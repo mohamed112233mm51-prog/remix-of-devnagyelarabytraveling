@@ -11,7 +11,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { useEffect } from "react";
-import { FIXED_FAVICON_HREF, FIXED_MANIFEST_HREF, enforceFixedFavicon, getFaviconBootScript } from "@/lib/favicon";
+import { FIXED_FAVICON_HREF, FIXED_MANIFEST_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
   return (
@@ -90,7 +90,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/png", href: FIXED_FAVICON_HREF },
-      { rel: "shortcut icon", href: FIXED_FAVICON_HREF },
+      { rel: "shortcut icon", href: FIXED_SHORTCUT_HREF },
       { rel: "apple-touch-icon", href: FIXED_FAVICON_HREF },
       { rel: "manifest", href: FIXED_MANIFEST_HREF },
     ],
@@ -165,7 +165,6 @@ function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
   useEffect(() => { installServerFnAuthFetch(); }, []);
-  useEffect(() => { enforceFixedFavicon(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
 
