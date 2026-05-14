@@ -12,6 +12,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "forgot">("login");
   const bootstrap = useServerFn(bootstrapAdmin);
+  const branding = useBranding();
 
   useEffect(() => {
     bootstrap().catch(() => {});
