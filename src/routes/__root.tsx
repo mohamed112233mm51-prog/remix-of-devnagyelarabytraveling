@@ -6,10 +6,12 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  ScriptOnce,
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-const INITIAL_FAVICON_VERSION = "2";
+import { useEffect } from "react";
+import { FIXED_FAVICON_HREF, FIXED_MANIFEST_HREF, enforceFixedFavicon, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
   return (
@@ -83,11 +85,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/x-icon", href: `/favicon.ico?v=${INITIAL_FAVICON_VERSION}` },
-      { rel: "icon", type: "image/png", href: `/favicon.png?v=${INITIAL_FAVICON_VERSION}` },
-      { rel: "apple-touch-icon", href: `/apple-touch-icon.png?v=${INITIAL_FAVICON_VERSION}` },
-      { rel: "shortcut icon", type: "image/x-icon", href: `/favicon.ico?v=${INITIAL_FAVICON_VERSION}` },
-      { rel: "manifest", href: `/manifest.json?v=${INITIAL_FAVICON_VERSION}` },
+      { rel: "icon", type: "image/png", href: FIXED_FAVICON_HREF },
+      { rel: "shortcut icon", href: FIXED_FAVICON_HREF },
+      { rel: "apple-touch-icon", href: FIXED_FAVICON_HREF },
+      { rel: "manifest", href: FIXED_MANIFEST_HREF },
     ],
   }),
   shellComponent: RootShell,
@@ -100,6 +101,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl">
       <head>
+        <ScriptOnce children={getFaviconBootScript()} />
         <link
           href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;900&family=Tajawal:wght@300;400;500;700;900&display=swap"
           rel="stylesheet"
@@ -121,7 +123,6 @@ import Login from "../components/Login";
 import SetPassword from "../components/SetPassword";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "../hooks/useAuth";
-import { useEffect } from "react";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
@@ -160,6 +161,7 @@ function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
   useEffect(() => { installServerFnAuthFetch(); }, []);
+  useEffect(() => { enforceFixedFavicon(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
 
