@@ -2,7 +2,6 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { FIXED_FAVICON_HREF, FIXED_FAVICON_VERSION } from "./lib/favicon";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -60,44 +59,12 @@ self.addEventListener("message", (event) => {
 });
 `;
 
-async function staticFaviconAssetResponse(request: Request, pathname: string): Promise<Response | null> {
-  if (!["/favicon.ico", "/favicon.png", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"].includes(pathname)) return null;
-  const source = await fetch(new URL(`/favicon.png?v=${FIXED_FAVICON_VERSION}`, request.url).toString(), { cache: "no-store" }).catch(() => null);
-  if (!source?.ok) return new Response(null, { status: 204, headers: NO_FAVICON_CACHE_HEADERS });
-
-  const headers = new Headers(NO_FAVICON_CACHE_HEADERS);
-  headers.set("content-type", "image/png");
-  headers.set("x-branding-favicon-source", "fixed-static-route");
-  return new Response(source.body, { status: 200, headers });
-}
-
-async function staticManifestResponse(request: Request): Promise<Response> {
-  const absoluteIcon = new URL(FIXED_FAVICON_HREF, request.url).toString();
-  return Response.json({
-    name: "العربي للخدمات السياحية",
-    short_name: "العربي",
-    dir: "rtl",
-    lang: "ar",
-    start_url: "/",
-    scope: "/",
-    display: "standalone",
-    icons: [
-      { src: absoluteIcon, sizes: "32x32 180x180 192x192 512x512", type: "image/png", purpose: "any" },
-    ],
-  }, { headers: NO_FAVICON_CACHE_HEADERS });
-}
-
 async function faviconCacheResponse(request: Request): Promise<Response | null> {
   const { pathname } = new URL(request.url);
   if (pathname === "/sw.js" || pathname === "/service-worker.js") {
     return new Response(SW_CLEANUP_SCRIPT, {
       headers: { ...NO_FAVICON_CACHE_HEADERS, "content-type": "application/javascript; charset=utf-8" },
     });
-  }
-  const assetResponse = await staticFaviconAssetResponse(request, pathname);
-  if (assetResponse) return assetResponse;
-  if (["/manifest.json", "/manifest.webmanifest", "/site.webmanifest"].includes(pathname)) {
-    return staticManifestResponse(request);
   }
   return null;
 }
