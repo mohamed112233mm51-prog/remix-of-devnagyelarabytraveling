@@ -25,45 +25,22 @@ function brandedErrorResponse(): Response {
   });
 }
 
-const NO_FAVICON_CACHE_HEADERS = {
-  "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-  pragma: "no-cache",
-  expires: "0",
-};
-
-const SW_CLEANUP_SCRIPT = `
-const FAVICON_CACHE_PATTERNS = ["favicon","apple-touch","icon-","manifest.","company-icon","company-assets/icons","lovable"];
-async function clearFaviconCacheEntries() {
-  const names = await caches.keys();
-  await Promise.all(names.map(async (name) => {
-    const cache = await caches.open(name);
-    const requests = await cache.keys();
-    await Promise.all(requests.map((request) => {
-      const url = new URL(request.url);
-      url.searchParams.delete("v");
-      const clean = url.toString().toLowerCase();
-      return FAVICON_CACHE_PATTERNS.some((pattern) => clean.includes(pattern.toLowerCase())) ? cache.delete(request) : Promise.resolve(false);
-    }));
-  }));
-}
+const SW_UNREGISTER_SCRIPT = `
 self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()));
 self.addEventListener("activate", (event) => event.waitUntil((async () => {
-  await clearFaviconCacheEntries();
   await self.clients.claim();
-  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  await Promise.all(clients.map((client) => client.postMessage({ type: "FAVICON_CACHE_CLEARED" })));
   await self.registration.unregister();
 })()));
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "CLEAR_FAVICON_CACHE") event.waitUntil(clearFaviconCacheEntries());
-});
 `;
 
 async function faviconCacheResponse(request: Request): Promise<Response | null> {
   const { pathname } = new URL(request.url);
   if (pathname === "/sw.js" || pathname === "/service-worker.js") {
-    return new Response(SW_CLEANUP_SCRIPT, {
-      headers: { ...NO_FAVICON_CACHE_HEADERS, "content-type": "application/javascript; charset=utf-8" },
+    return new Response(SW_UNREGISTER_SCRIPT, {
+      headers: {
+        "cache-control": "no-store",
+        "content-type": "application/javascript; charset=utf-8",
+      },
     });
   }
   return null;
