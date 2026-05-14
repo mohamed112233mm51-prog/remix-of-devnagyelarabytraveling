@@ -201,6 +201,6 @@ export async function applyFavicon(iconUrl?: string, updatedAt?: FaviconVersion,
   add("apple-touch-icon", appleHref, "180x180", pngType);
   add("apple-touch-icon", icon192Href, "192x192", pngType);
   add("apple-touch-icon", icon512Href, "512x512", pngType);
-  updateRuntimeManifest(updatedAt);
+  updateRuntimeManifest(updatedAt, hasCustom ? cleanIconUrl : undefined, companyName);
   console.log("Active favicon:", document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.href);
 }
