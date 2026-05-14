@@ -49,43 +49,36 @@ function canvasToBlob(canvas: HTMLCanvasElement) {
 }
 
 /**
- * Capture a single frame from the user's chosen screen/tab via
- * getDisplayMedia. Returns the frame as a canvas (native pixel size).
+ * Capture the current app viewport silently using html2canvas.
+ * No browser permission prompt, no getDisplayMedia, no tab-share dialog.
+ * Elements with [data-screenshot-ignore="true"] are excluded from the capture.
  */
 async function captureScreenFrame(): Promise<HTMLCanvasElement> {
-  const md = navigator.mediaDevices as MediaDevices & {
-    getDisplayMedia?: (c?: MediaStreamConstraints) => Promise<MediaStream>;
-  };
-  if (!md?.getDisplayMedia) {
-    throw new Error("Screen Capture API غير مدعومة في هذا المتصفح");
-  }
-  const stream = await md.getDisplayMedia({
-    video: { frameRate: 30 } as MediaTrackConstraints,
-    audio: false,
-    preferCurrentTab: true,
-    selfBrowserSurface: "include",
-  } as MediaStreamConstraints);
   try {
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.muted = true;
-    (video as HTMLVideoElement).playsInline = true;
-    await video.play();
-    // wait one frame so dimensions are ready
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    if (!w || !h) throw new Error("تعذر قراءة إطار الشاشة");
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas context unavailable");
-    ctx.drawImage(video, 0, 0, w, h);
-    return canvas;
-  } finally {
-    stream.getTracks().forEach((t) => t.stop());
-  }
+    await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
+  } catch {}
+
+  const target = (document.scrollingElement as HTMLElement) || document.documentElement || document.body;
+  const width = Math.max(target.clientWidth, window.innerWidth);
+  const height = Math.max(target.clientHeight, window.innerHeight);
+
+  const canvas = await html2canvas(document.body, {
+    backgroundColor: "#ffffff",
+    useCORS: true,
+    logging: false,
+    scale: Math.min(window.devicePixelRatio || 1, 2),
+    width,
+    height,
+    windowWidth: width,
+    windowHeight: height,
+    scrollX: -window.scrollX,
+    scrollY: -window.scrollY,
+    ignoreElements: (el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      return el.getAttribute("data-screenshot-ignore") === "true";
+    },
+  });
+  return canvas;
 }
 
 export default function ScreenshotTool() {
