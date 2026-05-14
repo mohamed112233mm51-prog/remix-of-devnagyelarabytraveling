@@ -126,12 +126,13 @@ function ApprovalsPage() {
               <span style={{ color: GOLD, fontWeight: 700 }}>التقديمات</span>
             </nav>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div aria-label="Libya" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(231,0,19,.35), 0 4px 14px rgba(35,158,70,.25)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #E70013 0%, #E70013 33.33%, #000000 33.33%, #000000 66.66%, #239E46 66.66%, #239E46 100%)" }}>
-                <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%)", pointerEvents: "none" }} />
-                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "33.0%", height: 1, background: "rgba(255,255,255,.55)" }} />
-                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "66.3%", height: 1, background: "rgba(255,255,255,.55)" }} />
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
+              <div aria-label="Egypt" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(206,17,38,.35), 0 4px 14px rgba(0,0,0,.28)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0) 55%)", pointerEvents: "none" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "33.0%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "66.3%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
                   <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                  <circle cx="12" cy="12" r="1.6" fill="#C8A44D" stroke="none" />
                 </svg>
               </div>
               <div style={{ minWidth: 0 }}>
