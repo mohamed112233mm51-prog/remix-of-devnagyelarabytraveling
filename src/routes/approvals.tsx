@@ -85,59 +85,171 @@ function ApprovalsPage() {
     return true;
   }), [approvals, agents, search, status, destination]);
 
+  const stats = useMemo(() => {
+    const s = { total: approvals.length, fast: 0, slow: 0, rejected: 0, review: 0, today: 0 };
+    for (const a of approvals) {
+      if (a.status === "سريعة") s.fast++;
+      else if (a.status === "بطيئة") s.slow++;
+      else if (a.status === "رفض أمني") s.rejected++;
+      else s.review++;
+      if (isToday(a.submit_date) || isToday(a.created_at)) s.today++;
+    }
+    return s;
+  }, [approvals]);
+
+  const activeFilters = (status ? 1 : 0) + (destination ? 1 : 0) + (search ? 1 : 0);
+  const printRow = (a: Approval) => {
+    const w = window.open("", "_blank", "width=900,height=700");
+    if (!w) return;
+    w.document.write(`<pre style="font-family:Cairo,sans-serif;padding:24px;direction:rtl">${
+      [
+        ["المسافر", a.passenger_name], ["الرقم القومي", a.national_id], ["الجواز", a.passport],
+        ["الوجهة", a.destination], ["الجهة", a.authority], ["الشركة الصادرة", a.issuing_company],
+        ["بيان السفر", a.travel_statement], ["تاريخ التقديم", a.submit_date], ["تاريخ الصدور", a.issue_date],
+        ["الحالة", a.status],
+      ].map(([k, v]) => `${k}: ${v ?? "—"}`).join("\n")
+    }</pre>`);
+    w.document.close(); w.print();
+  };
+  const cycleStatus = async (a: Approval) => {
+    const cycle = ["قيد المراجعة", "سريعة", "بطيئة", "رفض أمني"];
+    const next = cycle[(cycle.indexOf(a.status) + 1) % cycle.length] || "سريعة";
+    const { error } = await supabase.from("approvals").update({ status: next }).eq("id", a.id);
+    if (error) toast.error(error.message); else toast.success(`تم التحديث إلى: ${next}`);
+  };
+  const deleteRow = async (a: Approval) => {
+    if (!confirm(`حذف تقديم: ${a.passenger_name}؟`)) return;
+    const { error } = await supabase.from("approvals").delete().eq("id", a.id);
+    if (error) toast.error(error.message); else toast.success("تم الحذف");
+  };
+
   return (
-    <div className="section active">
+    <div className="section active fin-page approvals-page">
+      <div className="page-head">
+        <div className="page-head-text">
+          <div className="breadcrumb-row">
+            <span>العمليات</span><ChevronLeft size={12} />
+            <span>الموافقات الأمنية</span><ChevronLeft size={12} />
+            <span className="crumb-current">التقديمات</span>
+          </div>
+          <h1 className="page-h1"><ShieldCheck size={20} /> تقديمات الموافقات الأمنية</h1>
+          <div className="page-sub">إدارة ومتابعة حالات الموافقات الأمنية للمسافرين</div>
+        </div>
+        {perm.create && (
+          <button className="page-head-cta" onClick={() => setTab("add")}>
+            <Plus size={16} /> تقديم موافقة
+          </button>
+        )}
+      </div>
+
+      <div className="account-summary kpi-rich">
+        <div className="sum-box"><div className="kpi-icon"><Layers size={20} /></div>
+          <div className="kpi-text"><div className="label">إجمالي التقديمات</div><div className="val">{stats.total}</div></div></div>
+        <div className="sum-box green"><div className="kpi-icon"><Zap size={20} /></div>
+          <div className="kpi-text"><div className="label">الموافقات السريعة</div><div className="val">{stats.fast}</div></div></div>
+        <div className="sum-box gold"><div className="kpi-icon"><Timer size={20} /></div>
+          <div className="kpi-text"><div className="label">الموافقات البطيئة</div><div className="val">{stats.slow}</div></div></div>
+        <div className="sum-box red"><div className="kpi-icon"><Ban size={20} /></div>
+          <div className="kpi-text"><div className="label">الرفض الأمني</div><div className="val">{stats.rejected}</div></div></div>
+        <div className="sum-box"><div className="kpi-icon"><Clock3 size={20} /></div>
+          <div className="kpi-text"><div className="label">قيد المراجعة</div><div className="val">{stats.review}</div></div></div>
+        <div className="sum-box"><div className="kpi-icon"><CalendarDays size={20} /></div>
+          <div className="kpi-text"><div className="label">تقديمات اليوم</div><div className="val">{stats.today}</div></div></div>
+      </div>
+
       <div className="tabs">
-        <div className={`tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>📋 سجل التقديمات</div>
-        {perm.create && <div className={`tab ${tab === "add" ? "active" : ""}`} onClick={() => setTab("add")}>➕ تقديم موافقة</div>}
+        <button className={`tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>
+          <ListChecks size={14} /> سجل التقديمات
+        </button>
+        {perm.create && (
+          <button className={`tab ${tab === "add" ? "active" : ""}`} onClick={() => setTab("add")}>
+            <Plus size={14} /> تقديم موافقة
+          </button>
+        )}
       </div>
 
       {tab === "list" ? (
         <>
-          <div className="filter-bar">
-            <input className="search-input" placeholder="🔍 ابحث بالاسم، الجواز، الرقم القومي، أو اسم الوكيل..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            <select className="filter-select" value={destination} onChange={(e) => setDestination(e.target.value)}>
+          <div className="filter-bar approvals-toolbar">
+            <div className="search-wrap" style={{ flex: "1 1 280px" }}>
+              <Search size={16} className="search-wrap-icon" />
+              <input
+                className="search-input search-input--with-icon"
+                placeholder="ابحث بالاسم، الجواز، الرقم القومي، أو اسم الوكيل..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select className={`filter-select ${destination ? "is-active" : ""}`} value={destination} onChange={(e) => setDestination(e.target.value)}>
               <option value="">جميع الوجهات</option>
               <SafeSelectOptions options={DESTINATIONS} />
             </select>
-            <select className="filter-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select className={`filter-select ${status ? "is-active" : ""}`} value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">جميع الحالات</option>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            {activeFilters > 0 && (
+              <button className="filter-clear" onClick={() => { setSearch(""); setStatus(""); setDestination(""); }}>
+                مسح ({activeFilters})
+              </button>
+            )}
           </div>
 
-          <div className="card">
+          <div className="card enterprise-card">
             <div className="card-header">
-              <div className="card-title">📋 تقديمات الموافقات الأمنية</div>
-              <span style={{ fontSize: 12, color: "var(--text3)" }}>{filtered.length} تقديم</span>
+              <div className="card-title"><FileText size={16} style={{ verticalAlign: "-3px", marginInlineEnd: 6 }} /> سجل التقديمات</div>
+              <span className="muted-count">{filtered.length} تقديم</span>
             </div>
-            <div className="card-body">
-              <div className="table-wrap">
+            <div className="card-body" style={{ padding: 0 }}>
+              <div className="table-wrap approvals-table">
                 <table className="mobile-cards">
                   <thead>
                     <tr>
-                      <th>#</th><th>اسم المسافر</th><th>الرقم القومي</th><th>رقم الجواز</th><th>الوجهة</th>
-                      <th>الجهة</th><th>الشركة الصادرة</th><th>بيان السفر</th><th>الوكيل</th><th>تاريخ التقديم</th><th>تاريخ الصدور</th><th>الحالة</th><th>إجراءات</th>
+                      <th style={{ width: 48 }}>#</th>
+                      <th>اسم المسافر</th><th>الرقم القومي</th><th>رقم الجواز</th><th>الوجهة</th>
+                      <th>الجهة</th><th>الشركة الصادرة</th><th>بيان السفر</th><th>الوكيل</th>
+                      <th>تاريخ التقديم</th><th>تاريخ الصدور</th><th>الحالة</th>
+                      <th style={{ width: 60 }}>إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr><td colSpan={13}><div className="empty"><div className="empty-icon">📋</div><div className="empty-text">لا توجد تقديمات</div></div></td></tr>
+                      <tr><td colSpan={13}>
+                        <div className="empty-state">
+                          <div className="empty-state-icon"><ShieldCheck size={42} /></div>
+                          <div className="empty-state-title">لا توجد تقديمات حالياً</div>
+                          <div className="empty-state-sub">ستظهر تقديمات الموافقات الأمنية هنا فور إضافتها.</div>
+                          {perm.create && (
+                            <button className="page-head-cta" style={{ marginTop: 14 }} onClick={() => setTab("add")}>
+                              <Plus size={16} /> تقديم أول موافقة
+                            </button>
+                          )}
+                        </div>
+                      </td></tr>
                     ) : filtered.map((a, i) => (
                       <tr key={a.id}>
-                        <td data-label="#">{i + 1}</td>
-                        <td className="bold" data-label="المسافر">{a.passenger_name}</td>
-                        <td data-label="الرقم القومي">{a.national_id || "-"}</td>
+                        <td data-label="#" className="num-col">{i + 1}</td>
+                        <td className="bold passenger-cell" data-label="المسافر">{a.passenger_name}</td>
+                        <td data-label="الرقم القومي">{a.national_id || "—"}</td>
                         <td data-label="الجواز">{a.passport || "—"}</td>
                         <td data-label="الوجهة">{a.destination || "—"}</td>
                         <td data-label="الجهة">{a.authority || "—"}</td>
                         <td data-label="الشركة الصادرة">{a.issuing_company || "—"}</td>
-                        <td data-label="بيان السفر">{a.travel_statement || "—"}</td>
+                        <td data-label="بيان السفر" className="muted-cell">{a.travel_statement || "—"}</td>
                         <td data-label="الوكيل">{agentName(a.agent_id)}</td>
                         <td data-label="التقديم">{a.submit_date || "—"}</td>
                         <td data-label="الصدور">{a.issue_date || "—"}</td>
                         <td data-label="الحالة"><span className={`badge ${badgeFor(a.status)}`}>{a.status}</span></td>
-                        <td data-label="إجراءات">{perm.edit ? <button className="edit-btn" onClick={() => setEditing(a)}>✏️ تعديل</button> : null}</td>
+                        <td data-label="إجراءات">
+                          <RowActions
+                            canEdit={perm.edit}
+                            onView={() => setEditing(a)}
+                            onEdit={() => setEditing(a)}
+                            onPrint={() => printRow(a)}
+                            onStatus={() => cycleStatus(a)}
+                            onDelete={() => deleteRow(a)}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
