@@ -329,7 +329,17 @@ function InviteUserTab() {
     { key: "manager", label: "مدير", desc: "إدارة العمليات والتقارير والاطلاع على المعطيات", bg: "#EEF2FF", color: "#3730A3", border: "#C7D2FE" },
     { key: "user", label: "مستخدم", desc: "صلاحيات تشغيلية محدودة حسب الأقسام المسموح بها", bg: "#F1F5F9", color: "#0F172A", border: "#E2E8F0" },
   ];
-  const role = ROLES.find((r) => r.key === form.role)!;
+  // Map any free-text role label to a safe internal access level (admin/manager/user).
+  const roleKey = (form.role || "").trim().toLowerCase();
+  const accessLevel: "admin" | "manager" | "user" =
+    roleKey === "admin" ? "admin" : roleKey === "manager" ? "manager" : "user";
+  // Safe role config with fallback for custom labels (prevents crash on ROLES.find()!).
+  const role = ROLES.find((r) => r.key === accessLevel) ?? {
+    key: accessLevel, label: (form.role || "").trim() || "مستخدم", desc: "",
+    bg: "#F1F5F9", color: "#0F172A", border: "#E2E8F0",
+  };
+  // If user typed a custom label (not the canonical key), show their text.
+  const roleDisplayLabel = roleKey && roleKey !== accessLevel ? (form.role || "").trim() : role.label;
   const agentName = agents.find((a) => a.id === form.agent_id)?.name;
   const canSubmit = !!form.email.trim() && !!form.full_name.trim() && !busy;
 
