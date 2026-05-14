@@ -75,11 +75,6 @@ function ApprovalsPage() {
           <h1 className="page-h1"><ShieldCheck size={20} strokeWidth={2.2} /> تقديمات الموافقات الأمنية</h1>
           <div className="page-sub">إدارة ومتابعة حالات الموافقات الأمنية للمسافرين</div>
         </div>
-        {perm.create && (
-          <button className="btn btn-gold page-head-cta" onClick={() => setTab("add")} type="button">
-            <Plus size={16} strokeWidth={2.4} /> تقديم موافقة
-          </button>
-        )}
       </div>
 
       <div
