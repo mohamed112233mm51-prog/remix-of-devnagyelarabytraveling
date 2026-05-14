@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ShieldCheck, FileText, ListChecks, Search, Plus, Pencil, Printer, ShieldAlert, ShieldX, Clock, Zap, CalendarClock, Layers, CheckCircle2, AlertCircle, XCircle, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
+import { useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
 import { syncCounterpart } from "@/lib/sync";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -16,26 +15,13 @@ export const Route = createFileRoute("/approvals")({
 
 const STATUSES = ["سريعة", "بطيئة", "رفض أمني"];
 
-function StatusPill({ status }: { status: string }) {
-  const Icon =
-    status === "سريعة" ? CheckCircle2 :
-    status === "بطيئة" ? AlertCircle :
-    status === "رفض أمني" ? XCircle : HelpCircle;
-  return (
-    <span className={`pill-badge ${badgeFor(status)}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <Icon size={11} strokeWidth={2.4} />
-      {status || "قيد المراجعة"}
-    </span>
-  );
-}
-
 function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الموافقات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
 
 function ApprovalsPage() {
   const perm = usePerm("approvals");
-  const { rows: approvals, loading } = useLive<Approval>("approvals");
+  const { rows: approvals } = useLive<Approval>("approvals");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const DESTINATIONS = useDropdownOptions("destination");
@@ -59,203 +45,249 @@ function ApprovalsPage() {
     return true;
   }), [approvals, agents, search, status, destination]);
 
-  const stats = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return {
-      total: approvals.length,
-      fast: approvals.filter((a) => a.status === "سريعة").length,
-      slow: approvals.filter((a) => a.status === "بطيئة").length,
-      rejected: approvals.filter((a) => a.status === "رفض أمني").length,
-      pending: approvals.filter((a) => !a.issue_date).length,
-      today: approvals.filter((a) => (a.submit_date || "").slice(0, 10) === today).length,
-    };
-  }, [approvals]);
+  const NAVY = "#0f1b3d", GOLD = "#d4af37";
+  const today = new Date().toISOString().slice(0, 10);
+  const total = approvals.length;
+  const fast = approvals.filter((a) => a.status === "سريعة").length;
+  const slow = approvals.filter((a) => a.status === "بطيئة").length;
+  const rejected = approvals.filter((a) => a.status === "رفض أمني").length;
+  const pending = approvals.filter((a) => !a.issue_date).length;
+  const todayCount = approvals.filter((a) => (a.submit_date || "").slice(0, 10) === today).length;
 
-  const activeFilters = (status ? 1 : 0) + (destination ? 1 : 0) + (search ? 1 : 0);
   const clearFilters = () => { setSearch(""); setStatus(""); setDestination(""); };
+  const activeFilterCount = [search, status, destination].filter(Boolean).length;
+
+  const statusStyle = (s: string): React.CSSProperties => {
+    const k = s || "";
+    if (k === "سريعة") return { background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0" };
+    if (k === "رفض أمني") return { background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" };
+    if (k === "بطيئة") return { background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" };
+    return { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" };
+  };
+
+  const Kpi = ({ icon, label, value, tone }: { icon: string; label: string; value: number | string; tone: "navy" | "indigo" | "emerald" | "rose" | "amber" | "sky" }) => {
+    const tones: Record<string, { bg: string; fg: string; bd: string }> = {
+      navy:    { bg: "#eef2ff", fg: NAVY,      bd: "#dbe3ee" },
+      indigo:  { bg: "#eef2ff", fg: "#4338ca", bd: "#c7d2fe" },
+      emerald: { bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
+      rose:    { bg: "#fef2f2", fg: "#b91c1c", bd: "#fecaca" },
+      amber:   { bg: "#fffbeb", fg: "#b45309", bd: "#fde68a" },
+      sky:     { bg: "#f0f9ff", fg: "#0369a1", bd: "#bae6fd" },
+    };
+    const t = tones[tone];
+    return (
+      <div className="fl-card" style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+        <div style={{ width: 42, height: 42, borderRadius: 10, background: t.bg, color: t.fg, border: `1px solid ${t.bd}`, display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 3 }}>{label}</div>
+          <div style={{ fontSize: 18, color: "#0f172a", fontWeight: 800, lineHeight: 1.1 }}>{typeof value === "number" ? value.toLocaleString("ar") : value}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const inputStyle: React.CSSProperties = {
+    height: 38, padding: "0 12px", borderRadius: 10, border: "1px solid #e2e8f0",
+    background: "#fff", fontSize: 13, color: "#0f172a", outline: "none", minWidth: 0,
+  };
 
   return (
-    <div className="section active accounts-page">
-      <div className="page-head">
-        <div className="page-head-text">
-          <div className="breadcrumb-row">
-            <span>العمليات</span>
-            <ChevronLeft size={12} strokeWidth={2} />
-            <span>الموافقات الأمنية</span>
-            <ChevronLeft size={12} strokeWidth={2} />
-            <span className="crumb-current">التقديمات</span>
+    <div className="section active" style={{ display: "grid", gap: 14 }}>
+      <style>{`
+        .fl-card{transition:transform .2s ease, box-shadow .25s ease, border-color .2s ease;}
+        .fl-card:hover{transform:translateY(-2px); box-shadow:0 6px 20px rgba(15,23,42,.07); border-color:#dbe3ee;}
+        .fl-row{transition:background .15s ease;}
+        .fl-row:hover{background:#f8fafc !important;}
+        .fl-btn{transition:transform .15s ease, box-shadow .2s ease, background .2s ease;}
+        .fl-btn:hover:not(:disabled){transform:translateY(-1px);}
+        .fl-icon-btn{transition:all .15s ease;}
+        .fl-icon-btn:hover:not(:disabled){transform:translateY(-1px); background:#f1f5f9;}
+        .fl-input:focus{border-color:#1d4ed8 !important; box-shadow:0 0 0 3px rgba(29,78,216,.12) !important;}
+        @media (max-width: 700px){
+          .fl-toolbar{grid-template-columns:1fr 1fr !important;}
+          .fl-search{grid-column:1 / -1 !important;}
+        }
+      `}</style>
+
+      {/* ===== Header ===== */}
+      <div style={{
+        padding: "16px 20px", borderRadius: 14, border: "1px solid #1e3a8a44",
+        background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a8a 60%, #1e40af 100%)`,
+        boxShadow: `0 10px 30px ${NAVY}2e`, color: "#fff", overflow: "hidden", position: "relative",
+      }}>
+        <div aria-hidden style={{ position: "absolute", top: -40, left: -40, width: 200, height: 200, borderRadius: "50%", background: `radial-gradient(circle, ${GOLD}30, transparent 65%)` }} />
+        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+            <nav aria-label="breadcrumb" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#cbd5e1", marginBottom: 8, flexWrap: "wrap" }}>
+              <span>العمليات</span>
+              <span style={{ opacity: .6 }}>›</span>
+              <span>الموافقات الأمنية</span>
+              <span style={{ opacity: .6 }}>›</span>
+              <span style={{ color: GOLD, fontWeight: 700 }}>التقديمات</span>
+            </nav>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ width: 42, height: 42, borderRadius: 11, background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, display: "grid", placeItems: "center", flexShrink: 0, boxShadow: `0 6px 16px ${GOLD}55`, fontSize: 22 }}>🛡️</div>
+              <div style={{ minWidth: 0 }}>
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em", lineHeight: 1.2 }}>تقديمات الموافقات الأمنية</h1>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#cbd5e1", lineHeight: 1.4 }}>إدارة ومتابعة الموافقات الأمنية وحالات السفر</p>
+              </div>
+            </div>
           </div>
-          <h1 className="page-h1"><ShieldCheck size={20} strokeWidth={2.2} /> تقديمات الموافقات الأمنية</h1>
-          <div className="page-sub">إدارة ومتابعة الموافقات الأمنية وحالات السفر</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="fl-btn" onClick={() => setTab("list")} style={{
+              display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 14px", borderRadius: 10,
+              background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)",
+              fontWeight: 700, fontSize: 12.5, cursor: "pointer", backdropFilter: "blur(6px)",
+            }}>📋 سجل التقديمات</button>
+            {perm.create && (
+              <button className="fl-btn" onClick={() => setTab("add")} style={{
+                display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 16px", borderRadius: 10,
+                background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, border: 0,
+                fontWeight: 800, fontSize: 12.5, cursor: "pointer", boxShadow: `0 6px 16px ${GOLD}4d`,
+              }}>＋ تقديم موافقة</button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div
-        className="account-summary kpi-rich"
-        style={{ gridTemplateColumns: "repeat(6, minmax(0,1fr))" }}
-      >
-        <div className="sum-box">
-          <div className="kpi-icon"><Layers size={18} strokeWidth={2} /></div>
-          <div className="kpi-text"><div className="label">إجمالي التقديمات</div><div className="val">{stats.total}</div></div>
-        </div>
-        <div className="sum-box green">
-          <div className="kpi-icon"><Zap size={18} strokeWidth={2} /></div>
-          <div className="kpi-text"><div className="label">الموافقات السريعة</div><div className="val">{stats.fast}</div></div>
-        </div>
-        <div className="sum-box gold">
-          <div className="kpi-icon"><Clock size={18} strokeWidth={2} /></div>
-          <div className="kpi-text"><div className="label">الموافقات البطيئة</div><div className="val">{stats.slow}</div></div>
-        </div>
-        <div className="sum-box red">
-          <div className="kpi-icon"><ShieldX size={18} strokeWidth={2} /></div>
-          <div className="kpi-text"><div className="label">الرفض الأمني</div><div className="val">{stats.rejected}</div></div>
-        </div>
-        <div className="sum-box">
-          <div className="kpi-icon"><ShieldAlert size={18} strokeWidth={2} /></div>
-          <div className="kpi-text"><div className="label">قيد المراجعة</div><div className="val">{stats.pending}</div></div>
-        </div>
-        <div className="sum-box">
-          <div className="kpi-icon"><CalendarClock size={18} strokeWidth={2} /></div>
-          <div className="kpi-text"><div className="label">تقديمات اليوم</div><div className="val">{stats.today}</div></div>
-        </div>
-      </div>
-
-      <div className="action-toolbar">
-        <div className={`tool-tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>
-          <ListChecks size={15} strokeWidth={2} /> <span>سجل التقديمات</span>
-        </div>
-        {perm.create && (
-          <div
-            className={`tool-tab tool-tab--primary ${tab === "add" ? "active" : ""}`}
-            onClick={() => setTab("add")}
-          >
-            <Plus size={15} strokeWidth={2.4} /> <span>تقديم موافقة</span>
-          </div>
-        )}
+      {/* ===== KPI Cards ===== */}
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+        <Kpi icon="🗂️" label="إجمالي التقديمات" value={total} tone="navy" />
+        <Kpi icon="⚡" label="الموافقات السريعة" value={fast} tone="emerald" />
+        <Kpi icon="⏳" label="الموافقات البطيئة" value={slow} tone="amber" />
+        <Kpi icon="⛔" label="الرفض الأمني" value={rejected} tone="rose" />
+        <Kpi icon="🛡️" label="قيد المراجعة" value={pending} tone="indigo" />
+        <Kpi icon="📅" label="تقديمات اليوم" value={todayCount} tone="sky" />
       </div>
 
       {tab === "list" ? (
         <>
-          <div className="filter-bar">
-            <div className="search-wrap">
-              <Search size={15} strokeWidth={2} className="search-wrap-icon" />
-              <input
-                className="search-input search-input--with-icon"
-                placeholder="ابحث بالاسم، الجواز، الرقم القومي، أو الوكيل..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          {/* ===== Filters Toolbar ===== */}
+          <div style={{ padding: 14, borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>🔎 الفلاتر</span>
+                {activeFilterCount > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+                    {activeFilterCount} نشط
+                  </span>
+                )}
+              </div>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} className="fl-btn" style={{ height: 30, padding: "0 10px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
+                  ✕ مسح الفلاتر
+                </button>
+              )}
             </div>
-            <select className="filter-select" value={destination} onChange={(e) => setDestination(e.target.value)}>
-              <option value="">جميع الوجهات</option>
-              <SafeSelectOptions options={DESTINATIONS} />
-            </select>
-            <select className="filter-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">جميع الحالات</option>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {activeFilters > 0 && (
-              <button type="button" className="btn" onClick={clearFilters} style={{ height: 38 }}>
-                مسح الفلاتر ({activeFilters})
-              </button>
-            )}
+            <div className="fl-toolbar" style={{ display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr" }}>
+              <div className="fl-search" style={{ position: "relative", minWidth: 0 }}>
+                <span style={{ position: "absolute", insetInlineStart: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
+                <input
+                  className="fl-input"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="ابحث بالاسم، الجواز، الرقم القومي، أو الوكيل..."
+                  style={{ ...inputStyle, width: "100%", paddingInlineStart: 34, paddingInlineEnd: search ? 32 : 12 }}
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} aria-label="مسح" style={{ position: "absolute", insetInlineEnd: 8, top: "50%", transform: "translateY(-50%)", width: 22, height: 22, borderRadius: 6, border: 0, background: "#f1f5f9", color: "#64748b", cursor: "pointer", display: "grid", placeItems: "center", fontSize: 12 }}>✕</button>
+                )}
+              </div>
+              <select className="fl-input" value={destination} onChange={(e) => setDestination(e.target.value)} style={inputStyle}>
+                <option value="">جميع الوجهات</option>
+                <SafeSelectOptions options={DESTINATIONS} />
+              </select>
+              <select className="fl-input" value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
+                <option value="">جميع الحالات</option>
+                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
 
-          <div className="card enterprise-table">
-            <div className="card-header">
-              <div className="card-title">
-                <FileText size={16} strokeWidth={2.2} style={{ marginInlineEnd: 6, verticalAlign: "-3px", color: "var(--primary)" }} />
-                سجل التقديمات
-                <span className="muted-count">({filtered.length})</span>
+          {/* ===== Table Card ===== */}
+          <div className="fl-card" style={{ borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px", borderBottom: "1px solid #eef2f7" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: `${NAVY}10`, color: NAVY, display: "grid", placeItems: "center", fontSize: 16 }}>🛡️</div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>سجل التقديمات</h4>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>عرض ومتابعة جميع تقديمات الموافقات الأمنية</div>
+                </div>
               </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: NAVY, background: `${GOLD}22`, border: `1px solid ${GOLD}66`, padding: "3px 10px", borderRadius: 999 }}>
+                {filtered.length.toLocaleString("ar")} تقديم
+              </span>
             </div>
-            <div className="card-body">
-              <div className="table-wrap">
-                <table className="mobile-cards">
+
+            {filtered.length === 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 20px", color: "#64748b", background: "linear-gradient(180deg,#fafbfd,#fff)" }}>
+                <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${NAVY}08`, display: "grid", placeItems: "center", marginBottom: 14, fontSize: 36 }}>🛡️</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>لا توجد تقديمات حالياً</div>
+                <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 6, textAlign: "center", maxWidth: 360 }}>
+                  {activeFilterCount > 0 ? "لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل أو مسح الفلاتر." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
+                </div>
+                {perm.create && activeFilterCount === 0 && (
+                  <button className="fl-btn" onClick={() => setTab("add")} style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px", borderRadius: 10, background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: GOLD, border: 0, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    ＋ تقديم أول موافقة
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="mobile-cards" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100, fontSize: 13 }}>
                   <thead>
-                    <tr>
-                      <th>#</th><th>اسم المسافر</th><th>الرقم القومي</th><th>رقم الجواز</th><th>الوجهة</th>
-                      <th>الجهة</th><th>الشركة الصادرة</th><th>بيان السفر</th><th>الوكيل</th>
-                      <th>تاريخ التقديم</th><th>تاريخ الصدور</th><th>الحالة</th><th>إجراءات</th>
+                    <tr style={{ background: "linear-gradient(180deg,#f8fafc,#f1f5f9)", position: "sticky", top: 0, zIndex: 1 }}>
+                      {["#", "اسم المسافر", "الرقم القومي", "رقم الجواز", "الوجهة", "الجهة", "الشركة الصادرة", "بيان السفر", "الوكيل", "تاريخ التقديم", "تاريخ الصدور", "الحالة"].map((h) => (
+                        <th key={h} style={{ padding: "10px 12px", textAlign: "right", fontSize: 11.5, fontWeight: 800, color: "#475569", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11.5, fontWeight: 800, color: "#475569", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {loading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <tr key={`sk-${i}`}>
-                          {Array.from({ length: 13 }).map((__, j) => (
-                            <td key={j}><div style={{ height: 12, background: "#EEF2F7", borderRadius: 6, opacity: 0.7 }} /></td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={13}>
-                          <div className="empty" style={{ padding: "48px 20px" }}>
-                            <div className="empty-icon" style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(180deg,#EFF6FF 0%, #DBEAFE 100%)", color: "var(--primary)", display: "grid", placeItems: "center", margin: "0 auto 14px", boxShadow: "inset 0 0 0 1px #BFDBFE" }}>
-                              <ShieldCheck size={34} strokeWidth={1.8} />
+                    {filtered.map((a, i) => (
+                      <tr key={a.id} className="fl-row" style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{i + 1}</td>
+                        <td data-label="الاسم" style={{ padding: "10px 12px", fontWeight: 700, color: "#0f172a" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                              {(a.passenger_name || "?").trim().charAt(0)}
                             </div>
-                            <div className="empty-text" style={{ fontWeight: 800, color: "var(--text)", fontSize: 15 }}>لا توجد تقديمات حالياً</div>
-                            <div style={{ fontSize: 12.5, color: "var(--text3)", marginTop: 4 }}>
-                              {activeFilters > 0 ? "جرّب تعديل الفلاتر أو مسحها لعرض جميع التقديمات." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
-                            </div>
-                            {activeFilters === 0 && perm.create && (
-                              <button
-                                type="button"
-                                className="btn btn-gold"
-                                onClick={() => setTab("add")}
-                                style={{ marginTop: 16, height: 38, padding: "0 18px", display: "inline-flex", alignItems: "center", gap: 8 }}
-                              >
-                                <Plus size={15} strokeWidth={2.4} /> تقديم موافقة
-                              </button>
-                            )}
+                            <span>{a.passenger_name}</span>
                           </div>
                         </td>
-                      </tr>
-                    ) : filtered.map((a, i) => (
-                      <tr key={a.id}>
-                        <td data-label="#" className="num-col">{i + 1}</td>
-                        <td className="bold" data-label="المسافر">{a.passenger_name}</td>
-                        <td data-label="الرقم القومي">{a.national_id || "—"}</td>
-                        <td data-label="الجواز">{a.passport || "—"}</td>
-                        <td data-label="الوجهة">{a.destination || "—"}</td>
-                        <td data-label="الجهة">{a.authority || "—"}</td>
-                        <td data-label="الشركة الصادرة">{a.issuing_company || "—"}</td>
-                        <td data-label="بيان السفر">{a.travel_statement || "—"}</td>
-                        <td data-label="الوكيل">{agentName(a.agent_id)}</td>
-                        <td data-label="التقديم" className="num-col">{a.submit_date || "—"}</td>
-                        <td data-label="الصدور" className="num-col">{a.issue_date || "—"}</td>
-                        <td data-label="الحالة"><StatusPill status={a.status} /></td>
-                        <td data-label="إجراءات">
-                          <div style={{ display: "inline-flex", gap: 6 }}>
-                            {perm.edit && (
-                              <button
-                                type="button"
-                                className="icon-action-btn"
-                                onClick={() => setEditing(a)}
-                                title="تعديل"
-                                aria-label="تعديل"
-                              >
-                                <Pencil size={14} strokeWidth={2.2} />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="icon-action-btn"
-                              onClick={() => window.print()}
-                              title="طباعة"
-                              aria-label="طباعة"
-                            >
-                              <Printer size={14} strokeWidth={2.2} />
+                        <td data-label="الرقم القومي" style={{ padding: "10px 12px", color: "#475569", fontFamily: "ui-monospace,monospace", fontSize: 12 }}>{a.national_id || "—"}</td>
+                        <td data-label="رقم الجواز" style={{ padding: "10px 12px", color: "#475569", fontFamily: "ui-monospace,monospace", fontSize: 12 }}>{a.passport || "—"}</td>
+                        <td data-label="الوجهة" style={{ padding: "10px 12px", color: "#475569" }}>{a.destination ? <span>📍 {a.destination}</span> : "—"}</td>
+                        <td data-label="الجهة" style={{ padding: "10px 12px", color: "#475569" }}>{a.authority || "—"}</td>
+                        <td data-label="الشركة الصادرة" style={{ padding: "10px 12px", color: "#475569" }}>{a.issuing_company || "—"}</td>
+                        <td data-label="بيان السفر" style={{ padding: "10px 12px", color: "#64748b", fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.travel_statement || ""}>{a.travel_statement || "—"}</td>
+                        <td data-label="الوكيل" style={{ padding: "10px 12px", color: "#0f172a", fontWeight: 600 }}>{agentName(a.agent_id)}</td>
+                        <td data-label="تاريخ التقديم" style={{ padding: "10px 12px", color: "#475569", whiteSpace: "nowrap", fontSize: 12 }}>{a.submit_date || "—"}</td>
+                        <td data-label="تاريخ الصدور" style={{ padding: "10px 12px", color: "#475569", whiteSpace: "nowrap", fontSize: 12 }}>{a.issue_date || "—"}</td>
+                        <td data-label="الحالة" style={{ padding: "10px 12px" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, ...statusStyle(a.status) }}>
+                            {a.status || "—"}
+                          </span>
+                        </td>
+                        <td data-label="إجراءات" style={{ padding: "10px 12px" }}>
+                          {perm.edit ? (
+                            <button className="fl-icon-btn" onClick={() => setEditing(a)} style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 10px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: NAVY, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                              ✏️ تعديل
                             </button>
-                          </div>
+                          ) : "—"}
                         </td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <td colSpan={11} style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#475569" }}>إجمالي التقديمات:</td>
+                      <td colSpan={2} style={{ padding: "10px 12px", fontSize: 13, fontWeight: 800, color: NAVY }}>{filtered.length.toLocaleString("ar")}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
-            </div>
+            )}
           </div>
         </>
       ) : (
