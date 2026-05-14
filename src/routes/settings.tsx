@@ -431,7 +431,7 @@ function InviteUserTab() {
                 setBusy(true);
                 try {
                   await fn({ data: {
-                    email: form.email.trim(), full_name: form.full_name, role: form.role,
+                    email: form.email.trim(), full_name: form.full_name, role: accessLevel,
                     agent_id: form.agent_id || null, permissions: form.permissions as any,
                     origin: window.location.origin,
                   } });
