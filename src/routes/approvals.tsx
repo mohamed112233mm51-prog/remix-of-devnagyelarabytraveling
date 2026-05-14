@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ShieldCheck, FileText, ListChecks, Search, Plus, Pencil, Printer, ShieldAlert, ShieldX, Clock, Zap, CalendarClock, Layers, CheckCircle2, AlertCircle, XCircle, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
+import { useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
 import { syncCounterpart } from "@/lib/sync";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
