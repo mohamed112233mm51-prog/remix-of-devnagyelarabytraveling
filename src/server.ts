@@ -32,7 +32,7 @@ const NO_FAVICON_CACHE_HEADERS = {
 };
 
 const SW_CLEANUP_SCRIPT = `
-const FAVICON_CACHE_PATTERNS = ["/favicon.ico","/favicon.png","/apple-touch-icon","/icon-192","/icon-512","/manifest.json","/manifest.webmanifest","/site.webmanifest","company-icon","company-assets/icons","favicon","lovable"];
+const FAVICON_CACHE_PATTERNS = ["favicon","apple-touch","icon-","manifest.","company-icon","company-assets/icons","lovable"];
 async function clearFaviconCacheEntries() {
   const names = await caches.keys();
   await Promise.all(names.map(async (name) => {
