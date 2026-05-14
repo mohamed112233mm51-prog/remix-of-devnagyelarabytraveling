@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-const INITIAL_FAVICON_VERSION = "system-favicon-1";
+const INITIAL_FAVICON_VERSION = "system-favicon-2";
 
 function NotFoundComponent() {
   return (
