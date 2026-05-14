@@ -16,6 +16,19 @@ export const Route = createFileRoute("/approvals")({
 
 const STATUSES = ["سريعة", "بطيئة", "رفض أمني"];
 
+function StatusPill({ status }: { status: string }) {
+  const Icon =
+    status === "سريعة" ? CheckCircle2 :
+    status === "بطيئة" ? AlertCircle :
+    status === "رفض أمني" ? XCircle : HelpCircle;
+  return (
+    <span className={`pill-badge ${badgeFor(status)}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <Icon size={11} strokeWidth={2.4} />
+      {status || "قيد المراجعة"}
+    </span>
+  );
+}
+
 function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الموافقات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
