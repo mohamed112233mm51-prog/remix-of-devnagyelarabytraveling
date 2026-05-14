@@ -474,7 +474,7 @@ function InviteUserTab() {
               </div>
             </div>
             <div style={{ height: 1, background: "#E5E7EB" }} />
-            <Row label="الدور"><span style={{ display: "inline-flex", padding: "2px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: role.bg, color: role.color, border: `1px solid ${role.border}` }}>{role.label}</span></Row>
+            <Row label="الدور"><span style={{ display: "inline-flex", padding: "2px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: role.bg, color: role.color, border: `1px solid ${role.border}` }}>{roleDisplayLabel}</span></Row>
             <Row label="الوكيل المرتبط"><span style={{ color: agentName ? "#0F172A" : "#94A3B8" }}>{agentName || "بدون"}</span></Row>
             <Row label="حالة الدعوة">
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: canSubmit ? "#DCFCE7" : "#FEF3C7", color: canSubmit ? "#166534" : "#92400E", border: `1px solid ${canSubmit ? "#BBF7D0" : "#FDE68A"}` }}>
