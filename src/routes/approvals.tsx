@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+  ShieldCheck, ChevronLeft, Search, Plus, ListChecks, FileText,
+  Zap, Timer, Ban, Clock3, CalendarDays, Layers, MoreHorizontal,
+  Eye, Pencil, Printer, RefreshCw, Trash2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
 import { syncCounterpart } from "@/lib/sync";
@@ -14,6 +19,41 @@ export const Route = createFileRoute("/approvals")({
 });
 
 const STATUSES = ["سريعة", "بطيئة", "رفض أمني"];
+
+function isToday(d?: string | null) {
+  if (!d) return false;
+  const x = new Date(d); const t = new Date();
+  return x.getFullYear() === t.getFullYear() && x.getMonth() === t.getMonth() && x.getDate() === t.getDate();
+}
+
+function RowActions({ canEdit, onView, onEdit, onPrint, onStatus, onDelete }: {
+  canEdit: boolean; onView: () => void; onEdit: () => void; onPrint: () => void; onStatus: () => void; onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+  return (
+    <div className="row-actions" ref={ref}>
+      <button className="row-actions-btn" onClick={() => setOpen((v) => !v)} aria-label="إجراءات">
+        <MoreHorizontal size={16} />
+      </button>
+      {open && (
+        <div className="row-actions-menu">
+          <button onClick={() => { setOpen(false); onView(); }}><Eye size={14} /> عرض التفاصيل</button>
+          {canEdit && <button onClick={() => { setOpen(false); onEdit(); }}><Pencil size={14} /> تعديل</button>}
+          <button onClick={() => { setOpen(false); onPrint(); }}><Printer size={14} /> طباعة</button>
+          {canEdit && <button onClick={() => { setOpen(false); onStatus(); }}><RefreshCw size={14} /> تحديث الحالة</button>}
+          {canEdit && <button className="danger" onClick={() => { setOpen(false); onDelete(); }}><Trash2 size={14} /> حذف</button>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الموافقات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
