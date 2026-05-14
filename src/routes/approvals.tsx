@@ -126,12 +126,13 @@ function ApprovalsPage() {
               <span style={{ color: GOLD, fontWeight: 700 }}>التقديمات</span>
             </nav>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div aria-label="Libya" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(231,0,19,.35), 0 4px 14px rgba(35,158,70,.25)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #E70013 0%, #E70013 33.33%, #000000 33.33%, #000000 66.66%, #239E46 66.66%, #239E46 100%)" }}>
-                <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%)", pointerEvents: "none" }} />
-                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "33.0%", height: 1, background: "rgba(255,255,255,.55)" }} />
-                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "66.3%", height: 1, background: "rgba(255,255,255,.55)" }} />
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
+              <div aria-label="Egypt" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(206,17,38,.35), 0 4px 14px rgba(0,0,0,.28)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0) 55%)", pointerEvents: "none" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "33.0%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "66.3%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
                   <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                  <circle cx="12" cy="12" r="1.6" fill="#C8A44D" stroke="none" />
                 </svg>
               </div>
               <div style={{ minWidth: 0 }}>
@@ -215,7 +216,11 @@ function ApprovalsPage() {
           <div className="fl-card" style={{ borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)", overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px", borderBottom: "1px solid #eef2f7" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 9, background: `${NAVY}10`, color: NAVY, display: "grid", placeItems: "center", fontSize: 16 }}>🛡️</div>
+                <div aria-label="Egypt" style={{ width: 32, height: 32, borderRadius: 9, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 2px 6px rgba(206,17,38,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#C8A44D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>
+                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                  </svg>
+                </div>
                 <div>
                   <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>سجل التقديمات</h4>
                   <div style={{ fontSize: 11, color: "#94a3b8" }}>عرض ومتابعة جميع تقديمات الموافقات الأمنية</div>
@@ -228,7 +233,13 @@ function ApprovalsPage() {
 
             {filtered.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 20px", color: "#64748b", background: "linear-gradient(180deg,#fafbfd,#fff)" }}>
-                <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${NAVY}08`, display: "grid", placeItems: "center", marginBottom: 14, fontSize: 36 }}>🛡️</div>
+                <div aria-label="Egypt" style={{ width: 80, height: 80, borderRadius: "50%", position: "relative", overflow: "hidden", display: "grid", placeItems: "center", marginBottom: 14, border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 8px 22px rgba(206,17,38,.22), 0 4px 14px rgba(0,0,0,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                  <div aria-hidden style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 25%, rgba(255,255,255,.35), rgba(255,255,255,0) 60%)", pointerEvents: "none" }} />
+                  <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 2px 3px rgba(0,0,0,.45))" }}>
+                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                    <circle cx="12" cy="12" r="2" fill="#C8A44D" stroke="none" />
+                  </svg>
+                </div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>لا توجد تقديمات حالياً</div>
                 <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 6, textAlign: "center", maxWidth: 360 }}>
                   {activeFilterCount > 0 ? "لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل أو مسح الفلاتر." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
