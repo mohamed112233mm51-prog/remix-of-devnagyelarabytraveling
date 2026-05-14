@@ -96,12 +96,33 @@ function preloadFreshIcon(iconUrl: string): Promise<void> {
   });
 }
 
-function updateRuntimeManifest(updatedAt?: FaviconVersion) {
+function updateRuntimeManifest(updatedAt?: FaviconVersion, iconUrl?: string, companyName?: string) {
   removeExistingManifestLinks();
   const link = document.createElement("link");
   link.rel = "manifest";
   link.setAttribute("data-runtime-branding", "true");
-  link.href = staticAssetHref(STATIC_FAVICON_PATHS.manifest, updatedAt);
+  if (iconUrl) {
+    const versioned = withFaviconVersion(iconUrl, updatedAt);
+    const type = detectIconType(iconUrl);
+    const name = companyName || DEFAULT_TITLE;
+    const manifest = {
+      name,
+      short_name: name,
+      dir: "rtl",
+      lang: "ar",
+      start_url: "/",
+      scope: "/",
+      display: "standalone",
+      icons: [
+        { src: versioned, sizes: "any", type, purpose: "any" },
+        { src: versioned, sizes: "192x192", type },
+        { src: versioned, sizes: "512x512", type },
+      ],
+    };
+    link.href = `data:application/manifest+json;charset=utf-8,${encodeURIComponent(JSON.stringify(manifest))}`;
+  } else {
+    link.href = staticAssetHref(STATIC_FAVICON_PATHS.manifest, updatedAt);
+  }
   document.head.appendChild(link);
 }
 
