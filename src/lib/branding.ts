@@ -109,12 +109,8 @@ export function applyBrandingCssVars(b: Branding) {
   const s = hexToRgb(b.secondaryColor);
   if (s) root.style.setProperty("--brand-secondary-rgb", `${s.r}, ${s.g}, ${s.b}`);
 
-  const faviconSource = b.hasCustomIcon
-    ? (b.faviconUrl || b.iconUrl || b.iconDataUrl)
-    : b.hasCustomLogo
-      ? (b.iconUrl || b.iconDataUrl)
-      : "";
-  void applyFavicon(faviconSource, b.faviconUpdatedAt || b.updatedAt, b.companyName);
+  // Favicon is fixed system-wide; do not override from branding/app_settings.
+  void applyFavicon;
 }
 
 /**
