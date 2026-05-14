@@ -1827,11 +1827,18 @@
 }
 
 /* Responsive */
+@media (max-width: 1100px) {
+  .accounts-page .account-summary.kpi-rich { grid-template-columns: repeat(3, minmax(0,1fr)) !important; }
+}
 @media (max-width: 768px) {
   .accounts-page .page-head { flex-direction: column; align-items: stretch; gap: 12px; }
   .accounts-page .page-head-cta { width: 100%; justify-content: center; }
   .accounts-page .action-toolbar .tool-tab--primary { margin-inline-start: 0; width: 100%; justify-content: center; }
   .accounts-page .kpi-rich .val { font-size: 20px; }
+  .accounts-page .account-summary.kpi-rich { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+}
+@media (max-width: 480px) {
+  .accounts-page .account-summary.kpi-rich { grid-template-columns: 1fr 1fr !important; }
 }
 
 /* Premium "hero" KPI tile (used for primary balance) */
