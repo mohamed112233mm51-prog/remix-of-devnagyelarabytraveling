@@ -1698,8 +1698,10 @@
    ============================================================ */
 .accounts-page .page-head {
   display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 16px; margin-bottom: 16px; padding-bottom: 14px;
-  border-bottom: 1px solid #EEF1F5;
+  gap: 16px; margin-bottom: 16px; padding: 18px 20px 16px;
+  background: linear-gradient(180deg, #F8FAFD 0%, #FFFFFF 100%);
+  border: 1px solid #E5EAF1; border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.03);
 }
 .accounts-page .breadcrumb-row {
   display: inline-flex; align-items: center; gap: 6px;
@@ -1721,11 +1723,25 @@
   height: 40px; padding: 0 18px; flex: 0 0 auto;
 }
 
-/* KPI tiles with icon */
+/* KPI tiles with icon + colored left accent */
 .accounts-page .kpi-rich .sum-box {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; gap: 14px;
-  padding: 16px 18px;
+  padding: 16px 18px 16px 20px;
   background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFD 100%);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.accounts-page .kpi-rich .sum-box::before {
+  content: ""; position: absolute; inset-inline-start: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--primary, #0284C7);
+}
+.accounts-page .kpi-rich .sum-box.green::before { background: #15803D; }
+.accounts-page .kpi-rich .sum-box.gold::before  { background: #B8923A; }
+.accounts-page .kpi-rich .sum-box.red::before   { background: #B91C1C; }
+.accounts-page .kpi-rich .sum-box:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(15,23,42,0.06);
+  border-color: #CBD5E1;
 }
 .accounts-page .kpi-rich .kpi-icon {
   width: 40px; height: 40px; flex: 0 0 40px;
@@ -1740,6 +1756,18 @@
 .accounts-page .kpi-rich .kpi-text { min-width: 0; }
 .accounts-page .kpi-rich .label { margin-bottom: 4px; }
 .accounts-page .kpi-rich .val { font-size: 24px; font-weight: 900; }
+
+/* Compact icon action button (row actions) */
+.accounts-page .icon-action-btn {
+  width: 30px; height: 30px; display: inline-grid; place-items: center;
+  border-radius: 8px; background: #FFFFFF; color: #475569;
+  border: 1px solid #E2E8F0; cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.accounts-page .icon-action-btn:hover {
+  background: #EFF6FF; color: var(--primary, #0284C7);
+  border-color: #BFDBFE; box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+}
 
 /* Action toolbar (segmented tabs) */
 .accounts-page .action-toolbar {
