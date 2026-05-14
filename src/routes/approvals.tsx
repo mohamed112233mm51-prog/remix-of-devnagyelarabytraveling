@@ -233,7 +233,13 @@ function ApprovalsPage() {
 
             {filtered.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 20px", color: "#64748b", background: "linear-gradient(180deg,#fafbfd,#fff)" }}>
-                <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${NAVY}08`, display: "grid", placeItems: "center", marginBottom: 14, fontSize: 36 }}>🛡️</div>
+                <div aria-label="Egypt" style={{ width: 80, height: 80, borderRadius: "50%", position: "relative", overflow: "hidden", display: "grid", placeItems: "center", marginBottom: 14, border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 8px 22px rgba(206,17,38,.22), 0 4px 14px rgba(0,0,0,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                  <div aria-hidden style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 25%, rgba(255,255,255,.35), rgba(255,255,255,0) 60%)", pointerEvents: "none" }} />
+                  <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 2px 3px rgba(0,0,0,.45))" }}>
+                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                    <circle cx="12" cy="12" r="2" fill="#C8A44D" stroke="none" />
+                  </svg>
+                </div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>لا توجد تقديمات حالياً</div>
                 <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 6, textAlign: "center", maxWidth: 360 }}>
                   {activeFilterCount > 0 ? "لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل أو مسح الفلاتر." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
