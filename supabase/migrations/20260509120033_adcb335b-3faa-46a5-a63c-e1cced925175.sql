@@ -1,0 +1,2 @@
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS merchant_cash_net_amount numeric NOT NULL DEFAULT 0;
+ALTER TABLE public.company_transactions ADD COLUMN IF NOT EXISTS merchant_cash_net_amount numeric NOT NULL DEFAULT 0;

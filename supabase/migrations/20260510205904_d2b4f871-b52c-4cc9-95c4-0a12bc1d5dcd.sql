@@ -1,0 +1,1 @@
+ALTER TABLE public.flights ADD COLUMN IF NOT EXISTS authority text;

@@ -1,0 +1,1 @@
+ALTER TABLE public.approvals ADD COLUMN IF NOT EXISTS travel_date date, ADD COLUMN IF NOT EXISTS airline text;

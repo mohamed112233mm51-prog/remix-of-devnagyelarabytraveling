@@ -1,0 +1,40 @@
+@import "tailwindcss" source(none);
+@source "../src";
+
+@import "./erp.css";
+
+body { font-family: 'Cairo', 'Tajawal', sans-serif; }
+
+/* Enterprise brand logo — transparent, crisp, no container */
+.brand-logo {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  object-fit: contain;
+  display: block;
+  padding: 2px;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+.brand-logo--sidebar { height: 58px; width: 58px; }
+.brand-logo--navbar  { height: 52px; width: 52px; }
+.brand-logo--login   { height: 90px; width: auto; max-width: 240px; }
+@media (max-width: 640px) {
+  .brand-logo--sidebar { height: 46px; width: 46px; }
+  .brand-logo--navbar  { height: 42px; width: 42px; }
+  .brand-logo--login   { height: 70px; max-width: 200px; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes bk-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.bk-fade-in { animation: bk-fade-in .35s ease-out both; }
+.bk-tap { transition: transform .15s ease, box-shadow .15s ease; }
+.bk-tap:active { transform: scale(.97); }
+@media (max-width: 640px) {
+  .bk-root { padding-bottom: 96px; }
+  .bk-summary-wrap { box-shadow: 0 1px 2px rgba(15,23,42,0.03), 0 3px 10px -6px rgba(15,23,42,0.06) !important; }
+  .bk-summary-card:hover { box-shadow: none !important; transform: none !important; }
+}
