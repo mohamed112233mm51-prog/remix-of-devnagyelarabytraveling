@@ -1,8 +1,8 @@
 import "./lib/error-capture";
 
-import { supabaseAdmin } from "./integrations/supabase/client.server";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { FIXED_FAVICON_HREF, FIXED_FAVICON_VERSION } from "./lib/favicon";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -60,69 +60,29 @@ self.addEventListener("message", (event) => {
 });
 `;
 
-type StaticFaviconBranding = {
-  iconUrl: string;
-  updatedAt: string;
-  companyName: string;
-};
-
-async function loadStaticFaviconBranding(): Promise<StaticFaviconBranding> {
-  const now = Date.now();
-  const { data } = await supabaseAdmin
-    .from("app_settings")
-    .select("key,value,updated_at")
-    .in("key", ["favicon_url", "favicon_updated_at", "company_icon", "company_logo", "company_name"]);
-
-  const values: Record<string, string> = {};
-  const updated: Record<string, string> = {};
-  (data || []).forEach((row: any) => {
-    values[row.key] = row.value?.v || "";
-    updated[row.key] = row.updated_at || "";
-  });
-
-  return {
-    iconUrl: values.favicon_url || values.company_icon || values.company_logo || "",
-    updatedAt: values.favicon_updated_at || updated.favicon_url || updated.company_icon || updated.company_logo || String(now),
-    companyName: values.company_name || "العربي للخدمات السياحية",
-  };
-}
-
-function versionedStaticIcon(path: string, updatedAt: string): string {
-  return `${path}?v=${encodeURIComponent(updatedAt || String(Date.now()))}`;
-}
-
 async function staticFaviconAssetResponse(request: Request, pathname: string): Promise<Response | null> {
   if (!["/favicon.ico", "/favicon.png", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"].includes(pathname)) return null;
-  const branding = await loadStaticFaviconBranding();
-  if (!branding.iconUrl) return new Response(null, { status: 204, headers: NO_FAVICON_CACHE_HEADERS });
-
-  const sourceUrl = new URL(branding.iconUrl, request.url).toString();
-  const source = await fetch(sourceUrl, { cache: "no-store" }).catch(() => null);
+  const source = await fetch(new URL(`/favicon.png?v=${FIXED_FAVICON_VERSION}`, request.url).toString(), { cache: "no-store" }).catch(() => null);
   if (!source?.ok) return new Response(null, { status: 204, headers: NO_FAVICON_CACHE_HEADERS });
 
   const headers = new Headers(NO_FAVICON_CACHE_HEADERS);
-  headers.set("content-type", source.headers.get("content-type") || (pathname === "/favicon.ico" ? "image/x-icon" : "image/png"));
-  headers.set("x-branding-favicon-source", "uploaded-static-route");
+  headers.set("content-type", "image/png");
+  headers.set("x-branding-favicon-source", "fixed-static-route");
   return new Response(source.body, { status: 200, headers });
 }
 
-async function staticManifestResponse(): Promise<Response> {
-  const branding = await loadStaticFaviconBranding();
-  const iconVersion = branding.updatedAt || String(Date.now());
+async function staticManifestResponse(request: Request): Promise<Response> {
+  const absoluteIcon = new URL(FIXED_FAVICON_HREF, request.url).toString();
   return Response.json({
-    name: branding.companyName,
-    short_name: branding.companyName,
-    id: `/?brand_icon=${encodeURIComponent(iconVersion)}`,
+    name: "العربي للخدمات السياحية",
+    short_name: "العربي",
     dir: "rtl",
     lang: "ar",
     start_url: "/",
     scope: "/",
     display: "standalone",
     icons: [
-      { src: versionedStaticIcon("/favicon.png", iconVersion), sizes: "16x16 32x32 48x48", type: "image/png" },
-      { src: versionedStaticIcon("/apple-touch-icon.png", iconVersion), sizes: "180x180", type: "image/png", purpose: "any" },
-      { src: versionedStaticIcon("/icon-192.png", iconVersion), sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: versionedStaticIcon("/icon-512.png", iconVersion), sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: absoluteIcon, sizes: "32x32 180x180 192x192 512x512", type: "image/png", purpose: "any" },
     ],
   }, { headers: NO_FAVICON_CACHE_HEADERS });
 }
@@ -137,7 +97,7 @@ async function faviconCacheResponse(request: Request): Promise<Response | null> 
   const assetResponse = await staticFaviconAssetResponse(request, pathname);
   if (assetResponse) return assetResponse;
   if (["/manifest.json", "/manifest.webmanifest", "/site.webmanifest"].includes(pathname)) {
-    return staticManifestResponse();
+    return staticManifestResponse(request);
   }
   return null;
 }
