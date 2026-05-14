@@ -359,12 +359,19 @@ function InviteUserTab() {
             <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>سيتم إرسال رابط الدعوة إلى هذا البريد</div>
           </Field>
           <Field label="الدور">
-            <select style={inp} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })} disabled={busy}>
-              {ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-              <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 700, background: role.bg, color: role.color, border: `1px solid ${role.border}` }}>{role.label}</span>
-              <span style={{ fontSize: 11.5, color: "#64748B" }}>{role.desc}</span>
+            <input
+              style={inp}
+              type="text"
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value.slice(0, 40) as any })}
+              onBlur={(e) => setForm({ ...form, role: e.target.value.trim().slice(0, 40) as any })}
+              placeholder="مثال: admin / manager / accountant / operator / supervisor"
+              maxLength={40}
+              disabled={busy}
+              dir="auto"
+            />
+            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>
+              اكتب الدور يدوياً (يدعم العربية والإنجليزية، حتى 40 حرفاً)
             </div>
           </Field>
           <Field label="ربط بوكيل (اختياري)">
