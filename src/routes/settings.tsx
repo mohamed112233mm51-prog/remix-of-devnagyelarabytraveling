@@ -691,11 +691,28 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 4 }}>الدور</div>
-              <select defaultValue={u.roles[0] ?? "user"} onChange={async (e) => { await setRoleFn({ data: { user_id: u.id, role: e.target.value as any } }); toast.success("تم تحديث الدور"); onChanged(); }} style={{ ...inp, marginBottom: 0 }}>
-                <option value="user">مستخدم</option>
-                <option value="manager">مدير</option>
-                <option value="admin">أدمن</option>
-              </select>
+              <input
+                type="text"
+                defaultValue={u.roles[0] ?? "user"}
+                placeholder="admin / manager / accountant / operator"
+                maxLength={40}
+                dir="auto"
+                onBlur={async (e) => {
+                  const v = e.target.value.trim().slice(0, 40);
+                  if (!v) { toast.error("الرجاء إدخال الدور"); e.target.value = u.roles[0] ?? "user"; return; }
+                  if (v === (u.roles[0] ?? "user")) return;
+                  e.target.value = v;
+                  try {
+                    await setRoleFn({ data: { user_id: u.id, role: v as any } });
+                    toast.success("تم تحديث الدور");
+                    onChanged();
+                  } catch (err: any) {
+                    toast.error(err?.message || "تعذّر تحديث الدور");
+                    e.target.value = u.roles[0] ?? "user";
+                  }
+                }}
+                style={{ ...inp, marginBottom: 0 }}
+              />
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 4 }}>الوكيل المرتبط</div>
