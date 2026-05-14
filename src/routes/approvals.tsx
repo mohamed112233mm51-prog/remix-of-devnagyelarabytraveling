@@ -191,14 +191,24 @@ function ApprovalsPage() {
                     ) : filtered.length === 0 ? (
                       <tr>
                         <td colSpan={13}>
-                          <div className="empty" style={{ padding: "40px 20px" }}>
-                            <div className="empty-icon" style={{ width: 64, height: 64, borderRadius: 16, background: "#EFF6FF", color: "var(--primary)", display: "grid", placeItems: "center", margin: "0 auto 12px" }}>
-                              <ShieldCheck size={30} strokeWidth={1.8} />
+                          <div className="empty" style={{ padding: "48px 20px" }}>
+                            <div className="empty-icon" style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(180deg,#EFF6FF 0%, #DBEAFE 100%)", color: "var(--primary)", display: "grid", placeItems: "center", margin: "0 auto 14px", boxShadow: "inset 0 0 0 1px #BFDBFE" }}>
+                              <ShieldCheck size={34} strokeWidth={1.8} />
                             </div>
-                            <div className="empty-text" style={{ fontWeight: 700, color: "var(--text)" }}>لا توجد تقديمات حالياً</div>
+                            <div className="empty-text" style={{ fontWeight: 800, color: "var(--text)", fontSize: 15 }}>لا توجد تقديمات حالياً</div>
                             <div style={{ fontSize: 12.5, color: "var(--text3)", marginTop: 4 }}>
                               {activeFilters > 0 ? "جرّب تعديل الفلاتر أو مسحها لعرض جميع التقديمات." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
                             </div>
+                            {activeFilters === 0 && perm.create && (
+                              <button
+                                type="button"
+                                className="btn btn-gold"
+                                onClick={() => setTab("add")}
+                                style={{ marginTop: 16, height: 38, padding: "0 18px", display: "inline-flex", alignItems: "center", gap: 8 }}
+                              >
+                                <Plus size={15} strokeWidth={2.4} /> تقديم موافقة
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -215,19 +225,30 @@ function ApprovalsPage() {
                         <td data-label="الوكيل">{agentName(a.agent_id)}</td>
                         <td data-label="التقديم" className="num-col">{a.submit_date || "—"}</td>
                         <td data-label="الصدور" className="num-col">{a.issue_date || "—"}</td>
-                        <td data-label="الحالة"><span className={`pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
+                        <td data-label="الحالة"><StatusPill status={a.status} /></td>
                         <td data-label="إجراءات">
-                          {perm.edit ? (
+                          <div style={{ display: "inline-flex", gap: 6 }}>
+                            {perm.edit && (
+                              <button
+                                type="button"
+                                className="icon-action-btn"
+                                onClick={() => setEditing(a)}
+                                title="تعديل"
+                                aria-label="تعديل"
+                              >
+                                <Pencil size={14} strokeWidth={2.2} />
+                              </button>
+                            )}
                             <button
                               type="button"
-                              className="btn"
-                              onClick={() => setEditing(a)}
-                              title="تعديل"
-                              style={{ height: 32, padding: "0 12px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                              className="icon-action-btn"
+                              onClick={() => window.print()}
+                              title="طباعة"
+                              aria-label="طباعة"
                             >
-                              <Pencil size={13} strokeWidth={2.2} /> تعديل
+                              <Printer size={14} strokeWidth={2.2} />
                             </button>
-                          ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}
