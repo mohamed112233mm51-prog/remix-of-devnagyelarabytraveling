@@ -62,7 +62,6 @@ export default function Login() {
     return <ForgotPassword initialEmail={email} onBack={() => setView("login")} />;
   }
 
-  const branding = useBranding();
   return (
     <div dir="rtl" style={wrap}>
       <form onSubmit={onSubmit} style={card}>
