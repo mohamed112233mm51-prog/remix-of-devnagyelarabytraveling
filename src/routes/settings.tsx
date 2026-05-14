@@ -712,9 +712,17 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                   if (!v) { toast.error("الرجاء إدخال الدور"); e.target.value = u.roles[0] ?? "user"; return; }
                   if (v === (u.roles[0] ?? "user")) return;
                   e.target.value = v;
+                  // Map any free-text role to a safe internal access level (DB enum: admin/manager/user).
+                  const k = v.toLowerCase();
+                  const accessLevel: "admin" | "manager" | "user" =
+                    k === "admin" ? "admin" : k === "manager" ? "manager" : "user";
                   try {
-                    await setRoleFn({ data: { user_id: u.id, role: v as any } });
-                    toast.success("تم تحديث الدور");
+                    await setRoleFn({ data: { user_id: u.id, role: accessLevel } });
+                    if (accessLevel === k) {
+                      toast.success("تم تحديث الدور");
+                    } else {
+                      toast.success(`تم الحفظ كـ "${accessLevel}" (مستوى الصلاحيات الداخلي)`);
+                    }
                     onChanged();
                   } catch (err: any) {
                     toast.error(err?.message || "تعذّر تحديث الدور");
