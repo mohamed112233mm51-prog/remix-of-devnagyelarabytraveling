@@ -16,27 +16,44 @@ const BOOTSTRAP_PASSWORD = "nagy1420260000";
 
 export const bootstrapAdmin = createServerFn({ method: "POST" }).handler(async () => {
   const sb = admin();
-  const { data: existing } = await sb.from("user_roles").select("user_id").eq("role", "admin").limit(1);
-  if (existing && existing.length > 0) return { created: false };
 
-  const { data: created, error: createErr } = await sb.auth.admin.createUser({
+  // Always ensure the bootstrap admin auth user exists and is fully repaired.
+  // (After project duplication, profile rows may carry invite_accepted=false
+  // even though the admin already existed in the original project.)
+  const { data: list } = await sb.auth.admin.listUsers();
+  let authUser = list?.users.find((x) => x.email === BOOTSTRAP_EMAIL);
+
+  if (!authUser) {
+    const { data: created, error: createErr } = await sb.auth.admin.createUser({
+      email: BOOTSTRAP_EMAIL,
+      password: BOOTSTRAP_PASSWORD,
+      email_confirm: true,
+      user_metadata: { full_name: "Admin" },
+    });
+    if (createErr || !created?.user) {
+      throw new Error(createErr?.message ?? "Failed to create admin");
+    }
+    authUser = created.user as any;
+  }
+
+  const userId = authUser!.id;
+
+  // Repair profile: active + invite accepted, regardless of prior state.
+  await sb.from("profiles").upsert({
+    id: userId,
     email: BOOTSTRAP_EMAIL,
-    password: BOOTSTRAP_PASSWORD,
-    email_confirm: true,
-    user_metadata: { full_name: "Admin" },
+    full_name: "Admin",
+    is_active: true,
+    invite_accepted: true,
   });
 
-  let userId = created?.user?.id;
-  if (createErr && !userId) {
-    const { data: list } = await sb.auth.admin.listUsers();
-    const u = list?.users.find((x) => x.email === BOOTSTRAP_EMAIL);
-    userId = u?.id;
-  }
-  if (!userId) throw new Error(createErr?.message ?? "Failed to create admin");
+  // Repair admin role.
+  await sb.from("user_roles").upsert(
+    { user_id: userId, role: "admin" },
+    { onConflict: "user_id,role" },
+  );
 
-  await sb.from("user_roles").upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
-  await sb.from("profiles").upsert({ id: userId, email: BOOTSTRAP_EMAIL, full_name: "Admin", is_active: true });
-  return { created: true };
+  return { repaired: true };
 });
 
 async function ensureAdmin(supabase: any, userId: string) {
