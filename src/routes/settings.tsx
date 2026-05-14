@@ -329,7 +329,17 @@ function InviteUserTab() {
     { key: "manager", label: "مدير", desc: "إدارة العمليات والتقارير والاطلاع على المعطيات", bg: "#EEF2FF", color: "#3730A3", border: "#C7D2FE" },
     { key: "user", label: "مستخدم", desc: "صلاحيات تشغيلية محدودة حسب الأقسام المسموح بها", bg: "#F1F5F9", color: "#0F172A", border: "#E2E8F0" },
   ];
-  const role = ROLES.find((r) => r.key === form.role)!;
+  // Map any free-text role label to a safe internal access level (admin/manager/user).
+  const roleKey = (form.role || "").trim().toLowerCase();
+  const accessLevel: "admin" | "manager" | "user" =
+    roleKey === "admin" ? "admin" : roleKey === "manager" ? "manager" : "user";
+  // Safe role config with fallback for custom labels (prevents crash on ROLES.find()!).
+  const role = ROLES.find((r) => r.key === accessLevel) ?? {
+    key: accessLevel, label: (form.role || "").trim() || "مستخدم", desc: "",
+    bg: "#F1F5F9", color: "#0F172A", border: "#E2E8F0",
+  };
+  // If user typed a custom label (not the canonical key), show their text.
+  const roleDisplayLabel = roleKey && roleKey !== accessLevel ? (form.role || "").trim() : role.label;
   const agentName = agents.find((a) => a.id === form.agent_id)?.name;
   const canSubmit = !!form.email.trim() && !!form.full_name.trim() && !busy;
 
@@ -421,7 +431,7 @@ function InviteUserTab() {
                 setBusy(true);
                 try {
                   await fn({ data: {
-                    email: form.email.trim(), full_name: form.full_name, role: form.role,
+                    email: form.email.trim(), full_name: form.full_name, role: accessLevel,
                     agent_id: form.agent_id || null, permissions: form.permissions as any,
                     origin: window.location.origin,
                   } });
@@ -464,7 +474,7 @@ function InviteUserTab() {
               </div>
             </div>
             <div style={{ height: 1, background: "#E5E7EB" }} />
-            <Row label="الدور"><span style={{ display: "inline-flex", padding: "2px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: role.bg, color: role.color, border: `1px solid ${role.border}` }}>{role.label}</span></Row>
+            <Row label="الدور"><span style={{ display: "inline-flex", padding: "2px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: role.bg, color: role.color, border: `1px solid ${role.border}` }}>{roleDisplayLabel}</span></Row>
             <Row label="الوكيل المرتبط"><span style={{ color: agentName ? "#0F172A" : "#94A3B8" }}>{agentName || "بدون"}</span></Row>
             <Row label="حالة الدعوة">
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: canSubmit ? "#DCFCE7" : "#FEF3C7", color: canSubmit ? "#166534" : "#92400E", border: `1px solid ${canSubmit ? "#BBF7D0" : "#FDE68A"}` }}>
@@ -702,9 +712,17 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                   if (!v) { toast.error("الرجاء إدخال الدور"); e.target.value = u.roles[0] ?? "user"; return; }
                   if (v === (u.roles[0] ?? "user")) return;
                   e.target.value = v;
+                  // Map any free-text role to a safe internal access level (DB enum: admin/manager/user).
+                  const k = v.toLowerCase();
+                  const accessLevel: "admin" | "manager" | "user" =
+                    k === "admin" ? "admin" : k === "manager" ? "manager" : "user";
                   try {
-                    await setRoleFn({ data: { user_id: u.id, role: v as any } });
-                    toast.success("تم تحديث الدور");
+                    await setRoleFn({ data: { user_id: u.id, role: accessLevel } });
+                    if (accessLevel === k) {
+                      toast.success("تم تحديث الدور");
+                    } else {
+                      toast.success(`تم الحفظ كـ "${accessLevel}" (مستوى الصلاحيات الداخلي)`);
+                    }
                     onChanged();
                   } catch (err: any) {
                     toast.error(err?.message || "تعذّر تحديث الدور");
