@@ -1,12 +1,13 @@
 const DEFAULT_TITLE = "العربي للخدمات السياحية";
 
-export const FIXED_FAVICON_VERSION = "2026";
+export const FIXED_FAVICON_VERSION = "2026-final";
 export const FIXED_FAVICON_HREF = `/agent-egypt-icon.png?v=${FIXED_FAVICON_VERSION}`;
+export const FIXED_SHORTCUT_HREF = `/favicon.ico?v=${FIXED_FAVICON_VERSION}`;
 export const FIXED_MANIFEST_HREF = `/manifest.json?v=${FIXED_FAVICON_VERSION}`;
 
 const FIXED_LINKS = [
-  { rel: "icon", href: FIXED_FAVICON_HREF },
-  { rel: "shortcut icon", href: FIXED_FAVICON_HREF },
+  { rel: "icon", href: FIXED_FAVICON_HREF, type: "image/png" },
+  { rel: "shortcut icon", href: FIXED_SHORTCUT_HREF },
   { rel: "apple-touch-icon", href: FIXED_FAVICON_HREF },
   { rel: "manifest", href: FIXED_MANIFEST_HREF },
 ] as const;
@@ -30,10 +31,11 @@ function appendFixedFaviconLinks() {
   if (typeof document === "undefined") return;
   const head = document.head;
   if (!head) return;
-  FIXED_LINKS.forEach(({ rel, href }) => {
+  FIXED_LINKS.forEach(({ rel, href, type }) => {
     const link = document.createElement("link");
     link.rel = rel;
     link.href = href;
+    if (type) link.type = type;
     link.setAttribute("data-fixed-favicon", "true");
     head.appendChild(link);
   });
@@ -55,13 +57,15 @@ export function getFaviconBootScript() {
         link.remove();
       }
     });
-    fixedLinks.forEach(({ rel, href }) => {
+    fixedLinks.forEach(({ rel, href, type }) => {
       const link = document.createElement('link');
       link.rel = rel;
       link.href = href;
+      if (type) link.type = type;
       link.setAttribute('data-fixed-favicon', 'true');
       document.head.appendChild(link);
     });
+    console.info('favicon-debug', Array.from(document.querySelectorAll('link[rel*=icon]')).map((link) => ({ rel: link.getAttribute('rel'), href: link.getAttribute('href') })));
   })();`;
 }
 
