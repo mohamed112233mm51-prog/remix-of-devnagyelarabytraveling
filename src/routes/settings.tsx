@@ -1006,10 +1006,9 @@ function GeneralTab() {
     <div style={{ display: "grid", gap: 16, paddingBottom: 80 }}>
       {/* Branding identity */}
       <div style={cardStyle}>
-        <SectionHeader icon={<Sparkles size={20} />} title="الهوية البصرية للشركة" desc="ارفع شعار الشركة وأيقونة المتصفح. الصور تتحسّن تلقائيًا قبل الرفع." />
+        <SectionHeader icon={<Sparkles size={20} />} title="الهوية البصرية للشركة" desc="ارفع شعار الشركة. الصور تتحسّن تلقائيًا قبل الرفع." />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 12 }}>
           <UploadCard label="شعار الشركة" hint="PNG شفاف يُفضّل (1024×1024). PNG / JPG / WEBP / SVG حتى 2MB." current={currentLogo} busy={uploadingLogo} onPick={handleLogoFile} onRemove={() => setSettings((s) => ({ ...s, company_logo: "" }))} />
-          <UploadCard label="أيقونة المتصفح / Favicon" hint="مربعة (مثلاً 512×512). إذا تُركت فارغة سيُشتق تلقائيًا من الشعار." current={currentIcon} isIcon busy={uploadingIcon} onPick={handleIconFile} onRemove={() => setSettings((s) => ({ ...s, company_icon: "", favicon_url: "", favicon_updated_at: new Date().toISOString() }))} />
         </div>
       </div>
 
