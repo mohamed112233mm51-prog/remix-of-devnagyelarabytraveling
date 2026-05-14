@@ -216,7 +216,11 @@ function ApprovalsPage() {
           <div className="fl-card" style={{ borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)", overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px", borderBottom: "1px solid #eef2f7" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 9, background: `${NAVY}10`, color: NAVY, display: "grid", placeItems: "center", fontSize: 16 }}>🛡️</div>
+                <div aria-label="Egypt" style={{ width: 32, height: 32, borderRadius: 9, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 2px 6px rgba(206,17,38,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#C8A44D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>
+                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                  </svg>
+                </div>
                 <div>
                   <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>سجل التقديمات</h4>
                   <div style={{ fontSize: 11, color: "#94a3b8" }}>عرض ومتابعة جميع تقديمات الموافقات الأمنية</div>
