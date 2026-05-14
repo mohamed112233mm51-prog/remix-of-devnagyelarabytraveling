@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { normalizeDropdownValue, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
-import { applyFavicon, withFaviconVersion } from "@/lib/favicon";
+import { withFaviconVersion } from "@/lib/favicon";
 import {
   listUsers, inviteUser, deleteUser, setUserRole,
   setUserActive, updateUserProfile, resendInvite, sendPasswordReset,
@@ -868,7 +868,6 @@ function GeneralTab() {
           { key: "favicon_updated_at", value: { v: faviconUpdatedAt }, updated_at: faviconUpdatedAt },
         ], { onConflict: "key" });
         if (saveIconErr) throw saveIconErr;
-        await applyFavicon(url, faviconUpdatedAt, settings.company_name);
         invalidateBranding();
         void loadBranding(true);
       }
