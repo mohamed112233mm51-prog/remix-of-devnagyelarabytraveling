@@ -2,7 +2,7 @@ const DEFAULT_TITLE = "العربي للخدمات السياحية";
 
 type FaviconVersion = string | number | Date | null | undefined;
 
-export const FIXED_FAVICON_VERSION = "999999";
+export const FIXED_FAVICON_VERSION = "arabi-2026-01";
 export const FIXED_FAVICON_HREF = `/favicon.png?v=${FIXED_FAVICON_VERSION}`;
 export const FIXED_MANIFEST_HREF = `/manifest.json?v=${FIXED_FAVICON_VERSION}`;
 
