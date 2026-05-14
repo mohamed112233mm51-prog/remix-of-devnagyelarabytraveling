@@ -142,13 +142,22 @@ export async function applyFavicon(iconUrl?: string, updatedAt?: FaviconVersion,
   document.title = companyName || DEFAULT_TITLE;
   const cleanIconUrl = stripVersionParam(String(iconUrl || "").trim());
   await clearCachedFaviconEntries(cleanIconUrl);
-  await preloadFreshIcon(STATIC_FAVICON_PATHS.png);
   if (runId !== applyRun) return;
-  const pngHref = staticAssetHref(STATIC_FAVICON_PATHS.png, updatedAt);
-  const icoHref = staticAssetHref(STATIC_FAVICON_PATHS.ico, updatedAt);
-  const appleHref = staticAssetHref(STATIC_FAVICON_PATHS.apple, updatedAt);
-  const icon192Href = staticAssetHref(STATIC_FAVICON_PATHS.icon192, updatedAt);
-  const icon512Href = staticAssetHref(STATIC_FAVICON_PATHS.icon512, updatedAt);
+
+  // Prefer the actual uploaded icon URL (data: URL or storage URL) for link hrefs.
+  // Static paths like /favicon.png are served by Vite/Workers from public/ before
+  // our request handler runs, which would re-serve the bundled default icon.
+  const hasCustom = Boolean(cleanIconUrl);
+  const customHref = hasCustom ? withFaviconVersion(cleanIconUrl, updatedAt) : "";
+  const customType = hasCustom ? detectIconType(cleanIconUrl) : "image/png";
+
+  const pngHref = hasCustom ? customHref : staticAssetHref(STATIC_FAVICON_PATHS.png, updatedAt);
+  const icoHref = hasCustom ? customHref : staticAssetHref(STATIC_FAVICON_PATHS.ico, updatedAt);
+  const appleHref = hasCustom ? customHref : staticAssetHref(STATIC_FAVICON_PATHS.apple, updatedAt);
+  const icon192Href = hasCustom ? customHref : staticAssetHref(STATIC_FAVICON_PATHS.icon192, updatedAt);
+  const icon512Href = hasCustom ? customHref : staticAssetHref(STATIC_FAVICON_PATHS.icon512, updatedAt);
+  const pngType = hasCustom ? customType : "image/png";
+  const icoType = hasCustom ? customType : "image/x-icon";
 
   removeExistingFaviconLinks();
   const add = (rel: string, href: string, sizes?: string, type?: string) => {
@@ -161,16 +170,16 @@ export async function applyFavicon(iconUrl?: string, updatedAt?: FaviconVersion,
     document.head.appendChild(link);
   };
 
-  add("icon", pngHref, "32x32", "image/png");
-  add("icon", icoHref);
-  add("shortcut icon", icoHref);
-  add("icon", pngHref, "16x16", "image/png");
-  add("icon", pngHref, "48x48", "image/png");
-  add("icon", icon192Href, "192x192", "image/png");
-  add("icon", icon512Href, "512x512", "image/png");
-  add("apple-touch-icon", appleHref, "180x180", "image/png");
-  add("apple-touch-icon", icon192Href, "192x192", "image/png");
-  add("apple-touch-icon", icon512Href, "512x512", "image/png");
+  add("icon", pngHref, "32x32", pngType);
+  add("icon", icoHref, undefined, icoType);
+  add("shortcut icon", icoHref, undefined, icoType);
+  add("icon", pngHref, "16x16", pngType);
+  add("icon", pngHref, "48x48", pngType);
+  add("icon", icon192Href, "192x192", pngType);
+  add("icon", icon512Href, "512x512", pngType);
+  add("apple-touch-icon", appleHref, "180x180", pngType);
+  add("apple-touch-icon", icon192Href, "192x192", pngType);
+  add("apple-touch-icon", icon512Href, "512x512", pngType);
   updateRuntimeManifest(updatedAt);
   console.log("Active favicon:", document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.href);
 }
