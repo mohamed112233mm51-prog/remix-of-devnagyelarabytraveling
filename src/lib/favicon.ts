@@ -7,17 +7,12 @@ export const FIXED_FAVICON_HREF = `/favicon.png?v=${FIXED_FAVICON_VERSION}`;
 export const FIXED_MANIFEST_HREF = `/manifest.json?v=${FIXED_FAVICON_VERSION}`;
 
 const FAVICON_CACHE_PATTERNS = [
-  "/favicon.ico",
-  "/favicon.png",
-  "/apple-touch-icon",
-  "/icon-192",
-  "/icon-512",
-  "/manifest.json",
-  "/manifest.webmanifest",
-  "/site.webmanifest",
+  "favicon",
+  "apple-touch",
+  "icon-",
+  "manifest.",
   "company-icon",
   "company-assets/icons",
-  "favicon",
   "lovable",
 ];
 
