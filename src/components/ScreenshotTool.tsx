@@ -140,59 +140,19 @@ async function captureWithHtml2Canvas(): Promise<HTMLCanvasElement> {
 }
 
 /**
- * Fallback: browser screen capture (requires permission). Used only when DOM
- * capture fails or returns a blank canvas.
- */
-async function captureWithDisplayMedia(): Promise<HTMLCanvasElement> {
-  const md = navigator.mediaDevices as MediaDevices & {
-    getDisplayMedia?: (c?: MediaStreamConstraints) => Promise<MediaStream>;
-  };
-  if (!md?.getDisplayMedia) throw new Error("Screen Capture API غير مدعومة في هذا المتصفح");
-  const stream = await md.getDisplayMedia({
-    video: { frameRate: 30 } as MediaTrackConstraints,
-    audio: false,
-    preferCurrentTab: true,
-    selfBrowserSurface: "include",
-  } as MediaStreamConstraints);
-  try {
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.muted = true;
-    (video as HTMLVideoElement).playsInline = true;
-    await video.play();
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    if (!w || !h) throw new Error("تعذر قراءة إطار الشاشة");
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas context unavailable");
-    ctx.drawImage(video, 0, 0, w, h);
-    return canvas;
-  } finally {
-    stream.getTracks().forEach((t) => t.stop());
-  }
-}
-
-/**
- * Try DOM capture first; if blank, retry once after 500ms; if still blank,
- * fall back to browser screen capture (with a user-visible note).
+ * DOM-only capture. Tries once, retries once after 500ms if blank.
+ * No browser screen-capture fallback — never triggers permission popups.
  */
 async function captureScreenFrame(): Promise<HTMLCanvasElement> {
-  try {
-    let canvas = await captureWithHtml2Canvas();
-    if (isCanvasBlank(canvas)) {
-      await new Promise((r) => setTimeout(r, 500));
-      canvas = await captureWithHtml2Canvas();
-    }
-    if (!isCanvasBlank(canvas)) return canvas;
-    throw new Error("blank");
-  } catch (err) {
-    console.warn("DOM capture failed, falling back to screen capture", err);
-    toast.message("قد يطلب المتصفح إذن التقاط الشاشة لأسباب أمنية");
-    return captureWithDisplayMedia();
+  let canvas = await captureWithHtml2Canvas();
+  if (isCanvasBlank(canvas)) {
+    await new Promise((r) => setTimeout(r, 500));
+    canvas = await captureWithHtml2Canvas();
   }
+  if (isCanvasBlank(canvas)) {
+    throw new Error("تعذر التقاط الشاشة داخليًا، استخدم أداة لقطة الشاشة من النظام");
+  }
+  return canvas;
 }
 
 export default function ScreenshotTool() {
