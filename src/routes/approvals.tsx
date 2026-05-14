@@ -86,7 +86,7 @@ function ApprovalsPage() {
             <span className="crumb-current">التقديمات</span>
           </div>
           <h1 className="page-h1"><ShieldCheck size={20} strokeWidth={2.2} /> تقديمات الموافقات الأمنية</h1>
-          <div className="page-sub">إدارة ومتابعة حالات الموافقات الأمنية للمسافرين</div>
+          <div className="page-sub">إدارة ومتابعة الموافقات الأمنية وحالات السفر</div>
         </div>
       </div>
 
