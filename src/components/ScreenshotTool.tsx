@@ -49,23 +49,77 @@ function canvasToBlob(canvas: HTMLCanvasElement) {
 }
 
 /**
- * Capture the current app viewport silently using html2canvas.
- * No browser permission prompt, no getDisplayMedia, no tab-share dialog.
- * Elements with [data-screenshot-ignore="true"] are excluded from the capture.
+ * Wait for fonts and one paint frame so the DOM is fully rendered.
  */
-async function captureScreenFrame(): Promise<HTMLCanvasElement> {
+async function waitForRender() {
   try {
     await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
   } catch {}
+  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+}
 
-  const target = (document.scrollingElement as HTMLElement) || document.documentElement || document.body;
-  const width = Math.max(target.clientWidth, window.innerWidth);
-  const height = Math.max(target.clientHeight, window.innerHeight);
+/**
+ * Heuristic: returns true if the canvas is empty / fully white / fully one color.
+ * Samples a small grid instead of every pixel for speed.
+ */
+function isCanvasBlank(canvas: HTMLCanvasElement): boolean {
+  if (!canvas.width || !canvas.height) return true;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return true;
+  try {
+    const w = canvas.width;
+    const h = canvas.height;
+    const stepsX = 12;
+    const stepsY = 12;
+    let firstR = -1, firstG = -1, firstB = -1;
+    let varied = false;
+    let nonWhite = 0;
+    for (let i = 1; i < stepsX; i++) {
+      for (let j = 1; j < stepsY; j++) {
+        const x = Math.floor((w * i) / stepsX);
+        const y = Math.floor((h * j) / stepsY);
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        const [r, g, b] = [d[0], d[1], d[2]];
+        if (firstR < 0) { firstR = r; firstG = g; firstB = b; }
+        else if (r !== firstR || g !== firstG || b !== firstB) varied = true;
+        if (!(r >= 248 && g >= 248 && b >= 248)) nonWhite++;
+      }
+    }
+    if (!varied) return true; // single solid color
+    if (nonWhite < 3) return true; // basically all white
+    return false;
+  } catch {
+    // Tainted canvas — treat as non-blank (we still got something rendered).
+    return false;
+  }
+}
 
-  const canvas = await html2canvas(document.body, {
-    backgroundColor: "#ffffff",
+/**
+ * Silent DOM capture via html2canvas. No permission prompts.
+ * Excludes elements marked with [data-screenshot-ignore="true"].
+ */
+async function captureWithHtml2Canvas(): Promise<HTMLCanvasElement> {
+  await waitForRender();
+
+  // Best-effort: opt cross-origin images into CORS so they render instead of tainting.
+  document.querySelectorAll("img").forEach((img) => {
+    if (!img.crossOrigin && img.src && !img.src.startsWith(window.location.origin) && !img.src.startsWith("data:") && !img.src.startsWith("blob:")) {
+      try { img.crossOrigin = "anonymous"; } catch {}
+    }
+  });
+
+  const root = document.documentElement;
+  const body = document.body;
+  const width = Math.max(body.scrollWidth, root.scrollWidth, root.clientWidth, window.innerWidth);
+  const height = Math.max(body.scrollHeight, root.scrollHeight, root.clientHeight, window.innerHeight);
+  const bg = getComputedStyle(body).backgroundColor || "#ffffff";
+
+  return html2canvas(body, {
+    backgroundColor: bg && bg !== "rgba(0, 0, 0, 0)" ? bg : "#ffffff",
     useCORS: true,
+    allowTaint: false,
     logging: false,
+    removeContainer: true,
     scale: Math.min(window.devicePixelRatio || 1, 2),
     width,
     height,
@@ -73,12 +127,72 @@ async function captureScreenFrame(): Promise<HTMLCanvasElement> {
     windowHeight: height,
     scrollX: -window.scrollX,
     scrollY: -window.scrollY,
+    foreignObjectRendering: false,
     ignoreElements: (el) => {
       if (!(el instanceof HTMLElement)) return false;
-      return el.getAttribute("data-screenshot-ignore") === "true";
+      if (el.getAttribute("data-screenshot-ignore") === "true") return true;
+      // Skip portal overlays that aren't currently visible
+      const cs = el.ownerDocument?.defaultView?.getComputedStyle(el);
+      if (cs && cs.visibility === "hidden") return true;
+      return false;
     },
   });
-  return canvas;
+}
+
+/**
+ * Fallback: browser screen capture (requires permission). Used only when DOM
+ * capture fails or returns a blank canvas.
+ */
+async function captureWithDisplayMedia(): Promise<HTMLCanvasElement> {
+  const md = navigator.mediaDevices as MediaDevices & {
+    getDisplayMedia?: (c?: MediaStreamConstraints) => Promise<MediaStream>;
+  };
+  if (!md?.getDisplayMedia) throw new Error("Screen Capture API غير مدعومة في هذا المتصفح");
+  const stream = await md.getDisplayMedia({
+    video: { frameRate: 30 } as MediaTrackConstraints,
+    audio: false,
+    preferCurrentTab: true,
+    selfBrowserSurface: "include",
+  } as MediaStreamConstraints);
+  try {
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    video.muted = true;
+    (video as HTMLVideoElement).playsInline = true;
+    await video.play();
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) throw new Error("تعذر قراءة إطار الشاشة");
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context unavailable");
+    ctx.drawImage(video, 0, 0, w, h);
+    return canvas;
+  } finally {
+    stream.getTracks().forEach((t) => t.stop());
+  }
+}
+
+/**
+ * Try DOM capture first; if blank, retry once after 500ms; if still blank,
+ * fall back to browser screen capture (with a user-visible note).
+ */
+async function captureScreenFrame(): Promise<HTMLCanvasElement> {
+  try {
+    let canvas = await captureWithHtml2Canvas();
+    if (isCanvasBlank(canvas)) {
+      await new Promise((r) => setTimeout(r, 500));
+      canvas = await captureWithHtml2Canvas();
+    }
+    if (!isCanvasBlank(canvas)) return canvas;
+    throw new Error("blank");
+  } catch (err) {
+    console.warn("DOM capture failed, falling back to screen capture", err);
+    toast.message("قد يطلب المتصفح إذن التقاط الشاشة لأسباب أمنية");
+    return captureWithDisplayMedia();
+  }
 }
 
 export default function ScreenshotTool() {
