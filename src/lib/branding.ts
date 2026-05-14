@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import defaultLogo from "@/assets/company-logo.png";
-import { applyFavicon } from "./favicon";
 
 export const DEFAULT_COMPANY_NAME = "العربي للخدمات السياحية";
 export const BRAND_NAVY = "#0F1B3D";
@@ -109,8 +108,6 @@ export function applyBrandingCssVars(b: Branding) {
   const s = hexToRgb(b.secondaryColor);
   if (s) root.style.setProperty("--brand-secondary-rgb", `${s.r}, ${s.g}, ${s.b}`);
 
-  // Favicon is fixed system-wide; do not override from branding/app_settings.
-  void applyFavicon;
 }
 
 /**
