@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
 
 type Point = { x: number; y: number };
