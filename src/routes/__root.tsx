@@ -11,7 +11,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { useEffect } from "react";
-import { FIXED_FAVICON_HREF, FIXED_FAVICON_VERSION, FIXED_MANIFEST_HREF, enforceFixedFavicon, getFaviconBootScript } from "@/lib/favicon";
+import { FIXED_FAVICON_HREF, FIXED_MANIFEST_HREF, enforceFixedFavicon, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
   return (
