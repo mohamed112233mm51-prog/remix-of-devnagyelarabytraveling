@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
@@ -513,7 +514,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ maxWidth: 820 }}>
         <div className="modal-header">
@@ -566,6 +567,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
           <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "..." : "💾 حفظ التعديلات"}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
