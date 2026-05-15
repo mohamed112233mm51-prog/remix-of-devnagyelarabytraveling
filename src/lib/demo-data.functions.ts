@@ -291,10 +291,12 @@ export const generateDemoData = createServerFn({ method: "POST" })
         const total = count * price;
         const cash = Math.random() > 0.5 ? Math.floor(total * 0.6) : 0;
         const instapay = total - cash;
+        const date = daysAgo(rand(0, 60));
+        const destination = pickOrNull(dd.destination);
         return {
           agent_id: pick(agentIds),
-          date: daysAgo(rand(0, 60)),
-          destination: pickOrNull(dd.destination),
+          date,
+          destination,
           count,
           price,
           payment_method: pick(["نقدي", "إنستاباي", "محفظة"]),
@@ -304,7 +306,7 @@ export const generateDemoData = createServerFn({ method: "POST" })
           instapay_amount: instapay,
           merchant_id: Math.random() > 0.4 && merchantIds.length ? pick(merchantIds) : null,
           service_type: pickOrNull(dd.service_type),
-          travel_statement: buildTravelStatement(pickOrNull(dd.destination), daysAgo(rand(0, 60)), null) || null,
+          travel_statement: buildTravelStatement(destination, date, null) || null,
           note: "بيانات تجريبية",
           is_demo: true,
         };
