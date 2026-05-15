@@ -449,6 +449,23 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
   const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
