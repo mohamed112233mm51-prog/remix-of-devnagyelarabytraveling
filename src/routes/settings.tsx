@@ -2116,7 +2116,8 @@ function BackupPreviewModal({ data, onClose }: { data: { meta: any; file: any; l
   const created = meta?.created_at ? new Date(meta.created_at) : null;
   const createdBy = createdByName || (log?.created_by ? log.created_by.slice(0, 8) + "…" : "النظام");
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       onClick={onClose}
       style={{
