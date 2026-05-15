@@ -199,7 +199,8 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     toast.success("تم تحديث بيانات الوكيل بنجاح");
     onClose();
   };
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0 }}>
         <div className="card-header"><div className="card-title">✏️ تعديل بيانات الوكيل</div></div>
@@ -220,7 +221,8 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           <button className="btn btn-gold" onClick={save}>💾 حفظ التعديلات</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
