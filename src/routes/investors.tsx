@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
