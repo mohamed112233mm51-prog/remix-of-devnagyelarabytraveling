@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   exportStatementToExcel,
   exportStatementToPDF,
@@ -23,7 +24,7 @@ export function ExportButton({ getData, disabled }: { getData: () => StatementEx
     const data = getData();
     if (kind === "excel") {
       try { await exportStatementToExcel(data); }
-      catch (e) { alert("تعذر تصدير ملف Excel: " + (e as Error).message); }
+      catch (e) { toast.error("تعذر تصدير ملف Excel: " + (e as Error).message); }
     } else exportStatementToPDF(data);
   };
 

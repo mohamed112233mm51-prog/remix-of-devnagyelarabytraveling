@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { loadBranding, DEFAULT_COMPANY_NAME } from "./branding";
 
@@ -367,7 +368,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 export async function exportStatementToPDF(data: StatementExportData) {
   const w = window.open("", "_blank", "width=1024,height=768");
   if (!w) {
-    alert("برجاء السماح بفتح النوافذ المنبثقة لتصدير PDF");
+    toast.error("برجاء السماح بفتح النوافذ المنبثقة لتصدير PDF");
     return;
   }
   const branding = await loadBranding();

@@ -334,13 +334,13 @@ function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companie
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
 
   const save = async () => {
-    if (!form.passenger_name.trim()) return alert("اسم المسافر مطلوب");
-    if (!form.destination || !form.authority || !form.agent_id || !form.status) return alert("برجاء اختيار قيمة من القائمة");
-    if (!form.issuing_company) return alert("برجاء اختيار الشركة الصادرة");
+    if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
+    if (!form.destination || !form.authority || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
+    if (!form.issuing_company) return toast.error("برجاء اختيار الشركة الصادرة");
     let issuing_company_id = companies.find((c) => c.company_name === form.issuing_company)?.id || null;
     if (!issuing_company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.issuing_company, status: "نشط" }).select("id").single();
-      if (cErr) return alert(cErr.message);
+      if (cErr) return toast.error(cErr.message);
       issuing_company_id = data.id;
     }
     const shared = {
@@ -459,7 +459,7 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
 
   const save = async () => {
-    if (!form.passenger_name.trim()) return alert("اسم المسافر مطلوب");
+    if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     setSaving(true);
     let issuing_company_id = approval.issuing_company_id;
     if (form.issuing_company && form.issuing_company !== approval.issuing_company) {

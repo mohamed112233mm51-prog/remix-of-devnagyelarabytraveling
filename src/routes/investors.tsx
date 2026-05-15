@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
@@ -128,13 +129,13 @@ function InvestorForm() {
   const [form, setForm] = useState({ investor_name: "", phone: "", whatsapp: "" });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.investor_name.trim()) return alert("اسم المستثمر مطلوب");
+    if (!form.investor_name.trim()) return toast.error("اسم المستثمر مطلوب");
     const { error } = await supabase.from("investors").insert({
       investor_name: form.investor_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     setForm({ investor_name: "", phone: "", whatsapp: "" });
   };
   return (
@@ -160,9 +161,9 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.investor_id) return alert("اختر المستثمر");
-    if (!Number(form.amount)) return alert("أدخل المبلغ");
-    if (!form.payment_method) return alert(`اختر ${methodLabel}`);
+    if (!form.investor_id) return toast.error("اختر المستثمر");
+    if (!Number(form.amount)) return toast.error("أدخل المبلغ");
+    if (!form.payment_method) return toast.error(`اختر ${methodLabel}`);
     const { error } = await supabase.from("investor_transactions").insert({
       investor_id: form.investor_id,
       transaction_type: kind,
@@ -171,7 +172,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       payment_method: form.payment_method,
       note: form.note || null,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payment_method: "", note: "" });
   };
   return (
@@ -419,7 +420,7 @@ function EditInvestorModal({ investor, onClose }: { investor: Investor; onClose:
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.investor_name.trim()) return alert("اسم المستثمر مطلوب");
+    if (!form.investor_name.trim()) return toast.error("اسم المستثمر مطلوب");
     setSaving(true);
     const { error } = await supabase.from("investors").update({
       investor_name: form.investor_name.trim(),
@@ -427,7 +428,7 @@ function EditInvestorModal({ investor, onClose }: { investor: Investor; onClose:
       whatsapp: form.whatsapp.trim() || null,
     }).eq("id", investor.id);
     setSaving(false);
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     onClose();
   };
   if (typeof document === "undefined") return null;

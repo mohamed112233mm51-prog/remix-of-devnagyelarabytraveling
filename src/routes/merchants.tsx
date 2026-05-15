@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fmtDL, merchantCashGross, merchantCashNet, useLive,
@@ -211,7 +212,7 @@ function MerchantForm() {
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.merchant_name.trim()) return alert("اسم التاجر مطلوب");
+    if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
     const { error } = await supabase.from("merchants").insert({
       merchant_name: form.merchant_name,
       phone: form.phone || null,
@@ -220,7 +221,7 @@ function MerchantForm() {
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true });
   };
   return (
@@ -248,15 +249,15 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
   const [form, setForm] = useState({ merchant_id: "", date: new Date().toISOString().slice(0, 10), amount: "", note: "" });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.merchant_id) return alert("اختر التاجر");
-    if (!Number(form.amount)) return alert("أدخل المبلغ");
+    if (!form.merchant_id) return toast.error("اختر التاجر");
+    if (!Number(form.amount)) return toast.error("أدخل المبلغ");
     const { error } = await supabase.from("merchant_cash_collections").insert({
       merchant_id: form.merchant_id,
       date: form.date,
       amount: Number(form.amount || 0),
       note: form.note || null,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     setForm({ merchant_id: "", date: new Date().toISOString().slice(0, 10), amount: "", note: "" });
   };
   return (
@@ -430,7 +431,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.merchant_name.trim()) return alert("اسم التاجر مطلوب");
+    if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
     setSaving(true);
     const { error } = await supabase.from("merchants").update({
       merchant_name: form.merchant_name.trim(),
@@ -441,7 +442,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
       supports_physical_cash: form.supports_physical_cash,
     }).eq("id", merchant.id);
     setSaving(false);
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     onClose();
   };
   if (typeof document === "undefined") return null;

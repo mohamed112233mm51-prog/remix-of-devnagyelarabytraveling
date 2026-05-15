@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Expense, type ExpenseDeduction } from "@/lib/db";
+import { confirmDialog } from "@/lib/confirm";
 import { Wallet, Receipt, TrendingDown, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/expenses")({
@@ -88,8 +90,8 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
-    if (!form.expense_name.trim()) return alert("اسم المصروف مطلوب");
-    if (!Number(form.amount)) return alert("أدخل المبلغ");
+    if (!form.expense_name.trim()) return toast.error("اسم المصروف مطلوب");
+    if (!Number(form.amount)) return toast.error("أدخل المبلغ");
     const payload = {
       expense_name: form.expense_name,
       expense_type: form.expense_type,
@@ -106,7 +108,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     const { error } = initial
       ? await supabase.from("expenses").update(payload).eq("id", initial.id)
       : await supabase.from("expenses").insert(payload);
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     if (!initial) {
       setForm({
         expense_name: "",
@@ -180,9 +182,10 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
   const [edit, setEdit] = useState<Expense | null>(null);
   const del = async (id: string) => {
-    if (!confirm("حذف هذا المصروف؟")) return;
+    if (!(await confirmDialog("حذف هذا المصروف؟"))) return;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
+    else toast.success("تم حذف المصروف");
   };
 
   if (edit) return <ExpenseForm initial={edit} onDone={() => setEdit(null)} />;
