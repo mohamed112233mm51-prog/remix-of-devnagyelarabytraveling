@@ -182,9 +182,10 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
   const [edit, setEdit] = useState<Expense | null>(null);
   const del = async (id: string) => {
-    if (!confirm("حذف هذا المصروف؟")) return;
+    if (!(await confirmDialog("حذف هذا المصروف؟"))) return;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) toast.error(error.message);
+    else toast.success("تم حذف المصروف");
   };
 
   if (edit) return <ExpenseForm initial={edit} onDone={() => setEdit(null)} />;
