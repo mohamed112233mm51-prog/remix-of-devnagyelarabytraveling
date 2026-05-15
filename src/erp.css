@@ -1723,7 +1723,7 @@
   height: 40px; padding: 0 18px; flex: 0 0 auto;
   border-radius: 10px;
   background: linear-gradient(180deg, #F0C146 0%, #C99A2E 100%);
-  color: #ffffff;
+  color: #1a1a1a;
   border: 1px solid #E0B43E;
   font-weight: 800;
   box-shadow: 0 2px 8px rgba(201,154,46,0.30), inset 0 1px 0 rgba(255,255,255,0.25);
