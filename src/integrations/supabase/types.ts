@@ -49,6 +49,7 @@ export type Database = {
           created_at: string
           governorate: string | null
           id: string
+          is_demo: boolean
           name: string
           national_id: string | null
           phone: string | null
@@ -59,6 +60,7 @@ export type Database = {
           created_at?: string
           governorate?: string | null
           id?: string
+          is_demo?: boolean
           name: string
           national_id?: string | null
           phone?: string | null
@@ -69,6 +71,7 @@ export type Database = {
           created_at?: string
           governorate?: string | null
           id?: string
+          is_demo?: boolean
           name?: string
           national_id?: string | null
           phone?: string | null
@@ -105,6 +108,7 @@ export type Database = {
           dob: string | null
           government_fee: number
           id: string
+          is_demo: boolean
           issue_date: string | null
           issuing_company: string | null
           issuing_company_id: string | null
@@ -126,6 +130,7 @@ export type Database = {
           dob?: string | null
           government_fee?: number
           id?: string
+          is_demo?: boolean
           issue_date?: string | null
           issuing_company?: string | null
           issuing_company_id?: string | null
@@ -147,6 +152,7 @@ export type Database = {
           dob?: string | null
           government_fee?: number
           id?: string
+          is_demo?: boolean
           issue_date?: string | null
           issuing_company?: string | null
           issuing_company_id?: string | null
@@ -220,6 +226,7 @@ export type Database = {
           destination: string | null
           id: string
           instapay_amount: number
+          is_demo: boolean
           merchant_cash_amount: number
           merchant_cash_net_amount: number
           merchant_cash_physical_amount: number
@@ -243,6 +250,7 @@ export type Database = {
           destination?: string | null
           id?: string
           instapay_amount?: number
+          is_demo?: boolean
           merchant_cash_amount?: number
           merchant_cash_net_amount?: number
           merchant_cash_physical_amount?: number
@@ -266,6 +274,7 @@ export type Database = {
           destination?: string | null
           id?: string
           instapay_amount?: number
+          is_demo?: boolean
           merchant_cash_amount?: number
           merchant_cash_net_amount?: number
           merchant_cash_physical_amount?: number
@@ -287,6 +296,7 @@ export type Database = {
           deduction_date: string
           expense_id: string
           id: string
+          is_demo: boolean
           status: string
         }
         Insert: {
@@ -295,6 +305,7 @@ export type Database = {
           deduction_date?: string
           expense_id: string
           id?: string
+          is_demo?: boolean
           status?: string
         }
         Update: {
@@ -303,6 +314,7 @@ export type Database = {
           deduction_date?: string
           expense_id?: string
           id?: string
+          is_demo?: boolean
           status?: string
         }
         Relationships: []
@@ -317,6 +329,7 @@ export type Database = {
           expense_name: string
           expense_type: string
           id: string
+          is_demo: boolean
           notes: string | null
           payment_method: string
         }
@@ -329,6 +342,7 @@ export type Database = {
           expense_name: string
           expense_type?: string
           id?: string
+          is_demo?: boolean
           notes?: string | null
           payment_method?: string
         }
@@ -341,6 +355,7 @@ export type Database = {
           expense_name?: string
           expense_type?: string
           id?: string
+          is_demo?: boolean
           notes?: string | null
           payment_method?: string
         }
@@ -355,6 +370,7 @@ export type Database = {
           destination: string | null
           dob: string | null
           id: string
+          is_demo: boolean
           issuing_company: string | null
           national_id: string | null
           notes: string | null
@@ -372,6 +388,7 @@ export type Database = {
           destination?: string | null
           dob?: string | null
           id?: string
+          is_demo?: boolean
           issuing_company?: string | null
           national_id?: string | null
           notes?: string | null
@@ -389,6 +406,7 @@ export type Database = {
           destination?: string | null
           dob?: string | null
           id?: string
+          is_demo?: boolean
           issuing_company?: string | null
           national_id?: string | null
           notes?: string | null
@@ -415,6 +433,7 @@ export type Database = {
           date: string
           id: string
           investor_id: string
+          is_demo: boolean
           note: string | null
           payment_method: string | null
           transaction_type: string
@@ -425,6 +444,7 @@ export type Database = {
           date?: string
           id?: string
           investor_id: string
+          is_demo?: boolean
           note?: string | null
           payment_method?: string | null
           transaction_type: string
@@ -435,6 +455,7 @@ export type Database = {
           date?: string
           id?: string
           investor_id?: string
+          is_demo?: boolean
           note?: string | null
           payment_method?: string | null
           transaction_type?: string
@@ -446,6 +467,7 @@ export type Database = {
           created_at: string
           id: string
           investor_name: string
+          is_demo: boolean
           phone: string | null
           whatsapp: string | null
         }
@@ -453,6 +475,7 @@ export type Database = {
           created_at?: string
           id?: string
           investor_name: string
+          is_demo?: boolean
           phone?: string | null
           whatsapp?: string | null
         }
@@ -460,6 +483,7 @@ export type Database = {
           created_at?: string
           id?: string
           investor_name?: string
+          is_demo?: boolean
           phone?: string | null
           whatsapp?: string | null
         }
@@ -470,6 +494,7 @@ export type Database = {
           company_name: string
           created_at: string
           id: string
+          is_demo: boolean
           phone: string | null
           service_type: string | null
           status: string
@@ -479,6 +504,7 @@ export type Database = {
           company_name: string
           created_at?: string
           id?: string
+          is_demo?: boolean
           phone?: string | null
           service_type?: string | null
           status?: string
@@ -488,6 +514,7 @@ export type Database = {
           company_name?: string
           created_at?: string
           id?: string
+          is_demo?: boolean
           phone?: string | null
           service_type?: string | null
           status?: string
@@ -501,6 +528,7 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          is_demo: boolean
           merchant_id: string
           note: string | null
         }
@@ -509,6 +537,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          is_demo?: boolean
           merchant_id: string
           note?: string | null
         }
@@ -517,6 +546,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          is_demo?: boolean
           merchant_id?: string
           note?: string | null
         }
@@ -526,6 +556,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_demo: boolean
           merchant_name: string
           phone: string | null
           status: string
@@ -537,6 +568,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_demo?: boolean
           merchant_name: string
           phone?: string | null
           status?: string
@@ -548,6 +580,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_demo?: boolean
           merchant_name?: string
           phone?: string | null
           status?: string
@@ -630,6 +663,7 @@ export type Database = {
           destination: string | null
           id: string
           instapay_amount: number
+          is_demo: boolean
           merchant_cash_amount: number
           merchant_cash_net_amount: number
           merchant_cash_physical_amount: number
@@ -655,6 +689,7 @@ export type Database = {
           destination?: string | null
           id?: string
           instapay_amount?: number
+          is_demo?: boolean
           merchant_cash_amount?: number
           merchant_cash_net_amount?: number
           merchant_cash_physical_amount?: number
@@ -680,6 +715,7 @@ export type Database = {
           destination?: string | null
           id?: string
           instapay_amount?: number
+          is_demo?: boolean
           merchant_cash_amount?: number
           merchant_cash_net_amount?: number
           merchant_cash_physical_amount?: number
