@@ -2621,6 +2621,7 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
           }}>{busy ? "جارٍ الاستعادة..." : "تأكيد الاستعادة"}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
