@@ -304,7 +304,7 @@ export const generateDemoData = createServerFn({ method: "POST" })
           instapay_amount: instapay,
           merchant_id: Math.random() > 0.4 && merchantIds.length ? pick(merchantIds) : null,
           service_type: pickOrNull(dd.service_type),
-          travel_statement: pick(["سياحة", "عمل", "زيارة"]),
+          travel_statement: buildTravelStatement(pickOrNull(dd.destination), daysAgo(rand(0, 60)), null) || null,
           note: "بيانات تجريبية",
           is_demo: true,
         };
