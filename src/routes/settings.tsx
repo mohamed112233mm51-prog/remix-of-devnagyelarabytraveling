@@ -1448,6 +1448,7 @@ function DevToolsTab() {
 }
 
 
+const inp: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 };
 const th: React.CSSProperties = { padding: 10, textAlign: "right", fontSize: 13, borderBottom: "1px solid #e5e7eb" };
 const td: React.CSSProperties = { padding: 10, fontSize: 13, borderBottom: "1px solid #f3f4f6" };
 const btnPrimary: React.CSSProperties = { padding: "10px 18px", borderRadius: 8, background: "#2563eb", color: "#fff", border: 0, fontWeight: 700, cursor: "pointer" };
