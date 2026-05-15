@@ -54,12 +54,10 @@ export function Modal({
       }}
     >
       <div className="modal-box" style={{ maxWidth }}>
-        {(title || onClose) && (
-          <div className="modal-header">
-            <div className="modal-title">{title}</div>
-            <button className="modal-close" onClick={onClose} aria-label="إغلاق">×</button>
-          </div>
-        )}
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          <button className="modal-close" onClick={onClose} aria-label="إغلاق">×</button>
+        </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
