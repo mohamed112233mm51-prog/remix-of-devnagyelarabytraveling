@@ -223,22 +223,27 @@ export const generateDemoData = createServerFn({ method: "POST" })
 
     // Flights — only generate if we have agents AND at least one airline/destination/authority option.
     if (agentIds.length && dd.airline.length && dd.destination.length) {
-      const flights = Array.from({ length: 25 }, () => ({
-        passenger_name: fullName(),
-        passport: passport(),
-        national_id: nationalId(),
-        dob: daysAgo(rand(7000, 18000)),
-        airline: pickOrNull(dd.airline),
-        destination: pickOrNull(dd.destination),
-        travel_date: daysAgo(rand(-30, 60)),
-        agent_id: pick(agentIds),
-        status: pick(["محجوز", "مصدر", "ملغي"]),
-        issuing_company: pickOrNull(companyNames),
-        authority: pickOrNull(dd.authority),
-        travel_statement: pick(["سياحة", "عمل", "زيارة"]),
-        notes: "بيانات تجريبية",
-        is_demo: true,
-      }));
+      const flights = Array.from({ length: 25 }, () => {
+        const airline = pickOrNull(dd.airline);
+        const destination = pickOrNull(dd.destination);
+        const travel_date = daysAgo(rand(-30, 60));
+        return {
+          passenger_name: fullName(),
+          passport: passport(),
+          national_id: nationalId(),
+          dob: daysAgo(rand(7000, 18000)),
+          airline,
+          destination,
+          travel_date,
+          agent_id: pick(agentIds),
+          status: pick(APPROVAL_STATUSES as unknown as string[]),
+          issuing_company: pickOrNull(companyNames),
+          authority: pickOrNull(dd.authority),
+          travel_statement: buildTravelStatement(destination, travel_date, airline) || null,
+          notes: "بيانات تجريبية",
+          is_demo: true,
+        };
+      });
       const { data: flightRows } = await sb.from("flights").insert(flights).select("id");
       summary.flights = flightRows?.length ?? 0;
     } else {
@@ -247,26 +252,31 @@ export const generateDemoData = createServerFn({ method: "POST" })
 
     // Approvals
     if (agentIds.length && dd.destination.length) {
-      const approvals = Array.from({ length: 20 }, () => ({
-        passenger_name: fullName(),
-        passport: passport(),
-        national_id: nationalId(),
-        dob: daysAgo(rand(7000, 18000)),
-        destination: pickOrNull(dd.destination),
-        agent_id: pick(agentIds),
-        submit_date: daysAgo(rand(0, 60)),
-        issue_date: Math.random() > 0.4 ? daysAgo(rand(0, 30)) : null,
-        status: pick(["سريعة", "عادية", "مستعجلة"]),
-        government_fee: rand(500, 2500),
-        authority: pickOrNull(dd.authority),
-        airline: pickOrNull(dd.airline),
-        travel_date: daysAgo(rand(-30, 30)),
-        issuing_company: pickOrNull(companyNames),
-        issuing_company_id: companyIds.length ? pick(companyIds) : null,
-        travel_statement: pick(["سياحة", "عمل", "زيارة"]),
-        notes: "بيانات تجريبية",
-        is_demo: true,
-      }));
+      const approvals = Array.from({ length: 20 }, () => {
+        const airline = pickOrNull(dd.airline);
+        const destination = pickOrNull(dd.destination);
+        const travel_date = daysAgo(rand(-30, 30));
+        return {
+          passenger_name: fullName(),
+          passport: passport(),
+          national_id: nationalId(),
+          dob: daysAgo(rand(7000, 18000)),
+          destination,
+          agent_id: pick(agentIds),
+          submit_date: daysAgo(rand(0, 60)),
+          issue_date: Math.random() > 0.4 ? daysAgo(rand(0, 30)) : null,
+          status: pick(APPROVAL_STATUSES as unknown as string[]),
+          government_fee: rand(500, 2500),
+          authority: pickOrNull(dd.authority),
+          airline,
+          travel_date,
+          issuing_company: pickOrNull(companyNames),
+          issuing_company_id: companyIds.length ? pick(companyIds) : null,
+          travel_statement: buildTravelStatement(destination, travel_date, airline) || null,
+          notes: "بيانات تجريبية",
+          is_demo: true,
+        };
+      });
       const { data: approvalRows } = await sb.from("approvals").insert(approvals).select("id");
       summary.approvals = approvalRows?.length ?? 0;
     } else {
