@@ -106,6 +106,7 @@ function SettingsPage() {
       {tab === "perms" && <PermsTab />}
       {tab === "general" && <GeneralTab />}
       {tab === "backups" && <BackupsTab />}
+      {tab === "devtools" && import.meta.env.DEV && <DevToolsTab />}
     </div>
   );
 }
