@@ -1245,7 +1245,8 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
   title: string; message: string; confirmLabel: string; danger?: boolean;
   onConfirm: () => void; onCancel: () => void;
 }) {
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div dir="rtl" onClick={onCancel} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,.5)",
       display: "grid", placeItems: "center", zIndex: 1000, padding: 16,
@@ -1259,7 +1260,7 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
           <button onClick={onConfirm} style={{
             padding: "10px 18px", borderRadius: 8, border: 0, fontWeight: 700, cursor: "pointer",
-            background: danger ? "#ef4444" : "#2563eb", color: "#fff",
+            background: danger ? "#dc2626" : "#0F1F44", color: danger ? "#fff" : "#F5D27A",
           }}>{confirmLabel}</button>
           <button onClick={onCancel} style={{
             padding: "10px 18px", borderRadius: 8, border: "1px solid #e5e7eb", fontWeight: 600,
@@ -1267,7 +1268,8 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
           }}>إلغاء</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
