@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -272,7 +273,8 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     onClose();
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
         <div className="card-header"><div className="card-title">✏️ تعديل بيانات الوكيل</div></div>
@@ -293,6 +295,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

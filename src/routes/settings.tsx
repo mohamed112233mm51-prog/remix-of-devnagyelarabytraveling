@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -1244,7 +1245,8 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
   title: string; message: string; confirmLabel: string; danger?: boolean;
   onConfirm: () => void; onCancel: () => void;
 }) {
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div dir="rtl" onClick={onCancel} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,.5)",
       display: "grid", placeItems: "center", zIndex: 1000, padding: 16,
@@ -1258,7 +1260,7 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
           <button onClick={onConfirm} style={{
             padding: "10px 18px", borderRadius: 8, border: 0, fontWeight: 700, cursor: "pointer",
-            background: danger ? "#ef4444" : "#2563eb", color: "#fff",
+            background: danger ? "#dc2626" : "#0F1F44", color: danger ? "#fff" : "#F5D27A",
           }}>{confirmLabel}</button>
           <button onClick={onCancel} style={{
             padding: "10px 18px", borderRadius: 8, border: "1px solid #e5e7eb", fontWeight: 600,
@@ -1266,7 +1268,8 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
           }}>إلغاء</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1421,7 +1424,7 @@ function DevToolsTab() {
         />
       )}
 
-      {summary && (
+      {summary && typeof document !== "undefined" && createPortal(
         <div dir="rtl" onClick={() => setSummary(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0F1F44", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1441,7 +1444,8 @@ function DevToolsTab() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -2112,7 +2116,8 @@ function BackupPreviewModal({ data, onClose }: { data: { meta: any; file: any; l
   const created = meta?.created_at ? new Date(meta.created_at) : null;
   const createdBy = createdByName || (log?.created_by ? log.created_by.slice(0, 8) + "…" : "النظام");
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       onClick={onClose}
       style={{
@@ -2270,7 +2275,8 @@ function BackupPreviewModal({ data, onClose }: { data: { meta: any; file: any; l
           >إغلاق</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2538,7 +2544,8 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
   const [text, setText] = useState("");
   const valid = text.trim() === "RESTORE";
   const tc = typeColor(target.type);
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       onClick={onCancel}
       dir="rtl"
@@ -2614,6 +2621,7 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
           }}>{busy ? "جارٍ الاستعادة..." : "تأكيد الاستعادة"}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
