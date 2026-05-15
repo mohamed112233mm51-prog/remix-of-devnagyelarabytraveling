@@ -7,7 +7,12 @@ import {
   AUTHORITIES as FALLBACK_AUTHORITIES,
   DESTINATIONS as FALLBACK_DESTINATIONS,
   SERVICE_TYPES as FALLBACK_SERVICE_TYPES,
+  buildTravelStatement,
 } from "./db";
+
+// Approval/flight status options — must match the values used by the UI dropdowns
+// in src/routes/approvals.tsx and src/routes/flights.tsx. Do NOT invent new values.
+const APPROVAL_STATUSES = ["سريعة", "بطيئة", "رفض أمني"] as const;
 
 function admin() {
   return createClient<Database>(
@@ -218,22 +223,27 @@ export const generateDemoData = createServerFn({ method: "POST" })
 
     // Flights — only generate if we have agents AND at least one airline/destination/authority option.
     if (agentIds.length && dd.airline.length && dd.destination.length) {
-      const flights = Array.from({ length: 25 }, () => ({
-        passenger_name: fullName(),
-        passport: passport(),
-        national_id: nationalId(),
-        dob: daysAgo(rand(7000, 18000)),
-        airline: pickOrNull(dd.airline),
-        destination: pickOrNull(dd.destination),
-        travel_date: daysAgo(rand(-30, 60)),
-        agent_id: pick(agentIds),
-        status: pick(["محجوز", "مصدر", "ملغي"]),
-        issuing_company: pickOrNull(companyNames),
-        authority: pickOrNull(dd.authority),
-        travel_statement: pick(["سياحة", "عمل", "زيارة"]),
-        notes: "بيانات تجريبية",
-        is_demo: true,
-      }));
+      const flights = Array.from({ length: 25 }, () => {
+        const airline = pickOrNull(dd.airline);
+        const destination = pickOrNull(dd.destination);
+        const travel_date = daysAgo(rand(-30, 60));
+        return {
+          passenger_name: fullName(),
+          passport: passport(),
+          national_id: nationalId(),
+          dob: daysAgo(rand(7000, 18000)),
+          airline,
+          destination,
+          travel_date,
+          agent_id: pick(agentIds),
+          status: pick(APPROVAL_STATUSES as unknown as string[]),
+          issuing_company: pickOrNull(companyNames),
+          authority: pickOrNull(dd.authority),
+          travel_statement: buildTravelStatement(destination, travel_date, airline) || null,
+          notes: "بيانات تجريبية",
+          is_demo: true,
+        };
+      });
       const { data: flightRows } = await sb.from("flights").insert(flights).select("id");
       summary.flights = flightRows?.length ?? 0;
     } else {
@@ -242,26 +252,31 @@ export const generateDemoData = createServerFn({ method: "POST" })
 
     // Approvals
     if (agentIds.length && dd.destination.length) {
-      const approvals = Array.from({ length: 20 }, () => ({
-        passenger_name: fullName(),
-        passport: passport(),
-        national_id: nationalId(),
-        dob: daysAgo(rand(7000, 18000)),
-        destination: pickOrNull(dd.destination),
-        agent_id: pick(agentIds),
-        submit_date: daysAgo(rand(0, 60)),
-        issue_date: Math.random() > 0.4 ? daysAgo(rand(0, 30)) : null,
-        status: pick(["سريعة", "عادية", "مستعجلة"]),
-        government_fee: rand(500, 2500),
-        authority: pickOrNull(dd.authority),
-        airline: pickOrNull(dd.airline),
-        travel_date: daysAgo(rand(-30, 30)),
-        issuing_company: pickOrNull(companyNames),
-        issuing_company_id: companyIds.length ? pick(companyIds) : null,
-        travel_statement: pick(["سياحة", "عمل", "زيارة"]),
-        notes: "بيانات تجريبية",
-        is_demo: true,
-      }));
+      const approvals = Array.from({ length: 20 }, () => {
+        const airline = pickOrNull(dd.airline);
+        const destination = pickOrNull(dd.destination);
+        const travel_date = daysAgo(rand(-30, 30));
+        return {
+          passenger_name: fullName(),
+          passport: passport(),
+          national_id: nationalId(),
+          dob: daysAgo(rand(7000, 18000)),
+          destination,
+          agent_id: pick(agentIds),
+          submit_date: daysAgo(rand(0, 60)),
+          issue_date: Math.random() > 0.4 ? daysAgo(rand(0, 30)) : null,
+          status: pick(APPROVAL_STATUSES as unknown as string[]),
+          government_fee: rand(500, 2500),
+          authority: pickOrNull(dd.authority),
+          airline,
+          travel_date,
+          issuing_company: pickOrNull(companyNames),
+          issuing_company_id: companyIds.length ? pick(companyIds) : null,
+          travel_statement: buildTravelStatement(destination, travel_date, airline) || null,
+          notes: "بيانات تجريبية",
+          is_demo: true,
+        };
+      });
       const { data: approvalRows } = await sb.from("approvals").insert(approvals).select("id");
       summary.approvals = approvalRows?.length ?? 0;
     } else {
@@ -276,10 +291,12 @@ export const generateDemoData = createServerFn({ method: "POST" })
         const total = count * price;
         const cash = Math.random() > 0.5 ? Math.floor(total * 0.6) : 0;
         const instapay = total - cash;
+        const date = daysAgo(rand(0, 60));
+        const destination = pickOrNull(dd.destination);
         return {
           agent_id: pick(agentIds),
-          date: daysAgo(rand(0, 60)),
-          destination: pickOrNull(dd.destination),
+          date,
+          destination,
           count,
           price,
           payment_method: pick(["نقدي", "إنستاباي", "محفظة"]),
@@ -289,7 +306,7 @@ export const generateDemoData = createServerFn({ method: "POST" })
           instapay_amount: instapay,
           merchant_id: Math.random() > 0.4 && merchantIds.length ? pick(merchantIds) : null,
           service_type: pickOrNull(dd.service_type),
-          travel_statement: pick(["سياحة", "عمل", "زيارة"]),
+          travel_statement: buildTravelStatement(destination, date, null) || null,
           note: "بيانات تجريبية",
           is_demo: true,
         };
