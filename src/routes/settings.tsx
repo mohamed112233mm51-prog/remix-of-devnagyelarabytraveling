@@ -2275,7 +2275,8 @@ function BackupPreviewModal({ data, onClose }: { data: { meta: any; file: any; l
           >إغلاق</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
