@@ -357,13 +357,13 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ company_name: "", phone: "", whatsapp: "" });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.company_name) return alert("برجاء إدخال اسم الشركة");
+    if (!form.company_name) return toast.error("برجاء إدخال اسم الشركة");
     const { error } = await supabase.from("issuing_companies").insert({
       company_name: form.company_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     onDone();
   };
   return (
@@ -432,13 +432,13 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
   const totalPaid = insta + cash + merchantNet + merchantPhysical;
   const usesMerchant = insta > 0 || merchant > 0 || merchantPhysical > 0;
   const save = async () => {
-    if (!form.company_name) return alert("برجاء اختيار الشركة الصادرة");
-    if (totalPaid <= 0) return alert("يجب إدخال قيمة في حقل دفع واحد على الأقل");
-    if (usesMerchant && !form.merchant_id) return alert("برجاء اختيار التاجر");
+    if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
+    if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
+    if (usesMerchant && !form.merchant_id) return toast.error("برجاء اختيار التاجر");
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
-      if (cErr) return alert(cErr.message);
+      if (cErr) return toast.error(cErr.message);
       company_id = data.id;
     }
     const { error } = await supabase.from("company_transactions").insert({
@@ -456,7 +456,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       total_paid: totalPaid,
       note: form.note || null,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     onDone();
   };
   return (

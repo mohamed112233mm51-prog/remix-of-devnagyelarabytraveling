@@ -369,8 +369,8 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (!form.name.trim()) return alert("اسم الوكيل مطلوب");
-    if (!form.phone.trim()) return alert("الهاتف مطلوب");
+    if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
+    if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
     const { error } = await supabase.from("agents").insert({
       name: form.name,
       national_id: form.national_id || null,
@@ -378,7 +378,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     onDone();
   };
   return (
@@ -453,9 +453,9 @@ function TxnForm({ agents, merchants, onDone }: { agents: Agent[]; merchants: Me
   const totalPaid = insta + cash + merchantNet + merchantPhysical;
   const usesMerchant = insta > 0 || merchant > 0 || merchantPhysical > 0;
   const save = async () => {
-    if (!form.agent_id || !form.destination) return alert("برجاء اختيار قيمة من القائمة");
-    if (totalPaid <= 0) return alert("يجب إدخال قيمة في حقل دفع واحد على الأقل");
-    if (usesMerchant && !form.merchant_id) return alert("برجاء اختيار التاجر");
+    if (!form.agent_id || !form.destination) return toast.error("برجاء اختيار قيمة من القائمة");
+    if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
+    if (usesMerchant && !form.merchant_id) return toast.error("برجاء اختيار التاجر");
     const { error } = await supabase.from("transactions").insert({
       agent_id: form.agent_id, date: form.date,
       destination: form.destination || null,
@@ -471,7 +471,7 @@ function TxnForm({ agents, merchants, onDone }: { agents: Agent[]; merchants: Me
       total_paid: totalPaid,
       paid: totalPaid,
     });
-    if (error) return alert(error.message);
+    if (error) return toast.error(error.message);
     onDone();
   };
   return (

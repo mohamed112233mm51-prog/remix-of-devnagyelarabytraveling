@@ -346,9 +346,9 @@ function FlightForm({ agents, companies, onDone }: { agents: Agent[]; companies:
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
 
   const save = async () => {
-    if (!form.passenger_name.trim()) return alert("اسم المسافر مطلوب");
-    if (!form.airline || !form.destination || !form.agent_id || !form.status) return alert("برجاء اختيار قيمة من القائمة");
-    if (!form.issuing_company) return alert("برجاء اختيار الشركة الصادرة");
+    if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
+    if (!form.airline || !form.destination || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
+    if (!form.issuing_company) return toast.error("برجاء اختيار الشركة الصادرة");
     const payload = {
       ...form,
       dob: form.dob || null,
@@ -472,7 +472,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
 
   const save = async () => {
-    if (!form.passenger_name.trim()) return alert("اسم المسافر مطلوب");
+    if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     setSaving(true);
     const payload = {
       passenger_name: form.passenger_name,
