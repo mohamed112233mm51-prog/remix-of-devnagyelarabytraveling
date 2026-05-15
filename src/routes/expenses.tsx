@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Expense, type ExpenseDeduction } from "@/lib/db";
+import { confirmDialog } from "@/lib/confirm";
 import { Wallet, Receipt, TrendingDown, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/expenses")({
