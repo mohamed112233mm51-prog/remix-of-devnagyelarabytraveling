@@ -514,7 +514,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ maxWidth: 820 }}>
         <div className="modal-header">
@@ -567,6 +567,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
           <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "..." : "💾 حفظ التعديلات"}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
