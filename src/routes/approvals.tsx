@@ -7,6 +7,7 @@ import { syncCounterpart } from "@/lib/sync";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import { Modal } from "@/components/Modal";
 
 export const Route = createFileRoute("/approvals")({
   component: () => <AppErrorBoundary><ApprovalsPage /></AppErrorBoundary>,
@@ -500,67 +501,66 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
   };
 
   return (
-    <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 820 }}>
-        <div className="modal-header">
-          <div className="modal-title">✏️ تعديل موافقة أمنية</div>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        <div className="modal-body">
-          <div className="form-grid">
-            <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} /></div>
-            <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} /></div>
-            <div className="form-group"><label>رقم الجواز</label><input value={form.passport} onChange={(e) => set("passport", e.target.value)} /></div>
-            <div className="form-group"><label>تاريخ الميلاد</label><input type="date" value={form.dob} onChange={(e) => set("dob", e.target.value)} /></div>
-            <div className="form-group"><label>الوجهة</label>
-              <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
-                <option value="">اختر...</option>
-                <SafeSelectOptions options={DESTINATIONS} />
-              </select>
-            </div>
-            <div className="form-group"><label>الجهة</label>
-              <select value={form.authority} onChange={(e) => set("authority", e.target.value)}>
-                <option value="">اختر...</option>
-                <SafeSelectOptions options={AUTHORITIES} />
-              </select>
-            </div>
-            <div className="form-group"><label>الشركة الصادرة</label>
-              <select value={form.issuing_company} onChange={(e) => set("issuing_company", e.target.value)}>
-                <option value="">اختر...</option>
-                {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
-              </select>
-            </div>
-            <div className="form-group"><label>الوكيل</label>
-              <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)}>
-                <option value="">اختر...</option>
-                {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div className="form-group"><label>تاريخ التقديم</label><input type="date" value={form.submit_date} onChange={(e) => set("submit_date", e.target.value)} /></div>
-            <div className="form-group"><label>تاريخ الصدور</label><input type="date" value={form.issue_date} onChange={(e) => set("issue_date", e.target.value)} /></div>
-            <div className="form-group"><label>تاريخ السفر</label><input type="date" value={form.travel_date} onChange={(e) => set("travel_date", e.target.value)} /></div>
-            <div className="form-group"><label>شركة الطيران</label>
-              <select value={form.airline} onChange={(e) => set("airline", e.target.value)}>
-                <option value="">اختر...</option>
-                <SafeSelectOptions options={AIRLINES} />
-              </select>
-            </div>
-            <div className="form-group"><label>الحالة</label>
-              <select value={form.status} onChange={(e) => set("status", e.target.value)}>
-                <option value="">اختر...</option>
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className="form-group"><label>مبلغ الموافقة</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
-            <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
-            <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
-          </div>
-        </div>
-        <div className="modal-footer">
+    <Modal
+      open
+      onClose={onClose}
+      title="✏️ تعديل موافقة أمنية"
+      maxWidth={820}
+      footer={
+        <>
           <button className="btn" onClick={onClose} disabled={saving}>إلغاء</button>
           <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "..." : "💾 حفظ التعديلات"}</button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} /></div>
+        <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} /></div>
+        <div className="form-group"><label>رقم الجواز</label><input value={form.passport} onChange={(e) => set("passport", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ الميلاد</label><input type="date" value={form.dob} onChange={(e) => set("dob", e.target.value)} /></div>
+        <div className="form-group"><label>الوجهة</label>
+          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
+            <option value="">اختر...</option>
+            <SafeSelectOptions options={DESTINATIONS} />
+          </select>
         </div>
+        <div className="form-group"><label>الجهة</label>
+          <select value={form.authority} onChange={(e) => set("authority", e.target.value)}>
+            <option value="">اختر...</option>
+            <SafeSelectOptions options={AUTHORITIES} />
+          </select>
+        </div>
+        <div className="form-group"><label>الشركة الصادرة</label>
+          <select value={form.issuing_company} onChange={(e) => set("issuing_company", e.target.value)}>
+            <option value="">اختر...</option>
+            {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>الوكيل</label>
+          <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)}>
+            <option value="">اختر...</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>تاريخ التقديم</label><input type="date" value={form.submit_date} onChange={(e) => set("submit_date", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ الصدور</label><input type="date" value={form.issue_date} onChange={(e) => set("issue_date", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ السفر</label><input type="date" value={form.travel_date} onChange={(e) => set("travel_date", e.target.value)} /></div>
+        <div className="form-group"><label>شركة الطيران</label>
+          <select value={form.airline} onChange={(e) => set("airline", e.target.value)}>
+            <option value="">اختر...</option>
+            <SafeSelectOptions options={AIRLINES} />
+          </select>
+        </div>
+        <div className="form-group"><label>الحالة</label>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="">اختر...</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
+        <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
-    </div>
+    </Modal>
   );
 }
