@@ -63,20 +63,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Realtime: subscribe to current user's profile; sign out if disabled
+  // Realtime: subscribe to current user's profile + roles; sign out if disabled
   useEffect(() => {
     const uid = session?.user?.id;
     if (!uid) return;
+
+    const handleDisabled = async () => {
+      toast.error("تم تعطيل حسابك بواسطة الإدارة");
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.clear();
+          sessionStorage.clear();
+        }
+      } catch {}
+      await supabase.auth.signOut();
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+    };
+
     const channel = supabase
-      .channel(`profile-watch-${uid}`)
+      .channel(`user-watch-${uid}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${uid}` },
+        { event: "*", schema: "public", table: "profiles", filter: `id=eq.${uid}` },
         (payload) => {
-          const next: any = payload.new;
+          const next: any = (payload as any).new;
+          if (payload.eventType === "DELETE") {
+            handleDisabled();
+            return;
+          }
           if (next && (next.is_active === false || next.invite_accepted === false)) {
-            toast.error("تم تعطيل حسابك بواسطة الإدارة");
-            supabase.auth.signOut();
+            handleDisabled();
             return;
           }
           if (next && next.permissions) {
@@ -84,9 +102,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
+        () => {
+          loadProfile(uid);
+        }
+      )
       .subscribe();
+
+    // Polling fallback every 8s in case realtime drops
+    const poll = setInterval(async () => {
+      try {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("is_active, invite_accepted, permissions")
+          .eq("id", uid)
+          .maybeSingle();
+        if (error) return;
+        if (!profile || (profile as any).is_active === false || (profile as any).invite_accepted === false) {
+          handleDisabled();
+          return;
+        }
+        const nextPerms = ((profile as any).permissions ?? {}) as Record<string, any>;
+        setPermissions((prev) =>
+          JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms
+        );
+        const { data: roleRows } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", uid);
+        const nextRoles = (roleRows ?? []).map((r: any) => r.role) as Role[];
+        setRoles((prev) =>
+          prev.length === nextRoles.length && prev.every((r) => nextRoles.includes(r))
+            ? prev
+            : nextRoles
+        );
+      } catch {}
+    }, 8000);
+
+    // Multi-tab: react to logout in other tabs
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith("sb-") && e.newValue === null) {
+        if (typeof window !== "undefined") window.location.href = "/";
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", onStorage);
+    }
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(poll);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", onStorage);
+      }
     };
   }, [session?.user?.id]);
 
