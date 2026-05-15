@@ -7,7 +7,12 @@ import {
   AUTHORITIES as FALLBACK_AUTHORITIES,
   DESTINATIONS as FALLBACK_DESTINATIONS,
   SERVICE_TYPES as FALLBACK_SERVICE_TYPES,
+  buildTravelStatement,
 } from "./db";
+
+// Approval/flight status options — must match the values used by the UI dropdowns
+// in src/routes/approvals.tsx and src/routes/flights.tsx. Do NOT invent new values.
+const APPROVAL_STATUSES = ["سريعة", "بطيئة", "رفض أمني"] as const;
 
 function admin() {
   return createClient<Database>(
