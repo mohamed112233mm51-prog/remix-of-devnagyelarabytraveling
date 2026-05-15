@@ -1270,7 +1270,184 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
   );
 }
 
-const inp: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 };
+function DevToolsTab() {
+  const checkFn = useServerFn(checkDemoData);
+  const genFn = useServerFn(generateDemoData);
+  const delFn = useServerFn(deleteDemoData);
+  const qc = useQueryClient();
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["demo-data-counts"],
+    queryFn: () => checkFn(),
+  });
+  const [busy, setBusy] = useState<null | "gen" | "del">(null);
+  const [confirm, setConfirm] = useState<null | "gen" | "del" | "warn">(null);
+  const [summary, setSummary] = useState<Record<string, number> | null>(null);
+  const [summaryTitle, setSummaryTitle] = useState("");
+
+  const total = data?.total ?? 0;
+
+  async function doGenerate() {
+    setBusy("gen");
+    try {
+      const res = await genFn();
+      setSummary(res.summary);
+      setSummaryTitle("تم توليد الداتا التجريبية بنجاح");
+      toast.success("تم توليد الداتا التجريبية");
+      qc.invalidateQueries();
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل التوليد");
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function doDelete() {
+    setBusy("del");
+    try {
+      const res = await delFn();
+      setSummary(res.summary);
+      setSummaryTitle("تم حذف الداتا التجريبية");
+      toast.success("تم حذف الداتا التجريبية");
+      qc.invalidateQueries();
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل الحذف");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const labels: Record<string, string> = {
+    agents: "الوكلاء",
+    issuing_companies: "الشركات المصدرة",
+    merchants: "التجار",
+    investors: "المستثمرين",
+    flights: "الرحلات",
+    approvals: "الموافقات الأمنية",
+    transactions: "المعاملات/المدفوعات",
+    company_transactions: "معاملات الشركات",
+    merchant_cash_collections: "تحصيلات التجار",
+    investor_transactions: "حركات المستثمرين",
+    expenses: "المصروفات",
+    expense_deductions: "خصومات المصروفات",
+  };
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 10 }}>
+        <Wrench size={18} color="#0F1F44" />
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>أدوات التطوير</div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#92400E", background: "#FEF3C7", border: "1px solid #FDE68A", padding: "2px 8px", borderRadius: 999 }}>
+          DEV ONLY
+        </span>
+      </div>
+
+      <div style={{ padding: 20, display: "grid", gap: 20 }}>
+        <div style={{ display: "flex", gap: 12, padding: 14, background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 12, alignItems: "flex-start" }}>
+          <AlertTriangle size={18} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.7 }}>
+            هذه الأداة تنشئ بيانات تجريبية واقعية لاختبار النظام. كل السجلات الناتجة موسومة بـ <code>is_demo = true</code> ولا تمس البيانات الحقيقية. يظهر هذا القسم في وضع التطوير فقط ولن يظهر للمستخدمين في الإنتاج.
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>الداتا التجريبية الحالية</div>
+          {isLoading ? (
+            <div style={{ color: "#94A3B8", fontSize: 13 }}>جارٍ التحميل...</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
+              {Object.entries(data?.counts ?? {}).map(([k, v]) => (
+                <div key={k} style={{ padding: "10px 12px", background: v ? "#FEF3C7" : "#F8FAFC", border: `1px solid ${v ? "#FDE68A" : "#E5E7EB"}`, borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#475569" }}>{labels[k] || k}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: v ? "#92400E" : "#94A3B8" }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
+          <button
+            onClick={() => setConfirm(total > 0 ? "warn" : "gen")}
+            disabled={!!busy}
+            className="btn btn-gold"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", fontWeight: 800, color: "#1a1a1a" }}
+          >
+            <Database size={16} color="#fff" />
+            <span>{busy === "gen" ? "جارٍ التوليد..." : "توليد داتا جاهزة"}</span>
+          </button>
+          <button
+            onClick={() => setConfirm("del")}
+            disabled={!!busy || total === 0}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", borderRadius: 10,
+              background: total === 0 ? "#F1F5F9" : "#FEE2E2", color: total === 0 ? "#94A3B8" : "#991B1B",
+              border: `1px solid ${total === 0 ? "#E5E7EB" : "#FECACA"}`, fontWeight: 700, fontSize: 14,
+              cursor: !!busy || total === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            <Trash2 size={16} />
+            <span>{busy === "del" ? "جارٍ الحذف..." : `حذف الداتا التجريبية (${total})`}</span>
+          </button>
+        </div>
+      </div>
+
+      {confirm === "warn" && (
+        <ConfirmModal
+          title="يوجد داتا تجريبية بالفعل"
+          message={`يوجد حاليًا ${total} سجل تجريبي. هل تريد إضافة المزيد فوقها؟`}
+          confirmLabel="نعم، أضف المزيد"
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => { setConfirm("gen"); }}
+        />
+      )}
+      {confirm === "gen" && (
+        <ConfirmModal
+          title="توليد داتا تجريبية"
+          message="سيتم إنشاء بيانات تجريبية واقعية في الجداول التشغيلية. لن يتم المساس بأي بيانات حقيقية. هل تريد المتابعة؟"
+          confirmLabel="ابدأ التوليد"
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => { setConfirm(null); await doGenerate(); }}
+        />
+      )}
+      {confirm === "del" && (
+        <ConfirmModal
+          title="حذف الداتا التجريبية"
+          message={`سيتم حذف ${total} سجل تجريبي فقط (الموسومة بـ is_demo = true). البيانات الحقيقية لن تتأثر إطلاقًا.`}
+          confirmLabel="حذف نهائي"
+          danger
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => { setConfirm(null); await doDelete(); }}
+        />
+      )}
+
+      {summary && (
+        <div dir="rtl" onClick={() => setSummary(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0F1F44", display: "flex", alignItems: "center", gap: 8 }}>
+              <Check size={20} color="#16A34A" /> {summaryTitle}
+            </h3>
+            <div style={{ marginTop: 14, display: "grid", gap: 6 }}>
+              {Object.entries(summary).map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#F8FAFC", borderRadius: 8, fontSize: 13 }}>
+                  <span style={{ color: "#475569" }}>{labels[k] || k}</span>
+                  <span style={{ fontWeight: 800, color: "#0F1F44" }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => setSummary(null)} style={{ padding: "10px 22px", borderRadius: 10, background: "#0F1F44", color: "#F5D27A", border: 0, fontWeight: 700, cursor: "pointer" }}>
+                تم
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 const th: React.CSSProperties = { padding: 10, textAlign: "right", fontSize: 13, borderBottom: "1px solid #e5e7eb" };
 const td: React.CSSProperties = { padding: 10, fontSize: 13, borderBottom: "1px solid #f3f4f6" };
 const btnPrimary: React.CSSProperties = { padding: "10px 18px", borderRadius: 8, background: "#2563eb", color: "#fff", border: 0, fontWeight: 700, cursor: "pointer" };
