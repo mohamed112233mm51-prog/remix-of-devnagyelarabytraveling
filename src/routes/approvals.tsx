@@ -7,6 +7,7 @@ import { syncCounterpart } from "@/lib/sync";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import { Modal } from "@/components/Modal";
 
 export const Route = createFileRoute("/approvals")({
   component: () => <AppErrorBoundary><ApprovalsPage /></AppErrorBoundary>,
