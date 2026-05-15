@@ -17,21 +17,62 @@ function AcceptInvitePage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    // Supabase parses the recovery/invite tokens from the URL hash automatically
-    // and creates a session. We just wait for it.
     let cancelled = false;
     async function init() {
-      // Give the client a tick to consume the hash
-      await new Promise((r) => setTimeout(r, 50));
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!data.session?.user) {
-        setErr("رابط الدعوة غير صالح أو منتهي الصلاحية");
+      try {
+        const url = new URL(window.location.href);
+        const hash = window.location.hash || "";
+
+        // 1) Error returned by Supabase in query or hash (expired/invalid link)
+        const errParam =
+          url.searchParams.get("error_description") ||
+          url.searchParams.get("error") ||
+          (hash.includes("error") ? new URLSearchParams(hash.replace(/^#/, "")).get("error_description") : null);
+        if (errParam) {
+          const lower = errParam.toLowerCase();
+          if (lower.includes("expired") || lower.includes("otp_expired")) {
+            setErr("انتهت صلاحية رابط الدعوة، اطلب دعوة جديدة");
+          } else {
+            setErr("رابط الدعوة غير صالح");
+          }
+          setReady(true);
+          return;
+        }
+
+        // 2) PKCE code flow: ?code=...
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          // Clean URL regardless
+          window.history.replaceState(null, "", "/accept-invite");
+          if (error) {
+            const m = (error.message || "").toLowerCase();
+            if (m.includes("expired")) setErr("انتهت صلاحية رابط الدعوة، اطلب دعوة جديدة");
+            else if (m.includes("project") || m.includes("issuer") || m.includes("audience"))
+              setErr("تم إنشاء الدعوة من نسخة مختلفة من النظام");
+            else setErr("رابط الدعوة غير صالح أو منتهي الصلاحية");
+            setReady(true);
+            return;
+          }
+        } else if (hash && (hash.includes("access_token") || hash.includes("type=invite") || hash.includes("type=recovery"))) {
+          // 3) Legacy implicit flow: tokens in hash — let supabase consume them
+          await new Promise((r) => setTimeout(r, 80));
+        }
+
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (!data.session?.user) {
+          setErr("رابط الدعوة غير صالح أو منتهي الصلاحية");
+          setReady(true);
+          return;
+        }
+        setEmail(data.session.user.email ?? "");
         setReady(true);
-        return;
+      } catch (e: any) {
+        if (cancelled) return;
+        setErr(e?.message || "تعذر التحقق من رابط الدعوة");
+        setReady(true);
       }
-      setEmail(data.session.user.email ?? "");
-      setReady(true);
     }
     init();
     return () => {
@@ -49,7 +90,6 @@ function AcceptInvitePage() {
       setBusy(false);
       return toast.error(updErr?.message ?? "تعذر تعيين كلمة المرور");
     }
-    // Mark profile as accepted + active
     await supabase
       .from("profiles")
       .update({ is_active: true, invite_accepted: true })
