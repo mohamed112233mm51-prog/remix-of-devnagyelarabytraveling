@@ -332,7 +332,8 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     onClose();
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
         <div className="card-header"><div className="card-title">✏️ تعديل بيانات الشركة</div></div>
@@ -346,7 +347,8 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
