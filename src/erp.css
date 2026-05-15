@@ -1721,7 +1721,21 @@
 .accounts-page .page-head-cta {
   display: inline-flex; align-items: center; gap: 8px;
   height: 40px; padding: 0 18px; flex: 0 0 auto;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #F0C146 0%, #C99A2E 100%);
+  color: #ffffff;
+  border: 1px solid #E0B43E;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(201,154,46,0.30), inset 0 1px 0 rgba(255,255,255,0.25);
+  transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
 }
+.accounts-page .page-head-cta:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #E0B43E 0%, #B8862A 100%);
+  box-shadow: 0 4px 12px rgba(184,134,42,0.40), inset 0 1px 0 rgba(255,255,255,0.30);
+}
+.accounts-page .page-head-cta svg { color: #ffffff; }
 
 /* KPI tiles with icon + colored left accent */
 .accounts-page .kpi-rich .sum-box {
