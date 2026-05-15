@@ -2544,7 +2544,8 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
   const [text, setText] = useState("");
   const valid = text.trim() === "RESTORE";
   const tc = typeColor(target.type);
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       onClick={onCancel}
       dir="rtl"
