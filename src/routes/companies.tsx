@@ -4,8 +4,8 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, useLive, useDropdownOptions, withSelected,
-  type IssuingCompany, type CompanyTransaction, type Merchant,
+  fmtDL, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement,
+  type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
