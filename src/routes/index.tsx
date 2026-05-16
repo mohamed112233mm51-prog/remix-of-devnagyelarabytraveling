@@ -586,6 +586,15 @@ const dashCss = `
 .erp-welcome-sub{font-size:11px;opacity:.78;margin-top:1px}
 .erp-welcome-accent{position:absolute;inset-inline-end:-30px;top:-30px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,${GOLD}33 0%,transparent 70%)}
 
+/* ===== Period filter ===== */
+.erp-period-bar{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:8px 12px;margin-bottom:12px;box-shadow:0 1px 2px rgba(15,23,42,.03);flex-wrap:wrap}
+.erp-period-label{font-size:12px;font-weight:700;color:#64748B}
+.erp-period-tabs{display:inline-flex;gap:4px;background:#F1F5F9;border-radius:9px;padding:3px}
+.erp-period-tab{appearance:none;border:0;background:transparent;font:inherit;font-size:12px;font-weight:700;color:#64748B;padding:6px 12px;border-radius:7px;cursor:pointer;transition:all .15s ease}
+.erp-period-tab:hover{color:${NAVY}}
+.erp-period-tab.is-active{background:${NAVY};color:#fff;box-shadow:0 1px 3px rgba(15,27,61,.18)}
+.erp-period-current{margin-inline-start:auto;font-size:11px;font-weight:700;color:${NAVY};background:#FEF3C7;border:1px solid #FCD34D;padding:3px 10px;border-radius:999px}
+
 /* ===== Primary KPI hero ===== */
 .erp-hero-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
 .erp-hero{background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:14px 16px;position:relative;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;overflow:hidden}
