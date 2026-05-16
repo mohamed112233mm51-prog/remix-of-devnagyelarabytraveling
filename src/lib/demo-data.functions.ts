@@ -420,3 +420,78 @@ export const deleteDemoData = createServerFn({ method: "POST" })
     }
     return { summary };
   });
+
+// ============================================================
+// Production Cleanup — safe pre-release wipe of all demo/test data.
+// - Admin-only (enforced server-side).
+// - Optionally creates an emergency backup snapshot first.
+// - Deletes ONLY rows where is_demo = true across operational tables.
+// - Never touches: profiles, user_roles, app_settings, system_dropdown_options,
+//   backup_logs, storage buckets, or any row where is_demo = false.
+// ============================================================
+export const productionCleanup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { createBackup?: boolean } | undefined) => ({
+    createBackup: d?.createBackup !== false,
+  }))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context.supabase, context.userId);
+    const sb = admin();
+
+    // 1) Safety snapshot (best-effort; never block cleanup if backup fails)
+    let backup: { ok: boolean; path?: string; error?: string } = { ok: false };
+    if (data.createBackup) {
+      try {
+        const mod = await import("./backups.server");
+        const res = await mod.runBackupWithRetry("emergency", context.userId, 1);
+        backup = { ok: true, path: (res as any)?.path };
+      } catch (e: any) {
+        backup = { ok: false, error: e?.message || "backup failed" };
+      }
+    }
+
+    // 2) Delete demo records (child → parent order)
+    const order: DemoTable[] = [
+      "expense_deductions",
+      "expenses",
+      "investor_transactions",
+      "merchant_cash_collections",
+      "company_transactions",
+      "transactions",
+      "approvals",
+      "flights",
+      "investors",
+      "merchants",
+      "issuing_companies",
+      "agents",
+    ];
+    const summary: Record<string, number> = {};
+    let totalDeleted = 0;
+    for (const t of order) {
+      const { count } = await sb
+        .from(t)
+        .delete({ count: "exact" })
+        .eq("is_demo", true);
+      summary[t] = count ?? 0;
+      totalDeleted += count ?? 0;
+    }
+
+    // 3) Verification — confirm no demo rows remain.
+    let remaining = 0;
+    for (const t of order) {
+      const { count } = await sb
+        .from(t)
+        .select("*", { count: "exact", head: true })
+        .eq("is_demo", true);
+      remaining += count ?? 0;
+    }
+
+    return {
+      backup,
+      summary,
+      totalDeleted,
+      usersDeleted: 0, // admins / real users are intentionally preserved
+      remaining,
+      status: remaining === 0 ? "clean" : "partial",
+    };
+  });
