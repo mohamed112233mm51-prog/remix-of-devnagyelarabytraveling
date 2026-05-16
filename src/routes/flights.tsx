@@ -4,7 +4,7 @@ import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
-import { syncCounterpart } from "@/lib/sync";
+
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -345,6 +345,8 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
     destination: "", travel_date: "", agent_id: "", status: "", notes: "", issuing_company: "",
     count: "1", price: "", company_value: "",
   });
+  const [linkApproval, setLinkApproval] = useState(false);
+  const [linkInvestment, setLinkInvestment] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
@@ -374,20 +376,29 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
     try {
       const { data: inserted, error } = await supabase.from("flights").insert(payload).select("id").single();
       if (error) return toast.error(error.message);
-      await syncCounterpart("flights", {
+      const linkedShared = {
         passenger_name: payload.passenger_name,
         national_id: payload.national_id,
         passport: payload.passport,
         dob: payload.dob,
         destination: payload.destination,
         agent_id: payload.agent_id,
-        status: payload.status,
         notes: payload.notes,
         travel_date: payload.travel_date,
         airline: payload.airline,
+        authority: null as string | null,
         issuing_company: payload.issuing_company,
+        issuing_company_id: companyId,
         travel_statement: payload.travel_statement,
-      });
+      };
+      if (linkApproval) {
+        const { error: e1 } = await supabase.from("approvals").insert({ ...linkedShared, status: "سريعة", service_type: "security_approval" });
+        if (e1) toast.warning("تعذر إنشاء الموافقة المرتبطة: " + e1.message);
+      }
+      if (linkInvestment) {
+        const { error: e2 } = await supabase.from("approvals").insert({ ...linkedShared, status: "سريعة", service_type: "libyan_investment" });
+        if (e2) toast.warning("تعذر إنشاء الاستثمار المرتبط: " + e2.message);
+      }
       if (inserted?.id) {
         try {
           await postServiceFinancials({
@@ -416,6 +427,17 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">➕ إضافة مسافر جديد</div></div>
+      <div style={{ padding: "12px 16px", margin: "0 0 8px", background: "#f8fafc", border: "1px solid var(--border)", borderRadius: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#0f1b3d", marginBottom: 8 }}>خدمات مرتبطة</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={linkApproval} onChange={(e) => setLinkApproval(e.target.checked)} /> موافقة أمنية
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={linkInvestment} onChange={(e) => setLinkInvestment(e.target.checked)} /> استثمار ليبي
+          </label>
+        </div>
+      </div>
       <div className="form-grid">
         <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} placeholder="الاسم الكامل" /></div>
         <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} placeholder="الرقم القومي" /></div>
@@ -531,20 +553,6 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
     try {
       const { error } = await supabase.from("flights").update(payload).eq("id", flight.id);
       if (error) return toast.error(error.message);
-      await syncCounterpart("flights", {
-        passenger_name: payload.passenger_name,
-        national_id: payload.national_id,
-        passport: payload.passport,
-        dob: payload.dob,
-        destination: payload.destination,
-        agent_id: payload.agent_id,
-        status: payload.status,
-        notes: payload.notes,
-        travel_date: payload.travel_date,
-        airline: payload.airline,
-        issuing_company: payload.issuing_company,
-        travel_statement: payload.travel_statement,
-      });
       try {
         await updateServiceFinancials({
           serviceId: flight.id,
