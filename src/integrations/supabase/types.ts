@@ -103,6 +103,8 @@ export type Database = {
           agent_id: string | null
           airline: string | null
           authority: string | null
+          company_value: number
+          count: number
           created_at: string
           destination: string | null
           dob: string | null
@@ -116,6 +118,7 @@ export type Database = {
           notes: string | null
           passenger_name: string
           passport: string | null
+          price: number
           service_type: string
           status: string
           submit_date: string | null
@@ -126,6 +129,8 @@ export type Database = {
           agent_id?: string | null
           airline?: string | null
           authority?: string | null
+          company_value?: number
+          count?: number
           created_at?: string
           destination?: string | null
           dob?: string | null
@@ -139,6 +144,7 @@ export type Database = {
           notes?: string | null
           passenger_name: string
           passport?: string | null
+          price?: number
           service_type?: string
           status?: string
           submit_date?: string | null
@@ -149,6 +155,8 @@ export type Database = {
           agent_id?: string | null
           airline?: string | null
           authority?: string | null
+          company_value?: number
+          count?: number
           created_at?: string
           destination?: string | null
           dob?: string | null
@@ -162,6 +170,7 @@ export type Database = {
           notes?: string | null
           passenger_name?: string
           passport?: string | null
+          price?: number
           service_type?: string
           status?: string
           submit_date?: string | null
@@ -239,6 +248,8 @@ export type Database = {
           note: string | null
           price: number
           service_type: string | null
+          source_service_id: string | null
+          source_service_type: string | null
           total_paid: number
           trip_value: number
         }
@@ -263,6 +274,8 @@ export type Database = {
           note?: string | null
           price?: number
           service_type?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           total_paid?: number
           trip_value?: number
         }
@@ -287,6 +300,8 @@ export type Database = {
           note?: string | null
           price?: number
           service_type?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           total_paid?: number
           trip_value?: number
         }
@@ -369,6 +384,8 @@ export type Database = {
           agent_id: string | null
           airline: string | null
           authority: string | null
+          company_value: number
+          count: number
           created_at: string
           destination: string | null
           dob: string | null
@@ -379,6 +396,7 @@ export type Database = {
           notes: string | null
           passenger_name: string
           passport: string | null
+          price: number
           status: string
           travel_date: string | null
           travel_statement: string | null
@@ -387,6 +405,8 @@ export type Database = {
           agent_id?: string | null
           airline?: string | null
           authority?: string | null
+          company_value?: number
+          count?: number
           created_at?: string
           destination?: string | null
           dob?: string | null
@@ -397,6 +417,7 @@ export type Database = {
           notes?: string | null
           passenger_name: string
           passport?: string | null
+          price?: number
           status?: string
           travel_date?: string | null
           travel_statement?: string | null
@@ -405,6 +426,8 @@ export type Database = {
           agent_id?: string | null
           airline?: string | null
           authority?: string | null
+          company_value?: number
+          count?: number
           created_at?: string
           destination?: string | null
           dob?: string | null
@@ -415,6 +438,7 @@ export type Database = {
           notes?: string | null
           passenger_name?: string
           passport?: string | null
+          price?: number
           status?: string
           travel_date?: string | null
           travel_statement?: string | null
@@ -678,6 +702,8 @@ export type Database = {
           payment_method: string
           price: number
           service_type: string | null
+          source_service_id: string | null
+          source_service_type: string | null
           total_paid: number
           travel_statement: string | null
         }
@@ -704,6 +730,8 @@ export type Database = {
           payment_method?: string
           price?: number
           service_type?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           total_paid?: number
           travel_statement?: string | null
         }
@@ -730,6 +758,8 @@ export type Database = {
           payment_method?: string
           price?: number
           service_type?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           total_paid?: number
           travel_statement?: string | null
         }

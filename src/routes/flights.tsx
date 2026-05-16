@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
+import { badgeFor, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
 import { syncCounterpart } from "@/lib/sync";
+import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
@@ -342,16 +343,19 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
   const [form, setForm] = useState({
     passenger_name: "", national_id: "", passport: "", dob: "", airline: "",
     destination: "", travel_date: "", agent_id: "", status: "", notes: "", issuing_company: "",
+    count: "1", price: "", company_value: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
+  const tripValue = Number(form.count || 0) * Number(form.price || 0);
 
   const save = async () => {
     if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     if (!form.airline || !form.destination || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
     if (!form.issuing_company) return toast.error("برجاء اختيار الشركة الصادرة");
+    const companyId = companies.find((c) => c.company_name === form.issuing_company)?.id || null;
     const payload = {
       ...form,
       dob: form.dob || null,
@@ -363,9 +367,12 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
       notes: form.notes || null,
       travel_statement: travelStatement || null,
       issuing_company: form.issuing_company || null,
+      count: Math.max(1, Math.round(Number(form.count) || 1)),
+      price: Number(form.price) || 0,
+      company_value: Number(form.company_value) || 0,
     };
     try {
-      const { error } = await supabase.from("flights").insert(payload);
+      const { data: inserted, error } = await supabase.from("flights").insert(payload).select("id").single();
       if (error) return toast.error(error.message);
       await syncCounterpart("flights", {
         passenger_name: payload.passenger_name,
@@ -381,6 +388,25 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
         issuing_company: payload.issuing_company,
         travel_statement: payload.travel_statement,
       });
+      if (inserted?.id) {
+        try {
+          await postServiceFinancials({
+            serviceId: inserted.id,
+            serviceKind: "flight_ticket",
+            agentId: payload.agent_id,
+            companyId,
+            date: payload.travel_date,
+            destination: payload.destination,
+            travelStatement: payload.travel_statement,
+            passengerName: payload.passenger_name,
+            count: payload.count,
+            price: payload.price,
+            companyValue: payload.company_value,
+          });
+        } catch (postErr: any) {
+          toast.warning(postErr?.message || "تم حفظ الرحلة لكن تعذر إنشاء حركة مالية");
+        }
+      }
       onDone();
     } catch (error: any) {
       toast.error(error?.message || "تعذر حفظ الرحلة");
@@ -426,6 +452,10 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
             {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
           </select>
         </div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(tripValue)} disabled readOnly /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
@@ -450,6 +480,9 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
     status: flight.status || "",
     notes: flight.notes || "",
     issuing_company: flight.issuing_company || "",
+    count: String(flight.count ?? 1),
+    price: String(flight.price ?? ""),
+    company_value: String(flight.company_value ?? ""),
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -477,6 +510,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
   const save = async () => {
     if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     setSaving(true);
+    const companyId = companies.find((c) => c.company_name === form.issuing_company)?.id || null;
     const payload = {
       passenger_name: form.passenger_name,
       national_id: form.national_id || null,
@@ -490,6 +524,9 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
       notes: form.notes || null,
       issuing_company: form.issuing_company || null,
       travel_statement: travelStatement || null,
+      count: Math.max(1, Math.round(Number(form.count) || 1)),
+      price: Number(form.price) || 0,
+      company_value: Number(form.company_value) || 0,
     };
     try {
       const { error } = await supabase.from("flights").update(payload).eq("id", flight.id);
@@ -508,6 +545,23 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
         issuing_company: payload.issuing_company,
         travel_statement: payload.travel_statement,
       });
+      try {
+        await updateServiceFinancials({
+          serviceId: flight.id,
+          serviceKind: "flight_ticket",
+          agentId: payload.agent_id,
+          companyId,
+          date: payload.travel_date,
+          destination: payload.destination,
+          travelStatement: payload.travel_statement,
+          passengerName: payload.passenger_name,
+          count: payload.count,
+          price: payload.price,
+          companyValue: payload.company_value,
+        });
+      } catch (postErr: any) {
+        toast.warning(postErr?.message || "تم حفظ الرحلة لكن تعذر تحديث الحركة المالية");
+      }
       toast.success("تم حفظ التعديلات بنجاح");
       onClose();
     } catch (error: any) {
@@ -566,6 +620,10 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
             {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
           </select>
         </div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>

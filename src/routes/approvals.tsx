@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
+import { fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
 import { syncCounterpart } from "@/lib/sync";
+import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
@@ -331,6 +332,7 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
     agent_id: "", submit_date: "", issue_date: "",
     travel_date: "", airline: "",
     status: "", government_fee: "", notes: "",
+    count: "1", price: "", company_value: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
@@ -363,17 +365,42 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
       issuing_company: form.issuing_company || null,
       travel_statement: travelStatement || null,
     };
+    const count = Math.max(1, Math.round(Number(form.count) || 1));
+    const price = Number(form.price) || 0;
+    const companyValue = Number(form.company_value) || 0;
     const payload = {
       ...shared,
       issuing_company_id,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
       government_fee: Number(form.government_fee || 0),
+      count, price, company_value: companyValue,
     };
     try {
-      const { error } = await supabase.from("approvals").insert({ ...payload, service_type: "security_approval" });
+      const { data: inserted, error } = await supabase
+        .from("approvals")
+        .insert({ ...payload, service_type: "security_approval" })
+        .select("id")
+        .single();
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
+      if (inserted?.id) {
+        try {
+          await postServiceFinancials({
+            serviceId: inserted.id,
+            serviceKind: "security_approval",
+            agentId: shared.agent_id,
+            companyId: issuing_company_id,
+            date: shared.travel_date,
+            destination: shared.destination,
+            travelStatement: shared.travel_statement,
+            passengerName: shared.passenger_name,
+            count, price, companyValue,
+          });
+        } catch (postErr: any) {
+          toast.warning(postErr?.message || "تم حفظ التقديم لكن تعذر إنشاء حركة مالية");
+        }
+      }
       onDone();
     } catch (error: any) {
       toast.error(error?.message || "تعذر حفظ الموافقة");
@@ -428,6 +455,10 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
           </select>
         </div>
         <div className="form-group"><label>مبلغ الموافقة</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
@@ -455,6 +486,9 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
     status: approval.status || "",
     government_fee: String(approval.government_fee ?? ""),
     notes: approval.notes || "",
+    count: String(approval.count ?? 1),
+    price: String(approval.price ?? ""),
+    company_value: String(approval.company_value ?? ""),
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -485,17 +519,36 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
       issuing_company: form.issuing_company || null,
       travel_statement: travelStatement || null,
     };
+    const count = Math.max(1, Math.round(Number(form.count) || 1));
+    const price = Number(form.price) || 0;
+    const companyValue = Number(form.company_value) || 0;
     const payload = {
       ...shared,
       issuing_company_id,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
       government_fee: Number(form.government_fee || 0),
+      count, price, company_value: companyValue,
     };
     try {
       const { error } = await supabase.from("approvals").update({ ...payload, service_type: "security_approval" }).eq("id", approval.id);
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
+      try {
+        await updateServiceFinancials({
+          serviceId: approval.id,
+          serviceKind: "security_approval",
+          agentId: shared.agent_id,
+          companyId: issuing_company_id,
+          date: shared.travel_date,
+          destination: shared.destination,
+          travelStatement: shared.travel_statement,
+          passengerName: shared.passenger_name,
+          count, price, companyValue,
+        });
+      } catch (postErr: any) {
+        toast.warning(postErr?.message || "تعذر تحديث الحركة المالية");
+      }
       toast.success("تم حفظ التعديلات بنجاح");
       onClose();
     } catch (error: any) {

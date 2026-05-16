@@ -32,6 +32,9 @@ export type Flight = {
   agent_id: string | null;
   status: string;
   notes: string | null;
+  count: number;
+  price: number;
+  company_value: number;
   created_at: string;
 };
 
@@ -55,6 +58,9 @@ export type Approval = {
   government_fee: number;
   notes: string | null;
   service_type: string | null;
+  count: number;
+  price: number;
+  company_value: number;
   created_at: string;
 };
 
