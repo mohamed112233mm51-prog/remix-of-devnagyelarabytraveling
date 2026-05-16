@@ -860,10 +860,40 @@ const dashCss = `
 .dash-stat-hl{background:#FFFBEB;border-color:#FDE68A}
 .dash-stat-hl .dash-stat-value{font-size:15px;color:${GOLD}}
 
+/* ===== ERP Analytics ===== */
+.erp-analytics-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px}
+.erp-analytic-table{display:flex;flex-direction:column;gap:6px}
+.erp-rank-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid #F1F5F9;background:#F8FAFC;border-radius:9px;transition:all .15s ease}
+.erp-rank-row:hover{background:#fff;border-color:#E2E8F0;transform:translateX(-2px)}
+.erp-rank-no{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,${NAVY},#1E3A5F);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;flex-shrink:0}
+.erp-rank-row:nth-child(1) .erp-rank-no{background:linear-gradient(135deg,${GOLD},#B8860B)}
+.erp-rank-body{flex:1;min-width:0}
+.erp-rank-name{font-size:12.5px;font-weight:700;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.erp-rank-sub{font-size:10.5px;color:#64748B;margin-top:2px}
+.erp-rank-value{font-size:12.5px;font-weight:800;color:#0F172A;white-space:nowrap}
+.erp-rank-value.tone-green{color:#15803D}
+
+.erp-donut-wrap{display:flex;align-items:center;gap:18px;padding:6px 4px}
+.erp-donut-svg{flex-shrink:0}
+.erp-donut-legend{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.erp-legend-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:#F8FAFC;border:1px solid #F1F5F9;border-radius:8px}
+.erp-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.erp-legend-label{flex:1;font-size:12px;font-weight:700;color:#1E293B}
+.erp-legend-val{font-size:11px;font-weight:700;color:#64748B}
+
+.erp-hbar-list{display:flex;flex-direction:column;gap:11px}
+.erp-hbar-row{display:flex;flex-direction:column;gap:4px}
+.erp-hbar-head{display:flex;align-items:center;justify-content:space-between;font-size:11.5px}
+.erp-hbar-name{font-weight:700;color:#1E293B}
+.erp-hbar-meta{font-weight:600;color:#64748B}
+.erp-hbar-track{height:10px;background:#F1F5F9;border-radius:6px;overflow:hidden}
+.erp-hbar-fill{height:100%;background:linear-gradient(90deg,${NAVY} 0%,${GOLD} 100%);border-radius:6px;transition:width .6s ease}
+
 /* ===== Responsive ===== */
 @media (max-width:1100px){
   .erp-hero-grid{grid-template-columns:repeat(2,1fr)}
   .erp-row-2,.erp-row-chart{grid-template-columns:1fr}
+  .erp-analytics-grid{grid-template-columns:1fr}
 }
 @media (max-width:600px){
   .erp-hero-grid{grid-template-columns:1fr 1fr;gap:8px}
@@ -873,5 +903,6 @@ const dashCss = `
   .erp-bars{height:130px}
   .dash-stats{grid-template-columns:1fr}
   .erp-feed-time{display:none}
+  .erp-donut-wrap{flex-direction:column;gap:12px}
 }
 `;
