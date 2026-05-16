@@ -36,11 +36,68 @@ import {
   Plus,
   ChevronLeft,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
 });
+
+type Period = "today" | "week" | "month" | "year" | "all";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  today: "اليوم",
+  week: "هذا الأسبوع",
+  month: "هذا الشهر",
+  year: "السنة الحالية",
+  all: "إجمالي النظام",
+};
+
+function getPeriodRange(period: Period, ref: Date = new Date()) {
+  const start = new Date(ref);
+  let end = new Date(ref);
+  if (period === "today") {
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setDate(end.getDate() + 1);
+  } else if (period === "week") {
+    const day = start.getDay();
+    start.setDate(start.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setDate(end.getDate() + 7);
+  } else if (period === "month") {
+    start.setFullYear(ref.getFullYear(), ref.getMonth(), 1);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+  } else if (period === "year") {
+    start.setFullYear(ref.getFullYear(), 0, 1);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setFullYear(end.getFullYear() + 1);
+  } else {
+    return { start: new Date(0), end: new Date(8.64e15) };
+  }
+  return { start, end };
+}
+
+function getPreviousRange(period: Period) {
+  if (period === "all") return null;
+  const { start, end } = getPeriodRange(period);
+  const len = end.getTime() - start.getTime();
+  return { start: new Date(start.getTime() - len), end: new Date(start.getTime()) };
+}
+
+function inRange(d: string | null | undefined, r: { start: Date; end: Date }) {
+  if (!d) return false;
+  const t = new Date(d).getTime();
+  return t >= r.start.getTime() && t < r.end.getTime();
+}
+
+function pctDelta(curr: number, prev: number) {
+  if (prev === 0) return curr > 0 ? 100 : 0;
+  return Math.round(((curr - prev) / Math.abs(prev)) * 100);
+}
 
 function Dashboard() {
   const { rows: agents } = useLive<Agent>("agents");
