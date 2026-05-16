@@ -459,45 +459,46 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
   const eligibleMerchants = activeMerchants.filter(
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
   );
-  const hasEligible = eligibleMerchants.length > 0;
-  const selectedMerchant = eligibleMerchants.find((m) => m.id === form.merchant_id) || null;
+  const selectedMerchant = activeMerchants.find((m) => m.id === form.merchant_id) || null;
+  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_instapay || selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
+  // System (company-owned) methods: only when no merchant is selected
+  const showSystemInsta = !selectedMerchant;
+  const showSystemCash = !selectedMerchant;
+  // Merchant methods: only when merchant is selected and supports them
+  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
   const showMerchantCash = !!selectedMerchant && selectedMerchant.supports_cash_wallet;
   const showMerchantPhysical = !!selectedMerchant && selectedMerchant.supports_physical_cash;
-  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
 
-  // Auto-select sole eligible merchant
+  // If merchant disappears or is no longer eligible, clear it
   useEffect(() => {
-    if (eligibleMerchants.length === 1 && form.merchant_id !== eligibleMerchants[0].id) {
-      setForm((p) => ({ ...p, merchant_id: eligibleMerchants[0].id }));
-    } else if (eligibleMerchants.length === 0 && form.merchant_id) {
-      setForm((p) => ({ ...p, merchant_id: "" }));
-    } else if (form.merchant_id && !eligibleMerchants.find((m) => m.id === form.merchant_id)) {
+    if (form.merchant_id && !activeMerchants.find((m) => m.id === form.merchant_id)) {
       setForm((p) => ({ ...p, merchant_id: "" }));
     }
-  }, [eligibleMerchants.map((m) => m.id).join(",")]);
+  }, [activeMerchants.map((m) => m.id).join(",")]);
 
-  // Clear hidden merchant fields automatically when merchant changes
+  // Clear payment fields whose method is not currently visible
   useEffect(() => {
     setForm((p) => {
       const next = { ...p };
-      if (!showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
+      if (!showSystemInsta && !showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
+      if (!showSystemCash && next.cash_amount) next.cash_amount = "";
       if (!showMerchantCash && next.merchant_cash_amount) next.merchant_cash_amount = "";
       if (!showMerchantPhysical && next.merchant_cash_physical_amount) next.merchant_cash_physical_amount = "";
       return next;
     });
-  }, [showMerchantInsta, showMerchantCash, showMerchantPhysical]);
+  }, [showSystemInsta, showSystemCash, showMerchantInsta, showMerchantCash, showMerchantPhysical]);
 
-  const insta = showMerchantInsta ? Math.round(Number(form.instapay_amount || 0)) : 0;
-  const cash = Math.round(Number(form.cash_amount || 0));
+  const insta = (showSystemInsta || showMerchantInsta) ? Math.round(Number(form.instapay_amount || 0)) : 0;
+  const cash = showSystemCash ? Math.round(Number(form.cash_amount || 0)) : 0;
   const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
   const merchantNet = merchantCashNetAmount(merchant);
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
   const newPayment = insta + cash + merchantNet + merchantPhysical;
-  const usesMerchant = insta > 0 || merchant > 0 || merchantPhysical > 0;
+  const usesMerchant = !!selectedMerchant;
   const save = async () => {
     if (!form.agent_id || !form.destination) return toast.error("برجاء اختيار قيمة من القائمة");
+    if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
     if (newPayment <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
-    if (usesMerchant && !form.merchant_id) return toast.error("برجاء اختيار التاجر");
 
     if (selectedService) {
       // UPDATE existing service-linked transaction with the new payment values
