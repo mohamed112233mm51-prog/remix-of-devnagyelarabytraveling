@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
-import { syncCounterpart } from "@/lib/sync";
+
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -335,6 +335,8 @@ export function InvestmentForm({ agents, companies, onDone }: { agents: Agent[];
     status: "", government_fee: "", notes: "",
     count: "1", price: "", company_value: "",
   });
+  const [linkFlight, setLinkFlight] = useState(false);
+  const [linkApproval, setLinkApproval] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
   const AUTHORITIES = withSelected(useDropdownOptions("authority"), form.authority);
@@ -384,7 +386,21 @@ export function InvestmentForm({ agents, companies, onDone }: { agents: Agent[];
         .select("id")
         .single();
       if (error) return toast.error(error.message);
-      await syncCounterpart("approvals", shared);
+      if (linkFlight) {
+        const { error: e1 } = await supabase.from("flights").insert({
+          passenger_name: shared.passenger_name, national_id: shared.national_id, passport: shared.passport, dob: shared.dob,
+          destination: shared.destination, agent_id: shared.agent_id, notes: shared.notes, travel_date: shared.travel_date,
+          airline: shared.airline, issuing_company: shared.issuing_company, travel_statement: shared.travel_statement,
+          status: "محجوز",
+        });
+        if (e1) toast.warning("تعذر إنشاء الرحلة المرتبطة: " + e1.message);
+      }
+      if (linkApproval) {
+        const { error: e2 } = await supabase.from("approvals").insert({
+          ...shared, issuing_company_id, service_type: "security_approval",
+        });
+        if (e2) toast.warning("تعذر إنشاء الموافقة المرتبطة: " + e2.message);
+      }
       if (inserted?.id) {
         try {
           await postServiceFinancials({
@@ -411,6 +427,17 @@ export function InvestmentForm({ agents, companies, onDone }: { agents: Agent[];
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">➕ تقديم استثمار ليبي</div></div>
+      <div style={{ padding: "12px 16px", margin: "0 0 8px", background: "#f8fafc", border: "1px solid var(--border)", borderRadius: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#0f1b3d", marginBottom: 8 }}>خدمات مرتبطة</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={linkFlight} onChange={(e) => setLinkFlight(e.target.checked)} /> تذاكر طيران
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={linkApproval} onChange={(e) => setLinkApproval(e.target.checked)} /> موافقة أمنية
+          </label>
+        </div>
+      </div>
       <div className="form-grid">
         <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} /></div>
         <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} /></div>
@@ -534,7 +561,6 @@ function EditInvestmentModal({ approval, agents, companies, onClose }: { approva
     try {
       const { error } = await supabase.from("approvals").update({ ...payload, service_type: "libyan_investment" }).eq("id", approval.id);
       if (error) return toast.error(error.message);
-      await syncCounterpart("approvals", shared);
       try {
         await updateServiceFinancials({
           serviceId: approval.id,
