@@ -247,6 +247,8 @@ export type CompanyTransaction = {
   total_paid: number;
   note: string | null;
   merchant_id: string | null;
+  source_service_id?: string | null;
+  source_service_type?: string | null;
   created_at: string;
 };
 
