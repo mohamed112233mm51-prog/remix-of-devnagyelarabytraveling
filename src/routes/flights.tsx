@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
+import { badgeFor, fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
@@ -353,6 +353,21 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
   const tripValue = Number(form.count || 0) * Number(form.price || 0);
 
+  const pricingMap = useAgentPricingMap(form.agent_id || null);
+  const pricing = pricingMap["تذاكر طيران"];
+  const [pricingTouched, setPricingTouched] = useState(false);
+  useEffect(() => {
+    if (!form.agent_id) return;
+    if (pricing) {
+      setForm((p) => ({
+        ...p,
+        price: String(pricing.agent_price ?? ""),
+        company_value: String(pricing.company_price ?? ""),
+      }));
+      setPricingTouched(false);
+    }
+  }, [form.agent_id, pricing?.id]);
+
   const save = async () => {
     if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     if (!form.airline || !form.destination || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
@@ -372,6 +387,10 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
       count: Math.max(1, Math.round(Number(form.count) || 1)),
       price: Number(form.price) || 0,
       company_value: Number(form.company_value) || 0,
+      company_price: Number(form.company_value) || 0,
+      agent_price: Number(form.price) || 0,
+      company_percentage: (Number(form.price) || 0) > 0 ? Math.round(((Number(form.price) - Number(form.company_value)) / Number(form.price)) * 10000) / 100 : 0,
+      company_profit_value: Math.round(((Number(form.price) || 0) - (Number(form.company_value) || 0)) * 100) / 100,
     };
     try {
       const { data: inserted, error } = await supabase.from("flights").insert(payload).select("id").single();
@@ -475,9 +494,19 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
           </select>
         </div>
         <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
-        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => { set("price", e.target.value); setPricingTouched(true); }} /></div>
         <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(tripValue)} disabled readOnly /></div>
-        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => { set("company_value", e.target.value); setPricingTouched(true); }} /></div>
+        {form.agent_id && pricing && (
+          <div className="form-group full" style={{ fontSize: 12, color: "#0f766e", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: 8 }}>
+            تم جلب السعر من تسعير الوكيل ويمكن تعديله لهذه الخدمة فقط{pricingTouched ? " (تم التعديل)" : ""}
+          </div>
+        )}
+        {form.agent_id && !pricing && (
+          <div className="form-group full" style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: 8 }}>
+            لا يوجد تسعير محفوظ لهذه الخدمة لهذا الوكيل
+          </div>
+        )}
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>

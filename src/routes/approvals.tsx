@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
+import { fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
@@ -342,6 +342,17 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
   const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
 
+  const pricingMap = useAgentPricingMap(form.agent_id || null);
+  const pricing = pricingMap["موافقة أمنية"];
+  const [pricingTouched, setPricingTouched] = useState(false);
+  useEffect(() => {
+    if (!form.agent_id) return;
+    if (pricing) {
+      setForm((p) => ({ ...p, price: String(pricing.agent_price ?? ""), company_value: String(pricing.company_price ?? "") }));
+      setPricingTouched(false);
+    }
+  }, [form.agent_id, pricing?.id]);
+
   const save = async () => {
     if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     if (!form.destination || !form.authority || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
@@ -370,6 +381,8 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
     const count = Math.max(1, Math.round(Number(form.count) || 1));
     const price = Number(form.price) || 0;
     const companyValue = Number(form.company_value) || 0;
+    const profit = Math.round((price - companyValue) * 100) / 100;
+    const percentage = price > 0 ? Math.round(((price - companyValue) / price) * 10000) / 100 : 0;
     const payload = {
       ...shared,
       issuing_company_id,
@@ -377,6 +390,10 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
       issue_date: form.issue_date || null,
       government_fee: Number(form.government_fee || 0),
       count, price, company_value: companyValue,
+      company_price: companyValue,
+      agent_price: price,
+      company_percentage: percentage,
+      company_profit_value: profit,
     };
     try {
       const { data: inserted, error } = await supabase
@@ -483,9 +500,19 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
         </div>
         <div className="form-group"><label>مبلغ الموافقة</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
         <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
-        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => { set("price", e.target.value); setPricingTouched(true); }} /></div>
         <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
-        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => { set("company_value", e.target.value); setPricingTouched(true); }} /></div>
+        {form.agent_id && pricing && (
+          <div className="form-group full" style={{ fontSize: 12, color: "#0f766e", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: 8 }}>
+            تم جلب السعر من تسعير الوكيل ويمكن تعديله لهذه الخدمة فقط{pricingTouched ? " (تم التعديل)" : ""}
+          </div>
+        )}
+        {form.agent_id && !pricing && (
+          <div className="form-group full" style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: 8 }}>
+            لا يوجد تسعير محفوظ لهذه الخدمة لهذا الوكيل
+          </div>
+        )}
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>

@@ -44,6 +44,45 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_service_pricing: {
+        Row: {
+          agent_id: string
+          agent_price: number
+          company_percentage: number
+          company_price: number
+          company_profit_value: number
+          created_at: string
+          id: string
+          is_demo: boolean
+          service_type: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          agent_price?: number
+          company_percentage?: number
+          company_price?: number
+          company_profit_value?: number
+          created_at?: string
+          id?: string
+          is_demo?: boolean
+          service_type: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          agent_price?: number
+          company_percentage?: number
+          company_price?: number
+          company_profit_value?: number
+          created_at?: string
+          id?: string
+          is_demo?: boolean
+          service_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       agents: {
         Row: {
           created_at: string
@@ -101,8 +140,12 @@ export type Database = {
       approvals: {
         Row: {
           agent_id: string | null
+          agent_price: number
           airline: string | null
           authority: string | null
+          company_percentage: number
+          company_price: number
+          company_profit_value: number
           company_value: number
           count: number
           created_at: string
@@ -127,8 +170,12 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          agent_price?: number
           airline?: string | null
           authority?: string | null
+          company_percentage?: number
+          company_price?: number
+          company_profit_value?: number
           company_value?: number
           count?: number
           created_at?: string
@@ -153,8 +200,12 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          agent_price?: number
           airline?: string | null
           authority?: string | null
+          company_percentage?: number
+          company_price?: number
+          company_profit_value?: number
           company_value?: number
           count?: number
           created_at?: string
@@ -391,8 +442,12 @@ export type Database = {
       flights: {
         Row: {
           agent_id: string | null
+          agent_price: number
           airline: string | null
           authority: string | null
+          company_percentage: number
+          company_price: number
+          company_profit_value: number
           company_value: number
           count: number
           created_at: string
@@ -412,8 +467,12 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          agent_price?: number
           airline?: string | null
           authority?: string | null
+          company_percentage?: number
+          company_price?: number
+          company_profit_value?: number
           company_value?: number
           count?: number
           created_at?: string
@@ -433,8 +492,12 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          agent_price?: number
           airline?: string | null
           authority?: string | null
+          company_percentage?: number
+          company_price?: number
+          company_profit_value?: number
           company_value?: number
           count?: number
           created_at?: string

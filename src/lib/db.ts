@@ -216,6 +216,48 @@ export const buildTravelStatement = (
   return parts.length ? parts.join(" - ") : "";
 };
 
+export type AgentServicePricing = {
+  id: string;
+  agent_id: string;
+  service_type: string;
+  company_price: number;
+  agent_price: number;
+  company_percentage: number;
+  company_profit_value: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export const PRICING_SERVICE_TYPES = ["تذاكر طيران", "موافقة أمنية", "استثمار ليبي"] as const;
+export type PricingServiceType = typeof PRICING_SERVICE_TYPES[number];
+
+/** Fetch all pricing rows for an agent, keyed by service_type. */
+export function useAgentPricingMap(agentId: string | null | undefined) {
+  const [map, setMap] = useState<Record<string, AgentServicePricing>>({});
+  useEffect(() => {
+    if (!agentId) { setMap({}); return; }
+    let mounted = true;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("agent_service_pricing")
+        .select("*")
+        .eq("agent_id", agentId);
+      if (!mounted) return;
+      if (error) { setMap({}); return; }
+      const out: Record<string, AgentServicePricing> = {};
+      for (const r of (data || []) as AgentServicePricing[]) out[r.service_type] = r;
+      setMap(out);
+    };
+    load();
+    const ch = supabase
+      .channel(`agent-pricing-${agentId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "agent_service_pricing", filter: `agent_id=eq.${agentId}` }, () => load())
+      .subscribe();
+    return () => { mounted = false; supabase.removeChannel(ch); };
+  }, [agentId]);
+  return map;
+}
+
 export type IssuingCompany = {
   id: string;
   company_name: string;
