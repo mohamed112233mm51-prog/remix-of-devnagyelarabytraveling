@@ -501,9 +501,19 @@ export function InvestmentForm({ agents, companies, onDone }: { agents: Agent[];
         </div>
         <div className="form-group"><label>مبلغ الاستثمار</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
         <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
-        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => { set("price", e.target.value); setPricingTouched(true); }} /></div>
         <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
-        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} placeholder="0" value={form.company_value} onChange={(e) => { set("company_value", e.target.value); setPricingTouched(true); }} /></div>
+        {form.agent_id && pricing && (
+          <div className="form-group full" style={{ fontSize: 12, color: "#0f766e", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: 8 }}>
+            تم جلب السعر من تسعير الوكيل ويمكن تعديله لهذه الخدمة فقط{pricingTouched ? " (تم التعديل)" : ""}
+          </div>
+        )}
+        {form.agent_id && !pricing && (
+          <div className="form-group full" style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: 8 }}>
+            لا يوجد تسعير محفوظ لهذه الخدمة لهذا الوكيل
+          </div>
+        )}
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
