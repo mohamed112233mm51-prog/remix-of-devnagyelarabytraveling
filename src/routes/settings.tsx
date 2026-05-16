@@ -110,7 +110,7 @@ function SettingsPage() {
       {tab === "general" && <GeneralTab />}
       {tab === "backups" && <BackupsTab />}
       {tab === "production" && <ProductionCleanupTab />}
-      {tab === "devtools" && import.meta.env.DEV && <DevToolsTab />}
+      {tab === "devtools" && !isProdEnv() && <DevToolsTab />}
     </div>
   );
 }
