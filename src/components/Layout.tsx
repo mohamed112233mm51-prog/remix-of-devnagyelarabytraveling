@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Plane,
   ClipboardCheck,
+  Landmark,
   Users,
   Building2,
   HandCoins,
@@ -16,12 +17,14 @@ import {
   X,
   ChevronDown,
   UserCircle,
+  PlusCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm } from "@/hooks/usePerm";
 import { useBranding } from "@/lib/branding";
 import { SearchBox, NotificationsBell } from "@/components/TopbarTools";
 import { isDevEnv } from "@/lib/env";
+import { ServiceSubmissionModal } from "@/components/ServiceSubmissionModal";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null };
