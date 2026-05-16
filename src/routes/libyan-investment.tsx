@@ -133,13 +133,13 @@ function LibyanInvestmentPage() {
               <span style={{ color: GOLD, fontWeight: 700 }}>قائمة الاستثمار الليبي</span>
             </nav>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div aria-label="Egypt" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(206,17,38,.35), 0 4px 14px rgba(0,0,0,.28)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+              <div aria-label="Libya" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(35,158,70,.35), 0 4px 14px rgba(0,0,0,.28)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #E70013 0%, #E70013 25%, #000000 25%, #000000 75%, #239E46 75%, #239E46 100%)" }}>
                 <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0) 55%)", pointerEvents: "none" }} />
-                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "33.0%", height: 1, background: "rgba(0,0,0,.18)" }} />
-                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "66.3%", height: 1, background: "rgba(0,0,0,.18)" }} />
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
-                  <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
-                  <circle cx="12" cy="12" r="1.6" fill="#C8A44D" stroke="none" />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "25%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "75%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <svg viewBox="0 0 64 64" width="26" height="26" fill="#fff" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
+                  <path d="M38 32a10 10 0 1 1-7.5-9.7 8.5 8.5 0 1 0 0 19.4A10 10 0 0 1 38 32z" />
+                  <polygon points="46,26 47.6,30.5 52.3,30.5 48.5,33.3 50,38 46,35.2 42,38 43.5,33.3 39.7,30.5 44.4,30.5" />
                 </svg>
               </div>
               <div style={{ minWidth: 0 }}>
