@@ -394,6 +394,40 @@ function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: Iss
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
   const SERVICE_TYPES = withSelected(useDropdownOptions("service_type"), form.service_type);
   const tv = Number(form.count || 0) * Number(form.price || 0);
+
+  const selectedCompanyId = useMemo(
+    () => companies.find((c) => c.company_name === form.company_name)?.id || "",
+    [companies, form.company_name],
+  );
+  const dueServices = useMemo(() => {
+    if (!selectedCompanyId) return [] as CompanyTransaction[];
+    return txns.filter((t) =>
+      t.company_id === selectedCompanyId &&
+      !!t.source_service_id &&
+      (!form.service_type || t.service_type === form.service_type) &&
+      Number(t.trip_value || 0) - Number(t.total_paid || 0) > 0,
+    );
+  }, [txns, selectedCompanyId, form.service_type]);
+  const selectedService = dueServices.find((s) => s.id === form.service_id) || null;
+
+  useEffect(() => {
+    if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
+      setForm((p) => ({ ...p, service_id: "" }));
+    }
+  }, [dueServices, form.service_id]);
+
+  useEffect(() => {
+    if (!selectedService) return;
+    setForm((p) => ({
+      ...p,
+      destination: selectedService.destination || "",
+      count: String(selectedService.count || ""),
+      price: String(selectedService.price || ""),
+      service_type: selectedService.service_type || p.service_type,
+    }));
+  }, [form.service_id]);
+
+  const lockFields = !!selectedService;
   const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
   const eligibleMerchants = activeMerchants.filter(
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
