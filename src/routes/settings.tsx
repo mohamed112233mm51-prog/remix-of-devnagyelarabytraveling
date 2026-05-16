@@ -73,7 +73,7 @@ function SettingsPage() {
     { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} /> },
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} /> },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} /> },
-    ...(import.meta.env.DEV ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} /> }] : []),
+    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} /> }] : []),
   ];
 
   return (
