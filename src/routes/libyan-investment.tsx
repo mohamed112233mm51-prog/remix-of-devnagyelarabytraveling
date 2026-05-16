@@ -223,9 +223,10 @@ function LibyanInvestmentPage() {
           <div className="fl-card" style={{ borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)", overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px", borderBottom: "1px solid #eef2f7" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div aria-label="Egypt" style={{ width: 32, height: 32, borderRadius: 9, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 2px 6px rgba(206,17,38,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#C8A44D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>
-                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                <div aria-label="Libya" style={{ width: 32, height: 32, borderRadius: 9, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 2px 6px rgba(35,158,70,.22)", background: "linear-gradient(180deg, #E70013 0%, #E70013 25%, #000000 25%, #000000 75%, #239E46 75%, #239E46 100%)" }}>
+                  <svg viewBox="0 0 64 64" width="20" height="20" fill="#fff" style={{ position: "relative", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>
+                    <path d="M38 32a10 10 0 1 1-7.5-9.7 8.5 8.5 0 1 0 0 19.4A10 10 0 0 1 38 32z" />
+                    <polygon points="46,26 47.6,30.5 52.3,30.5 48.5,33.3 50,38 46,35.2 42,38 43.5,33.3 39.7,30.5 44.4,30.5" />
                   </svg>
                 </div>
                 <div>
