@@ -521,20 +521,37 @@ function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: Iss
           </select>
         </div>
         <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-        <div className="form-group"><label>الوجهة</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            <SafeSelectOptions options={DESTINATIONS} />
-          </select>
-        </div>
         <div className="form-group"><label>نوع الخدمة</label>
           <select value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
             <option value="" disabled>اختر...</option>
             <SafeSelectOptions options={SERVICE_TYPES} />
           </select>
         </div>
-        <div className="form-group"><label>العدد</label><input type="number" min={1} placeholder="0" value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
-        <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>الخدمة المستحقة</label>
+          <select
+            value={form.service_id}
+            onChange={(e) => set("service_id", e.target.value)}
+            disabled={!selectedCompanyId}
+          >
+            <option value="">{selectedCompanyId ? (dueServices.length ? "اختر الخدمة..." : "لا توجد خدمات مستحقة") : "اختر الشركة أولاً"}</option>
+            {dueServices.map((s) => {
+              const remaining = Number(s.trip_value || 0) - Number(s.total_paid || 0);
+              return (
+                <option key={s.id} value={s.id}>
+                  {s.date} — {s.service_type || "—"} — {s.destination || "—"} — متبقي {fmtNum(remaining)}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <div className="form-group"><label>الوجهة</label>
+          <select value={form.destination} onChange={(e) => set("destination", e.target.value)} disabled={lockFields}>
+            <option value="" disabled>اختر...</option>
+            <SafeSelectOptions options={DESTINATIONS} />
+          </select>
+        </div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} placeholder="0" value={form.count} onChange={(e) => set("count", e.target.value)} disabled={lockFields} /></div>
+        <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} disabled={lockFields} /></div>
         <div className="form-group"><label>قيمة الخدمة</label><input value={fmtNum(tv)} disabled /></div>
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
