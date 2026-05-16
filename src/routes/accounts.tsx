@@ -401,18 +401,60 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function TxnForm({ agents, merchants, onDone }: { agents: Agent[]; merchants: Merchant[]; onDone: () => void }) {
+function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchants: Merchant[]; txns: Transaction[]; onDone: () => void }) {
   const [form, setForm] = useState({
     agent_id: "", date: new Date().toISOString().slice(0, 10),
     destination: "", count: "", price: "", service_type: "",
     instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
     merchant_id: "",
+    service_id: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
   const SERVICE_TYPES = withSelected(useDropdownOptions("service_type"), form.service_type);
+
+  // Outstanding services for selected agent + (optional) service type
+  const dueServices = useMemo(() => {
+    if (!form.agent_id) return [] as Transaction[];
+    return txns.filter((t) => {
+      if (t.agent_id !== form.agent_id) return false;
+      if (!t.source_service_id) return false;
+      if (form.service_type && (t.service_type || "") !== form.service_type) return false;
+      const tv = Number(t.count || 0) * Number(t.price || 0);
+      const paid = Number(t.total_paid || 0);
+      return tv - paid > 0;
+    });
+  }, [txns, form.agent_id, form.service_type]);
+
+  // Reset/auto-fill when service selection changes
+  useEffect(() => {
+    if (!form.service_id) return;
+    const svc = dueServices.find((s) => s.id === form.service_id);
+    if (!svc) {
+      setForm((p) => ({ ...p, service_id: "" }));
+      return;
+    }
+    setForm((p) => ({
+      ...p,
+      destination: svc.destination || "",
+      count: String(svc.count || 0),
+      price: String(svc.price || 0),
+      service_type: svc.service_type || p.service_type,
+    }));
+  }, [form.service_id]);
+
+  // If agent or service_type changes and selected service no longer eligible, clear it
+  useEffect(() => {
+    if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
+      setForm((p) => ({ ...p, service_id: "" }));
+    }
+  }, [dueServices, form.service_id]);
+
+  const selectedService = form.service_id ? dueServices.find((s) => s.id === form.service_id) || null : null;
+  const lockFields = !!selectedService;
+
   const tv = Number(form.count || 0) * Number(form.price || 0);
-  const travelStatement = buildTravelStatement(form.destination, form.date, null);
+  const travelStatement = selectedService?.travel_statement || buildTravelStatement(form.destination, form.date, null);
   const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
   const eligibleMerchants = activeMerchants.filter(
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
@@ -450,12 +492,43 @@ function TxnForm({ agents, merchants, onDone }: { agents: Agent[]; merchants: Me
   const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
   const merchantNet = merchantCashNetAmount(merchant);
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
-  const totalPaid = insta + cash + merchantNet + merchantPhysical;
+  const newPayment = insta + cash + merchantNet + merchantPhysical;
   const usesMerchant = insta > 0 || merchant > 0 || merchantPhysical > 0;
   const save = async () => {
     if (!form.agent_id || !form.destination) return toast.error("برجاء اختيار قيمة من القائمة");
-    if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
+    if (newPayment <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
     if (usesMerchant && !form.merchant_id) return toast.error("برجاء اختيار التاجر");
+
+    if (selectedService) {
+      // UPDATE existing service-linked transaction with the new payment values
+      const prevInsta = Number(selectedService.instapay_amount || 0);
+      const prevCash = Number(selectedService.cash_amount || 0);
+      const prevMerchant = Number(selectedService.merchant_cash_amount || 0);
+      const prevMerchantPhysical = Number(selectedService.merchant_cash_physical_amount || 0);
+      const newInsta = prevInsta + insta;
+      const newCash = prevCash + cash;
+      const newMerchant = prevMerchant + merchant;
+      const newMerchantNet = merchantCashNetAmount(newMerchant);
+      const newMerchantPhysical = prevMerchantPhysical + merchantPhysical;
+      const newTotalPaid = Number(selectedService.total_paid || 0) + newPayment;
+      const { error } = await supabase
+        .from("transactions")
+        .update({
+          instapay_amount: newInsta,
+          cash_amount: newCash,
+          merchant_cash_amount: newMerchant,
+          merchant_cash_net_amount: newMerchantNet,
+          merchant_cash_physical_amount: newMerchantPhysical,
+          merchant_id: usesMerchant ? form.merchant_id : (selectedService.merchant_id || null),
+          total_paid: newTotalPaid,
+          paid: newTotalPaid,
+        })
+        .eq("id", selectedService.id);
+      if (error) return toast.error(error.message);
+      onDone();
+      return;
+    }
+
     const { error } = await supabase.from("transactions").insert({
       agent_id: form.agent_id, date: form.date,
       destination: form.destination || null,
@@ -468,8 +541,8 @@ function TxnForm({ agents, merchants, onDone }: { agents: Agent[]; merchants: Me
       merchant_cash_net_amount: merchantNet,
       merchant_cash_physical_amount: merchantPhysical,
       merchant_id: usesMerchant ? form.merchant_id : null,
-      total_paid: totalPaid,
-      paid: totalPaid,
+      total_paid: newPayment,
+      paid: newPayment,
     });
     if (error) return toast.error(error.message);
     onDone();
