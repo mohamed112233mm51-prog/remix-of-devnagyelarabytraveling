@@ -13,6 +13,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as MerchantsRouteImport } from './routes/merchants'
+import { Route as LibyanInvestmentRouteImport } from './routes/libyan-investment'
 import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as FlightsRouteImport } from './routes/flights'
 import { Route as ExpensesRouteImport } from './routes/expenses'
@@ -42,6 +43,11 @@ const ReportsRoute = ReportsRouteImport.update({
 const MerchantsRoute = MerchantsRouteImport.update({
   id: '/merchants',
   path: '/merchants',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LibyanInvestmentRoute = LibyanInvestmentRouteImport.update({
+  id: '/libyan-investment',
+  path: '/libyan-investment',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InvestorsRoute = InvestorsRouteImport.update({
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
+  '/libyan-investment': typeof LibyanInvestmentRoute
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
+  '/libyan-investment': typeof LibyanInvestmentRoute
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
+  '/libyan-investment': typeof LibyanInvestmentRoute
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/flights'
     | '/investors'
+    | '/libyan-investment'
     | '/merchants'
     | '/reports'
     | '/reset-password'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/flights'
     | '/investors'
+    | '/libyan-investment'
     | '/merchants'
     | '/reports'
     | '/reset-password'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/flights'
     | '/investors'
+    | '/libyan-investment'
     | '/merchants'
     | '/reports'
     | '/reset-password'
@@ -204,6 +216,7 @@ export interface RootRouteChildren {
   ExpensesRoute: typeof ExpensesRoute
   FlightsRoute: typeof FlightsRoute
   InvestorsRoute: typeof InvestorsRoute
+  LibyanInvestmentRoute: typeof LibyanInvestmentRoute
   MerchantsRoute: typeof MerchantsRoute
   ReportsRoute: typeof ReportsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -240,6 +253,13 @@ declare module '@tanstack/react-router' {
       path: '/merchants'
       fullPath: '/merchants'
       preLoaderRoute: typeof MerchantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/libyan-investment': {
+      id: '/libyan-investment'
+      path: '/libyan-investment'
+      fullPath: '/libyan-investment'
+      preLoaderRoute: typeof LibyanInvestmentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/investors': {
@@ -324,6 +344,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExpensesRoute: ExpensesRoute,
   FlightsRoute: FlightsRoute,
   InvestorsRoute: InvestorsRoute,
+  LibyanInvestmentRoute: LibyanInvestmentRoute,
   MerchantsRoute: MerchantsRoute,
   ReportsRoute: ReportsRoute,
   ResetPasswordRoute: ResetPasswordRoute,

@@ -9,7 +9,7 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import { Modal } from "@/components/Modal";
 
-export const Route = createFileRoute("/approvals")({
+export const Route = createFileRoute("/libyan-investment")({
   component: () => <AppErrorBoundary><ApprovalsPage /></AppErrorBoundary>,
   errorComponent: () => <SafePageError />,
 });
