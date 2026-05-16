@@ -25,6 +25,9 @@ function CompaniesPage() {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: txns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: flights } = useLive<Flight>("flights");
+  const { rows: approvals } = useLive<Approval>("approvals");
+  const { rows: agents } = useLive<Agent>("agents");
   const [tab, setTab] = useState<"list" | "add" | "txn" | "statement">("list");
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
