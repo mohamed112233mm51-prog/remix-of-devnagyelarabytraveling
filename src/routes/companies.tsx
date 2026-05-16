@@ -725,3 +725,66 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
     </div>
   );
 }
+
+function UsdConvertModal({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({
+    egp_amount: "",
+    exchange_rate: "",
+    date: new Date().toISOString().slice(0, 10),
+    note: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const egp = Number(form.egp_amount || 0);
+  const rate = Number(form.exchange_rate || 0);
+  const usd = rate > 0 ? egp / rate : 0;
+
+  const save = async () => {
+    if (egp <= 0) return toast.error("أدخل المبلغ بالجنيه");
+    if (rate <= 0) return toast.error("أدخل سعر الصرف");
+    setSaving(true);
+    const { error } = await supabase.from("usd_treasury_transactions").insert({
+      date: form.date,
+      type: "conversion",
+      egp_amount: egp,
+      usd_amount: Math.round(usd * 100) / 100,
+      exchange_rate: rate,
+      note: form.note || null,
+    });
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("تم تحويل المبلغ إلى الخزينة الدولارية");
+    onClose();
+  };
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 560, margin: 0 }}>
+        <div className="card-header"><div className="card-title">💱 تحويل إلى الخزينة الدولارية</div></div>
+        <div className="form-grid">
+          <div className="form-group"><label>المبلغ بالجنيه</label>
+            <input type="number" placeholder="0" value={form.egp_amount} onChange={(e) => set("egp_amount", e.target.value)} />
+          </div>
+          <div className="form-group"><label>سعر الصرف</label>
+            <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
+          </div>
+          <div className="form-group"><label>المبلغ بالدولار (تلقائي)</label>
+            <input value={fmtUSD(usd)} disabled />
+          </div>
+          <div className="form-group"><label>التاريخ</label>
+            <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+          </div>
+          <div className="form-group full"><label>ملاحظات</label>
+            <input value={form.note} onChange={(e) => set("note", e.target.value)} />
+          </div>
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التحويل</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
