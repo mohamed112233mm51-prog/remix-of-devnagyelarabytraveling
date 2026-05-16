@@ -367,7 +367,8 @@ function Dashboard() {
       <div className="erp-hero-grid">
         <HeroKpi
           label={`صافي الأرباح — ${periodLabel}`}
-          value={fmtDL(periodAgg.profit)}
+          value={periodAgg.profit}
+          format={fmtDL}
           icon={<TrendingUp size={18} />}
           tone="primary"
           delta={prevAgg ? `${pctDelta(periodAgg.profit, prevAgg.profit) >= 0 ? "+" : ""}${pctDelta(periodAgg.profit, prevAgg.profit)}%` : undefined}
@@ -376,7 +377,8 @@ function Dashboard() {
         />
         <HeroKpi
           label={`إجمالي التحصيلات — ${periodLabel}`}
-          value={fmtDL(periodAgg.collected)}
+          value={periodAgg.collected}
+          format={fmtDL}
           icon={<HandCoins size={18} />}
           tone="success"
           delta={prevAgg ? `${pctDelta(periodAgg.collected, prevAgg.collected) >= 0 ? "+" : ""}${pctDelta(periodAgg.collected, prevAgg.collected)}%` : undefined}
@@ -385,7 +387,8 @@ function Dashboard() {
         />
         <HeroKpi
           label={`المصروفات — ${periodLabel}`}
-          value={fmtDL(periodAgg.expenses)}
+          value={periodAgg.expenses}
+          format={fmtDL}
           icon={<Wallet size={18} />}
           tone="warning"
           delta={prevAgg ? `${pctDelta(periodAgg.expenses, prevAgg.expenses) >= 0 ? "+" : ""}${pctDelta(periodAgg.expenses, prevAgg.expenses)}%` : undefined}
@@ -394,7 +397,8 @@ function Dashboard() {
         />
         <HeroKpi
           label={`الرحلات — ${periodLabel}`}
-          value={fmtNum(periodAgg.flightsCount)}
+          value={periodAgg.flightsCount}
+          format={fmtNum}
           icon={<Plane size={18} />}
           tone="navy"
           delta={prevAgg ? `${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 ? "+" : ""}${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount)}%` : undefined}
