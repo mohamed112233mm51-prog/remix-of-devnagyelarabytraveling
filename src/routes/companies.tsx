@@ -736,24 +736,86 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   );
 }
 
+type ConvertSource = "" | "insta_company" | "cash_company" | "merchant_wallet" | "merchant_physical";
+const SOURCE_LABELS: Record<Exclude<ConvertSource, "">, string> = {
+  insta_company: "انستا الشركة",
+  cash_company: "نقدي الشركة",
+  merchant_wallet: "كاش التاجر",
+  merchant_physical: "نقدي التاجر",
+};
+
 function UsdConvertModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     egp_amount: "",
     exchange_rate: "",
     date: new Date().toISOString().slice(0, 10),
     note: "",
+    source_type: "" as ConvertSource,
+    merchant_id: "",
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const egp = Number(form.egp_amount || 0);
   const rate = Number(form.exchange_rate || 0);
   const usd = rate > 0 ? egp / rate : 0;
-  const balances = useTreasuryBalances();
 
+  const { rows: agentTxns } = useLive<import("@/lib/db").Transaction>("transactions");
+  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: collections } = useLive<import("@/lib/db").MerchantCashCollection>("merchant_cash_collections");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+
+  const needsMerchant = form.source_type === "merchant_wallet" || form.source_type === "merchant_physical";
+  const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
+
+  const sourceBalance = useMemo(() => {
+    const src = form.source_type;
+    if (!src) return 0;
+    const conversionsFor = (type: ConvertSource, mid?: string) =>
+      usdRows
+        .filter((r) => r.type === "conversion" && r.source_type === type && (mid ? r.merchant_id === mid : true))
+        .reduce((s, r) => s + Number(r.egp_amount || 0), 0);
+    if (src === "insta_company") {
+      const inn = agentTxns.reduce((s, t) => s + Number(t.instapay_amount || 0), 0);
+      const out = companyTxns.reduce((s, t) => s + Number(t.instapay_amount || 0), 0);
+      return Math.round(inn - out - conversionsFor("insta_company"));
+    }
+    if (src === "cash_company") {
+      const inn = agentTxns.reduce((s, t) => s + Number(t.cash_amount || 0), 0);
+      const out = companyTxns.reduce((s, t) => s + Number(t.cash_amount || 0), 0);
+      return Math.round(inn - out - conversionsFor("cash_company"));
+    }
+    const mid = form.merchant_id;
+    if (!mid) return 0;
+    if (src === "merchant_wallet") {
+      const inn = agentTxns
+        .filter((t) => t.merchant_id === mid)
+        .reduce((s, t) => s + merchantCashNet(t), 0);
+      const out = companyTxns
+        .filter((t) => t.merchant_id === mid)
+        .reduce((s, t) => s + merchantCashNet(t), 0);
+      const collected = collections
+        .filter((c) => c.merchant_id === mid)
+        .reduce((s, c) => s + Number(c.amount || 0), 0);
+      return Math.round(inn - out - collected - conversionsFor("merchant_wallet", mid));
+    }
+    // merchant_physical
+    const inn = agentTxns
+      .filter((t) => t.merchant_id === mid)
+      .reduce((s, t) => s + Number(t.merchant_cash_physical_amount || 0), 0);
+    const out = companyTxns
+      .filter((t) => t.merchant_id === mid)
+      .reduce((s, t) => s + Number(t.merchant_cash_physical_amount || 0), 0);
+    return Math.round(inn - out - conversionsFor("merchant_physical", mid));
+  }, [form.source_type, form.merchant_id, agentTxns, companyTxns, collections, usdRows]);
+
+  // Need merchantCashNet helper imported
   const save = async () => {
     if (egp <= 0) return toast.error("أدخل المبلغ بالجنيه");
     if (rate <= 0) return toast.error("أدخل سعر الصرف");
-    if (egp > balances.egp) return toast.error("لا يوجد رصيد كافي في الخزينة");
+    if (!form.source_type) return toast.error("اختر مصدر التحويل");
+    if (needsMerchant && !form.merchant_id) return toast.error("اختر التاجر");
+    if (egp > sourceBalance) return toast.error("لا يوجد رصيد كافي في مصدر التحويل");
     setSaving(true);
     const { error } = await supabase.from("usd_treasury_transactions").insert({
       date: form.date,
@@ -761,6 +823,8 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
       egp_amount: egp,
       usd_amount: Math.round(usd * 100) / 100,
       exchange_rate: rate,
+      source_type: form.source_type,
+      merchant_id: needsMerchant ? form.merchant_id : null,
       note: form.note || null,
     });
     setSaving(false);
@@ -775,6 +839,28 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 560, margin: 0 }}>
         <div className="card-header"><div className="card-title">💱 تحويل إلى الخزينة الدولارية</div></div>
         <div className="form-grid">
+          <div className="form-group"><label>مصدر التحويل</label>
+            <select value={form.source_type} onChange={(e) => set("source_type", e.target.value)}>
+              <option value="" disabled>اختر...</option>
+              {(Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>).map((k) => (
+                <option key={k} value={k}>{SOURCE_LABELS[k]}</option>
+              ))}
+            </select>
+          </div>
+          {needsMerchant && (
+            <div className="form-group"><label>التاجر</label>
+              <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
+                <option value="" disabled>اختر...</option>
+                {activeMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+              </select>
+            </div>
+          )}
+          {form.source_type && (!needsMerchant || form.merchant_id) && (
+            <div className="form-group full" style={{ background: "var(--surface, #f8fafc)", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)" }}>
+              <small style={{ color: "var(--text2)" }}>الرصيد المتاح في المصدر: </small>
+              <strong>{fmtDL(sourceBalance)}</strong>
+            </div>
+          )}
           <div className="form-group"><label>المبلغ بالجنيه</label>
             <input type="number" placeholder="0" value={form.egp_amount} onChange={(e) => set("egp_amount", e.target.value)} />
           </div>
