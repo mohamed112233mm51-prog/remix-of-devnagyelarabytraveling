@@ -27,7 +27,10 @@ function FlightsPage() {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const AIRLINES = useDropdownOptions("airline");
   const DESTINATIONS = useDropdownOptions("destination");
-  const [tab, setTab] = useState<"list" | "add">(perm.create ? "list" : "list");
+  const [tab, setTab] = useState<"list" | "add">(() => {
+    if (typeof window === "undefined") return "list";
+    return new URLSearchParams(window.location.search).get("tab") === "add" && perm.create ? "add" : "list";
+  });
   const [search, setSearch] = useState("");
   const [airline, setAirline] = useState("");
   const [destination, setDestination] = useState("");
