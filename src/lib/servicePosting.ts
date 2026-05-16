@@ -133,7 +133,7 @@ export async function updateServiceFinancials(input: ServicePostingInput): Promi
       .maybeSingle();
     if (selErr) throw new Error(selErr.message);
 
-    const base = agentRow(input);
+    const base = agentRow({ ...input, agentId: input.agentId });
     if (existing?.id) {
       // Update only structural fields; leave payment fields untouched
       const { error } = await supabase
@@ -167,7 +167,7 @@ export async function updateServiceFinancials(input: ServicePostingInput): Promi
     if (selErr) throw new Error(selErr.message);
 
     const value = Math.max(0, Number(input.companyValue) || 0);
-    const base = companyRow(input);
+    const base = companyRow({ ...input, companyId: input.companyId });
     if (existing?.id) {
       if (value > 0) {
         const { error } = await supabase
