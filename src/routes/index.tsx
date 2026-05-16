@@ -248,37 +248,95 @@ function Dashboard() {
   const chartMax = Math.max(...chart.map((b) => b.value), 1);
   const chartTotal = chart.reduce((s, b) => s + b.value, 0);
 
-  // Recent activity (mix of txns, flights, approvals, expenses)
-  type ActivityItem = { date: string; label: string; sub: string; tone: "blue" | "green" | "gold" | "red" | "navy" };
-  const recent: ActivityItem[] = [
-    ...txns.slice(0, 8).map<ActivityItem>((t) => ({
-      date: t.created_at,
-      label: `معاملة وكيل: ${t.service_type || ""}`,
-      sub: `${fmtDL(tripValue(t))}`,
-      tone: "blue",
-    })),
-    ...flights.slice(0, 4).map<ActivityItem>((f) => ({
-      date: f.created_at,
-      label: `رحلة جديدة`,
-      sub: `حالة: ${f.status || "—"}`,
-      tone: "navy",
-    })),
-    ...approvals.slice(0, 4).map<ActivityItem>((a) => ({
-      date: a.created_at,
-      label: `تقديم موافقة أمنية`,
-      sub: `حالة: ${a.status || "—"}`,
-      tone: "gold",
-    })),
-    ...expenses.slice(0, 4).map<ActivityItem>((e) => ({
-      date: e.created_at,
-      label: `مصروف: ${e.expense_type || ""}`,
-      sub: `${fmtDL(Number(e.amount || 0))}`,
-      tone: "red",
-    })),
-  ]
-    .filter((x) => x.date)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 7);
+  // ===== ERP Analytics =====
+  // 1. Top agents by collection
+  const topAgents = useMemo(() => {
+    const byAgent = new Map<string, { collected: number; count: number }>();
+    for (const t of txns) {
+      if (!t.agent_id) continue;
+      const collected = Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
+      const cur = byAgent.get(t.agent_id) || { collected: 0, count: 0 };
+      cur.collected += collected;
+      cur.count += 1;
+      byAgent.set(t.agent_id, cur);
+    }
+    const nameOf = new Map(agents.map((a) => [a.id, a.name]));
+    return Array.from(byAgent.entries())
+      .map(([id, v]) => ({ id, name: nameOf.get(id) || "—", ...v }))
+      .sort((a, b) => b.collected - a.collected)
+      .slice(0, 5);
+  }, [txns, agents]);
+
+  // 2. Top issuing companies by services provided
+  const topCompanies = useMemo(() => {
+    const byCo = new Map<string, { count: number; services: Map<string, number> }>();
+    for (const ct of cTxns) {
+      if (!ct.company_id) continue;
+      const cur = byCo.get(ct.company_id) || { count: 0, services: new Map() };
+      cur.count += 1;
+      const s = ct.service_type || "—";
+      cur.services.set(s, (cur.services.get(s) || 0) + 1);
+      byCo.set(ct.company_id, cur);
+    }
+    // also include approvals via issuing_company_id
+    for (const ap of approvals) {
+      if (!ap.issuing_company_id) continue;
+      const cur = byCo.get(ap.issuing_company_id) || { count: 0, services: new Map() };
+      cur.count += 1;
+      cur.services.set("موافقة أمنية", (cur.services.get("موافقة أمنية") || 0) + 1);
+      byCo.set(ap.issuing_company_id, cur);
+    }
+    const nameOf = new Map(companies.map((c) => [c.id, c.company_name]));
+    return Array.from(byCo.entries())
+      .map(([id, v]) => {
+        let top = "—"; let max = 0;
+        v.services.forEach((n, k) => { if (n > max) { max = n; top = k; } });
+        return { id, name: nameOf.get(id) || "—", count: v.count, topService: top };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [cTxns, approvals, companies]);
+
+  // 3. Service type distribution
+  const serviceDist = useMemo(() => {
+    const targets = ["تذاكر طيران", "موافقة أمنية", "استثمار ليبي"];
+    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0, "استثمار ليبي": 0 };
+    for (const t of txns) {
+      const s = t.service_type || "";
+      if (targets.includes(s)) counts[s] += 1;
+    }
+    for (const ct of cTxns) {
+      const s = ct.service_type || "";
+      if (targets.includes(s)) counts[s] += 1;
+    }
+    // flights count as تذاكر طيران if not already represented
+    counts["تذاكر طيران"] += flights.length;
+    counts["موافقة أمنية"] += approvals.length;
+    const total = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
+    const palette: Record<string, string> = {
+      "تذاكر طيران": NAVY,
+      "موافقة أمنية": GOLD,
+      "استثمار ليبي": "#16A34A",
+    };
+    return targets.map((k) => ({ label: k, value: counts[k], pct: Math.round((counts[k] / total) * 100), color: palette[k] }));
+  }, [txns, cTxns, flights, approvals]);
+  const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
+
+  // 4. Travel authorities (جهة السفر) from flights
+  const topAuthorities = useMemo(() => {
+    const byAuth = new Map<string, number>();
+    for (const f of flights) {
+      const a = (f.authority || "").trim();
+      if (!a) continue;
+      byAuth.set(a, (byAuth.get(a) || 0) + 1);
+    }
+    const total = Array.from(byAuth.values()).reduce((s, n) => s + n, 0) || 1;
+    return Array.from(byAuth.entries())
+      .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [flights]);
+  const authMax = Math.max(...topAuthorities.map((a) => a.count), 1);
 
   // Pending approvals
   const pendingApprovals = approvals.filter((a) => a.status && !["مكتمل", "منتهي", "مرفوض"].includes(a.status)).slice(0, 5);
