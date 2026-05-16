@@ -248,37 +248,95 @@ function Dashboard() {
   const chartMax = Math.max(...chart.map((b) => b.value), 1);
   const chartTotal = chart.reduce((s, b) => s + b.value, 0);
 
-  // Recent activity (mix of txns, flights, approvals, expenses)
-  type ActivityItem = { date: string; label: string; sub: string; tone: "blue" | "green" | "gold" | "red" | "navy" };
-  const recent: ActivityItem[] = [
-    ...txns.slice(0, 8).map<ActivityItem>((t) => ({
-      date: t.created_at,
-      label: `معاملة وكيل: ${t.service_type || ""}`,
-      sub: `${fmtDL(tripValue(t))}`,
-      tone: "blue",
-    })),
-    ...flights.slice(0, 4).map<ActivityItem>((f) => ({
-      date: f.created_at,
-      label: `رحلة جديدة`,
-      sub: `حالة: ${f.status || "—"}`,
-      tone: "navy",
-    })),
-    ...approvals.slice(0, 4).map<ActivityItem>((a) => ({
-      date: a.created_at,
-      label: `تقديم موافقة أمنية`,
-      sub: `حالة: ${a.status || "—"}`,
-      tone: "gold",
-    })),
-    ...expenses.slice(0, 4).map<ActivityItem>((e) => ({
-      date: e.created_at,
-      label: `مصروف: ${e.expense_type || ""}`,
-      sub: `${fmtDL(Number(e.amount || 0))}`,
-      tone: "red",
-    })),
-  ]
-    .filter((x) => x.date)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 7);
+  // ===== ERP Analytics =====
+  // 1. Top agents by collection
+  const topAgents = useMemo(() => {
+    const byAgent = new Map<string, { collected: number; count: number }>();
+    for (const t of txns) {
+      if (!t.agent_id) continue;
+      const collected = Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
+      const cur = byAgent.get(t.agent_id) || { collected: 0, count: 0 };
+      cur.collected += collected;
+      cur.count += 1;
+      byAgent.set(t.agent_id, cur);
+    }
+    const nameOf = new Map(agents.map((a) => [a.id, a.name]));
+    return Array.from(byAgent.entries())
+      .map(([id, v]) => ({ id, name: nameOf.get(id) || "—", ...v }))
+      .sort((a, b) => b.collected - a.collected)
+      .slice(0, 5);
+  }, [txns, agents]);
+
+  // 2. Top issuing companies by services provided
+  const topCompanies = useMemo(() => {
+    const byCo = new Map<string, { count: number; services: Map<string, number> }>();
+    for (const ct of cTxns) {
+      if (!ct.company_id) continue;
+      const cur = byCo.get(ct.company_id) || { count: 0, services: new Map() };
+      cur.count += 1;
+      const s = ct.service_type || "—";
+      cur.services.set(s, (cur.services.get(s) || 0) + 1);
+      byCo.set(ct.company_id, cur);
+    }
+    // also include approvals via issuing_company_id
+    for (const ap of approvals) {
+      if (!ap.issuing_company_id) continue;
+      const cur = byCo.get(ap.issuing_company_id) || { count: 0, services: new Map() };
+      cur.count += 1;
+      cur.services.set("موافقة أمنية", (cur.services.get("موافقة أمنية") || 0) + 1);
+      byCo.set(ap.issuing_company_id, cur);
+    }
+    const nameOf = new Map(companies.map((c) => [c.id, c.company_name]));
+    return Array.from(byCo.entries())
+      .map(([id, v]) => {
+        let top = "—"; let max = 0;
+        v.services.forEach((n, k) => { if (n > max) { max = n; top = k; } });
+        return { id, name: nameOf.get(id) || "—", count: v.count, topService: top };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [cTxns, approvals, companies]);
+
+  // 3. Service type distribution
+  const serviceDist = useMemo(() => {
+    const targets = ["تذاكر طيران", "موافقة أمنية", "استثمار ليبي"];
+    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0, "استثمار ليبي": 0 };
+    for (const t of txns) {
+      const s = t.service_type || "";
+      if (targets.includes(s)) counts[s] += 1;
+    }
+    for (const ct of cTxns) {
+      const s = ct.service_type || "";
+      if (targets.includes(s)) counts[s] += 1;
+    }
+    // flights count as تذاكر طيران if not already represented
+    counts["تذاكر طيران"] += flights.length;
+    counts["موافقة أمنية"] += approvals.length;
+    const total = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
+    const palette: Record<string, string> = {
+      "تذاكر طيران": NAVY,
+      "موافقة أمنية": GOLD,
+      "استثمار ليبي": "#16A34A",
+    };
+    return targets.map((k) => ({ label: k, value: counts[k], pct: Math.round((counts[k] / total) * 100), color: palette[k] }));
+  }, [txns, cTxns, flights, approvals]);
+  const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
+
+  // 4. Travel authorities (جهة السفر) from flights
+  const topAuthorities = useMemo(() => {
+    const byAuth = new Map<string, number>();
+    for (const f of flights) {
+      const a = (f.authority || "").trim();
+      if (!a) continue;
+      byAuth.set(a, (byAuth.get(a) || 0) + 1);
+    }
+    const total = Array.from(byAuth.values()).reduce((s, n) => s + n, 0) || 1;
+    return Array.from(byAuth.entries())
+      .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [flights]);
+  const authMax = Math.max(...topAuthorities.map((a) => a.count), 1);
 
   // Pending approvals
   const pendingApprovals = approvals.filter((a) => a.status && !["مكتمل", "منتهي", "مرفوض"].includes(a.status)).slice(0, 5);
@@ -417,22 +475,91 @@ function Dashboard() {
       </div>
 
       {/* === Recent activity feed === */}
-      <div className="erp-panel" style={{ marginTop: 14 }}>
-        <div className="erp-panel-head">
-          <div className="erp-panel-title"><Activity size={14} /> آخر العمليات</div>
-        </div>
-        <div className="erp-feed">
-          {recent.length === 0 && <div className="erp-empty">لا توجد عمليات حديثة</div>}
-          {recent.map((a, i) => (
-            <div key={i} className={`erp-feed-row tone-${a.tone}`}>
-              <div className="erp-feed-dot" />
-              <div className="erp-feed-body">
-                <div className="erp-feed-label">{a.label}</div>
-                <div className="erp-feed-sub">{a.sub}</div>
+      {/* === ERP Analytics === */}
+      <div className="erp-section-title">تحليلات الأداء</div>
+      <div className="erp-analytics-grid">
+        {/* 1. Top agents by collection */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Users size={14} /> أكثر الوكلاء تحصيلاً</div>
+            <span className="erp-chip">أعلى 5</span>
+          </div>
+          <div className="erp-analytic-table">
+            {topAgents.length === 0 && <div className="erp-empty">لا توجد بيانات</div>}
+            {topAgents.map((a, i) => (
+              <div key={a.id} className="erp-rank-row">
+                <div className="erp-rank-no">{i + 1}</div>
+                <div className="erp-rank-body">
+                  <div className="erp-rank-name">{a.name}</div>
+                  <div className="erp-rank-sub">{fmtNum(a.count)} عملية</div>
+                </div>
+                <div className="erp-rank-value tone-green">{fmtDL(a.collected)}</div>
               </div>
-              <div className="erp-feed-time">{new Date(a.date).toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" })}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* 2. Top issuing companies */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Building2 size={14} /> أكثر الشركات تقديمًا للخدمات</div>
+            <span className="erp-chip">أعلى 5</span>
+          </div>
+          <div className="erp-analytic-table">
+            {topCompanies.length === 0 && <div className="erp-empty">لا توجد بيانات</div>}
+            {topCompanies.map((c, i) => (
+              <div key={c.id} className="erp-rank-row">
+                <div className="erp-rank-no">{i + 1}</div>
+                <div className="erp-rank-body">
+                  <div className="erp-rank-name">{c.name}</div>
+                  <div className="erp-rank-sub">أكثر خدمة: {c.topService}</div>
+                </div>
+                <div className="erp-rank-value">{fmtNum(c.count)} طلب</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. Service type donut */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Briefcase size={14} /> توزيع أنواع الخدمات</div>
+            <span className="erp-chip erp-chip-strong">{fmtNum(serviceTotal)}</span>
+          </div>
+          <div className="erp-donut-wrap">
+            <Donut data={serviceDist} total={serviceTotal} />
+            <div className="erp-donut-legend">
+              {serviceDist.map((s) => (
+                <div key={s.label} className="erp-legend-row">
+                  <span className="erp-legend-dot" style={{ background: s.color }} />
+                  <span className="erp-legend-label">{s.label}</span>
+                  <span className="erp-legend-val">{s.pct}% · {fmtNum(s.value)}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* 4. Travel authorities — horizontal bars */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Plane size={14} /> جهات السفر الأكثر استخدامًا</div>
+            <span className="erp-chip">أعلى 6</span>
+          </div>
+          <div className="erp-hbar-list">
+            {topAuthorities.length === 0 && <div className="erp-empty">لا توجد بيانات</div>}
+            {topAuthorities.map((a) => (
+              <div key={a.name} className="erp-hbar-row">
+                <div className="erp-hbar-head">
+                  <span className="erp-hbar-name">{a.name}</span>
+                  <span className="erp-hbar-meta">{fmtNum(a.count)} رحلة · {a.pct}%</span>
+                </div>
+                <div className="erp-hbar-track">
+                  <div className="erp-hbar-fill" style={{ width: `${Math.max(4, (a.count / authMax) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -502,6 +629,40 @@ function DashboardWelcome() {
       </div>
       <div className="erp-welcome-accent" />
     </div>
+  );
+}
+
+function Donut({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
+  const size = 160; const stroke = 22; const r = (size - stroke) / 2; const C = 2 * Math.PI * r;
+  let offset = 0;
+  const safeTotal = total > 0 ? total : 1;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="erp-donut-svg">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F1F5F9" strokeWidth={stroke} />
+      {data.map((d, i) => {
+        const frac = d.value / safeTotal;
+        const dash = frac * C;
+        const el = (
+          <circle
+            key={i}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={d.color}
+            strokeWidth={stroke}
+            strokeDasharray={`${dash} ${C - dash}`}
+            strokeDashoffset={-offset}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            style={{ transition: "stroke-dasharray .6s ease" }}
+          />
+        );
+        offset += dash;
+        return el;
+      })}
+      <text x="50%" y="46%" textAnchor="middle" fontSize="13" fontWeight="700" fill="#64748B">الإجمالي</text>
+      <text x="50%" y="60%" textAnchor="middle" fontSize="20" fontWeight="800" fill="#0F172A">{total.toLocaleString("ar-EG")}</text>
+    </svg>
   );
 }
 
@@ -699,10 +860,40 @@ const dashCss = `
 .dash-stat-hl{background:#FFFBEB;border-color:#FDE68A}
 .dash-stat-hl .dash-stat-value{font-size:15px;color:${GOLD}}
 
+/* ===== ERP Analytics ===== */
+.erp-analytics-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px}
+.erp-analytic-table{display:flex;flex-direction:column;gap:6px}
+.erp-rank-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid #F1F5F9;background:#F8FAFC;border-radius:9px;transition:all .15s ease}
+.erp-rank-row:hover{background:#fff;border-color:#E2E8F0;transform:translateX(-2px)}
+.erp-rank-no{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,${NAVY},#1E3A5F);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;flex-shrink:0}
+.erp-rank-row:nth-child(1) .erp-rank-no{background:linear-gradient(135deg,${GOLD},#B8860B)}
+.erp-rank-body{flex:1;min-width:0}
+.erp-rank-name{font-size:12.5px;font-weight:700;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.erp-rank-sub{font-size:10.5px;color:#64748B;margin-top:2px}
+.erp-rank-value{font-size:12.5px;font-weight:800;color:#0F172A;white-space:nowrap}
+.erp-rank-value.tone-green{color:#15803D}
+
+.erp-donut-wrap{display:flex;align-items:center;gap:18px;padding:6px 4px}
+.erp-donut-svg{flex-shrink:0}
+.erp-donut-legend{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.erp-legend-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:#F8FAFC;border:1px solid #F1F5F9;border-radius:8px}
+.erp-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.erp-legend-label{flex:1;font-size:12px;font-weight:700;color:#1E293B}
+.erp-legend-val{font-size:11px;font-weight:700;color:#64748B}
+
+.erp-hbar-list{display:flex;flex-direction:column;gap:11px}
+.erp-hbar-row{display:flex;flex-direction:column;gap:4px}
+.erp-hbar-head{display:flex;align-items:center;justify-content:space-between;font-size:11.5px}
+.erp-hbar-name{font-weight:700;color:#1E293B}
+.erp-hbar-meta{font-weight:600;color:#64748B}
+.erp-hbar-track{height:10px;background:#F1F5F9;border-radius:6px;overflow:hidden}
+.erp-hbar-fill{height:100%;background:linear-gradient(90deg,${NAVY} 0%,${GOLD} 100%);border-radius:6px;transition:width .6s ease}
+
 /* ===== Responsive ===== */
 @media (max-width:1100px){
   .erp-hero-grid{grid-template-columns:repeat(2,1fr)}
   .erp-row-2,.erp-row-chart{grid-template-columns:1fr}
+  .erp-analytics-grid{grid-template-columns:1fr}
 }
 @media (max-width:600px){
   .erp-hero-grid{grid-template-columns:1fr 1fr;gap:8px}
@@ -712,5 +903,6 @@ const dashCss = `
   .erp-bars{height:130px}
   .dash-stats{grid-template-columns:1fr}
   .erp-feed-time{display:none}
+  .erp-donut-wrap{flex-direction:column;gap:12px}
 }
 `;
