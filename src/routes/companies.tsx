@@ -4,15 +4,15 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement,
-  type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent,
+  fmtDL, fmtNum, fmtUSD, useLive, useDropdownOptions, withSelected, buildTravelStatement,
+  type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
-import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
+import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, DollarSign, ArrowRightLeft } from "lucide-react";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
