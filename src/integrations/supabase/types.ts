@@ -791,7 +791,9 @@ export type Database = {
           exchange_rate: number | null
           id: string
           is_demo: boolean
+          merchant_id: string | null
           note: string | null
+          source_type: string | null
           type: string
           usd_amount: number
         }
@@ -803,7 +805,9 @@ export type Database = {
           exchange_rate?: number | null
           id?: string
           is_demo?: boolean
+          merchant_id?: string | null
           note?: string | null
+          source_type?: string | null
           type?: string
           usd_amount?: number
         }
@@ -815,7 +819,9 @@ export type Database = {
           exchange_rate?: number | null
           id?: string
           is_demo?: boolean
+          merchant_id?: string | null
           note?: string | null
+          source_type?: string | null
           type?: string
           usd_amount?: number
         }
