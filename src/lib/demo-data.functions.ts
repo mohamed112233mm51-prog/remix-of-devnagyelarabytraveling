@@ -495,3 +495,162 @@ export const productionCleanup = createServerFn({ method: "POST" })
       status: remaining === 0 ? "clean" : "partial",
     };
   });
+
+// ============================================================
+// Production Wizard — selective wipe of operational data
+// regardless of is_demo flag. Preserves: profiles (admins),
+// user_roles, app_settings, system_dropdown_options, backup_logs,
+// storage (branding/logo), and auth users that hold admin role.
+// ============================================================
+export type WipeCategory =
+  | "agents"
+  | "companies"
+  | "merchants"
+  | "investors"
+  | "flights"
+  | "approvals"
+  | "transactions"
+  | "collections"
+  | "expenses"
+  | "notifications"
+  | "test_users";
+
+const CATEGORY_TABLES: Record<WipeCategory, readonly string[]> = {
+  agents: ["agents"],
+  companies: ["issuing_companies", "company_transactions"],
+  merchants: ["merchants", "merchant_cash_collections"],
+  investors: ["investors", "investor_transactions"],
+  flights: ["flights"],
+  approvals: ["approvals"],
+  transactions: ["transactions"],
+  collections: ["merchant_cash_collections"],
+  expenses: ["expenses", "expense_deductions"],
+  notifications: ["activity_logs"],
+  test_users: [],
+};
+
+// Deterministic deletion order — children first to avoid FK/relationship gaps.
+const DELETE_ORDER: readonly string[] = [
+  "expense_deductions",
+  "expenses",
+  "investor_transactions",
+  "merchant_cash_collections",
+  "company_transactions",
+  "transactions",
+  "approvals",
+  "flights",
+  "investors",
+  "merchants",
+  "issuing_companies",
+  "agents",
+  "activity_logs",
+];
+
+export const productionWipe = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    categories: WipeCategory[];
+    confirm: string;
+    createBackup?: boolean;
+  }) => {
+    if (d.confirm !== "CONFIRM") throw new Error("Confirmation phrase required");
+    if (!Array.isArray(d.categories) || d.categories.length === 0) {
+      throw new Error("No categories selected");
+    }
+    return {
+      categories: d.categories,
+      confirm: d.confirm,
+      createBackup: d.createBackup !== false,
+    };
+  })
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context.supabase, context.userId);
+    const sb = admin();
+
+    // 1) Safety snapshot
+    let backup: { ok: boolean; path?: string; error?: string } = { ok: false };
+    if (data.createBackup) {
+      try {
+        const mod = await import("./backups.server");
+        const res = await mod.runBackupWithRetry("emergency", context.userId, 1);
+        backup = { ok: true, path: (res as any)?.path };
+      } catch (e: any) {
+        backup = { ok: false, error: e?.message || "backup failed" };
+      }
+    }
+
+    // 2) Resolve target tables from selected categories
+    const targets = new Set<string>();
+    for (const cat of data.categories) {
+      for (const t of CATEGORY_TABLES[cat] ?? []) targets.add(t);
+    }
+
+    // 3) Wipe selected tables (full, not is_demo-scoped)
+    const summary: Record<string, number> = {};
+    let totalDeleted = 0;
+    for (const t of DELETE_ORDER) {
+      if (!targets.has(t)) continue;
+      // .delete() needs a filter; use an always-true predicate.
+      const { count, error } = await sb
+        .from(t as any)
+        .delete({ count: "exact" })
+        .not("id", "is", null);
+      if (error) {
+        summary[t] = 0;
+        continue;
+      }
+      summary[t] = count ?? 0;
+      totalDeleted += count ?? 0;
+    }
+
+    // 4) Optionally delete non-admin test users (profiles + auth + user_roles)
+    let usersDeleted = 0;
+    if (data.categories.includes("test_users")) {
+      // Collect admin user ids — these are never deleted.
+      const { data: admins } = await sb
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      const adminIds = new Set((admins ?? []).map((r: any) => r.user_id as string));
+
+      // List all auth users in pages, delete any non-admin.
+      let page = 1;
+      const perPage = 200;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data: list, error } = await sb.auth.admin.listUsers({ page, perPage });
+        if (error || !list?.users?.length) break;
+        for (const u of list.users) {
+          if (adminIds.has(u.id)) continue;
+          await sb.auth.admin.deleteUser(u.id).catch(() => null);
+          // Profile + roles fall through; clean up explicitly in case of stragglers.
+          await sb.from("profiles").delete().eq("id", u.id);
+          await sb.from("user_roles").delete().eq("user_id", u.id);
+          usersDeleted += 1;
+        }
+        if (list.users.length < perPage) break;
+        page += 1;
+      }
+    }
+
+    // 5) Verify integrity — counts after wipe for targeted tables
+    const remaining: Record<string, number> = {};
+    let remainingTotal = 0;
+    for (const t of targets) {
+      const { count } = await sb
+        .from(t as any)
+        .select("*", { count: "exact", head: true });
+      remaining[t] = count ?? 0;
+      remainingTotal += count ?? 0;
+    }
+
+    return {
+      backup,
+      summary,
+      totalDeleted,
+      usersDeleted,
+      remaining,
+      remainingTotal,
+      status: remainingTotal === 0 ? "clean" : "partial",
+    };
+  });
