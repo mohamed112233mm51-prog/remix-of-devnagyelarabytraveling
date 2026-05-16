@@ -226,6 +226,7 @@ function ReportsPage() {
     { id: "flights", label: "الرحلات", icon: <Plane size={15} strokeWidth={2} /> },
     { id: "approvals", label: "الموافقات الأمنية", icon: <ShieldCheck size={15} strokeWidth={2} /> },
     { id: "expenses", label: "المصروفات", icon: <Receipt size={15} strokeWidth={2} /> },
+    { id: "usd_treasury", label: "الخزينة الدولارية", icon: <DollarSign size={15} strokeWidth={2} /> },
   ];
 
   return (
