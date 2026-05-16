@@ -332,6 +332,7 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
     agent_id: "", submit_date: "", issue_date: "",
     travel_date: "", airline: "",
     status: "", government_fee: "", notes: "",
+    count: "1", price: "", company_value: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
