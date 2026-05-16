@@ -343,6 +343,17 @@ export function InvestmentForm({ agents, companies, onDone }: { agents: Agent[];
   const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
   const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
 
+  const pricingMap = useAgentPricingMap(form.agent_id || null);
+  const pricing = pricingMap["استثمار ليبي"];
+  const [pricingTouched, setPricingTouched] = useState(false);
+  useEffect(() => {
+    if (!form.agent_id) return;
+    if (pricing) {
+      setForm((p) => ({ ...p, price: String(pricing.agent_price ?? ""), company_value: String(pricing.company_price ?? "") }));
+      setPricingTouched(false);
+    }
+  }, [form.agent_id, pricing?.id]);
+
   const save = async () => {
     if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     if (!form.destination || !form.authority || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
