@@ -386,6 +386,47 @@ export const fmtUSD = (n: number) =>
 export const tripValue = (t: Pick<Transaction, "count" | "price">) =>
   Number(t.count || 0) * Number(t.price || 0);
 
+/** Compute live EGP and USD treasury balances by aggregating across all relevant tables. */
+export function useTreasuryBalances() {
+  const { rows: agentTxns } = useLive<Transaction>("transactions");
+  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: investorTxns } = useLive<InvestorTransaction>("investor_transactions");
+  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+
+  return useMemo(() => {
+    const egpIn = agentTxns.reduce(
+      (s, t) =>
+        s +
+        Number(t.instapay_amount || 0) +
+        Number(t.cash_amount || 0) +
+        merchantCashNet(t) +
+        Number(t.merchant_cash_physical_amount || 0),
+      0,
+    );
+    const investorIn = investorTxns
+      .filter((t) => t.transaction_type === "توريد نقدية")
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const investorOut = investorTxns
+      .filter((t) => t.transaction_type === "صرف نقدية")
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const companyOut = companyTxns.reduce((s, t) => s + Number(t.total_paid || 0), 0);
+    const expensesOut = deductions.reduce((s, d) => s + Number(d.amount || 0), 0);
+    const usdConversionsEgp = usdRows
+      .filter((r) => r.type === "conversion")
+      .reduce((s, r) => s + Number(r.egp_amount || 0), 0);
+
+    const egp = Math.round(egpIn + investorIn - investorOut - companyOut - expensesOut - usdConversionsEgp);
+
+    const usd = usdRows.reduce((s, r) => {
+      const amt = Number(r.usd_amount || 0);
+      return r.type === "company_payment" ? s - amt : s + amt;
+    }, 0);
+
+    return { egp, usd: Math.round(usd * 100) / 100 };
+  }, [agentTxns, companyTxns, investorTxns, deductions, usdRows]);
+}
+
 export const badgeFor = (status: string) => {
   switch (status) {
     case "سافر":
