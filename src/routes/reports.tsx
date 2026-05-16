@@ -33,7 +33,7 @@ import {
 } from "recharts";
 import {
   BarChart3, Users, Building2, Handshake, Briefcase, Plane, ShieldCheck, Receipt,
-  Calendar, RefreshCw, FileSpreadsheet, FileText, TrendingUp, TrendingDown, Wallet, Activity,
+  Calendar, RefreshCw, FileSpreadsheet, FileText, TrendingUp, TrendingDown, Wallet, Activity, DollarSign,
 } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
