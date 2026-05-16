@@ -457,6 +457,7 @@ export const productionCleanup = createServerFn({ method: "POST" })
       "expenses",
       "investor_transactions",
       "merchant_cash_collections",
+      "usd_treasury_transactions",
       "company_transactions",
       "transactions",
       "approvals",
@@ -475,6 +476,19 @@ export const productionCleanup = createServerFn({ method: "POST" })
         .eq("is_demo", true);
       summary[t] = count ?? 0;
       totalDeleted += count ?? 0;
+    }
+
+    // Extra safety: USD treasury must read zero after a production cleanup.
+    // Wipe ALL remaining usd_treasury_transactions (deposits, conversions,
+    // company payments, mixed EGP/USD records) so the balance resets to 0.
+    {
+      const { count } = await sb
+        .from("usd_treasury_transactions")
+        .delete({ count: "exact" })
+        .not("id", "is", null);
+      const extra = count ?? 0;
+      summary["usd_treasury_transactions"] = (summary["usd_treasury_transactions"] ?? 0) + extra;
+      totalDeleted += extra;
     }
 
     // 3) Verification — confirm no demo rows remain.
