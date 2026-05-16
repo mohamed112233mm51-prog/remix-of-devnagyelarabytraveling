@@ -35,6 +35,7 @@ function ApprovalsPage() {
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   const filtered = useMemo(() => approvals.filter((a) => {
+    if (a.service_type === "libyan_investment") return false;
     if (search) {
       const q = search.toLowerCase();
       const aName = (agents.find((ag) => ag.id === a.agent_id)?.name || "").toLowerCase();
@@ -48,12 +49,13 @@ function ApprovalsPage() {
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const today = new Date().toISOString().slice(0, 10);
-  const total = approvals.length;
-  const fast = approvals.filter((a) => a.status === "سريعة").length;
-  const slow = approvals.filter((a) => a.status === "بطيئة").length;
-  const rejected = approvals.filter((a) => a.status === "رفض أمني").length;
-  const pending = approvals.filter((a) => !a.issue_date).length;
-  const todayCount = approvals.filter((a) => (a.submit_date || "").slice(0, 10) === today).length;
+  const approvalsScoped = approvals.filter((a) => a.service_type !== "libyan_investment");
+  const total = approvalsScoped.length;
+  const fast = approvalsScoped.filter((a) => a.status === "سريعة").length;
+  const slow = approvalsScoped.filter((a) => a.status === "بطيئة").length;
+  const rejected = approvalsScoped.filter((a) => a.status === "رفض أمني").length;
+  const pending = approvalsScoped.filter((a) => !a.issue_date).length;
+  const todayCount = approvalsScoped.filter((a) => (a.submit_date || "").slice(0, 10) === today).length;
 
   const clearFilters = () => { setSearch(""); setStatus(""); setDestination(""); };
   const activeFilterCount = [search, status, destination].filter(Boolean).length;
@@ -366,7 +368,7 @@ function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companie
       government_fee: Number(form.government_fee || 0),
     };
     try {
-      const { error } = await supabase.from("approvals").insert(payload);
+      const { error } = await supabase.from("approvals").insert({ ...payload, service_type: "security_approval" });
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
       onDone();
@@ -488,7 +490,7 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
       government_fee: Number(form.government_fee || 0),
     };
     try {
-      const { error } = await supabase.from("approvals").update(payload).eq("id", approval.id);
+      const { error } = await supabase.from("approvals").update({ ...payload, service_type: "security_approval" }).eq("id", approval.id);
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
       toast.success("تم حفظ التعديلات بنجاح");
