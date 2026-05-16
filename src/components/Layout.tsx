@@ -24,7 +24,6 @@ import { checkPerm } from "@/hooks/usePerm";
 import { useBranding } from "@/lib/branding";
 import { SearchBox, NotificationsBell } from "@/components/TopbarTools";
 import { isDevEnv } from "@/lib/env";
-import { ServiceSubmissionModal } from "@/components/ServiceSubmissionModal";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null };
@@ -33,6 +32,12 @@ const NAV: { label: string; items: Item[] }[] = [
   {
     label: "الرئيسية",
     items: [{ to: "/", icon: LayoutDashboard, label: "لوحة التحكم", section: "الرئيسية", permKey: "dashboard" }],
+  },
+  {
+    label: "تقديم",
+    items: [
+      { to: "/submit", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: null },
+    ],
   },
   {
     label: "العمليات",
@@ -69,6 +74,7 @@ const NAV: { label: string; items: Item[] }[] = [
 
 const TITLES: Record<string, ReactNode> = {
   "/": (<>لوحة <span>التحكم</span></>),
+  "/submit": (<>تقديم <span>خدمة</span></>),
   "/flights": (<>قائمة <span>الرحلات</span></>),
   "/approvals": (<>قائمة <span>الموافقات الأمنية</span></>),
   "/libyan-investment": (<>قائمة <span>الاستثمار الليبي</span></>),
@@ -85,7 +91,6 @@ export default function Layout() {
   const loc = useLocation();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [submitOpen, setSubmitOpen] = useState(false);
   const { isAdmin, user, signOut, permissions } = useAuth();
   const branding = useBranding();
   const allowed = (it: Item) => {
