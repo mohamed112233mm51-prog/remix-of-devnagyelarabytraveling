@@ -616,6 +616,10 @@ function EditInvestmentModal({ approval, agents, companies, onClose }: { approva
           </select>
         </div>
         <div className="form-group"><label>مبلغ الاستثمار</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
