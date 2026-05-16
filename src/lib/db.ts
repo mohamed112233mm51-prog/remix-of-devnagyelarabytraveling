@@ -249,6 +249,9 @@ export type CompanyTransaction = {
   merchant_id: string | null;
   source_service_id?: string | null;
   source_service_type?: string | null;
+  usd_amount?: number;
+  exchange_rate_used?: number | null;
+  payment_currency?: string | null;
   created_at: string;
 };
 
@@ -314,7 +317,19 @@ export type ExpenseDeduction = {
   created_at: string;
 };
 
-export function useLive<T>(table: "agents" | "flights" | "approvals" | "transactions" | "issuing_companies" | "company_transactions" | "merchants" | "merchant_cash_collections" | "investors" | "investor_transactions" | "expenses" | "expense_deductions") {
+export type UsdTreasuryTransaction = {
+  id: string;
+  date: string;
+  type: string; // 'conversion' | 'company_payment' | 'adjustment'
+  egp_amount: number;
+  usd_amount: number;
+  exchange_rate: number | null;
+  company_id: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export function useLive<T>(table: "agents" | "flights" | "approvals" | "transactions" | "issuing_companies" | "company_transactions" | "merchants" | "merchant_cash_collections" | "investors" | "investor_transactions" | "expenses" | "expense_deductions" | "usd_treasury_transactions") {
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -365,6 +380,8 @@ export const CURRENCY_LABEL = "ج.م";
 export const CURRENCY_NAME = "جنيه مصري";
 export const fmtDL = (n: number) => `${fmtNum(n)} ${CURRENCY_LABEL}`;
 export const fmtMoney = fmtDL;
+export const fmtUSD = (n: number) =>
+  `${new Intl.NumberFormat("ar-LY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)} $`;
 
 export const tripValue = (t: Pick<Transaction, "count" | "price">) =>
   Number(t.count || 0) * Number(t.price || 0);

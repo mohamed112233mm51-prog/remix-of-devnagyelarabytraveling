@@ -236,6 +236,7 @@ export type Database = {
           created_at: string
           date: string
           destination: string | null
+          exchange_rate_used: number | null
           id: string
           instapay_amount: number
           is_demo: boolean
@@ -246,12 +247,14 @@ export type Database = {
           mobile_cash_amount: number
           mobile_cash_net_amount: number
           note: string | null
+          payment_currency: string | null
           price: number
           service_type: string | null
           source_service_id: string | null
           source_service_type: string | null
           total_paid: number
           trip_value: number
+          usd_amount: number
         }
         Insert: {
           arabic_tourism_cash_amount?: number
@@ -262,6 +265,7 @@ export type Database = {
           created_at?: string
           date?: string
           destination?: string | null
+          exchange_rate_used?: number | null
           id?: string
           instapay_amount?: number
           is_demo?: boolean
@@ -272,12 +276,14 @@ export type Database = {
           mobile_cash_amount?: number
           mobile_cash_net_amount?: number
           note?: string | null
+          payment_currency?: string | null
           price?: number
           service_type?: string | null
           source_service_id?: string | null
           source_service_type?: string | null
           total_paid?: number
           trip_value?: number
+          usd_amount?: number
         }
         Update: {
           arabic_tourism_cash_amount?: number
@@ -288,6 +294,7 @@ export type Database = {
           created_at?: string
           date?: string
           destination?: string | null
+          exchange_rate_used?: number | null
           id?: string
           instapay_amount?: number
           is_demo?: boolean
@@ -298,12 +305,14 @@ export type Database = {
           mobile_cash_amount?: number
           mobile_cash_net_amount?: number
           note?: string | null
+          payment_currency?: string | null
           price?: number
           service_type?: string | null
           source_service_id?: string | null
           source_service_type?: string | null
           total_paid?: number
           trip_value?: number
+          usd_amount?: number
         }
         Relationships: []
       }
@@ -772,6 +781,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      usd_treasury_transactions: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          date: string
+          egp_amount: number
+          exchange_rate: number | null
+          id: string
+          is_demo: boolean
+          note: string | null
+          type: string
+          usd_amount: number
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          date?: string
+          egp_amount?: number
+          exchange_rate?: number | null
+          id?: string
+          is_demo?: boolean
+          note?: string | null
+          type?: string
+          usd_amount?: number
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          date?: string
+          egp_amount?: number
+          exchange_rate?: number | null
+          id?: string
+          is_demo?: boolean
+          note?: string | null
+          type?: string
+          usd_amount?: number
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

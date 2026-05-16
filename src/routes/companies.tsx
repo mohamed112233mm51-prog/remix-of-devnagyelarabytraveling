@@ -4,15 +4,15 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement,
-  type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent,
+  fmtDL, fmtNum, fmtUSD, useLive, useDropdownOptions, withSelected, buildTravelStatement,
+  type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
-import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
+import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, DollarSign, ArrowRightLeft } from "lucide-react";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
@@ -28,10 +28,20 @@ function CompaniesPage() {
   const { rows: flights } = useLive<Flight>("flights");
   const { rows: approvals } = useLive<Approval>("approvals");
   const { rows: agents } = useLive<Agent>("agents");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const [tab, setTab] = useState<"list" | "add" | "txn" | "statement">("list");
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
+  const [showConvert, setShowConvert] = useState(false);
+
+  const usdBalance = useMemo(() => {
+    return usdRows.reduce((s, r) => {
+      const amt = Number(r.usd_amount || 0);
+      if (r.type === "company_payment") return s - amt;
+      return s + amt; // conversion or adjustment
+    }, 0);
+  }, [usdRows]);
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
@@ -93,7 +103,23 @@ function CompaniesPage() {
             <div className="val">{fmtDL(totalDue)}</div>
           </div>
         </div>
+        <div className="sum-box" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
+          <div className="kpi-icon"><DollarSign size={18} strokeWidth={2} /></div>
+          <div className="kpi-text">
+            <div className="label">رصيد الخزينة بالدولار</div>
+            <div className="val">{fmtUSD(usdBalance)}</div>
+          </div>
+        </div>
       </div>
+
+      {perm.create && (
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={() => setShowConvert(true)}>
+            <ArrowRightLeft size={14} strokeWidth={2} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} />
+            تحويل إلى الخزينة الدولارية
+          </button>
+        </div>
+      )}
 
       <div className="action-toolbar">
         <div className={`tool-tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>
@@ -179,6 +205,9 @@ function CompaniesPage() {
 
       {editCompany && perm.edit && (
         <EditCompanyModal company={editCompany} onClose={() => setEditCompany(null)} />
+      )}
+      {showConvert && perm.create && (
+        <UsdConvertModal onClose={() => setShowConvert(false)} />
       )}
     </div>
   );
@@ -392,6 +421,8 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
     destination: "", count: "", price: "", service_type: "",
     instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
     note: "", merchant_id: "", service_id: "",
+    payment_currency: "EGP" as "EGP" | "USD" | "MIXED",
+    usd_amount: "", exchange_rate: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
@@ -476,10 +507,18 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
   const totalPaid = insta + cash + merchantNet + merchantPhysical;
   const usesMerchant = !!selectedMerchant;
+  const usdAmt = Number(form.usd_amount || 0);
+  const rateUsed = Number(form.exchange_rate || 0) || null;
+  const payCurrency: "EGP" | "USD" | "MIXED" = form.payment_currency;
+  const includeEgp = payCurrency === "EGP" || payCurrency === "MIXED";
+  const includeUsd = payCurrency === "USD" || payCurrency === "MIXED";
+
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
     if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
-    if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
+    const egpPaid = includeEgp ? totalPaid : 0;
+    const usdPaid = includeUsd ? usdAmt : 0;
+    if (egpPaid <= 0 && usdPaid <= 0) return toast.error("يجب إدخال قيمة دفع بالجنيه أو بالدولار");
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
@@ -487,18 +526,28 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
       company_id = data.id;
     }
     if (selectedService) {
-      const newTotal = Number(selectedService.total_paid || 0) + totalPaid;
+      const newTotal = Number(selectedService.total_paid || 0) + egpPaid;
       const { error } = await supabase.from("company_transactions").update({
-        instapay_amount: Number(selectedService.instapay_amount || 0) + insta,
-        cash_amount: Number(selectedService.cash_amount || 0) + cash,
-        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + merchant,
-        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + merchantNet,
-        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + merchantPhysical,
-        merchant_id: usesMerchant ? form.merchant_id : selectedService.merchant_id,
+        instapay_amount: Number(selectedService.instapay_amount || 0) + (includeEgp ? insta : 0),
+        cash_amount: Number(selectedService.cash_amount || 0) + (includeEgp ? cash : 0),
+        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + (includeEgp ? merchant : 0),
+        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + (includeEgp ? merchantNet : 0),
+        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + (includeEgp ? merchantPhysical : 0),
+        merchant_id: usesMerchant && includeEgp ? form.merchant_id : selectedService.merchant_id,
         total_paid: newTotal,
+        usd_amount: Number(selectedService.usd_amount || 0) + usdPaid,
+        exchange_rate_used: rateUsed ?? selectedService.exchange_rate_used ?? null,
+        payment_currency: payCurrency,
         note: form.note || selectedService.note,
       }).eq("id", selectedService.id);
       if (error) return toast.error(error.message);
+      if (usdPaid > 0) {
+        await supabase.from("usd_treasury_transactions").insert({
+          date: form.date, type: "company_payment", egp_amount: 0,
+          usd_amount: usdPaid, exchange_rate: rateUsed, company_id,
+          note: form.note || `دفع للشركة (${form.company_name})`,
+        });
+      }
       toast.success("تم تسجيل الدفعة على الخدمة المستحقة");
       onDone();
       return;
@@ -509,16 +558,26 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
       service_type: form.service_type || null,
       count: Number(form.count || 0), price: Number(form.price || 0),
       trip_value: tv,
-      instapay_amount: insta,
-      cash_amount: cash,
-      merchant_cash_amount: merchant,
-      merchant_cash_net_amount: merchantNet,
-      merchant_cash_physical_amount: merchantPhysical,
-      merchant_id: usesMerchant ? form.merchant_id : null,
-      total_paid: totalPaid,
+      instapay_amount: includeEgp ? insta : 0,
+      cash_amount: includeEgp ? cash : 0,
+      merchant_cash_amount: includeEgp ? merchant : 0,
+      merchant_cash_net_amount: includeEgp ? merchantNet : 0,
+      merchant_cash_physical_amount: includeEgp ? merchantPhysical : 0,
+      merchant_id: usesMerchant && includeEgp ? form.merchant_id : null,
+      total_paid: egpPaid,
+      usd_amount: usdPaid,
+      exchange_rate_used: rateUsed,
+      payment_currency: payCurrency,
       note: form.note || null,
     });
     if (error) return toast.error(error.message);
+    if (usdPaid > 0) {
+      await supabase.from("usd_treasury_transactions").insert({
+        date: form.date, type: "company_payment", egp_amount: 0,
+        usd_amount: usdPaid, exchange_rate: rateUsed, company_id,
+        note: form.note || `دفع للشركة (${form.company_name})`,
+      });
+    }
     onDone();
   };
   return (
@@ -575,57 +634,157 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
         <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} disabled={lockFields} /></div>
         <div className="form-group"><label>قيمة الخدمة</label><input value={fmtNum(tv)} disabled /></div>
         <div className="form-group full">
+          <label style={{ fontWeight: 700, marginBottom: 8 }}>عملة الدفع</label>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {([
+              { v: "EGP", label: "جنيه مصري" },
+              { v: "USD", label: "دولار" },
+              { v: "MIXED", label: "كلاهما" },
+            ] as const).map((o) => (
+              <button
+                type="button"
+                key={o.v}
+                onClick={() => set("payment_currency", o.v)}
+                className={form.payment_currency === o.v ? "btn btn-gold" : "action-btn"}
+                style={{ flex: 1 }}
+              >{o.label}</button>
+            ))}
+          </div>
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
-          <div className="form-group" style={{ marginBottom: 12 }}>
-            <label>التاجر</label>
-            {eligibleMerchants.length > 0 ? (
-              <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="">— اختر جهة التحصيل —</option>
-                {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
-            ) : (
-              <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
-            )}
-            {selectedMerchant && !merchantHasMethods && (
-              <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
-            )}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {showSystemInsta && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
-                <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
+          {includeEgp && (
+            <>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>التاجر</label>
+                {eligibleMerchants.length > 0 ? (
+                  <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
+                    <option value="">— اختر جهة التحصيل —</option>
+                    {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
+                )}
+                {selectedMerchant && !merchantHasMethods && (
+                  <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
+                )}
               </div>
-            )}
-            {showSystemCash && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
-                <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+                {showSystemInsta && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
+                    <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
+                  </div>
+                )}
+                {showSystemCash && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
+                    <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
+                  </div>
+                )}
+                {showMerchantCash && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
+                    <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
+                    <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
+                      صافي المرسل: <strong>{fmtNum(merchantNet)}</strong>
+                    </div>
+                  </div>
+                )}
+                {showMerchantPhysical && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
+                    <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
+                  </div>
+                )}
               </div>
-            )}
-            {showMerchantCash && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
-                <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
-                <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
-                  صافي المرسل: <strong>{fmtNum(merchantNet)}</strong>
+              <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
+                إجمالي المدفوع بالجنيه: {fmtNum(totalPaid)} ج.م
+              </div>
+            </>
+          )}
+          {includeUsd && (
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "linear-gradient(135deg, #ecfdf5, #f0fdf4)" }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>المبلغ بالدولار ($)</div>
+                <input type="number" step="0.01" placeholder="0.00" value={form.usd_amount} onChange={(e) => set("usd_amount", e.target.value)} />
+              </div>
+              {payCurrency === "MIXED" && (
+                <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>سعر الصرف (اختياري)</div>
+                  <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
                 </div>
+              )}
+              <div style={{ padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left", alignSelf: "center" }}>
+                المدفوع بالدولار: {fmtUSD(usdAmt)}
               </div>
-            )}
-            {showMerchantPhysical && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
-                <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
-              </div>
-            )}
-          </div>
-          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
-            إجمالي المدفوع: {fmtNum(totalPaid)} ج.م
-          </div>
+            </div>
+          )}
         </div>
         <div className="form-group full"><label>بيان</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
       <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button></div>
     </div>
+  );
+}
+
+function UsdConvertModal({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({
+    egp_amount: "",
+    exchange_rate: "",
+    date: new Date().toISOString().slice(0, 10),
+    note: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const egp = Number(form.egp_amount || 0);
+  const rate = Number(form.exchange_rate || 0);
+  const usd = rate > 0 ? egp / rate : 0;
+
+  const save = async () => {
+    if (egp <= 0) return toast.error("أدخل المبلغ بالجنيه");
+    if (rate <= 0) return toast.error("أدخل سعر الصرف");
+    setSaving(true);
+    const { error } = await supabase.from("usd_treasury_transactions").insert({
+      date: form.date,
+      type: "conversion",
+      egp_amount: egp,
+      usd_amount: Math.round(usd * 100) / 100,
+      exchange_rate: rate,
+      note: form.note || null,
+    });
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("تم تحويل المبلغ إلى الخزينة الدولارية");
+    onClose();
+  };
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 560, margin: 0 }}>
+        <div className="card-header"><div className="card-title">💱 تحويل إلى الخزينة الدولارية</div></div>
+        <div className="form-grid">
+          <div className="form-group"><label>المبلغ بالجنيه</label>
+            <input type="number" placeholder="0" value={form.egp_amount} onChange={(e) => set("egp_amount", e.target.value)} />
+          </div>
+          <div className="form-group"><label>سعر الصرف</label>
+            <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
+          </div>
+          <div className="form-group"><label>المبلغ بالدولار (تلقائي)</label>
+            <input value={fmtUSD(usd)} disabled />
+          </div>
+          <div className="form-group"><label>التاريخ</label>
+            <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+          </div>
+          <div className="form-group full"><label>ملاحظات</label>
+            <input value={form.note} onChange={(e) => set("note", e.target.value)} />
+          </div>
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التحويل</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
