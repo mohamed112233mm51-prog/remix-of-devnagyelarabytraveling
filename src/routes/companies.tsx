@@ -513,12 +513,22 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   const includeEgp = payCurrency === "EGP" || payCurrency === "MIXED";
   const includeUsd = payCurrency === "USD" || payCurrency === "MIXED";
 
+  const balances = useTreasuryBalances();
+
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
     if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
     const egpPaid = includeEgp ? totalPaid : 0;
     const usdPaid = includeUsd ? usdAmt : 0;
     if (egpPaid <= 0 && usdPaid <= 0) return toast.error("يجب إدخال قيمة دفع بالجنيه أو بالدولار");
+    if (payCurrency === "MIXED") {
+      if (egpPaid > balances.egp) return toast.error("لا يوجد رصيد كافي في خزينة الجنيه");
+      if (usdPaid > balances.usd) return toast.error("لا يوجد رصيد كافي في الخزينة الدولارية");
+    } else if (payCurrency === "EGP") {
+      if (egpPaid > balances.egp) return toast.error("لا يوجد رصيد كافي في الخزينة");
+    } else if (payCurrency === "USD") {
+      if (usdPaid > balances.usd) return toast.error("لا يوجد رصيد كافي في الخزينة الدولارية");
+    }
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
