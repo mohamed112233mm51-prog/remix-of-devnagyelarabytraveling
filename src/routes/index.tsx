@@ -287,38 +287,61 @@ function Dashboard() {
     <div className="section active">
       <DashboardWelcome />
 
-      {/* === PRIMARY KPIs (hero) === */}
+      {/* === Period filter === */}
+      <div className="erp-period-bar">
+        <span className="erp-period-label">الفترة:</span>
+        <div className="erp-period-tabs">
+          {(["today", "week", "month", "year", "all"] as Period[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`erp-period-tab ${period === p ? "is-active" : ""}`}
+              onClick={() => setPeriod(p)}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
+        <span className="erp-period-current">{periodLabel}</span>
+      </div>
+
+      {/* === PRIMARY KPIs (hero) — period-based === */}
       <div className="erp-hero-grid">
         <HeroKpi
-          label="صافي أرباح الشركة"
-          value={fmtDL(companyProfit)}
+          label={`صافي الأرباح — ${periodLabel}`}
+          value={fmtDL(periodAgg.profit)}
           icon={<TrendingUp size={18} />}
           tone="primary"
-          delta={companyProfit >= 0 ? "ربح" : "خسارة"}
-          deltaPositive={companyProfit >= 0}
+          delta={prevAgg ? `${pctDelta(periodAgg.profit, prevAgg.profit) >= 0 ? "+" : ""}${pctDelta(periodAgg.profit, prevAgg.profit)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.profit, prevAgg.profit) >= 0 : undefined}
+          sub={prevAgg ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
         />
         <HeroKpi
-          label="صافي الخزينة"
-          value={fmtDL(treasuryNet)}
-          icon={<Wallet size={18} />}
-          tone="navy"
-          sub={`السيولة الكلية: ${fmtDL(treasuryNet + merchantBalance)}`}
-        />
-        <HeroKpi
-          label="إجمالي التحصيلات"
-          value={fmtDL(agentCollectionsNet)}
+          label={`إجمالي التحصيلات — ${periodLabel}`}
+          value={fmtDL(periodAgg.collected)}
           icon={<HandCoins size={18} />}
           tone="success"
-          sub="مقارنة بالأمس"
-          delta={`${collectionsTrend >= 0 ? "+" : ""}${collectionsTrend}%`}
-          deltaPositive={collectionsTrend >= 0}
+          delta={prevAgg ? `${pctDelta(periodAgg.collected, prevAgg.collected) >= 0 ? "+" : ""}${pctDelta(periodAgg.collected, prevAgg.collected)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.collected, prevAgg.collected) >= 0 : undefined}
+          sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
         <HeroKpi
-          label="مستحقات على الوكلاء"
-          value={fmtDL(agentsDue)}
-          icon={<Users size={18} />}
+          label={`المصروفات — ${periodLabel}`}
+          value={fmtDL(periodAgg.expenses)}
+          icon={<Wallet size={18} />}
           tone="warning"
-          sub={`عدد الوكلاء: ${fmtNum(agents.length)}`}
+          delta={prevAgg ? `${pctDelta(periodAgg.expenses, prevAgg.expenses) >= 0 ? "+" : ""}${pctDelta(periodAgg.expenses, prevAgg.expenses)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.expenses, prevAgg.expenses) <= 0 : undefined}
+          sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
+        />
+        <HeroKpi
+          label={`الرحلات — ${periodLabel}`}
+          value={fmtNum(periodAgg.flightsCount)}
+          icon={<Plane size={18} />}
+          tone="navy"
+          delta={prevAgg ? `${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 ? "+" : ""}${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 : undefined}
+          sub={`الموافقات: ${fmtNum(periodAgg.approvalsCount)}`}
         />
       </div>
 
@@ -356,19 +379,17 @@ function Dashboard() {
       <div className="erp-row-chart">
         <div className="erp-panel">
           <div className="erp-panel-head">
-            <div className="erp-panel-title"><TrendingUp size={14} /> التحصيلات — آخر 7 أيام</div>
-            <span className="erp-chip erp-chip-strong">{fmtDL(collectionsPerDay.reduce((a, b) => a + b, 0))}</span>
+            <div className="erp-panel-title"><TrendingUp size={14} /> التحصيلات — {periodLabel}</div>
+            <span className="erp-chip erp-chip-strong">{fmtDL(chartTotal)}</span>
           </div>
           <div className="erp-bars">
-            {collectionsPerDay.map((v, i) => {
-              const h = Math.max(4, Math.round((v / maxDay) * 100));
-              const d = days7[i];
-              const isLast = i === collectionsPerDay.length - 1;
+            {chart.map((b, i) => {
+              const h = Math.max(4, Math.round((b.value / chartMax) * 100));
               return (
                 <div key={i} className="erp-bar-col">
-                  <div className="erp-bar-val">{v ? fmtDL(v) : ""}</div>
-                  <div className={`erp-bar ${isLast ? "is-last" : ""}`} style={{ height: `${h}%` }} />
-                  <div className="erp-bar-day">{d.toLocaleDateString("ar-EG", { weekday: "short" })}</div>
+                  <div className="erp-bar-val">{b.value ? fmtDL(b.value) : ""}</div>
+                  <div className={`erp-bar ${b.isLast ? "is-last" : ""}`} style={{ height: `${h}%` }} />
+                  <div className="erp-bar-day">{b.label}</div>
                 </div>
               );
             })}
