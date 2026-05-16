@@ -591,10 +591,10 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
           <div className="form-group" style={{ marginBottom: 12 }}>
-            <label>التاجر <span style={{ fontWeight: 400, fontSize: 12, color: "var(--muted-foreground, #6b7280)" }}>(اتركه فارغاً للدفع من خزينة الشركة)</span></label>
+            <label>التاجر</label>
             {eligibleMerchants.length > 0 ? (
               <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="">— بدون تاجر (دفع من الشركة) —</option>
+                <option value="">— اختر جهة التحصيل —</option>
                 {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
               </select>
             ) : (
