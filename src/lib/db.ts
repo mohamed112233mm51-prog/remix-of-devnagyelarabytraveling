@@ -314,7 +314,19 @@ export type ExpenseDeduction = {
   created_at: string;
 };
 
-export function useLive<T>(table: "agents" | "flights" | "approvals" | "transactions" | "issuing_companies" | "company_transactions" | "merchants" | "merchant_cash_collections" | "investors" | "investor_transactions" | "expenses" | "expense_deductions") {
+export type UsdTreasuryTransaction = {
+  id: string;
+  date: string;
+  type: string; // 'conversion' | 'company_payment' | 'adjustment'
+  egp_amount: number;
+  usd_amount: number;
+  exchange_rate: number | null;
+  company_id: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export function useLive<T>(table: "agents" | "flights" | "approvals" | "transactions" | "issuing_companies" | "company_transactions" | "merchants" | "merchant_cash_collections" | "investors" | "investor_transactions" | "expenses" | "expense_deductions" | "usd_treasury_transactions") {
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
