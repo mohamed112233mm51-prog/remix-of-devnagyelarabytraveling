@@ -381,6 +381,8 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
     const count = Math.max(1, Math.round(Number(form.count) || 1));
     const price = Number(form.price) || 0;
     const companyValue = Number(form.company_value) || 0;
+    const profit = Math.round((price - companyValue) * 100) / 100;
+    const percentage = price > 0 ? Math.round(((price - companyValue) / price) * 10000) / 100 : 0;
     const payload = {
       ...shared,
       issuing_company_id,
@@ -388,6 +390,10 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
       issue_date: form.issue_date || null,
       government_fee: Number(form.government_fee || 0),
       count, price, company_value: companyValue,
+      company_price: companyValue,
+      agent_price: price,
+      company_percentage: percentage,
+      company_profit_value: profit,
     };
     try {
       const { data: inserted, error } = await supabase
