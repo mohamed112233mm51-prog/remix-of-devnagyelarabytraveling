@@ -10,22 +10,30 @@ function readHostname(): string {
   return window.location.hostname.toLowerCase();
 }
 
+// This project is the DEVELOPMENT environment. It has its own Supabase
+// project (database / auth / storage) — fully isolated from Production.
+// We force-mark it as DEV so badges, demo tools, and cleanup wizards stay on.
+const DEV_PROJECT_ID = "lioqalbrhfrbtqgzwnzm";
+
 export function detectAppEnv(): AppEnv {
   const override = (import.meta.env.VITE_APP_ENV as string | undefined)?.toLowerCase();
   if (override === "production" || override === "development") return override;
 
+  // Hard pin: this project's Supabase ref is the DEV backend.
+  const projectId =
+    (import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined) ?? "";
+  if (projectId === DEV_PROJECT_ID) return "development";
+
   const host = readHostname();
-  if (!host) {
-    return import.meta.env.MODE === "production" ? "production" : "development";
-  }
+  if (!host) return "development";
   if (host === "localhost" || host.endsWith(".localhost") || host.startsWith("127.")) {
     return "development";
   }
-  // Lovable preview / dev sandboxes
   if (host.includes("id-preview--") || host.includes("-dev.lovable.app") || host.includes(".lovable.dev")) {
     return "development";
   }
-  return "production";
+  // Default to development for this project — Production lives in a separate Lovable project.
+  return "development";
 }
 
 export function isDevEnv(): boolean {
