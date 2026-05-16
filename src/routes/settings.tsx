@@ -18,6 +18,7 @@ import {
   createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow,
 } from "@/lib/backups.functions";
 import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, type WipeCategory } from "@/lib/demo-data.functions";
+import { getBackendDiagnostics, isProdEnv } from "@/lib/env";
 import { Settings as SettingsIcon, Users, UserPlus, ShieldCheck, SlidersHorizontal, DatabaseBackup, Search, Power, Trash2, KeyRound, Mail, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserCheck, UserCog, Clock, Building2, Palette, Image as ImageIcon, ListChecks, Plus, Pencil, Check, X as XIcon, Upload, Save, Inbox, MapPin, Plane, Wrench, Phone, DollarSign, Sparkles, AlertCircle, Trash, Database, HardDrive, Download, RotateCcw, Eye, RefreshCw, Calendar, Activity, FileArchive, XCircle, AlertTriangle, Cloud } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
@@ -72,7 +73,7 @@ function SettingsPage() {
     { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} /> },
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} /> },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} /> },
-    ...(import.meta.env.DEV ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} /> }] : []),
+    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} /> }] : []),
   ];
 
   return (
@@ -109,7 +110,7 @@ function SettingsPage() {
       {tab === "general" && <GeneralTab />}
       {tab === "backups" && <BackupsTab />}
       {tab === "production" && <ProductionCleanupTab />}
-      {tab === "devtools" && import.meta.env.DEV && <DevToolsTab />}
+      {tab === "devtools" && !isProdEnv() && <DevToolsTab />}
     </div>
   );
 }
@@ -2632,10 +2633,72 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
 // Production Cleanup — admin-only pre-release wipe of demo data.
 // ============================================================
 function ProductionCleanupTab() {
+  const prod = isProdEnv();
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <ProductionWizardCard />
-      <DemoDataCleanupCard />
+      <EnvironmentDiagnosticsCard />
+      {prod ? (
+        <div className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "flex-start", background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <ShieldCheck size={20} color="#166534" style={{ marginTop: 2 }} />
+          <div style={{ fontSize: 13, color: "#14532D", lineHeight: 1.7 }}>
+            <b>وضع الإنتاج مُفعّل.</b> تم تعطيل مولّد البيانات التجريبية وأدوات التهيئة الخطرة تلقائيًا لحماية بيانات العميل.
+          </div>
+        </div>
+      ) : (
+        <>
+          <ProductionWizardCard />
+          <DemoDataCleanupCard />
+        </>
+      )}
+    </div>
+  );
+}
+
+function EnvironmentDiagnosticsCard() {
+  const d = getBackendDiagnostics();
+  const isProd = d.env === "production";
+  const envColor = isProd ? { bg: "#DCFCE7", fg: "#14532D", bd: "#86EFAC" } : { bg: "#FEF3C7", fg: "#78350F", bd: "#FDE68A" };
+
+  const rows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "البيئة", value: isProd ? "Production" : "Development" },
+    { label: "Hostname", value: d.hostname || "—", mono: true },
+    { label: "Supabase URL", value: d.supabaseUrl || "—", mono: true },
+    { label: "Database / Project ID", value: d.projectId || "—", mono: true },
+    { label: "Auth Namespace", value: d.authNamespace || "—", mono: true },
+    { label: "Storage Buckets", value: d.storageBuckets.join("، ") || "—" },
+    { label: "PROD Project ID (متوقّع)", value: d.productionProjectId || "غير مُهيّأ" },
+  ];
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 10 }}>
+        <Database size={18} color="#0F1F44" />
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تشخيص البيئة وعزل قاعدة البيانات</div>
+        <span style={{ marginInlineStart: "auto", fontSize: 11, fontWeight: 800, color: envColor.fg, background: envColor.bg, border: `1px solid ${envColor.bd}`, padding: "3px 10px", borderRadius: 999 }}>
+          {isProd ? "PRODUCTION" : "DEVELOPMENT"}
+        </span>
+      </div>
+
+      {d.isSharedWithProduction && (
+        <div style={{ padding: 14, background: "#FEF2F2", borderBottom: "1px solid #FECACA", display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <AlertTriangle size={18} color="#B91C1C" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: "#7F1D1D", lineHeight: 1.7 }}>
+            <b>تحذير حرج:</b> بيئة التطوير الحالية تشير إلى نفس قاعدة بيانات الإنتاج. يجب فصلهما فورًا — أي حذف أو إنشاء هنا سيؤثر على بيانات الإنتاج الفعلية.
+          </div>
+        </div>
+      )}
+
+      <div style={{ padding: 16, display: "grid", gap: 8 }}>
+        {rows.map((r) => (
+          <div key={r.label} style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 12, fontSize: 13, padding: "8px 0", borderBottom: "1px solid #F3F4F6" }}>
+            <div style={{ color: "#6B7280", fontWeight: 600 }}>{r.label}</div>
+            <div style={{ color: "#111827", fontFamily: r.mono ? "ui-monospace, SFMono-Regular, Menlo, monospace" : undefined, wordBreak: "break-all" }}>{r.value}</div>
+          </div>
+        ))}
+        <div style={{ marginTop: 6, fontSize: 12, color: "#6B7280", lineHeight: 1.7 }}>
+          العزل الكامل يتطلب أن يكون لكل بيئة <b>Project ID</b> مختلف، مما يعني تلقائيًا قواعد بيانات وتخزين ومستخدمين وجلسات منفصلة. لتعريف مشروع الإنتاج المتوقّع للمقارنة، اضبط المتغير <code style={{ background: "#F3F4F6", padding: "1px 6px", borderRadius: 4 }}>VITE_PRODUCTION_PROJECT_ID</code>.
+        </div>
+      </div>
     </div>
   );
 }
