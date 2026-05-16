@@ -174,7 +174,7 @@ function CompaniesPage() {
       )}
 
       {tab === "add" && perm.create && <CompanyForm onDone={() => setTab("list")} />}
-      {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} txns={txns} onDone={() => setTab("list")} />}
+      {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} txns={txns} flights={flights} approvals={approvals} agents={agents} onDone={() => setTab("list")} />}
       {tab === "statement" && <CompanyStatementTab companies={companies} txns={txns} initialCompanyId={statementCompanyId} canExport={perm.export} />}
 
       {editCompany && perm.edit && (
