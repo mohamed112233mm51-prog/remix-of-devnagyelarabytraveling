@@ -1,0 +1,566 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
+import { syncCounterpart } from "@/lib/sync";
+import { usePerm } from "@/hooks/usePerm";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import { Modal } from "@/components/Modal";
+
+export const Route = createFileRoute("/approvals")({
+  component: () => <AppErrorBoundary><ApprovalsPage /></AppErrorBoundary>,
+  errorComponent: () => <SafePageError />,
+});
+
+const STATUSES = ["سريعة", "بطيئة", "رفض أمني"];
+
+function SafePageError() {
+  return <div className="card" style={{ padding: 24 }}>تعذر تحميل الموافقات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
+}
+
+function ApprovalsPage() {
+  const perm = usePerm("approvals");
+  const { rows: approvals } = useLive<Approval>("approvals");
+  const { rows: agents } = useLive<Agent>("agents");
+  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
+  const DESTINATIONS = useDropdownOptions("destination");
+  const [tab, setTab] = useState<"list" | "add">("list");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [destination, setDestination] = useState("");
+  const [editing, setEditing] = useState<Approval | null>(null);
+
+  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
+
+  const filtered = useMemo(() => approvals.filter((a) => {
+    if (search) {
+      const q = search.toLowerCase();
+      const aName = (agents.find((ag) => ag.id === a.agent_id)?.name || "").toLowerCase();
+      const hay = `${a.passenger_name} ${a.passport || ""} ${a.national_id || ""} ${aName}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (status && a.status !== status) return false;
+    if (destination && a.destination !== destination) return false;
+    return true;
+  }), [approvals, agents, search, status, destination]);
+
+  const NAVY = "#0f1b3d", GOLD = "#d4af37";
+  const today = new Date().toISOString().slice(0, 10);
+  const total = approvals.length;
+  const fast = approvals.filter((a) => a.status === "سريعة").length;
+  const slow = approvals.filter((a) => a.status === "بطيئة").length;
+  const rejected = approvals.filter((a) => a.status === "رفض أمني").length;
+  const pending = approvals.filter((a) => !a.issue_date).length;
+  const todayCount = approvals.filter((a) => (a.submit_date || "").slice(0, 10) === today).length;
+
+  const clearFilters = () => { setSearch(""); setStatus(""); setDestination(""); };
+  const activeFilterCount = [search, status, destination].filter(Boolean).length;
+
+  const statusStyle = (s: string): React.CSSProperties => {
+    const k = s || "";
+    if (k === "سريعة") return { background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0" };
+    if (k === "رفض أمني") return { background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" };
+    if (k === "بطيئة") return { background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" };
+    return { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" };
+  };
+
+  const Kpi = ({ icon, label, value, tone }: { icon: string; label: string; value: number | string; tone: "navy" | "indigo" | "emerald" | "rose" | "amber" | "sky" }) => {
+    const tones: Record<string, { bg: string; fg: string; bd: string }> = {
+      navy:    { bg: "#eef2ff", fg: NAVY,      bd: "#dbe3ee" },
+      indigo:  { bg: "#eef2ff", fg: "#4338ca", bd: "#c7d2fe" },
+      emerald: { bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
+      rose:    { bg: "#fef2f2", fg: "#b91c1c", bd: "#fecaca" },
+      amber:   { bg: "#fffbeb", fg: "#b45309", bd: "#fde68a" },
+      sky:     { bg: "#f0f9ff", fg: "#0369a1", bd: "#bae6fd" },
+    };
+    const t = tones[tone];
+    return (
+      <div className="fl-card" style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+        <div style={{ width: 42, height: 42, borderRadius: 10, background: t.bg, color: t.fg, border: `1px solid ${t.bd}`, display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 3 }}>{label}</div>
+          <div style={{ fontSize: 18, color: "#0f172a", fontWeight: 800, lineHeight: 1.1 }}>{typeof value === "number" ? value.toLocaleString("ar") : value}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const inputStyle: React.CSSProperties = {
+    height: 38, padding: "0 12px", borderRadius: 10, border: "1px solid #e2e8f0",
+    background: "#fff", fontSize: 13, color: "#0f172a", outline: "none", minWidth: 0,
+  };
+
+  return (
+    <div className="section active" style={{ display: "grid", gap: 14 }}>
+      <style>{`
+        .fl-card{transition:transform .2s ease, box-shadow .25s ease, border-color .2s ease;}
+        .fl-card:hover{transform:translateY(-2px); box-shadow:0 6px 20px rgba(15,23,42,.07); border-color:#dbe3ee;}
+        .fl-row{transition:background .15s ease;}
+        .fl-row:hover{background:#f8fafc !important;}
+        .fl-btn{transition:transform .15s ease, box-shadow .2s ease, background .2s ease;}
+        .fl-btn:hover:not(:disabled){transform:translateY(-1px);}
+        .fl-icon-btn{transition:all .15s ease;}
+        .fl-icon-btn:hover:not(:disabled){transform:translateY(-1px); background:#f1f5f9;}
+        .fl-input:focus{border-color:#1d4ed8 !important; box-shadow:0 0 0 3px rgba(29,78,216,.12) !important;}
+        @media (max-width: 700px){
+          .fl-toolbar{grid-template-columns:1fr 1fr !important;}
+          .fl-search{grid-column:1 / -1 !important;}
+        }
+      `}</style>
+
+      {/* ===== Header ===== */}
+      <div style={{
+        padding: "16px 20px", borderRadius: 14, border: "1px solid #1e3a8a44",
+        background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a8a 60%, #1e40af 100%)`,
+        boxShadow: `0 10px 30px ${NAVY}2e`, color: "#fff", overflow: "hidden", position: "relative",
+      }}>
+        <div aria-hidden style={{ position: "absolute", top: -40, left: -40, width: 200, height: 200, borderRadius: "50%", background: `radial-gradient(circle, ${GOLD}30, transparent 65%)` }} />
+        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+            <nav aria-label="breadcrumb" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#cbd5e1", marginBottom: 8, flexWrap: "wrap" }}>
+              <span>العمليات</span>
+              <span style={{ opacity: .6 }}>›</span>
+              <span>الموافقات الأمنية</span>
+              <span style={{ opacity: .6 }}>›</span>
+              <span style={{ color: GOLD, fontWeight: 700 }}>التقديمات</span>
+            </nav>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div aria-label="Egypt" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(206,17,38,.35), 0 4px 14px rgba(0,0,0,.28)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                <div aria-hidden style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0) 55%)", pointerEvents: "none" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "33.0%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "66.3%", height: 1, background: "rgba(0,0,0,.18)" }} />
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.45))" }}>
+                  <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                  <circle cx="12" cy="12" r="1.6" fill="#C8A44D" stroke="none" />
+                </svg>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em", lineHeight: 1.2 }}>تقديمات الموافقات الأمنية</h1>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#cbd5e1", lineHeight: 1.4 }}>إدارة ومتابعة الموافقات الأمنية وحالات السفر</p>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="fl-btn" onClick={() => setTab("list")} style={{
+              display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 14px", borderRadius: 10,
+              background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)",
+              fontWeight: 700, fontSize: 12.5, cursor: "pointer", backdropFilter: "blur(6px)",
+            }}>📋 سجل التقديمات</button>
+            {perm.create && (
+              <button className="fl-btn" onClick={() => setTab("add")} style={{
+                display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 16px", borderRadius: 10,
+                background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, border: 0,
+                fontWeight: 800, fontSize: 12.5, cursor: "pointer", boxShadow: `0 6px 16px ${GOLD}4d`,
+              }}>＋ تقديم موافقة</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== KPI Cards ===== */}
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+        <Kpi icon="🗂️" label="إجمالي التقديمات" value={total} tone="navy" />
+        <Kpi icon="⚡" label="الموافقات السريعة" value={fast} tone="emerald" />
+        <Kpi icon="⏳" label="الموافقات البطيئة" value={slow} tone="amber" />
+        <Kpi icon="⛔" label="الرفض الأمني" value={rejected} tone="rose" />
+        <Kpi icon="🛡️" label="قيد المراجعة" value={pending} tone="indigo" />
+        <Kpi icon="📅" label="تقديمات اليوم" value={todayCount} tone="sky" />
+      </div>
+
+      {tab === "list" ? (
+        <>
+          {/* ===== Filters Toolbar ===== */}
+          <div style={{ padding: 14, borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>🔎 الفلاتر</span>
+                {activeFilterCount > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+                    {activeFilterCount} نشط
+                  </span>
+                )}
+              </div>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} className="fl-btn" style={{ height: 30, padding: "0 10px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
+                  ✕ مسح الفلاتر
+                </button>
+              )}
+            </div>
+            <div className="fl-toolbar" style={{ display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr" }}>
+              <div className="fl-search" style={{ position: "relative", minWidth: 0 }}>
+                <span style={{ position: "absolute", insetInlineStart: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: 14 }}>🔍</span>
+                <input
+                  className="fl-input"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="ابحث بالاسم، الجواز، الرقم القومي، أو الوكيل..."
+                  style={{ ...inputStyle, width: "100%", paddingInlineStart: 34, paddingInlineEnd: search ? 32 : 12 }}
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} aria-label="مسح" style={{ position: "absolute", insetInlineEnd: 8, top: "50%", transform: "translateY(-50%)", width: 22, height: 22, borderRadius: 6, border: 0, background: "#f1f5f9", color: "#64748b", cursor: "pointer", display: "grid", placeItems: "center", fontSize: 12 }}>✕</button>
+                )}
+              </div>
+              <select className="fl-input" value={destination} onChange={(e) => setDestination(e.target.value)} style={inputStyle}>
+                <option value="">جميع الوجهات</option>
+                <SafeSelectOptions options={DESTINATIONS} />
+              </select>
+              <select className="fl-input" value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
+                <option value="">جميع الحالات</option>
+                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* ===== Table Card ===== */}
+          <div className="fl-card" style={{ borderRadius: 12, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04)", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px", borderBottom: "1px solid #eef2f7" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div aria-label="Egypt" style={{ width: 32, height: 32, borderRadius: 9, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 2px 6px rgba(206,17,38,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#C8A44D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>
+                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>سجل التقديمات</h4>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>عرض ومتابعة جميع تقديمات الموافقات الأمنية</div>
+                </div>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: NAVY, background: `${GOLD}22`, border: `1px solid ${GOLD}66`, padding: "3px 10px", borderRadius: 999 }}>
+                {filtered.length.toLocaleString("ar")} تقديم
+              </span>
+            </div>
+
+            {filtered.length === 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 20px", color: "#64748b", background: "linear-gradient(180deg,#fafbfd,#fff)" }}>
+                <div aria-label="Egypt" style={{ width: 80, height: 80, borderRadius: "50%", position: "relative", overflow: "hidden", display: "grid", placeItems: "center", marginBottom: 14, border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 8px 22px rgba(206,17,38,.22), 0 4px 14px rgba(0,0,0,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
+                  <div aria-hidden style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 25%, rgba(255,255,255,.35), rgba(255,255,255,0) 60%)", pointerEvents: "none" }} />
+                  <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#C8A44D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative", filter: "drop-shadow(0 2px 3px rgba(0,0,0,.45))" }}>
+                    <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
+                    <circle cx="12" cy="12" r="2" fill="#C8A44D" stroke="none" />
+                  </svg>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>لا توجد تقديمات حالياً</div>
+                <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 6, textAlign: "center", maxWidth: 360 }}>
+                  {activeFilterCount > 0 ? "لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل أو مسح الفلاتر." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
+                </div>
+                {perm.create && activeFilterCount === 0 && (
+                  <button className="fl-btn" onClick={() => setTab("add")} style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px", borderRadius: 10, background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: GOLD, border: 0, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    ＋ تقديم أول موافقة
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="mobile-cards" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100, fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "linear-gradient(180deg,#f8fafc,#f1f5f9)", position: "sticky", top: 0, zIndex: 1 }}>
+                      {["#", "اسم المسافر", "الرقم القومي", "رقم الجواز", "الوجهة", "الجهة", "الشركة الصادرة", "بيان السفر", "الوكيل", "تاريخ التقديم", "تاريخ الصدور", "الحالة"].map((h) => (
+                        <th key={h} style={{ padding: "10px 12px", textAlign: "right", fontSize: 11.5, fontWeight: 800, color: "#475569", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11.5, fontWeight: 800, color: "#475569", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((a, i) => (
+                      <tr key={a.id} className="fl-row" style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{i + 1}</td>
+                        <td data-label="الاسم" style={{ padding: "10px 12px", fontWeight: 700, color: "#0f172a" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                              {(a.passenger_name || "?").trim().charAt(0)}
+                            </div>
+                            <span>{a.passenger_name}</span>
+                          </div>
+                        </td>
+                        <td data-label="الرقم القومي" style={{ padding: "10px 12px", color: "#475569", fontFamily: "ui-monospace,monospace", fontSize: 12 }}>{a.national_id || "—"}</td>
+                        <td data-label="رقم الجواز" style={{ padding: "10px 12px", color: "#475569", fontFamily: "ui-monospace,monospace", fontSize: 12 }}>{a.passport || "—"}</td>
+                        <td data-label="الوجهة" style={{ padding: "10px 12px", color: "#475569" }}>{a.destination ? <span>📍 {a.destination}</span> : "—"}</td>
+                        <td data-label="الجهة" style={{ padding: "10px 12px", color: "#475569" }}>{a.authority || "—"}</td>
+                        <td data-label="الشركة الصادرة" style={{ padding: "10px 12px", color: "#475569" }}>{a.issuing_company || "—"}</td>
+                        <td data-label="بيان السفر" style={{ padding: "10px 12px", color: "#64748b", fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.travel_statement || ""}>{a.travel_statement || "—"}</td>
+                        <td data-label="الوكيل" style={{ padding: "10px 12px", color: "#0f172a", fontWeight: 600 }}>{agentName(a.agent_id)}</td>
+                        <td data-label="تاريخ التقديم" style={{ padding: "10px 12px", color: "#475569", whiteSpace: "nowrap", fontSize: 12 }}>{a.submit_date || "—"}</td>
+                        <td data-label="تاريخ الصدور" style={{ padding: "10px 12px", color: "#475569", whiteSpace: "nowrap", fontSize: 12 }}>{a.issue_date || "—"}</td>
+                        <td data-label="الحالة" style={{ padding: "10px 12px" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, ...statusStyle(a.status) }}>
+                            {a.status || "—"}
+                          </span>
+                        </td>
+                        <td data-label="إجراءات" style={{ padding: "10px 12px" }}>
+                          {perm.edit ? (
+                            <button className="fl-icon-btn" onClick={() => setEditing(a)} style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 10px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: NAVY, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                              ✏️ تعديل
+                            </button>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <td colSpan={11} style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#475569" }}>إجمالي التقديمات:</td>
+                      <td colSpan={2} style={{ padding: "10px 12px", fontSize: 13, fontWeight: 800, color: NAVY }}>{filtered.length.toLocaleString("ar")}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        perm.create ? <ApprovalForm agents={agents} companies={companies} onDone={() => setTab("list")} /> : null
+      )}
+      {editing && perm.edit && (
+        <EditApprovalModal approval={editing} agents={agents} companies={companies} onClose={() => setEditing(null)} />
+      )}
+    </div>
+  );
+}
+
+function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
+  const [form, setForm] = useState({
+    passenger_name: "", national_id: "", passport: "", dob: "",
+    destination: "", authority: "", issuing_company: "",
+    agent_id: "", submit_date: "", issue_date: "",
+    travel_date: "", airline: "",
+    status: "", government_fee: "", notes: "",
+  });
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
+  const AUTHORITIES = withSelected(useDropdownOptions("authority"), form.authority);
+  const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
+  const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
+
+  const save = async () => {
+    if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
+    if (!form.destination || !form.authority || !form.agent_id || !form.status) return toast.error("برجاء اختيار قيمة من القائمة");
+    if (!form.issuing_company) return toast.error("برجاء اختيار الشركة الصادرة");
+    let issuing_company_id = companies.find((c) => c.company_name === form.issuing_company)?.id || null;
+    if (!issuing_company_id) {
+      const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.issuing_company, status: "نشط" }).select("id").single();
+      if (cErr) return toast.error(cErr.message);
+      issuing_company_id = data.id;
+    }
+    const shared = {
+      passenger_name: form.passenger_name,
+      national_id: form.national_id || null,
+      passport: form.passport || null,
+      dob: form.dob || null,
+      destination: form.destination || null,
+      agent_id: form.agent_id || null,
+      status: form.status,
+      notes: form.notes || null,
+      travel_date: form.travel_date || null,
+      airline: form.airline || null,
+      authority: form.authority || null,
+      issuing_company: form.issuing_company || null,
+      travel_statement: travelStatement || null,
+    };
+    const payload = {
+      ...shared,
+      issuing_company_id,
+      submit_date: form.submit_date || null,
+      issue_date: form.issue_date || null,
+      government_fee: Number(form.government_fee || 0),
+    };
+    try {
+      const { error } = await supabase.from("approvals").insert(payload);
+      if (error) return toast.error(error.message);
+      await syncCounterpart("approvals", shared);
+      onDone();
+    } catch (error: any) {
+      toast.error(error?.message || "تعذر حفظ الموافقة");
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">➕ تقديم موافقة أمنية</div></div>
+      <div className="form-grid">
+        <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} /></div>
+        <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} /></div>
+        <div className="form-group"><label>رقم الجواز</label><input value={form.passport} onChange={(e) => set("passport", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ الميلاد</label><input type="date" value={form.dob} onChange={(e) => set("dob", e.target.value)} /></div>
+        <div className="form-group"><label>الوجهة</label>
+          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
+            <option value="" disabled>اختر...</option>
+            <SafeSelectOptions options={DESTINATIONS} />
+          </select>
+        </div>
+        <div className="form-group"><label>الجهة</label>
+          <select value={form.authority} onChange={(e) => set("authority", e.target.value)}>
+            <option value="" disabled>اختر...</option>
+            <SafeSelectOptions options={AUTHORITIES} />
+          </select>
+        </div>
+        <div className="form-group"><label>الشركة الصادرة</label>
+          <select value={form.issuing_company} onChange={(e) => set("issuing_company", e.target.value)}>
+            <option value="" disabled>اختر...</option>
+            {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>الوكيل</label>
+          <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)}>
+            <option value="" disabled>اختر...</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>تاريخ التقديم</label><input type="date" value={form.submit_date} onChange={(e) => set("submit_date", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ الصدور</label><input type="date" value={form.issue_date} onChange={(e) => set("issue_date", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ السفر</label><input type="date" value={form.travel_date} onChange={(e) => set("travel_date", e.target.value)} /></div>
+        <div className="form-group"><label>شركة الطيران</label>
+          <select value={form.airline} onChange={(e) => set("airline", e.target.value)}>
+            <option value="" disabled>اختر...</option>
+            <SafeSelectOptions options={AIRLINES} />
+          </select>
+        </div>
+        <div className="form-group"><label>الحالة</label>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="" disabled>اختر...</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
+        <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+      </div>
+      <div className="form-footer">
+        <button className="btn btn-gold" onClick={save}>💾 حفظ التقديم</button>
+      </div>
+    </div>
+  );
+}
+
+function EditApprovalModal({ approval, agents, companies, onClose }: { approval: Approval; agents: Agent[]; companies: IssuingCompany[]; onClose: () => void }) {
+  const [form, setForm] = useState({
+    passenger_name: approval.passenger_name || "",
+    national_id: approval.national_id || "",
+    passport: approval.passport || "",
+    dob: approval.dob || "",
+    destination: approval.destination || "",
+    authority: approval.authority || "",
+    issuing_company: approval.issuing_company || "",
+    agent_id: approval.agent_id || "",
+    submit_date: approval.submit_date || "",
+    issue_date: approval.issue_date || "",
+    travel_date: approval.travel_date || "",
+    airline: approval.airline || "",
+    status: approval.status || "",
+    government_fee: String(approval.government_fee ?? ""),
+    notes: approval.notes || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
+  const AUTHORITIES = withSelected(useDropdownOptions("authority"), form.authority);
+  const AIRLINES = withSelected(useDropdownOptions("airline"), form.airline);
+  const travelStatement = buildTravelStatement(form.destination, form.travel_date, form.airline);
+
+  const save = async () => {
+    if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
+    setSaving(true);
+    let issuing_company_id = approval.issuing_company_id;
+    if (form.issuing_company && form.issuing_company !== approval.issuing_company) {
+      issuing_company_id = companies.find((c) => c.company_name === form.issuing_company)?.id || null;
+    }
+    const shared = {
+      passenger_name: form.passenger_name,
+      national_id: form.national_id || null,
+      passport: form.passport || null,
+      dob: form.dob || null,
+      destination: form.destination || null,
+      agent_id: form.agent_id || null,
+      status: form.status,
+      notes: form.notes || null,
+      travel_date: form.travel_date || null,
+      airline: form.airline || null,
+      authority: form.authority || null,
+      issuing_company: form.issuing_company || null,
+      travel_statement: travelStatement || null,
+    };
+    const payload = {
+      ...shared,
+      issuing_company_id,
+      submit_date: form.submit_date || null,
+      issue_date: form.issue_date || null,
+      government_fee: Number(form.government_fee || 0),
+    };
+    try {
+      const { error } = await supabase.from("approvals").update(payload).eq("id", approval.id);
+      if (error) return toast.error(error.message);
+      await syncCounterpart("approvals", shared);
+      toast.success("تم حفظ التعديلات بنجاح");
+      onClose();
+    } catch (error: any) {
+      toast.error(error?.message || "تعذر حفظ التعديلات");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="✏️ تعديل موافقة أمنية"
+      maxWidth={820}
+      footer={
+        <>
+          <button className="btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "..." : "💾 حفظ التعديلات"}</button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} /></div>
+        <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} /></div>
+        <div className="form-group"><label>رقم الجواز</label><input value={form.passport} onChange={(e) => set("passport", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ الميلاد</label><input type="date" value={form.dob} onChange={(e) => set("dob", e.target.value)} /></div>
+        <div className="form-group"><label>الوجهة</label>
+          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
+            <option value="">اختر...</option>
+            <SafeSelectOptions options={DESTINATIONS} />
+          </select>
+        </div>
+        <div className="form-group"><label>الجهة</label>
+          <select value={form.authority} onChange={(e) => set("authority", e.target.value)}>
+            <option value="">اختر...</option>
+            <SafeSelectOptions options={AUTHORITIES} />
+          </select>
+        </div>
+        <div className="form-group"><label>الشركة الصادرة</label>
+          <select value={form.issuing_company} onChange={(e) => set("issuing_company", e.target.value)}>
+            <option value="">اختر...</option>
+            {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>الوكيل</label>
+          <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)}>
+            <option value="">اختر...</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>تاريخ التقديم</label><input type="date" value={form.submit_date} onChange={(e) => set("submit_date", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ الصدور</label><input type="date" value={form.issue_date} onChange={(e) => set("issue_date", e.target.value)} /></div>
+        <div className="form-group"><label>تاريخ السفر</label><input type="date" value={form.travel_date} onChange={(e) => set("travel_date", e.target.value)} /></div>
+        <div className="form-group"><label>شركة الطيران</label>
+          <select value={form.airline} onChange={(e) => set("airline", e.target.value)}>
+            <option value="">اختر...</option>
+            <SafeSelectOptions options={AIRLINES} />
+          </select>
+        </div>
+        <div className="form-group"><label>الحالة</label>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="">اختر...</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
+        <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+      </div>
+    </Modal>
+  );
+}
