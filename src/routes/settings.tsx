@@ -2632,6 +2632,15 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
 // Production Cleanup — admin-only pre-release wipe of demo data.
 // ============================================================
 function ProductionCleanupTab() {
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <ProductionWizardCard />
+      <DemoDataCleanupCard />
+    </div>
+  );
+}
+
+function DemoDataCleanupCard() {
   const checkFn = useServerFn(checkDemoData);
   const cleanupFn = useServerFn(productionCleanup);
   const qc = useQueryClient();
