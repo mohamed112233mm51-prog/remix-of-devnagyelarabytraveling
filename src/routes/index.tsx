@@ -632,6 +632,40 @@ function DashboardWelcome() {
   );
 }
 
+function Donut({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
+  const size = 160; const stroke = 22; const r = (size - stroke) / 2; const C = 2 * Math.PI * r;
+  let offset = 0;
+  const safeTotal = total > 0 ? total : 1;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="erp-donut-svg">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F1F5F9" strokeWidth={stroke} />
+      {data.map((d, i) => {
+        const frac = d.value / safeTotal;
+        const dash = frac * C;
+        const el = (
+          <circle
+            key={i}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={d.color}
+            strokeWidth={stroke}
+            strokeDasharray={`${dash} ${C - dash}`}
+            strokeDashoffset={-offset}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            style={{ transition: "stroke-dasharray .6s ease" }}
+          />
+        );
+        offset += dash;
+        return el;
+      })}
+      <text x="50%" y="46%" textAnchor="middle" fontSize="13" fontWeight="700" fill="#64748B">الإجمالي</text>
+      <text x="50%" y="60%" textAnchor="middle" fontSize="20" fontWeight="800" fill="#0F172A">{total.toLocaleString("ar-EG")}</text>
+    </svg>
+  );
+}
+
 function HeroKpi({
   label, value, icon, tone, sub, delta, deltaPositive,
 }: {
