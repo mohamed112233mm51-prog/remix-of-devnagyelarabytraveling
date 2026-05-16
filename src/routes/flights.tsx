@@ -137,12 +137,12 @@ function FlightsPage() {
               <span style={{ opacity: .6 }}>›</span>
               <span>الرحلات</span>
               <span style={{ opacity: .6 }}>›</span>
-              <span style={{ color: GOLD, fontWeight: 700 }}>قوائم الرحلات</span>
+              <span style={{ color: GOLD, fontWeight: 700 }}>قائمة الرحلات</span>
             </nav>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <div style={{ width: 42, height: 42, borderRadius: 11, background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, display: "grid", placeItems: "center", flexShrink: 0, boxShadow: `0 6px 16px ${GOLD}55`, fontSize: 22 }}>✈️</div>
               <div style={{ minWidth: 0 }}>
-                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em", lineHeight: 1.2 }}>قوائم الرحلات</h1>
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em", lineHeight: 1.2 }}>قائمة الرحلات</h1>
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: "#cbd5e1", lineHeight: 1.4 }}>إدارة ومتابعة الرحلات والموافقات الأمنية للمسافرين</p>
               </div>
             </div>
