@@ -18,6 +18,7 @@ import {
   type Merchant,
   type MerchantCashCollection,
   type Transaction,
+  type UsdTreasuryTransaction,
 } from "./db";
 
 export type ReportsData = {
@@ -34,6 +35,7 @@ export type ReportsData = {
   investorTransactions: InvestorTransaction[];
   expenses: Expense[];
   expenseDeductions: ExpenseDeduction[];
+  usdTreasury: UsdTreasuryTransaction[];
   // Name lookups for joins
   agentName: (id: string | null | undefined) => string;
   companyName: (id: string | null | undefined) => string;
