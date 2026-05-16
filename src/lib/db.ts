@@ -249,6 +249,9 @@ export type CompanyTransaction = {
   merchant_id: string | null;
   source_service_id?: string | null;
   source_service_type?: string | null;
+  usd_amount?: number;
+  exchange_rate_used?: number | null;
+  payment_currency?: string | null;
   created_at: string;
 };
 
