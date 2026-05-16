@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -25,6 +26,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentStatementAgentIdRouteImport } from './routes/agent-statement.$agentId'
 import { Route as ApiPublicHooksBackupRouteImport } from './routes/api/public/hooks/backup'
 
+const SubmitRoute = SubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/reset-password'
     | '/settings'
+    | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/reset-password'
     | '/settings'
+    | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/reset-password'
     | '/settings'
+    | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
   fileRoutesById: FileRoutesById
@@ -221,12 +233,20 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
+  SubmitRoute: typeof SubmitRoute
   AgentStatementAgentIdRoute: typeof AgentStatementAgentIdRoute
   ApiPublicHooksBackupRoute: typeof ApiPublicHooksBackupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/submit': {
+      id: '/submit'
+      path: '/submit'
+      fullPath: '/submit'
+      preLoaderRoute: typeof SubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -349,6 +369,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
+  SubmitRoute: SubmitRoute,
   AgentStatementAgentIdRoute: AgentStatementAgentIdRoute,
   ApiPublicHooksBackupRoute: ApiPublicHooksBackupRoute,
 }
