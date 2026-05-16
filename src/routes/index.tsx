@@ -36,7 +36,7 @@ import {
   Plus,
   ChevronLeft,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
