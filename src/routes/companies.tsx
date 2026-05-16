@@ -551,13 +551,23 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
             <option value="">{selectedCompanyId ? (dueServices.length ? "اختر الخدمة..." : "لا توجد خدمات مستحقة") : "اختر الشركة أولاً"}</option>
             {dueServices.map((s) => {
               const remaining = Number(s.trip_value || 0) - Number(s.total_paid || 0);
+              const src = sourceLookup.get(s.source_service_id || "");
+              const passenger = src?.passenger_name || "—";
               return (
                 <option key={s.id} value={s.id}>
-                  {s.date} — {s.service_type || "—"} — {s.destination || "—"} — متبقي {fmtNum(remaining)}
+                  {s.service_type || "—"} — {passenger} — متبقي {fmtNum(remaining)}
                 </option>
               );
             })}
           </select>
+          {selectedService && (
+            <div style={{ marginTop: 6, fontSize: 12, color: "var(--text2)", display: "flex", flexDirection: "column", gap: 2 }}>
+              <span><strong>المسافر:</strong> {sourceForSelected?.passenger_name || "—"}</span>
+              <span><strong>الوكيل:</strong> {selectedAgent?.name || "—"}</span>
+              <span><strong>بيان السفر:</strong> {sourceForSelected?.travel_statement || buildTravelStatement(selectedService.destination, sourceForSelected?.travel_date, sourceForSelected?.airline) || "—"}</span>
+              <span><strong>المتبقي:</strong> {fmtNum(Number(selectedService.trip_value || 0) - Number(selectedService.total_paid || 0))}</span>
+            </div>
+          )}
         </div>
         <div className="form-group"><label>الوجهة</label>
           <select value={form.destination} onChange={(e) => set("destination", e.target.value)} disabled={lockFields}>
