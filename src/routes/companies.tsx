@@ -171,7 +171,7 @@ function CompaniesPage() {
       )}
 
       {tab === "add" && perm.create && <CompanyForm onDone={() => setTab("list")} />}
-      {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} onDone={() => setTab("list")} />}
+      {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} txns={txns} onDone={() => setTab("list")} />}
       {tab === "statement" && <CompanyStatementTab companies={companies} txns={txns} initialCompanyId={statementCompanyId} canExport={perm.export} />}
 
       {editCompany && perm.edit && (
@@ -383,17 +383,51 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 
-function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; onDone: () => void }) {
+function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; onDone: () => void }) {
   const [form, setForm] = useState({
     company_name: "", date: new Date().toISOString().slice(0, 10),
     destination: "", count: "", price: "", service_type: "",
     instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
-    note: "", merchant_id: "",
+    note: "", merchant_id: "", service_id: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
   const SERVICE_TYPES = withSelected(useDropdownOptions("service_type"), form.service_type);
   const tv = Number(form.count || 0) * Number(form.price || 0);
+
+  const selectedCompanyId = useMemo(
+    () => companies.find((c) => c.company_name === form.company_name)?.id || "",
+    [companies, form.company_name],
+  );
+  const dueServices = useMemo(() => {
+    if (!selectedCompanyId) return [] as CompanyTransaction[];
+    return txns.filter((t) =>
+      t.company_id === selectedCompanyId &&
+      !!t.source_service_id &&
+      (!form.service_type || t.service_type === form.service_type) &&
+      Number(t.trip_value || 0) - Number(t.total_paid || 0) > 0,
+    );
+  }, [txns, selectedCompanyId, form.service_type]);
+  const selectedService = dueServices.find((s) => s.id === form.service_id) || null;
+
+  useEffect(() => {
+    if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
+      setForm((p) => ({ ...p, service_id: "" }));
+    }
+  }, [dueServices, form.service_id]);
+
+  useEffect(() => {
+    if (!selectedService) return;
+    setForm((p) => ({
+      ...p,
+      destination: selectedService.destination || "",
+      count: String(selectedService.count || ""),
+      price: String(selectedService.price || ""),
+      service_type: selectedService.service_type || p.service_type,
+    }));
+  }, [form.service_id]);
+
+  const lockFields = !!selectedService;
   const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
   const eligibleMerchants = activeMerchants.filter(
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
@@ -441,6 +475,23 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       if (cErr) return toast.error(cErr.message);
       company_id = data.id;
     }
+    if (selectedService) {
+      const newTotal = Number(selectedService.total_paid || 0) + totalPaid;
+      const { error } = await supabase.from("company_transactions").update({
+        instapay_amount: Number(selectedService.instapay_amount || 0) + insta,
+        cash_amount: Number(selectedService.cash_amount || 0) + cash,
+        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + merchant,
+        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + merchantNet,
+        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + merchantPhysical,
+        merchant_id: usesMerchant ? form.merchant_id : selectedService.merchant_id,
+        total_paid: newTotal,
+        note: form.note || selectedService.note,
+      }).eq("id", selectedService.id);
+      if (error) return toast.error(error.message);
+      toast.success("تم تسجيل الدفعة على الخدمة المستحقة");
+      onDone();
+      return;
+    }
     const { error } = await supabase.from("company_transactions").insert({
       company_id, date: form.date,
       destination: form.destination || null,
@@ -470,20 +521,37 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
           </select>
         </div>
         <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-        <div className="form-group"><label>الوجهة</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            <SafeSelectOptions options={DESTINATIONS} />
-          </select>
-        </div>
         <div className="form-group"><label>نوع الخدمة</label>
           <select value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
             <option value="" disabled>اختر...</option>
             <SafeSelectOptions options={SERVICE_TYPES} />
           </select>
         </div>
-        <div className="form-group"><label>العدد</label><input type="number" min={1} placeholder="0" value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
-        <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>الخدمة المستحقة</label>
+          <select
+            value={form.service_id}
+            onChange={(e) => set("service_id", e.target.value)}
+            disabled={!selectedCompanyId}
+          >
+            <option value="">{selectedCompanyId ? (dueServices.length ? "اختر الخدمة..." : "لا توجد خدمات مستحقة") : "اختر الشركة أولاً"}</option>
+            {dueServices.map((s) => {
+              const remaining = Number(s.trip_value || 0) - Number(s.total_paid || 0);
+              return (
+                <option key={s.id} value={s.id}>
+                  {s.date} — {s.service_type || "—"} — {s.destination || "—"} — متبقي {fmtNum(remaining)}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <div className="form-group"><label>الوجهة</label>
+          <select value={form.destination} onChange={(e) => set("destination", e.target.value)} disabled={lockFields}>
+            <option value="" disabled>اختر...</option>
+            <SafeSelectOptions options={DESTINATIONS} />
+          </select>
+        </div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} placeholder="0" value={form.count} onChange={(e) => set("count", e.target.value)} disabled={lockFields} /></div>
+        <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} disabled={lockFields} /></div>
         <div className="form-group"><label>قيمة الخدمة</label><input value={fmtNum(tv)} disabled /></div>
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
