@@ -28,10 +28,20 @@ function CompaniesPage() {
   const { rows: flights } = useLive<Flight>("flights");
   const { rows: approvals } = useLive<Approval>("approvals");
   const { rows: agents } = useLive<Agent>("agents");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const [tab, setTab] = useState<"list" | "add" | "txn" | "statement">("list");
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
+  const [showConvert, setShowConvert] = useState(false);
+
+  const usdBalance = useMemo(() => {
+    return usdRows.reduce((s, r) => {
+      const amt = Number(r.usd_amount || 0);
+      if (r.type === "company_payment") return s - amt;
+      return s + amt; // conversion or adjustment
+    }, 0);
+  }, [usdRows]);
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
