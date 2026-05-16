@@ -206,6 +206,18 @@ export default function Layout() {
               style={{ flexShrink: 0 }}
             />
             <div className="page-title">{title}</div>
+            {isDevEnv() && (
+              <span
+                title="بيئة التطوير — البيانات منفصلة عن الإنتاج"
+                style={{
+                  fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
+                  color: "#78350F", background: "#FEF3C7", border: "1px solid #FDE68A",
+                  padding: "2px 8px", borderRadius: 999, flexShrink: 0,
+                }}
+              >
+                DEV
+              </span>
+            )}
           </div>
           <div className="topbar-actions">
             <SearchBox />
