@@ -113,74 +113,80 @@ function Dashboard() {
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
 
-  const agentsFlightsValue = txns
-    .filter((t) => t.service_type === "تذاكر طيران")
-    .reduce((s, t) => s + tripValue(t), 0);
-  const agentsApprovalsValue = txns
-    .filter((t) => t.service_type === "موافقة أمنية")
-    .reduce((s, t) => s + tripValue(t), 0);
-  const agentsOtherValue = txns
-    .filter((t) => t.service_type !== "تذاكر طيران" && t.service_type !== "موافقة أمنية")
-    .reduce((s, t) => s + tripValue(t), 0);
-  const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
-  const agentsPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
-  const agentsDue = agentsTripValue - agentsPaid;
-  const agentCollectionsNet = txns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      Number(t.merchant_cash_physical_amount || 0) +
-      merchantCashNet(t),
-    0,
-  );
+  const [period, setPeriod] = useState<Period>("month");
 
-  const companyServices = cTxns.reduce(
-    (s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)),
-    0,
-  );
-  const companyPaid = cTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      merchantCashNet(t) +
-      Number(t.merchant_cash_physical_amount || 0),
-    0,
-  );
-  const companyDue = companyServices - companyPaid;
+  // ===== Lifetime totals (kept for the "تفاصيل الأقسام" breakdown) =====
+  const lifetime = useMemo(() => {
+    const agentsFlightsValue = txns.filter((t) => t.service_type === "تذاكر طيران").reduce((s, t) => s + tripValue(t), 0);
+    const agentsApprovalsValue = txns.filter((t) => t.service_type === "موافقة أمنية").reduce((s, t) => s + tripValue(t), 0);
+    const agentsOtherValue = txns.filter((t) => t.service_type !== "تذاكر طيران" && t.service_type !== "موافقة أمنية").reduce((s, t) => s + tripValue(t), 0);
+    const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
+    const agentsPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
+    const agentsDue = agentsTripValue - agentsPaid;
+    const agentCollectionsNet = txns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t), 0);
+    const companyServices = cTxns.reduce((s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)), 0);
+    const companyPaid = cTxns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0), 0);
+    const companyDue = companyServices - companyPaid;
+    const merchantIncomingNet = txns.reduce((s, t) => s + merchantCashNet(t), 0);
+    const merchantIncomingGross = txns.reduce((s, t) => s + merchantCashGross(t), 0);
+    const merchantOutgoing = cTxns.reduce((s, t) => s + Number(t.merchant_cash_amount || 0), 0);
+    const merchantCollected = collections.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
+    const merchantFee = merchantIncomingGross - merchantIncomingNet;
+    const investorDeposits = invTxns.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
+    const investorWithdrawals = invTxns.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
+    const investorBalance = investorDeposits - investorWithdrawals;
+    const expensesFixed = expenses.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expensesVariable = expenses.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expensesDeducted = expenseDeductions.reduce((s, d) => s + Number(d.amount || 0), 0);
+    const expensesAll = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
+    const companyOutgoingNet = cTxns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0), 0);
+    const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
+    const treasuryNet = agentCollectionsNet - companyOutgoingNet - expensesAll - expensesDeducted + investorBalance;
+    return {
+      agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
+      companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
+      investorDeposits, investorWithdrawals, investorBalance,
+      expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
+      companyOutgoingNet, companyProfit, treasuryNet,
+    };
+  }, [txns, cTxns, collections, invTxns, expenses, expenseDeductions]);
 
-  const merchantIncomingNet = txns.reduce((s, t) => s + merchantCashNet(t), 0);
-  const merchantIncomingGross = txns.reduce((s, t) => s + merchantCashGross(t), 0);
-  const merchantOutgoing = cTxns.reduce((s, t) => s + Number(t.merchant_cash_amount || 0), 0);
-  const merchantCollected = collections.reduce((s, c) => s + Number(c.amount || 0), 0);
-  const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
-  const merchantFee = merchantIncomingGross - merchantIncomingNet;
+  const {
+    agentsFlightsValue, agentsApprovalsValue, agentsPaid, agentsDue, agentCollectionsNet,
+    companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
+    investorDeposits, investorWithdrawals, investorBalance,
+    expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
+    companyOutgoingNet, companyProfit, treasuryNet,
+  } = lifetime;
 
-  const investorDeposits = invTxns
-    .filter((t) => t.transaction_type === "توريد نقدية")
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const investorWithdrawals = invTxns
-    .filter((t) => t.transaction_type === "صرف نقدية")
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const investorBalance = investorDeposits - investorWithdrawals;
+  // ===== Period-based aggregates =====
+  const computeAgg = (range: { start: Date; end: Date }) => {
+    const inR = (d?: string | null) => inRange(d, range);
+    const t = txns.filter((x) => inR(x.created_at));
+    const ct = cTxns.filter((x) => inR(x.created_at));
+    const ex = expenses.filter((x) => inR(x.created_at));
+    const ed = expenseDeductions.filter((x) => inR(x.created_at));
+    const collected = t.reduce((s, x) => s + Number(x.instapay_amount || 0) + Number(x.cash_amount || 0) + Number(x.merchant_cash_physical_amount || 0) + merchantCashNet(x), 0);
+    const compOut = ct.reduce((s, x) => s + Number(x.instapay_amount || 0) + Number(x.cash_amount || 0) + merchantCashNet(x) + Number(x.merchant_cash_physical_amount || 0), 0);
+    const expSum = ex.reduce((s, x) => s + Number(x.amount || 0), 0) + ed.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const profit = collected - compOut - ex.reduce((s, x) => s + Number(x.amount || 0), 0);
+    return {
+      collected,
+      expenses: expSum,
+      profit,
+      flightsCount: flights.filter((f) => inR(f.created_at)).length,
+      approvalsCount: approvals.filter((a) => inR(a.created_at)).length,
+    };
+  };
 
-  const expensesFixed = expenses.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expensesVariable = expenses.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expensesDeducted = expenseDeductions.reduce((s, d) => s + Number(d.amount || 0), 0);
-  const expensesAll = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
-  const companyOutgoingNet = cTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      merchantCashNet(t) +
-      Number(t.merchant_cash_physical_amount || 0),
-    0,
-  );
-  const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
-  const treasuryNet = agentCollectionsNet - companyOutgoingNet - expensesAll - expensesDeducted + investorBalance;
+  const periodRange = useMemo(() => getPeriodRange(period), [period]);
+  const prevRange = useMemo(() => getPreviousRange(period), [period]);
+  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+
+  const periodLabel = PERIOD_LABELS[period];
 
   // Today's summary
   const today = new Date();
@@ -190,65 +196,57 @@ function Dashboard() {
     return dt.getFullYear() === today.getFullYear() && dt.getMonth() === today.getMonth() && dt.getDate() === today.getDate();
   };
   const todayTxns = txns.filter((t) => isToday(t.created_at));
-  const todayCollected = todayTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      Number(t.merchant_cash_physical_amount || 0) +
-      merchantCashNet(t),
-    0,
-  );
+  const todayCollected = todayTxns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t), 0);
   const todayValue = todayTxns.reduce((s, t) => s + tripValue(t), 0);
   const todayFlights = flights.filter((f) => isToday(f.created_at)).length;
   const todayApprovals = approvals.filter((a) => isToday(a.created_at)).length;
 
-  // Yesterday comparisons
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = (d?: string) => {
-    if (!d) return false;
-    const dt = new Date(d);
-    return dt.getFullYear() === yesterday.getFullYear() && dt.getMonth() === yesterday.getMonth() && dt.getDate() === yesterday.getDate();
-  };
-  const yesterdayTxns = txns.filter((t) => isYesterday(t.created_at));
-  const yesterdayCollected = yesterdayTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      Number(t.merchant_cash_physical_amount || 0) +
-      merchantCashNet(t),
-    0,
-  );
-  const collectionsTrend = yesterdayCollected > 0
-    ? Math.round(((todayCollected - yesterdayCollected) / yesterdayCollected) * 100)
-    : (todayCollected > 0 ? 100 : 0);
-  
+  // ===== Period-aware chart buckets =====
+  const chart = useMemo(() => {
+    const buckets: { label: string; value: number; isLast?: boolean }[] = [];
+    const sumCollected = (range: { start: Date; end: Date }) =>
+      txns.filter((t) => inRange(t.created_at, range)).reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t), 0);
 
-
-  // Last 7 days revenue chart (collections per day)
-  const days7 = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d;
-  });
-  const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  const collectionsPerDay = days7.map((d) => {
-    const k = dayKey(d);
-    return txns
-      .filter((t) => t.created_at && dayKey(new Date(t.created_at)) === k)
-      .reduce(
-        (s, t) =>
-          s +
-          Number(t.instapay_amount || 0) +
-          Number(t.cash_amount || 0) +
-          Number(t.merchant_cash_physical_amount || 0) +
-          merchantCashNet(t),
-        0,
-      );
-  });
-  const maxDay = Math.max(...collectionsPerDay, 1);
+    if (period === "today") {
+      for (let h = 0; h < 24; h += 3) {
+        const s = new Date(); s.setHours(h, 0, 0, 0);
+        const e = new Date(s); e.setHours(h + 3);
+        buckets.push({ label: `${h}`, value: sumCollected({ start: s, end: e }) });
+      }
+    } else if (period === "week") {
+      const { start } = getPeriodRange("week");
+      for (let i = 0; i < 7; i++) {
+        const s = new Date(start); s.setDate(s.getDate() + i);
+        const e = new Date(s); e.setDate(e.getDate() + 1);
+        buckets.push({ label: s.toLocaleDateString("ar-EG", { weekday: "short" }), value: sumCollected({ start: s, end: e }) });
+      }
+    } else if (period === "month") {
+      const { start, end } = getPeriodRange("month");
+      const days = Math.round((end.getTime() - start.getTime()) / 86400000);
+      for (let i = 0; i < days; i++) {
+        const s = new Date(start); s.setDate(s.getDate() + i);
+        const e = new Date(s); e.setDate(e.getDate() + 1);
+        buckets.push({ label: `${s.getDate()}`, value: sumCollected({ start: s, end: e }) });
+      }
+    } else if (period === "year") {
+      for (let m = 0; m < 12; m++) {
+        const s = new Date(today.getFullYear(), m, 1);
+        const e = new Date(today.getFullYear(), m + 1, 1);
+        buckets.push({ label: s.toLocaleDateString("ar-EG", { month: "short" }), value: sumCollected({ start: s, end: e }) });
+      }
+    } else {
+      // all: last 12 months trailing
+      for (let i = 11; i >= 0; i--) {
+        const s = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const e = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
+        buckets.push({ label: s.toLocaleDateString("ar-EG", { month: "short" }), value: sumCollected({ start: s, end: e }) });
+      }
+    }
+    if (buckets.length) buckets[buckets.length - 1].isLast = true;
+    return buckets;
+  }, [period, txns]);
+  const chartMax = Math.max(...chart.map((b) => b.value), 1);
+  const chartTotal = chart.reduce((s, b) => s + b.value, 0);
 
   // Recent activity (mix of txns, flights, approvals, expenses)
   type ActivityItem = { date: string; label: string; sub: string; tone: "blue" | "green" | "gold" | "red" | "navy" };
