@@ -36,11 +36,68 @@ import {
   Plus,
   ChevronLeft,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
 });
+
+type Period = "today" | "week" | "month" | "year" | "all";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  today: "اليوم",
+  week: "هذا الأسبوع",
+  month: "هذا الشهر",
+  year: "السنة الحالية",
+  all: "إجمالي النظام",
+};
+
+function getPeriodRange(period: Period, ref: Date = new Date()) {
+  const start = new Date(ref);
+  let end = new Date(ref);
+  if (period === "today") {
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setDate(end.getDate() + 1);
+  } else if (period === "week") {
+    const day = start.getDay();
+    start.setDate(start.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setDate(end.getDate() + 7);
+  } else if (period === "month") {
+    start.setFullYear(ref.getFullYear(), ref.getMonth(), 1);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+  } else if (period === "year") {
+    start.setFullYear(ref.getFullYear(), 0, 1);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start);
+    end.setFullYear(end.getFullYear() + 1);
+  } else {
+    return { start: new Date(0), end: new Date(8.64e15) };
+  }
+  return { start, end };
+}
+
+function getPreviousRange(period: Period) {
+  if (period === "all") return null;
+  const { start, end } = getPeriodRange(period);
+  const len = end.getTime() - start.getTime();
+  return { start: new Date(start.getTime() - len), end: new Date(start.getTime()) };
+}
+
+function inRange(d: string | null | undefined, r: { start: Date; end: Date }) {
+  if (!d) return false;
+  const t = new Date(d).getTime();
+  return t >= r.start.getTime() && t < r.end.getTime();
+}
+
+function pctDelta(curr: number, prev: number) {
+  if (prev === 0) return curr > 0 ? 100 : 0;
+  return Math.round(((curr - prev) / Math.abs(prev)) * 100);
+}
 
 function Dashboard() {
   const { rows: agents } = useLive<Agent>("agents");
@@ -56,74 +113,80 @@ function Dashboard() {
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
 
-  const agentsFlightsValue = txns
-    .filter((t) => t.service_type === "تذاكر طيران")
-    .reduce((s, t) => s + tripValue(t), 0);
-  const agentsApprovalsValue = txns
-    .filter((t) => t.service_type === "موافقة أمنية")
-    .reduce((s, t) => s + tripValue(t), 0);
-  const agentsOtherValue = txns
-    .filter((t) => t.service_type !== "تذاكر طيران" && t.service_type !== "موافقة أمنية")
-    .reduce((s, t) => s + tripValue(t), 0);
-  const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
-  const agentsPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
-  const agentsDue = agentsTripValue - agentsPaid;
-  const agentCollectionsNet = txns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      Number(t.merchant_cash_physical_amount || 0) +
-      merchantCashNet(t),
-    0,
-  );
+  const [period, setPeriod] = useState<Period>("month");
 
-  const companyServices = cTxns.reduce(
-    (s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)),
-    0,
-  );
-  const companyPaid = cTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      merchantCashNet(t) +
-      Number(t.merchant_cash_physical_amount || 0),
-    0,
-  );
-  const companyDue = companyServices - companyPaid;
+  // ===== Lifetime totals (kept for the "تفاصيل الأقسام" breakdown) =====
+  const lifetime = useMemo(() => {
+    const agentsFlightsValue = txns.filter((t) => t.service_type === "تذاكر طيران").reduce((s, t) => s + tripValue(t), 0);
+    const agentsApprovalsValue = txns.filter((t) => t.service_type === "موافقة أمنية").reduce((s, t) => s + tripValue(t), 0);
+    const agentsOtherValue = txns.filter((t) => t.service_type !== "تذاكر طيران" && t.service_type !== "موافقة أمنية").reduce((s, t) => s + tripValue(t), 0);
+    const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
+    const agentsPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
+    const agentsDue = agentsTripValue - agentsPaid;
+    const agentCollectionsNet = txns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t), 0);
+    const companyServices = cTxns.reduce((s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)), 0);
+    const companyPaid = cTxns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0), 0);
+    const companyDue = companyServices - companyPaid;
+    const merchantIncomingNet = txns.reduce((s, t) => s + merchantCashNet(t), 0);
+    const merchantIncomingGross = txns.reduce((s, t) => s + merchantCashGross(t), 0);
+    const merchantOutgoing = cTxns.reduce((s, t) => s + Number(t.merchant_cash_amount || 0), 0);
+    const merchantCollected = collections.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
+    const merchantFee = merchantIncomingGross - merchantIncomingNet;
+    const investorDeposits = invTxns.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
+    const investorWithdrawals = invTxns.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
+    const investorBalance = investorDeposits - investorWithdrawals;
+    const expensesFixed = expenses.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expensesVariable = expenses.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expensesDeducted = expenseDeductions.reduce((s, d) => s + Number(d.amount || 0), 0);
+    const expensesAll = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+    const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
+    const companyOutgoingNet = cTxns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0), 0);
+    const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
+    const treasuryNet = agentCollectionsNet - companyOutgoingNet - expensesAll - expensesDeducted + investorBalance;
+    return {
+      agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
+      companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
+      investorDeposits, investorWithdrawals, investorBalance,
+      expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
+      companyOutgoingNet, companyProfit, treasuryNet,
+    };
+  }, [txns, cTxns, collections, invTxns, expenses, expenseDeductions]);
 
-  const merchantIncomingNet = txns.reduce((s, t) => s + merchantCashNet(t), 0);
-  const merchantIncomingGross = txns.reduce((s, t) => s + merchantCashGross(t), 0);
-  const merchantOutgoing = cTxns.reduce((s, t) => s + Number(t.merchant_cash_amount || 0), 0);
-  const merchantCollected = collections.reduce((s, c) => s + Number(c.amount || 0), 0);
-  const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
-  const merchantFee = merchantIncomingGross - merchantIncomingNet;
+  const {
+    agentsFlightsValue, agentsApprovalsValue, agentsPaid, agentsDue, agentCollectionsNet,
+    companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
+    investorDeposits, investorWithdrawals, investorBalance,
+    expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
+    companyOutgoingNet, companyProfit, treasuryNet,
+  } = lifetime;
 
-  const investorDeposits = invTxns
-    .filter((t) => t.transaction_type === "توريد نقدية")
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const investorWithdrawals = invTxns
-    .filter((t) => t.transaction_type === "صرف نقدية")
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-  const investorBalance = investorDeposits - investorWithdrawals;
+  // ===== Period-based aggregates =====
+  const computeAgg = (range: { start: Date; end: Date }) => {
+    const inR = (d?: string | null) => inRange(d, range);
+    const t = txns.filter((x) => inR(x.created_at));
+    const ct = cTxns.filter((x) => inR(x.created_at));
+    const ex = expenses.filter((x) => inR(x.created_at));
+    const ed = expenseDeductions.filter((x) => inR(x.created_at));
+    const collected = t.reduce((s, x) => s + Number(x.instapay_amount || 0) + Number(x.cash_amount || 0) + Number(x.merchant_cash_physical_amount || 0) + merchantCashNet(x), 0);
+    const compOut = ct.reduce((s, x) => s + Number(x.instapay_amount || 0) + Number(x.cash_amount || 0) + merchantCashNet(x) + Number(x.merchant_cash_physical_amount || 0), 0);
+    const expSum = ex.reduce((s, x) => s + Number(x.amount || 0), 0) + ed.reduce((s, x) => s + Number(x.amount || 0), 0);
+    const profit = collected - compOut - ex.reduce((s, x) => s + Number(x.amount || 0), 0);
+    return {
+      collected,
+      expenses: expSum,
+      profit,
+      flightsCount: flights.filter((f) => inR(f.created_at)).length,
+      approvalsCount: approvals.filter((a) => inR(a.created_at)).length,
+    };
+  };
 
-  const expensesFixed = expenses.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expensesVariable = expenses.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expensesDeducted = expenseDeductions.reduce((s, d) => s + Number(d.amount || 0), 0);
-  const expensesAll = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
-  const companyOutgoingNet = cTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      merchantCashNet(t) +
-      Number(t.merchant_cash_physical_amount || 0),
-    0,
-  );
-  const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
-  const treasuryNet = agentCollectionsNet - companyOutgoingNet - expensesAll - expensesDeducted + investorBalance;
+  const periodRange = useMemo(() => getPeriodRange(period), [period]);
+  const prevRange = useMemo(() => getPreviousRange(period), [period]);
+  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+
+  const periodLabel = PERIOD_LABELS[period];
 
   // Today's summary
   const today = new Date();
@@ -133,65 +196,57 @@ function Dashboard() {
     return dt.getFullYear() === today.getFullYear() && dt.getMonth() === today.getMonth() && dt.getDate() === today.getDate();
   };
   const todayTxns = txns.filter((t) => isToday(t.created_at));
-  const todayCollected = todayTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      Number(t.merchant_cash_physical_amount || 0) +
-      merchantCashNet(t),
-    0,
-  );
+  const todayCollected = todayTxns.reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t), 0);
   const todayValue = todayTxns.reduce((s, t) => s + tripValue(t), 0);
   const todayFlights = flights.filter((f) => isToday(f.created_at)).length;
   const todayApprovals = approvals.filter((a) => isToday(a.created_at)).length;
 
-  // Yesterday comparisons
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = (d?: string) => {
-    if (!d) return false;
-    const dt = new Date(d);
-    return dt.getFullYear() === yesterday.getFullYear() && dt.getMonth() === yesterday.getMonth() && dt.getDate() === yesterday.getDate();
-  };
-  const yesterdayTxns = txns.filter((t) => isYesterday(t.created_at));
-  const yesterdayCollected = yesterdayTxns.reduce(
-    (s, t) =>
-      s +
-      Number(t.instapay_amount || 0) +
-      Number(t.cash_amount || 0) +
-      Number(t.merchant_cash_physical_amount || 0) +
-      merchantCashNet(t),
-    0,
-  );
-  const collectionsTrend = yesterdayCollected > 0
-    ? Math.round(((todayCollected - yesterdayCollected) / yesterdayCollected) * 100)
-    : (todayCollected > 0 ? 100 : 0);
-  
+  // ===== Period-aware chart buckets =====
+  const chart = useMemo(() => {
+    const buckets: { label: string; value: number; isLast?: boolean }[] = [];
+    const sumCollected = (range: { start: Date; end: Date }) =>
+      txns.filter((t) => inRange(t.created_at, range)).reduce((s, t) => s + Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t), 0);
 
-
-  // Last 7 days revenue chart (collections per day)
-  const days7 = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d;
-  });
-  const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  const collectionsPerDay = days7.map((d) => {
-    const k = dayKey(d);
-    return txns
-      .filter((t) => t.created_at && dayKey(new Date(t.created_at)) === k)
-      .reduce(
-        (s, t) =>
-          s +
-          Number(t.instapay_amount || 0) +
-          Number(t.cash_amount || 0) +
-          Number(t.merchant_cash_physical_amount || 0) +
-          merchantCashNet(t),
-        0,
-      );
-  });
-  const maxDay = Math.max(...collectionsPerDay, 1);
+    if (period === "today") {
+      for (let h = 0; h < 24; h += 3) {
+        const s = new Date(); s.setHours(h, 0, 0, 0);
+        const e = new Date(s); e.setHours(h + 3);
+        buckets.push({ label: `${h}`, value: sumCollected({ start: s, end: e }) });
+      }
+    } else if (period === "week") {
+      const { start } = getPeriodRange("week");
+      for (let i = 0; i < 7; i++) {
+        const s = new Date(start); s.setDate(s.getDate() + i);
+        const e = new Date(s); e.setDate(e.getDate() + 1);
+        buckets.push({ label: s.toLocaleDateString("ar-EG", { weekday: "short" }), value: sumCollected({ start: s, end: e }) });
+      }
+    } else if (period === "month") {
+      const { start, end } = getPeriodRange("month");
+      const days = Math.round((end.getTime() - start.getTime()) / 86400000);
+      for (let i = 0; i < days; i++) {
+        const s = new Date(start); s.setDate(s.getDate() + i);
+        const e = new Date(s); e.setDate(e.getDate() + 1);
+        buckets.push({ label: `${s.getDate()}`, value: sumCollected({ start: s, end: e }) });
+      }
+    } else if (period === "year") {
+      for (let m = 0; m < 12; m++) {
+        const s = new Date(today.getFullYear(), m, 1);
+        const e = new Date(today.getFullYear(), m + 1, 1);
+        buckets.push({ label: s.toLocaleDateString("ar-EG", { month: "short" }), value: sumCollected({ start: s, end: e }) });
+      }
+    } else {
+      // all: last 12 months trailing
+      for (let i = 11; i >= 0; i--) {
+        const s = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const e = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
+        buckets.push({ label: s.toLocaleDateString("ar-EG", { month: "short" }), value: sumCollected({ start: s, end: e }) });
+      }
+    }
+    if (buckets.length) buckets[buckets.length - 1].isLast = true;
+    return buckets;
+  }, [period, txns]);
+  const chartMax = Math.max(...chart.map((b) => b.value), 1);
+  const chartTotal = chart.reduce((s, b) => s + b.value, 0);
 
   // Recent activity (mix of txns, flights, approvals, expenses)
   type ActivityItem = { date: string; label: string; sub: string; tone: "blue" | "green" | "gold" | "red" | "navy" };
@@ -232,38 +287,61 @@ function Dashboard() {
     <div className="section active">
       <DashboardWelcome />
 
-      {/* === PRIMARY KPIs (hero) === */}
+      {/* === Period filter === */}
+      <div className="erp-period-bar">
+        <span className="erp-period-label">الفترة:</span>
+        <div className="erp-period-tabs">
+          {(["today", "week", "month", "year", "all"] as Period[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`erp-period-tab ${period === p ? "is-active" : ""}`}
+              onClick={() => setPeriod(p)}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
+        <span className="erp-period-current">{periodLabel}</span>
+      </div>
+
+      {/* === PRIMARY KPIs (hero) — period-based === */}
       <div className="erp-hero-grid">
         <HeroKpi
-          label="صافي أرباح الشركة"
-          value={fmtDL(companyProfit)}
+          label={`صافي الأرباح — ${periodLabel}`}
+          value={fmtDL(periodAgg.profit)}
           icon={<TrendingUp size={18} />}
           tone="primary"
-          delta={companyProfit >= 0 ? "ربح" : "خسارة"}
-          deltaPositive={companyProfit >= 0}
+          delta={prevAgg ? `${pctDelta(periodAgg.profit, prevAgg.profit) >= 0 ? "+" : ""}${pctDelta(periodAgg.profit, prevAgg.profit)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.profit, prevAgg.profit) >= 0 : undefined}
+          sub={prevAgg ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
         />
         <HeroKpi
-          label="صافي الخزينة"
-          value={fmtDL(treasuryNet)}
-          icon={<Wallet size={18} />}
-          tone="navy"
-          sub={`السيولة الكلية: ${fmtDL(treasuryNet + merchantBalance)}`}
-        />
-        <HeroKpi
-          label="إجمالي التحصيلات"
-          value={fmtDL(agentCollectionsNet)}
+          label={`إجمالي التحصيلات — ${periodLabel}`}
+          value={fmtDL(periodAgg.collected)}
           icon={<HandCoins size={18} />}
           tone="success"
-          sub="مقارنة بالأمس"
-          delta={`${collectionsTrend >= 0 ? "+" : ""}${collectionsTrend}%`}
-          deltaPositive={collectionsTrend >= 0}
+          delta={prevAgg ? `${pctDelta(periodAgg.collected, prevAgg.collected) >= 0 ? "+" : ""}${pctDelta(periodAgg.collected, prevAgg.collected)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.collected, prevAgg.collected) >= 0 : undefined}
+          sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
         <HeroKpi
-          label="مستحقات على الوكلاء"
-          value={fmtDL(agentsDue)}
-          icon={<Users size={18} />}
+          label={`المصروفات — ${periodLabel}`}
+          value={fmtDL(periodAgg.expenses)}
+          icon={<Wallet size={18} />}
           tone="warning"
-          sub={`عدد الوكلاء: ${fmtNum(agents.length)}`}
+          delta={prevAgg ? `${pctDelta(periodAgg.expenses, prevAgg.expenses) >= 0 ? "+" : ""}${pctDelta(periodAgg.expenses, prevAgg.expenses)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.expenses, prevAgg.expenses) <= 0 : undefined}
+          sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
+        />
+        <HeroKpi
+          label={`الرحلات — ${periodLabel}`}
+          value={fmtNum(periodAgg.flightsCount)}
+          icon={<Plane size={18} />}
+          tone="navy"
+          delta={prevAgg ? `${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 ? "+" : ""}${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount)}%` : undefined}
+          deltaPositive={prevAgg ? pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 : undefined}
+          sub={`الموافقات: ${fmtNum(periodAgg.approvalsCount)}`}
         />
       </div>
 
@@ -301,19 +379,17 @@ function Dashboard() {
       <div className="erp-row-chart">
         <div className="erp-panel">
           <div className="erp-panel-head">
-            <div className="erp-panel-title"><TrendingUp size={14} /> التحصيلات — آخر 7 أيام</div>
-            <span className="erp-chip erp-chip-strong">{fmtDL(collectionsPerDay.reduce((a, b) => a + b, 0))}</span>
+            <div className="erp-panel-title"><TrendingUp size={14} /> التحصيلات — {periodLabel}</div>
+            <span className="erp-chip erp-chip-strong">{fmtDL(chartTotal)}</span>
           </div>
           <div className="erp-bars">
-            {collectionsPerDay.map((v, i) => {
-              const h = Math.max(4, Math.round((v / maxDay) * 100));
-              const d = days7[i];
-              const isLast = i === collectionsPerDay.length - 1;
+            {chart.map((b, i) => {
+              const h = Math.max(4, Math.round((b.value / chartMax) * 100));
               return (
                 <div key={i} className="erp-bar-col">
-                  <div className="erp-bar-val">{v ? fmtDL(v) : ""}</div>
-                  <div className={`erp-bar ${isLast ? "is-last" : ""}`} style={{ height: `${h}%` }} />
-                  <div className="erp-bar-day">{d.toLocaleDateString("ar-EG", { weekday: "short" })}</div>
+                  <div className="erp-bar-val">{b.value ? fmtDL(b.value) : ""}</div>
+                  <div className={`erp-bar ${b.isLast ? "is-last" : ""}`} style={{ height: `${h}%` }} />
+                  <div className="erp-bar-day">{b.label}</div>
                 </div>
               );
             })}
@@ -509,6 +585,15 @@ const dashCss = `
 .erp-welcome-title{font-size:15px;font-weight:800;letter-spacing:.2px}
 .erp-welcome-sub{font-size:11px;opacity:.78;margin-top:1px}
 .erp-welcome-accent{position:absolute;inset-inline-end:-30px;top:-30px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,${GOLD}33 0%,transparent 70%)}
+
+/* ===== Period filter ===== */
+.erp-period-bar{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:8px 12px;margin-bottom:12px;box-shadow:0 1px 2px rgba(15,23,42,.03);flex-wrap:wrap}
+.erp-period-label{font-size:12px;font-weight:700;color:#64748B}
+.erp-period-tabs{display:inline-flex;gap:4px;background:#F1F5F9;border-radius:9px;padding:3px}
+.erp-period-tab{appearance:none;border:0;background:transparent;font:inherit;font-size:12px;font-weight:700;color:#64748B;padding:6px 12px;border-radius:7px;cursor:pointer;transition:all .15s ease}
+.erp-period-tab:hover{color:${NAVY}}
+.erp-period-tab.is-active{background:${NAVY};color:#fff;box-shadow:0 1px 3px rgba(15,27,61,.18)}
+.erp-period-current{margin-inline-start:auto;font-size:11px;font-weight:700;color:${NAVY};background:#FEF3C7;border:1px solid #FCD34D;padding:3px 10px;border-radius:999px}
 
 /* ===== Primary KPI hero ===== */
 .erp-hero-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
