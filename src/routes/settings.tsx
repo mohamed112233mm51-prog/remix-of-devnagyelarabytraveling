@@ -2627,3 +2627,174 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
     document.body,
   );
 }
+
+// ============================================================
+// Production Cleanup — admin-only pre-release wipe of demo data.
+// ============================================================
+function ProductionCleanupTab() {
+  const checkFn = useServerFn(checkDemoData);
+  const cleanupFn = useServerFn(productionCleanup);
+  const qc = useQueryClient();
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["demo-data-counts"],
+    queryFn: () => checkFn(),
+  });
+  const [withBackup, setWithBackup] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<null | Awaited<ReturnType<typeof productionCleanup>>>(null);
+
+  const total = data?.total ?? 0;
+
+  const labels: Record<string, string> = {
+    agents: "الوكلاء",
+    issuing_companies: "الشركات المصدرة",
+    merchants: "التجار",
+    investors: "المستثمرين",
+    flights: "الرحلات",
+    approvals: "الموافقات الأمنية",
+    transactions: "المعاملات/المدفوعات",
+    company_transactions: "معاملات الشركات",
+    merchant_cash_collections: "تحصيلات التجار",
+    investor_transactions: "حركات المستثمرين",
+    expenses: "المصروفات",
+    expense_deductions: "خصومات المصروفات",
+  };
+
+  async function doCleanup() {
+    setBusy(true);
+    try {
+      const res = await cleanupFn({ data: { createBackup: withBackup } });
+      setResult(res);
+      if (res.status === "clean") {
+        toast.success(`تم تنظيف النظام • ${res.totalDeleted} سجل محذوف`);
+      } else {
+        toast.warning(`اكتمل التنظيف مع ${res.remaining} سجلات متبقية`);
+      }
+      qc.invalidateQueries();
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل التنظيف");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 10 }}>
+        <Sparkles size={18} color="#0F1F44" />
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تنظيف النظام للإنتاج</div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#065F46", background: "#D1FAE5", border: "1px solid #A7F3D0", padding: "2px 8px", borderRadius: 999 }}>
+          ADMIN
+        </span>
+      </div>
+
+      <div style={{ padding: 20, display: "grid", gap: 20 }}>
+        <div style={{ display: "flex", gap: 12, padding: 14, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, alignItems: "flex-start" }}>
+          <AlertTriangle size={18} color="#B91C1C" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: "#7F1D1D", lineHeight: 1.7 }}>
+            تستخدم هذه الأداة قبل تسليم النظام للعميل لإزالة جميع البيانات التجريبية الموسومة بـ <code>is_demo = true</code>.
+            <br />
+            يتم الحفاظ على: الهوية البصرية، إعدادات النظام، الصلاحيات، الأدوار، إعدادات النسخ الاحتياطي، وحساب المسؤول.
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>البيانات التجريبية الحالية</div>
+          {isLoading ? (
+            <div style={{ color: "#94A3B8", fontSize: 13 }}>جارٍ التحميل...</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
+              {Object.entries(data?.counts ?? {}).map(([k, v]) => (
+                <div key={k} style={{ padding: "10px 12px", background: v ? "#FEF3C7" : "#F8FAFC", border: `1px solid ${v ? "#FDE68A" : "#E5E7EB"}`, borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#475569" }}>{labels[k] || k}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: v ? "#92400E" : "#94A3B8" }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 10, cursor: "pointer", fontSize: 13, color: "#334155" }}>
+          <input type="checkbox" checked={withBackup} onChange={(e) => setWithBackup(e.target.checked)} />
+          <span>إنشاء نسخة احتياطية طارئة قبل التنظيف (موصى به)</span>
+        </label>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            disabled={busy || total === 0}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", borderRadius: 10,
+              background: total === 0 ? "#F1F5F9" : "#dc2626", color: total === 0 ? "#94A3B8" : "#fff",
+              border: 0, fontWeight: 800, fontSize: 14,
+              cursor: busy || total === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            <Trash2 size={16} />
+            <span>{busy ? "جارٍ التنظيف..." : total === 0 ? "النظام نظيف بالفعل" : `تنظيف النظام للإنتاج (${total})`}</span>
+          </button>
+        </div>
+      </div>
+
+      {confirmOpen && (
+        <ConfirmModal
+          title="تأكيد تنظيف النظام للإنتاج"
+          message="سيتم حذف جميع البيانات التجريبية نهائيًا مع الحفاظ على إعدادات النظام. لا يمكن التراجع عن هذه العملية."
+          confirmLabel="نعم، نظّف الآن"
+          danger
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={async () => { setConfirmOpen(false); await doCleanup(); }}
+        />
+      )}
+
+      {result && typeof document !== "undefined" && createPortal(
+        <div dir="rtl" onClick={() => setResult(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 520, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0F1F44", display: "flex", alignItems: "center", gap: 8 }}>
+              <Check size={20} color="#16A34A" /> اكتمل تنظيف النظام
+            </h3>
+            <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, fontSize: 13 }}>
+                <span style={{ color: "#065F46", fontWeight: 700 }}>إجمالي السجلات المحذوفة</span>
+                <span style={{ fontWeight: 800, color: "#065F46" }}>{result.totalDeleted}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13 }}>
+                <span style={{ color: "#475569" }}>عدد المستخدمين المحذوفين</span>
+                <span style={{ fontWeight: 800, color: "#0F1F44" }}>{result.usersDeleted}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13 }}>
+                <span style={{ color: "#475569" }}>النسخة الاحتياطية الطارئة</span>
+                <span style={{ fontWeight: 800, color: result.backup.ok ? "#065F46" : "#92400E" }}>
+                  {result.backup.ok ? "تم إنشاؤها" : withBackup ? "فشل الإنشاء" : "تم تخطيها"}
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: result.status === "clean" ? "#ECFDF5" : "#FEF3C7", border: `1px solid ${result.status === "clean" ? "#A7F3D0" : "#FDE68A"}`, borderRadius: 8, fontSize: 13 }}>
+                <span style={{ color: "#334155", fontWeight: 700 }}>حالة النظام</span>
+                <span style={{ fontWeight: 800, color: result.status === "clean" ? "#065F46" : "#92400E" }}>
+                  {result.status === "clean" ? "جاهز للإنتاج ✓" : `${result.remaining} سجل متبقٍ`}
+                </span>
+              </div>
+              <details style={{ marginTop: 6, fontSize: 12, color: "#475569" }}>
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>تفاصيل لكل جدول</summary>
+                <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+                  {Object.entries(result.summary).map(([k, v]) => (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", background: "#F8FAFC", borderRadius: 6 }}>
+                      <span>{labels[k] || k}</span>
+                      <span style={{ fontWeight: 700, color: "#0F1F44" }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+            <button onClick={() => setResult(null)} style={{ marginTop: 16, padding: "10px 18px", borderRadius: 8, border: 0, background: "#0F1F44", color: "#F5D27A", fontWeight: 700, cursor: "pointer" }}>
+              تم
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
