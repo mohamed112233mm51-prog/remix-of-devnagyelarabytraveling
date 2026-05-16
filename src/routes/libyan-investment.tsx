@@ -324,7 +324,7 @@ function LibyanInvestmentPage() {
   );
 }
 
-function InvestmentForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
+export function InvestmentForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
   const [form, setForm] = useState({
     passenger_name: "", national_id: "", passport: "", dob: "",
     destination: "", authority: "", issuing_company: "",

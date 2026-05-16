@@ -324,7 +324,7 @@ function ApprovalsPage() {
   );
 }
 
-function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
+export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
   const [form, setForm] = useState({
     passenger_name: "", national_id: "", passport: "", dob: "",
     destination: "", authority: "", issuing_company: "",
