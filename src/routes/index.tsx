@@ -36,7 +36,7 @@ import {
   Plus,
   ChevronLeft,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -367,7 +367,8 @@ function Dashboard() {
       <div className="erp-hero-grid">
         <HeroKpi
           label={`صافي الأرباح — ${periodLabel}`}
-          value={fmtDL(periodAgg.profit)}
+          value={periodAgg.profit}
+          format={fmtDL}
           icon={<TrendingUp size={18} />}
           tone="primary"
           delta={prevAgg ? `${pctDelta(periodAgg.profit, prevAgg.profit) >= 0 ? "+" : ""}${pctDelta(periodAgg.profit, prevAgg.profit)}%` : undefined}
@@ -376,7 +377,8 @@ function Dashboard() {
         />
         <HeroKpi
           label={`إجمالي التحصيلات — ${periodLabel}`}
-          value={fmtDL(periodAgg.collected)}
+          value={periodAgg.collected}
+          format={fmtDL}
           icon={<HandCoins size={18} />}
           tone="success"
           delta={prevAgg ? `${pctDelta(periodAgg.collected, prevAgg.collected) >= 0 ? "+" : ""}${pctDelta(periodAgg.collected, prevAgg.collected)}%` : undefined}
@@ -385,7 +387,8 @@ function Dashboard() {
         />
         <HeroKpi
           label={`المصروفات — ${periodLabel}`}
-          value={fmtDL(periodAgg.expenses)}
+          value={periodAgg.expenses}
+          format={fmtDL}
           icon={<Wallet size={18} />}
           tone="warning"
           delta={prevAgg ? `${pctDelta(periodAgg.expenses, prevAgg.expenses) >= 0 ? "+" : ""}${pctDelta(periodAgg.expenses, prevAgg.expenses)}%` : undefined}
@@ -394,7 +397,8 @@ function Dashboard() {
         />
         <HeroKpi
           label={`الرحلات — ${periodLabel}`}
-          value={fmtNum(periodAgg.flightsCount)}
+          value={periodAgg.flightsCount}
+          format={fmtNum}
           icon={<Plane size={18} />}
           tone="navy"
           delta={prevAgg ? `${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 ? "+" : ""}${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount)}%` : undefined}
@@ -666,10 +670,45 @@ function Donut({ data, total }: { data: { label: string; value: number; color: s
   );
 }
 
+function AnimatedNumber({
+  value, format, duration = 900,
+}: { value: number; format: (n: number) => string; duration?: number }) {
+  const [display, setDisplay] = useState(value);
+  const fromRef = useRef(value);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      // easeOutCubic — smooth, enterprise feel
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = from + (to - from) * eased;
+      setDisplay(current);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
+        setDisplay(to);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      fromRef.current = value;
+    };
+  }, [value, duration]);
+
+  return <>{format(display)}</>;
+}
+
 function HeroKpi({
-  label, value, icon, tone, sub, delta, deltaPositive,
+  label, value, format, icon, tone, sub, delta, deltaPositive,
 }: {
-  label: string; value: string; icon: ReactNode;
+  label: string; value: number; format: (n: number) => string; icon: ReactNode;
   tone: "primary" | "navy" | "success" | "warning";
   sub?: string; delta?: string; deltaPositive?: boolean;
 }) {
@@ -679,7 +718,9 @@ function HeroKpi({
         <span className="erp-hero-label">{label}</span>
         <span className="erp-hero-icon">{icon}</span>
       </div>
-      <div className="erp-hero-value">{value}</div>
+      <div className="erp-hero-value">
+        <AnimatedNumber value={value} format={format} />
+      </div>
       <div className="erp-hero-foot">
         {delta ? (
           <span className={`erp-hero-delta ${deltaPositive ? "up" : "down"}`}>
@@ -904,5 +945,134 @@ const dashCss = `
   .dash-stats{grid-template-columns:1fr}
   .erp-feed-time{display:none}
   .erp-donut-wrap{flex-direction:column;gap:12px}
+}
+
+/* ===== Premium ERP motion ===== */
+@keyframes erp-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes erp-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes erp-bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes erp-hbar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes erp-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* Hero KPI staggered entrance + refined hover */
+.erp-hero{ animation: erp-fade-up .5s cubic-bezier(.22,1,.36,1) both; will-change: transform, opacity; }
+.erp-hero-grid > .erp-hero:nth-child(1){ animation-delay: .04s; }
+.erp-hero-grid > .erp-hero:nth-child(2){ animation-delay: .10s; }
+.erp-hero-grid > .erp-hero:nth-child(3){ animation-delay: .16s; }
+.erp-hero-grid > .erp-hero:nth-child(4){ animation-delay: .22s; }
+.erp-hero{ transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s ease, border-color .25s ease; }
+.erp-hero:hover{ transform: translateY(-3px); box-shadow: 0 10px 26px -12px rgba(15,23,42,.18); }
+
+/* Panels & welcome strip */
+.erp-welcome{ animation: erp-fade-up .45s cubic-bezier(.22,1,.36,1) both; }
+.erp-period-bar{ animation: erp-fade-up .45s cubic-bezier(.22,1,.36,1) both; animation-delay: .04s; }
+.erp-panel{ animation: erp-fade-up .5s cubic-bezier(.22,1,.36,1) both; animation-delay: .12s; }
+.erp-row-2 > .erp-panel:nth-child(2){ animation-delay: .18s; }
+.erp-row-chart > .erp-panel:nth-child(2){ animation-delay: .18s; }
+.erp-analytics-grid > .erp-panel:nth-child(1){ animation-delay: .14s; }
+.erp-analytics-grid > .erp-panel:nth-child(2){ animation-delay: .20s; }
+.erp-analytics-grid > .erp-panel:nth-child(3){ animation-delay: .26s; }
+.erp-analytics-grid > .erp-panel:nth-child(4){ animation-delay: .32s; }
+.dash-card{ animation: erp-fade-up .5s cubic-bezier(.22,1,.36,1) both; }
+.dash-groups > .dash-card:nth-child(1){ animation-delay: .06s; }
+.dash-groups > .dash-card:nth-child(2){ animation-delay: .12s; }
+.dash-groups > .dash-card:nth-child(3){ animation-delay: .18s; }
+.dash-groups > .dash-card:nth-child(4){ animation-delay: .24s; }
+.dash-groups > .dash-card:nth-child(5){ animation-delay: .30s; }
+.dash-groups > .dash-card:nth-child(6){ animation-delay: .36s; }
+
+/* Chart bars — smooth progressive draw, anchored at bottom */
+.erp-bar{
+  transform-origin: bottom;
+  animation: erp-bar-grow .75s cubic-bezier(.22,1,.36,1) both;
+  transition: filter .2s ease, transform .25s ease;
+}
+.erp-bars > .erp-bar-col:nth-child(1) .erp-bar{ animation-delay: .05s; }
+.erp-bars > .erp-bar-col:nth-child(2) .erp-bar{ animation-delay: .10s; }
+.erp-bars > .erp-bar-col:nth-child(3) .erp-bar{ animation-delay: .15s; }
+.erp-bars > .erp-bar-col:nth-child(4) .erp-bar{ animation-delay: .20s; }
+.erp-bars > .erp-bar-col:nth-child(5) .erp-bar{ animation-delay: .25s; }
+.erp-bars > .erp-bar-col:nth-child(6) .erp-bar{ animation-delay: .30s; }
+.erp-bars > .erp-bar-col:nth-child(7) .erp-bar{ animation-delay: .35s; }
+.erp-bars > .erp-bar-col:nth-child(8) .erp-bar{ animation-delay: .40s; }
+.erp-bars > .erp-bar-col:nth-child(9) .erp-bar{ animation-delay: .45s; }
+.erp-bars > .erp-bar-col:nth-child(10) .erp-bar{ animation-delay: .50s; }
+.erp-bars > .erp-bar-col:nth-child(11) .erp-bar{ animation-delay: .55s; }
+.erp-bars > .erp-bar-col:nth-child(12) .erp-bar{ animation-delay: .60s; }
+.erp-bar:hover{ filter: brightness(1.12); transform: scaleY(1.02); }
+
+/* Horizontal bar fills — draw from inline-start (RTL = right) */
+.erp-hbar-fill{
+  transform-origin: right;
+  animation: erp-hbar-grow .85s cubic-bezier(.22,1,.36,1) both;
+}
+.erp-hbar-list > .erp-hbar-row:nth-child(1) .erp-hbar-fill{ animation-delay: .08s; }
+.erp-hbar-list > .erp-hbar-row:nth-child(2) .erp-hbar-fill{ animation-delay: .14s; }
+.erp-hbar-list > .erp-hbar-row:nth-child(3) .erp-hbar-fill{ animation-delay: .20s; }
+.erp-hbar-list > .erp-hbar-row:nth-child(4) .erp-hbar-fill{ animation-delay: .26s; }
+.erp-hbar-list > .erp-hbar-row:nth-child(5) .erp-hbar-fill{ animation-delay: .32s; }
+.erp-hbar-list > .erp-hbar-row:nth-child(6) .erp-hbar-fill{ animation-delay: .38s; }
+
+/* Lists & ranking rows — gentle staggered fade-in */
+.erp-rank-row,
+.erp-list-row,
+.erp-legend-row,
+.erp-feed-row{
+  animation: erp-fade-up .42s cubic-bezier(.22,1,.36,1) both;
+}
+.erp-analytic-table > .erp-rank-row:nth-child(1){ animation-delay: .05s; }
+.erp-analytic-table > .erp-rank-row:nth-child(2){ animation-delay: .10s; }
+.erp-analytic-table > .erp-rank-row:nth-child(3){ animation-delay: .15s; }
+.erp-analytic-table > .erp-rank-row:nth-child(4){ animation-delay: .20s; }
+.erp-analytic-table > .erp-rank-row:nth-child(5){ animation-delay: .25s; }
+.erp-list > .erp-list-row:nth-child(1){ animation-delay: .05s; }
+.erp-list > .erp-list-row:nth-child(2){ animation-delay: .10s; }
+.erp-list > .erp-list-row:nth-child(3){ animation-delay: .15s; }
+.erp-list > .erp-list-row:nth-child(4){ animation-delay: .20s; }
+.erp-list > .erp-list-row:nth-child(5){ animation-delay: .25s; }
+.erp-list > .erp-list-row:nth-child(6){ animation-delay: .30s; }
+
+/* Donut — soft fade-in (avoid spinning per brief) */
+.erp-donut-svg{ animation: erp-fade-in .6s ease-out both; animation-delay: .15s; }
+
+/* Quick actions — refined hover */
+.erp-qa{ transition: transform .2s cubic-bezier(.22,1,.36,1), background .2s ease, border-color .2s ease, box-shadow .25s ease, color .2s ease; }
+.erp-qa:hover{ transform: translateY(-2px) scale(1.015); }
+.erp-qa:active{ transform: translateY(0) scale(.99); }
+
+/* Period tabs — smoother active swap */
+.erp-period-tab{ transition: background .22s ease, color .22s ease, box-shadow .22s ease, transform .15s ease; }
+.erp-period-tab:active{ transform: scale(.97); }
+
+/* Today / dash stat hover lift */
+.erp-today{ transition: background .2s ease, transform .2s ease, border-color .2s ease; }
+.erp-today:hover{ transform: translateY(-1px); background: #fff; }
+.dash-stat{ transition: background .2s ease, transform .2s ease, border-color .2s ease; }
+.dash-stat:hover{ transform: translateY(-1px); }
+
+/* Reduced motion — respect user preference */
+@media (prefers-reduced-motion: reduce){
+  .erp-hero, .erp-panel, .dash-card, .erp-welcome, .erp-period-bar,
+  .erp-bar, .erp-hbar-fill, .erp-rank-row, .erp-list-row,
+  .erp-legend-row, .erp-feed-row, .erp-donut-svg{
+    animation: none !important;
+  }
+  .erp-hero:hover, .erp-qa:hover, .dash-card:hover,
+  .erp-today:hover, .dash-stat:hover{ transform: none !important; }
 }
 `;
