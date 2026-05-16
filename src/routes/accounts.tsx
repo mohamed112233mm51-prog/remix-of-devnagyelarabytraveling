@@ -614,7 +614,7 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
             )}
           </div>
           <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
-            إجمالي المدفوع: {fmtNum(totalPaid)} ج.م
+            إجمالي المدفوع: {fmtNum(newPayment)} ج.م
           </div>
         </div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
