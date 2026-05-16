@@ -387,6 +387,10 @@ export function FlightForm({ agents, companies, onDone }: { agents: Agent[]; com
       count: Math.max(1, Math.round(Number(form.count) || 1)),
       price: Number(form.price) || 0,
       company_value: Number(form.company_value) || 0,
+      company_price: Number(form.company_value) || 0,
+      agent_price: Number(form.price) || 0,
+      company_percentage: (Number(form.price) || 0) > 0 ? Math.round(((Number(form.price) - Number(form.company_value)) / Number(form.price)) * 10000) / 100 : 0,
+      company_profit_value: Math.round(((Number(form.price) || 0) - (Number(form.company_value) || 0)) * 100) / 100,
     };
     try {
       const { data: inserted, error } = await supabase.from("flights").insert(payload).select("id").single();
