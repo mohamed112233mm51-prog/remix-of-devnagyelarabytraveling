@@ -413,6 +413,15 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   }, [txns, selectedCompanyId, form.service_type]);
   const selectedService = dueServices.find((s) => s.id === form.service_id) || null;
 
+  const sourceLookup = useMemo(() => {
+    const m = new Map<string, { passenger_name: string; agent_id: string | null; travel_statement: string | null; destination: string | null; airline: string | null; travel_date: string | null }>();
+    for (const f of flights) m.set(f.id, { passenger_name: f.passenger_name, agent_id: f.agent_id, travel_statement: f.travel_statement, destination: f.destination, airline: f.airline, travel_date: f.travel_date });
+    for (const a of approvals) m.set(a.id, { passenger_name: a.passenger_name, agent_id: a.agent_id, travel_statement: a.travel_statement, destination: a.destination, airline: a.airline, travel_date: a.travel_date });
+    return m;
+  }, [flights, approvals]);
+  const sourceForSelected = selectedService ? sourceLookup.get(selectedService.source_service_id || "") : null;
+  const selectedAgent = sourceForSelected?.agent_id ? agents.find((a) => a.id === sourceForSelected.agent_id) : null;
+
   useEffect(() => {
     if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
       setForm((p) => ({ ...p, service_id: "" }));
@@ -421,12 +430,15 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
 
   useEffect(() => {
     if (!selectedService) return;
+    const src = sourceLookup.get(selectedService.source_service_id || "");
+    const autoStatement = src?.travel_statement || buildTravelStatement(selectedService.destination, src?.travel_date, src?.airline);
     setForm((p) => ({
       ...p,
       destination: selectedService.destination || "",
       count: String(selectedService.count || ""),
       price: String(selectedService.price || ""),
       service_type: selectedService.service_type || p.service_type,
+      note: src?.passenger_name ? `${src.passenger_name}${autoStatement ? ` — ${autoStatement}` : ""}` : p.note,
     }));
   }, [form.service_id]);
 
