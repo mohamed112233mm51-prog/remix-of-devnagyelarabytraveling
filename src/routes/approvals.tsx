@@ -365,17 +365,42 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
       issuing_company: form.issuing_company || null,
       travel_statement: travelStatement || null,
     };
+    const count = Math.max(1, Math.round(Number(form.count) || 1));
+    const price = Number(form.price) || 0;
+    const companyValue = Number(form.company_value) || 0;
     const payload = {
       ...shared,
       issuing_company_id,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
       government_fee: Number(form.government_fee || 0),
+      count, price, company_value: companyValue,
     };
     try {
-      const { error } = await supabase.from("approvals").insert({ ...payload, service_type: "security_approval" });
+      const { data: inserted, error } = await supabase
+        .from("approvals")
+        .insert({ ...payload, service_type: "security_approval" })
+        .select("id")
+        .single();
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
+      if (inserted?.id) {
+        try {
+          await postServiceFinancials({
+            serviceId: inserted.id,
+            serviceKind: "security_approval",
+            agentId: shared.agent_id,
+            companyId: issuing_company_id,
+            date: shared.travel_date,
+            destination: shared.destination,
+            travelStatement: shared.travel_statement,
+            passengerName: shared.passenger_name,
+            count, price, companyValue,
+          });
+        } catch (postErr: any) {
+          toast.warning(postErr?.message || "تم حفظ التقديم لكن تعذر إنشاء حركة مالية");
+        }
+      }
       onDone();
     } catch (error: any) {
       toast.error(error?.message || "تعذر حفظ الموافقة");
