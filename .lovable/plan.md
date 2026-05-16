@@ -1,64 +1,104 @@
-## نظرة عامة
-إضافة زر "توليد داتا جاهزة" + زر "حذف الداتا التجريبية" في صفحة الإعدادات، يظهر فقط للـ Admin وفقط في وضع التطوير (`import.meta.env.DEV`). الزر ينشئ بيانات تجريبية واقعية موسومة بـ `is_demo = true` بدون المساس بأي بيانات حقيقية.
+# خطة: ربط تقديم الخدمة بالحسابات المالية
 
-## 1) تغييرات قاعدة البيانات (Migration)
-إضافة عمود `is_demo BOOLEAN NOT NULL DEFAULT false` إلى الجداول:
-- `agents`
-- `issuing_companies`
-- `merchants`
-- `investors`
-- `flights`
-- `approvals`
-- `transactions` (المدفوعات/التحصيلات/البيع)
-- `company_transactions`
-- `merchant_cash_collections`
-- `investor_transactions`
-- `expenses`
-- `expense_deductions`
+> ملاحظة: كشف حساب الوكيل يبقى كما هو 100% — لا تغيير في الأعمدة أو الحسابات. كل ما سيتم هو إنشاء سجلات `transactions` / `company_transactions` تلقائياً حتى يظهر الدين فيها مباشرة.
 
-(لا تغيير في الأعمدة الأخرى أو RLS أو الدوال — الجداول الموجودة سياستها `open_all`.)
+---
 
-## 2) Server Functions جديدة (`src/lib/demo-data.functions.ts`)
-محمية بـ `requireSupabaseAuth` + فحص دور admin (نفس نمط `admin.functions.ts`):
+## 1) Database Migration
 
-- `checkDemoData()` → يرجع عدد السجلات `is_demo=true` لكل جدول.
-- `generateDemoData()` → ينشئ:
-  - 6 وكلاء، 4 شركات مصدرة، 4 تجار، 3 مستثمرين
-  - 25 رحلة، 20 موافقة أمنية
-  - 30 معاملة بيع/مدفوعات (transactions)
-  - 10 تحصيلات تجار، 8 معاملات مستثمرين
-  - 12 مصروف + بعض الخصومات
-  - تواريخ موزعة على آخر 60 يومًا، أسماء/مبالغ واقعية بالعربية
-  - الكل بـ `is_demo = true`
-  - يرجع ملخص أعداد ما تم إدراجه
-- `deleteDemoData()` → `DELETE WHERE is_demo = true` لكل الجداول السابقة، يرجع الأعداد المحذوفة.
+أضف الأعمدة التالية:
 
-كل العمليات تستخدم `supabaseAdmin` (server-side فقط)، لا تلمس صفًا حيث `is_demo = false`.
+**جدول `flights` و `approvals`** (لحفظ المالية مع الخدمة):
+- `count` INTEGER DEFAULT 1
+- `price` NUMERIC DEFAULT 0  (سعر الوحدة على الوكيل)
+- `company_value` NUMERIC DEFAULT 0  (قيمة الشركة الصادرة)
 
-## 3) واجهة المستخدم
-في `src/routes/settings.tsx` — قسم جديد "أدوات التطوير" يظهر فقط عندما:
-```ts
-import.meta.env.DEV && isAdmin
-```
-يحتوي على:
-- زر **"توليد داتا جاهزة"** — gold style (نفس `.btn-gold-primary` الموجودة) مع أيقونة `Database` بيضاء ونص داكن.
-- زر **"حذف الداتا التجريبية"** — variant خطر (أحمر) أو outline.
-- عند الضغط:
-  1. يستدعي `checkDemoData()`.
-  2. لو فيه بيانات تجريبية → AlertDialog تحذير "يوجد X سجلات تجريبية، هل تريد إضافة المزيد؟".
-  3. AlertDialog تأكيد قبل التوليد.
-  4. بعد التنفيذ → toast نجاح + Dialog ملخص بأعداد كل نوع.
-- زر الحذف بنفس الفكرة: AlertDialog تأكيد ثم تنفيذ + toast.
+**جدول `transactions` و `company_transactions`** (لربط الحركة بالخدمة):
+- `source_service_id` UUID
+- `source_service_type` TEXT  (`flight_ticket` | `security_approval` | `libyan_investment`)
+- INDEX على `source_service_id`
 
-## 4) ضمانات الأمان
-- التحقق من `import.meta.env.DEV` في الواجهة (يختفي تمامًا في الإنتاج).
-- التحقق من دور admin في الـ server function (لا يكفي إخفاء الواجهة).
-- كل INSERT/DELETE مقيّد بـ `is_demo = true`.
-- لا تغيير في منطق الأعمال أو التقارير أو الصلاحيات.
+(لن يتم تعديل أي بيانات قديمة — السجلات الحالية تبقى كما هي بدون ربط)
 
-## ملاحظات تقنية
-- التقارير تعرض كل البيانات تلقائيًا (بما فيها التجريبية) بدون تعديل، وهذا مطلوب للديمو.
-- لا حاجة لتحديث `types.ts` يدويًا — يتولد تلقائيًا بعد الـ migration.
-- لا تغيير في `erp.css` (نستعمل كلاس الذهبي الموجود).
+---
 
-هل أبدأ التنفيذ؟
+## 2) نموذج "تقديم خدمة" — حقول جديدة
+
+في كل من `FlightForm` / `ApprovalForm` / `InvestmentForm` أضف:
+- **العدد** (`count`) — افتراضي 1
+- **السعر** (`price`) — سعر الوحدة
+- **قيمة الرحلة** (`count × price`) — محسوب تلقائياً ومعطّل
+- **قيمة الشركة الصادرة** (`company_value`) — حقل منفصل
+
+عند الحفظ (`save`):
+1. حفظ الخدمة كما هو الآن في `flights` / `approvals`.
+2. **إنشاء حركة وكيل تلقائياً** في `transactions`:
+   - `agent_id`, `date` = `travel_date` أو اليوم
+   - `destination`, `count`, `price`, `service_type` (الاسم العربي)
+   - `travel_statement` = البيان التلقائي
+   - `total_paid` = 0, `paid` = 0  ← يظهر كدين كامل في كشف حساب الوكيل
+   - `note` = اسم المسافر
+   - `source_service_id` = id الخدمة, `source_service_type` = نوع الخدمة
+3. **إنشاء حركة شركة تلقائياً** في `company_transactions`:
+   - `company_id` = id الشركة المختارة
+   - `date`, `destination`, `count` = 1, `price` = `company_value`, `trip_value` = `company_value`
+   - `service_type` (الاسم العربي), `total_paid` = 0
+   - `source_service_id`, `source_service_type`
+4. عند تعديل الخدمة (Edit modals): UPDATE الحركات المرتبطة عبر `source_service_id` بنفس القيم.
+5. مساعد `deleteServiceLinkedRows(id)` يحذف السجلات المرتبطة (للاستخدام مستقبلاً مع زر الحذف).
+
+كل ذلك في ملف مساعد جديد: `src/lib/servicePosting.ts`.
+
+---
+
+## 3) تعديل نموذج "إضافة حركة" للوكلاء (`TxnForm` في accounts.tsx)
+
+الحقول بنفس الترتيب المطلوب:
+1. الوكيل
+2. التاريخ
+3. نوع الخدمة
+4. **الخدمة المستحقة** (Dropdown جديد) — يعرض الخدمات غير المسددة لهذا الوكيل + نوع الخدمة المختار (سجلات `transactions` المرتبطة بـ `source_service_id` حيث المدفوع < قيمة الرحلة)
+5. العدد، السعر، قيمة الرحلة، الوجهة → تُجلب تلقائياً من الخدمة المختارة (قراءة فقط)
+6. طريقة الدفع (كما هي حالياً: انستا / نقدي / كاش تاجر / نقدي تاجر)
+7. بيان السفر (تلقائي كما هو)
+
+**عند الحفظ:** بدلاً من INSERT جديد، يتم **UPDATE** للسجل المختار في `transactions` بقيم الدفع الجديدة (instapay/cash/merchant + total_paid + merchant_id). هكذا يبقى نفس سطر الدين في كشف الحساب لكن يظهر "المدفوع" و"الصافي = 0" بعد السداد.
+
+(لو لم يختر المستخدم خدمة مستحقة، يسلك السلوك القديم: INSERT جديد، حفاظاً على المرونة للحركات اليدوية.)
+
+---
+
+## 4) ما لن يتغير
+
+- كشف حساب الوكيل (`AgentStatementTab`): نفس الأعمدة، نفس الحسابات، نفس التصدير.
+- السجلات اليدوية القديمة في `transactions`/`company_transactions`: تبقى كما هي.
+- صفحات الموافقات / الرحلات / الاستثمار: نفس الأعمدة المعروضة (الحقول الجديدة تُحفظ فقط ولا تُضاف للجداول لتجنب كسر التخطيط).
+- الصلاحيات، التقارير، المصاريف، المستثمرين.
+
+---
+
+## 5) ملفات سيتم تعديلها
+
+| الملف | التغيير |
+|---|---|
+| `supabase/migrations/<new>.sql` | إضافة الأعمدة + الفهارس |
+| `src/integrations/supabase/types.ts` | يتحدث تلقائياً |
+| `src/lib/db.ts` | إضافة الحقول الجديدة لأنواع `Flight` و `Approval` |
+| `src/lib/servicePosting.ts` | **جديد** — دوال `postServiceFinancials` / `updateServiceFinancials` / `deleteServiceLinkedRows` |
+| `src/routes/flights.tsx` | إضافة حقول count/price/company_value + استدعاء servicePosting في FlightForm وEditFlightModal |
+| `src/routes/approvals.tsx` | نفس الشيء في ApprovalForm وEditApprovalModal |
+| `src/routes/libyan-investment.tsx` | نفس الشيء في InvestmentForm وEditInvestmentModal |
+| `src/routes/accounts.tsx` | تعديل `TxnForm`: dropdown الخدمة المستحقة + autofill + UPDATE بدل INSERT عند اختيار خدمة |
+
+---
+
+## 6) خطوات التنفيذ
+
+1. الـ migration أولاً (يحتاج موافقتك قبل التنفيذ).
+2. تحديث `db.ts` بالأنواع.
+3. إنشاء `src/lib/servicePosting.ts`.
+4. تعديل الـ 3 نماذج تقديم + تعديل المودالات.
+5. تعديل `TxnForm` في accounts.
+6. التحقق من البناء.
+
+هل أمضي بهذه الخطة؟
