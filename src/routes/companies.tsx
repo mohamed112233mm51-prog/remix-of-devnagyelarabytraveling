@@ -748,10 +748,12 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
   const egp = Number(form.egp_amount || 0);
   const rate = Number(form.exchange_rate || 0);
   const usd = rate > 0 ? egp / rate : 0;
+  const balances = useTreasuryBalances();
 
   const save = async () => {
     if (egp <= 0) return toast.error("أدخل المبلغ بالجنيه");
     if (rate <= 0) return toast.error("أدخل سعر الصرف");
+    if (egp > balances.egp) return toast.error("لا يوجد رصيد كافي في الخزينة");
     setSaving(true);
     const { error } = await supabase.from("usd_treasury_transactions").insert({
       date: form.date,
