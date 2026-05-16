@@ -634,53 +634,90 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
         <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} disabled={lockFields} /></div>
         <div className="form-group"><label>قيمة الخدمة</label><input value={fmtNum(tv)} disabled /></div>
         <div className="form-group full">
+          <label style={{ fontWeight: 700, marginBottom: 8 }}>عملة الدفع</label>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {([
+              { v: "EGP", label: "جنيه مصري" },
+              { v: "USD", label: "دولار" },
+              { v: "MIXED", label: "كلاهما" },
+            ] as const).map((o) => (
+              <button
+                type="button"
+                key={o.v}
+                onClick={() => set("payment_currency", o.v)}
+                className={form.payment_currency === o.v ? "btn btn-gold" : "action-btn"}
+                style={{ flex: 1 }}
+              >{o.label}</button>
+            ))}
+          </div>
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
-          <div className="form-group" style={{ marginBottom: 12 }}>
-            <label>التاجر</label>
-            {eligibleMerchants.length > 0 ? (
-              <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="">— اختر جهة التحصيل —</option>
-                {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
-            ) : (
-              <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
-            )}
-            {selectedMerchant && !merchantHasMethods && (
-              <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
-            )}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {showSystemInsta && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
-                <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
+          {includeEgp && (
+            <>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>التاجر</label>
+                {eligibleMerchants.length > 0 ? (
+                  <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
+                    <option value="">— اختر جهة التحصيل —</option>
+                    {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
+                )}
+                {selectedMerchant && !merchantHasMethods && (
+                  <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
+                )}
               </div>
-            )}
-            {showSystemCash && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
-                <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+                {showSystemInsta && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
+                    <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
+                  </div>
+                )}
+                {showSystemCash && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
+                    <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
+                  </div>
+                )}
+                {showMerchantCash && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
+                    <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
+                    <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
+                      صافي المرسل: <strong>{fmtNum(merchantNet)}</strong>
+                    </div>
+                  </div>
+                )}
+                {showMerchantPhysical && (
+                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
+                    <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
+                  </div>
+                )}
               </div>
-            )}
-            {showMerchantCash && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
-                <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
-                <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
-                  صافي المرسل: <strong>{fmtNum(merchantNet)}</strong>
+              <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
+                إجمالي المدفوع بالجنيه: {fmtNum(totalPaid)} ج.م
+              </div>
+            </>
+          )}
+          {includeUsd && (
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "linear-gradient(135deg, #ecfdf5, #f0fdf4)" }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>المبلغ بالدولار ($)</div>
+                <input type="number" step="0.01" placeholder="0.00" value={form.usd_amount} onChange={(e) => set("usd_amount", e.target.value)} />
+              </div>
+              {payCurrency === "MIXED" && (
+                <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>سعر الصرف (اختياري)</div>
+                  <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
                 </div>
+              )}
+              <div style={{ padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left", alignSelf: "center" }}>
+                المدفوع بالدولار: {fmtUSD(usdAmt)}
               </div>
-            )}
-            {showMerchantPhysical && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
-                <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
-              </div>
-            )}
-          </div>
-          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
-            إجمالي المدفوع: {fmtNum(totalPaid)} ج.م
-          </div>
+            </div>
+          )}
         </div>
         <div className="form-group full"><label>بيان</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
