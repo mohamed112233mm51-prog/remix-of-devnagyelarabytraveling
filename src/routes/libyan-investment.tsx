@@ -10,17 +10,17 @@ import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import { Modal } from "@/components/Modal";
 
 export const Route = createFileRoute("/libyan-investment")({
-  component: () => <AppErrorBoundary><ApprovalsPage /></AppErrorBoundary>,
+  component: () => <AppErrorBoundary><LibyanInvestmentPage /></AppErrorBoundary>,
   errorComponent: () => <SafePageError />,
 });
 
 const STATUSES = ["سريعة", "بطيئة", "رفض أمني"];
 
 function SafePageError() {
-  return <div className="card" style={{ padding: 24 }}>تعذر تحميل الموافقات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
+  return <div className="card" style={{ padding: 24 }}>تعذر تحميل قائمة الاستثمار الليبي مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
 
-function ApprovalsPage() {
+function LibyanInvestmentPage() {
   const perm = usePerm("approvals");
   const { rows: approvals } = useLive<Approval>("approvals");
   const { rows: agents } = useLive<Agent>("agents");
@@ -35,6 +35,7 @@ function ApprovalsPage() {
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   const filtered = useMemo(() => approvals.filter((a) => {
+    if (a.service_type !== "libyan_investment") return false;
     if (search) {
       const q = search.toLowerCase();
       const aName = (agents.find((ag) => ag.id === a.agent_id)?.name || "").toLowerCase();
@@ -48,12 +49,13 @@ function ApprovalsPage() {
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const today = new Date().toISOString().slice(0, 10);
-  const total = approvals.length;
-  const fast = approvals.filter((a) => a.status === "سريعة").length;
-  const slow = approvals.filter((a) => a.status === "بطيئة").length;
-  const rejected = approvals.filter((a) => a.status === "رفض أمني").length;
-  const pending = approvals.filter((a) => !a.issue_date).length;
-  const todayCount = approvals.filter((a) => (a.submit_date || "").slice(0, 10) === today).length;
+  const approvalsScoped = approvals.filter((a) => a.service_type === "libyan_investment");
+  const total = approvalsScoped.length;
+  const fast = approvalsScoped.filter((a) => a.status === "سريعة").length;
+  const slow = approvalsScoped.filter((a) => a.status === "بطيئة").length;
+  const rejected = approvalsScoped.filter((a) => a.status === "رفض أمني").length;
+  const pending = approvalsScoped.filter((a) => !a.issue_date).length;
+  const todayCount = approvalsScoped.filter((a) => (a.submit_date || "").slice(0, 10) === today).length;
 
   const clearFilters = () => { setSearch(""); setStatus(""); setDestination(""); };
   const activeFilterCount = [search, status, destination].filter(Boolean).length;
@@ -122,9 +124,9 @@ function ApprovalsPage() {
             <nav aria-label="breadcrumb" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#cbd5e1", marginBottom: 8, flexWrap: "wrap" }}>
               <span>العمليات</span>
               <span style={{ opacity: .6 }}>›</span>
-              <span>الموافقات الأمنية</span>
+              <span>الاستثمار الليبي</span>
               <span style={{ opacity: .6 }}>›</span>
-              <span style={{ color: GOLD, fontWeight: 700 }}>التقديمات</span>
+              <span style={{ color: GOLD, fontWeight: 700 }}>قائمة الاستثمار الليبي</span>
             </nav>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <div aria-label="Egypt" style={{ width: 42, height: 42, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, position: "relative", overflow: "hidden", boxShadow: "0 6px 16px rgba(206,17,38,.35), 0 4px 14px rgba(0,0,0,.28)", border: "1px solid rgba(255,255,255,.18)", background: "linear-gradient(180deg, #CE1126 0%, #CE1126 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #000000 66.66%, #000000 100%)" }}>
@@ -137,8 +139,8 @@ function ApprovalsPage() {
                 </svg>
               </div>
               <div style={{ minWidth: 0 }}>
-                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em", lineHeight: 1.2 }}>تقديمات الموافقات الأمنية</h1>
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#cbd5e1", lineHeight: 1.4 }}>إدارة ومتابعة الموافقات الأمنية وحالات السفر</p>
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em", lineHeight: 1.2 }}>قائمة الاستثمار الليبي</h1>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#cbd5e1", lineHeight: 1.4 }}>إدارة ومتابعة طلبات الاستثمار الليبي</p>
               </div>
             </div>
           </div>
@@ -147,13 +149,13 @@ function ApprovalsPage() {
               display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 14px", borderRadius: 10,
               background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)",
               fontWeight: 700, fontSize: 12.5, cursor: "pointer", backdropFilter: "blur(6px)",
-            }}>📋 سجل التقديمات</button>
+            }}>📋 قائمة الاستثمار الليبي</button>
             {perm.create && (
               <button className="fl-btn" onClick={() => setTab("add")} style={{
                 display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 16px", borderRadius: 10,
                 background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, border: 0,
                 fontWeight: 800, fontSize: 12.5, cursor: "pointer", boxShadow: `0 6px 16px ${GOLD}4d`,
-              }}>＋ تقديم موافقة</button>
+              }}>＋ تقديم استثمار</button>
             )}
           </div>
         </div>
@@ -161,12 +163,12 @@ function ApprovalsPage() {
 
       {/* ===== KPI Cards ===== */}
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-        <Kpi icon="🗂️" label="إجمالي التقديمات" value={total} tone="navy" />
-        <Kpi icon="⚡" label="الموافقات السريعة" value={fast} tone="emerald" />
-        <Kpi icon="⏳" label="الموافقات البطيئة" value={slow} tone="amber" />
+        <Kpi icon="🗂️" label="إجمالي السجلات" value={total} tone="navy" />
+        <Kpi icon="⚡" label="السريعة" value={fast} tone="emerald" />
+        <Kpi icon="⏳" label="البطيئة" value={slow} tone="amber" />
         <Kpi icon="⛔" label="الرفض الأمني" value={rejected} tone="rose" />
         <Kpi icon="🛡️" label="قيد المراجعة" value={pending} tone="indigo" />
-        <Kpi icon="📅" label="تقديمات اليوم" value={todayCount} tone="sky" />
+        <Kpi icon="📅" label="سجلات اليوم" value={todayCount} tone="sky" />
       </div>
 
       {tab === "list" ? (
@@ -223,12 +225,12 @@ function ApprovalsPage() {
                   </svg>
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>سجل التقديمات</h4>
-                  <div style={{ fontSize: 11, color: "#94a3b8" }}>عرض ومتابعة جميع تقديمات الموافقات الأمنية</div>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f172a" }}>قائمة الاستثمار الليبي</h4>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>عرض ومتابعة جميع قائمة الاستثمار الليبي</div>
                 </div>
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: NAVY, background: `${GOLD}22`, border: `1px solid ${GOLD}66`, padding: "3px 10px", borderRadius: 999 }}>
-                {filtered.length.toLocaleString("ar")} تقديم
+                {filtered.length.toLocaleString("ar")} سجل
               </span>
             </div>
 
@@ -241,13 +243,13 @@ function ApprovalsPage() {
                     <circle cx="12" cy="12" r="2" fill="#C8A44D" stroke="none" />
                   </svg>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>لا توجد تقديمات حالياً</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>لا توجد سجلات حالياً</div>
                 <div style={{ fontSize: 12.5, color: "#94a3b8", marginTop: 6, textAlign: "center", maxWidth: 360 }}>
-                  {activeFilterCount > 0 ? "لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل أو مسح الفلاتر." : "ابدأ بإضافة أول تقديم موافقة أمنية."}
+                  {activeFilterCount > 0 ? "لا توجد نتائج مطابقة للفلاتر الحالية. جرّب تعديل أو مسح الفلاتر." : "ابدأ بإضافة أول طلب استثمار ليبي."}
                 </div>
                 {perm.create && activeFilterCount === 0 && (
                   <button className="fl-btn" onClick={() => setTab("add")} style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px", borderRadius: 10, background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: GOLD, border: 0, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                    ＋ تقديم أول موافقة
+                    ＋ تقديم أول استثمار
                   </button>
                 )}
               </div>
@@ -300,7 +302,7 @@ function ApprovalsPage() {
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#f8fafc" }}>
-                      <td colSpan={11} style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#475569" }}>إجمالي التقديمات:</td>
+                      <td colSpan={11} style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#475569" }}>إجمالي السجلات:</td>
                       <td colSpan={2} style={{ padding: "10px 12px", fontSize: 13, fontWeight: 800, color: NAVY }}>{filtered.length.toLocaleString("ar")}</td>
                     </tr>
                   </tfoot>
@@ -310,16 +312,16 @@ function ApprovalsPage() {
           </div>
         </>
       ) : (
-        perm.create ? <ApprovalForm agents={agents} companies={companies} onDone={() => setTab("list")} /> : null
+        perm.create ? <InvestmentForm agents={agents} companies={companies} onDone={() => setTab("list")} /> : null
       )}
       {editing && perm.edit && (
-        <EditApprovalModal approval={editing} agents={agents} companies={companies} onClose={() => setEditing(null)} />
+        <EditInvestmentModal approval={editing} agents={agents} companies={companies} onClose={() => setEditing(null)} />
       )}
     </div>
   );
 }
 
-function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
+function InvestmentForm({ agents, companies, onDone }: { agents: Agent[]; companies: IssuingCompany[]; onDone: () => void }) {
   const [form, setForm] = useState({
     passenger_name: "", national_id: "", passport: "", dob: "",
     destination: "", authority: "", issuing_company: "",
@@ -366,18 +368,18 @@ function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companie
       government_fee: Number(form.government_fee || 0),
     };
     try {
-      const { error } = await supabase.from("approvals").insert(payload);
+      const { error } = await supabase.from("approvals").insert({ ...payload, service_type: "libyan_investment" });
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
       onDone();
     } catch (error: any) {
-      toast.error(error?.message || "تعذر حفظ الموافقة");
+      toast.error(error?.message || "تعذر حفظ السجل");
     }
   };
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">➕ تقديم موافقة أمنية</div></div>
+      <div className="card-header"><div className="card-title">➕ تقديم استثمار ليبي</div></div>
       <div className="form-grid">
         <div className="form-group"><label>اسم المسافر</label><input value={form.passenger_name} onChange={(e) => set("passenger_name", e.target.value)} /></div>
         <div className="form-group"><label>الرقم القومي</label><input value={form.national_id} onChange={(e) => set("national_id", e.target.value)} /></div>
@@ -422,18 +424,18 @@ function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; companie
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group"><label>مبلغ الاستثمار</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
       <div className="form-footer">
-        <button className="btn btn-gold" onClick={save}>💾 حفظ التقديم</button>
+        <button className="btn btn-gold" onClick={save}>💾 حفظ السجل</button>
       </div>
     </div>
   );
 }
 
-function EditApprovalModal({ approval, agents, companies, onClose }: { approval: Approval; agents: Agent[]; companies: IssuingCompany[]; onClose: () => void }) {
+function EditInvestmentModal({ approval, agents, companies, onClose }: { approval: Approval; agents: Agent[]; companies: IssuingCompany[]; onClose: () => void }) {
   const [form, setForm] = useState({
     passenger_name: approval.passenger_name || "",
     national_id: approval.national_id || "",
@@ -488,7 +490,7 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
       government_fee: Number(form.government_fee || 0),
     };
     try {
-      const { error } = await supabase.from("approvals").update(payload).eq("id", approval.id);
+      const { error } = await supabase.from("approvals").update({ ...payload, service_type: "libyan_investment" }).eq("id", approval.id);
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
       toast.success("تم حفظ التعديلات بنجاح");
@@ -504,7 +506,7 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
     <Modal
       open
       onClose={onClose}
-      title="✏️ تعديل موافقة أمنية"
+      title="✏️ تعديل استثمار ليبي"
       maxWidth={820}
       footer={
         <>
@@ -557,7 +559,7 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
+        <div className="form-group"><label>مبلغ الاستثمار</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
