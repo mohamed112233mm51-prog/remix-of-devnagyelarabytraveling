@@ -22,6 +22,7 @@ export const ROUTE_PERM: Record<string, string | null> = {
   "/": "dashboard",
   "/flights": "flights",
   "/approvals": "approvals",
+  "/libyan-investment": "approvals",
   "/accounts": "accounts",
   "/companies": "companies",
   "/merchants": "merchants",

@@ -54,6 +54,7 @@ export type Approval = {
   status: string;
   government_fee: number;
   notes: string | null;
+  service_type: string | null;
   created_at: string;
 };
 

@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Plane,
   ClipboardCheck,
+  Landmark,
   Users,
   Building2,
   HandCoins,
@@ -16,12 +17,14 @@ import {
   X,
   ChevronDown,
   UserCircle,
+  PlusCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm } from "@/hooks/usePerm";
 import { useBranding } from "@/lib/branding";
 import { SearchBox, NotificationsBell } from "@/components/TopbarTools";
 import { isDevEnv } from "@/lib/env";
+import { ServiceSubmissionModal } from "@/components/ServiceSubmissionModal";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null };
@@ -34,8 +37,9 @@ const NAV: { label: string; items: Item[] }[] = [
   {
     label: "العمليات",
     items: [
-      { to: "/flights", icon: Plane, label: "قوائم الرحلات", section: "العمليات", permKey: "flights" },
-      { to: "/approvals", icon: ClipboardCheck, label: "تقديمات الموافقات الأمنية", section: "العمليات", permKey: "approvals" },
+      { to: "/flights", icon: Plane, label: "قائمة الرحلات", section: "العمليات", permKey: "flights" },
+      { to: "/approvals", icon: ClipboardCheck, label: "قائمة الموافقات الأمنية", section: "العمليات", permKey: "approvals" },
+      { to: "/libyan-investment", icon: Landmark, label: "قائمة الاستثمار الليبي", section: "العمليات", permKey: "approvals" },
     ],
   },
   {
@@ -65,8 +69,9 @@ const NAV: { label: string; items: Item[] }[] = [
 
 const TITLES: Record<string, ReactNode> = {
   "/": (<>لوحة <span>التحكم</span></>),
-  "/flights": (<>قوائم <span>الرحلات</span></>),
-  "/approvals": (<>تقديمات <span>الموافقات الأمنية</span></>),
+  "/flights": (<>قائمة <span>الرحلات</span></>),
+  "/approvals": (<>قائمة <span>الموافقات الأمنية</span></>),
+  "/libyan-investment": (<>قائمة <span>الاستثمار الليبي</span></>),
   "/accounts": (<>حسابات <span>الوكلاء</span></>),
   "/companies": (<>حسابات <span>الشركات الصادرة</span></>),
   "/merchants": (<>حسابات <span>كاش التاجر</span></>),
@@ -80,6 +85,7 @@ export default function Layout() {
   const loc = useLocation();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
   const { isAdmin, user, signOut, permissions } = useAuth();
   const branding = useBranding();
   const allowed = (it: Item) => {
@@ -224,6 +230,22 @@ export default function Layout() {
             )}
           </div>
           <div className="topbar-actions">
+            <button
+              type="button"
+              onClick={() => setSubmitOpen(true)}
+              title="تقديم خدمة جديدة"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                height: 36, padding: "0 14px", borderRadius: 10,
+                background: "linear-gradient(135deg,#d4af37,#e0b65c)",
+                color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 12.5,
+                cursor: "pointer", boxShadow: "0 4px 12px rgba(212,175,55,.35)",
+                flexShrink: 0,
+              }}
+            >
+              <PlusCircle size={15} strokeWidth={2.4} />
+              <span>تقديم خدمة</span>
+            </button>
             <SearchBox />
             <NotificationsBell />
             <div className="topbar-divider" />
@@ -235,6 +257,8 @@ export default function Layout() {
           <Outlet />
         </div>
       </div>
+
+      <ServiceSubmissionModal open={submitOpen} onClose={() => setSubmitOpen(false)} />
 
       <nav className="bottom-nav">
         <div className="bottom-nav-inner">

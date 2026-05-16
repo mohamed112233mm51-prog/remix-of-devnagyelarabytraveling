@@ -116,6 +116,7 @@ export type Database = {
           notes: string | null
           passenger_name: string
           passport: string | null
+          service_type: string
           status: string
           submit_date: string | null
           travel_date: string | null
@@ -138,6 +139,7 @@ export type Database = {
           notes?: string | null
           passenger_name: string
           passport?: string | null
+          service_type?: string
           status?: string
           submit_date?: string | null
           travel_date?: string | null
@@ -160,6 +162,7 @@ export type Database = {
           notes?: string | null
           passenger_name?: string
           passport?: string | null
+          service_type?: string
           status?: string
           submit_date?: string | null
           travel_date?: string | null
