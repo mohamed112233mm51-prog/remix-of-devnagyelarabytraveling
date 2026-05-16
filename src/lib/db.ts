@@ -326,6 +326,8 @@ export type UsdTreasuryTransaction = {
   exchange_rate: number | null;
   company_id: string | null;
   note: string | null;
+  source_type: string | null; // 'insta_company' | 'cash_company' | 'merchant_wallet' | 'merchant_physical'
+  merchant_id: string | null;
   created_at: string;
 };
 
