@@ -447,43 +447,42 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   const eligibleMerchants = activeMerchants.filter(
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
   );
-  const hasEligible = eligibleMerchants.length > 0;
-  const selectedMerchant = eligibleMerchants.find((m) => m.id === form.merchant_id) || null;
+  const selectedMerchant = activeMerchants.find((m) => m.id === form.merchant_id) || null;
+  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_instapay || selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
+  const showSystemInsta = !selectedMerchant;
+  const showSystemCash = !selectedMerchant;
+  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
   const showMerchantCash = !!selectedMerchant && selectedMerchant.supports_cash_wallet;
   const showMerchantPhysical = !!selectedMerchant && selectedMerchant.supports_physical_cash;
-  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
 
   useEffect(() => {
-    if (eligibleMerchants.length === 1 && form.merchant_id !== eligibleMerchants[0].id) {
-      setForm((p) => ({ ...p, merchant_id: eligibleMerchants[0].id }));
-    } else if (eligibleMerchants.length === 0 && form.merchant_id) {
-      setForm((p) => ({ ...p, merchant_id: "" }));
-    } else if (form.merchant_id && !eligibleMerchants.find((m) => m.id === form.merchant_id)) {
+    if (form.merchant_id && !activeMerchants.find((m) => m.id === form.merchant_id)) {
       setForm((p) => ({ ...p, merchant_id: "" }));
     }
-  }, [eligibleMerchants.map((m) => m.id).join(",")]);
+  }, [activeMerchants.map((m) => m.id).join(",")]);
 
   useEffect(() => {
     setForm((p) => {
       const next = { ...p };
-      if (!showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
+      if (!showSystemInsta && !showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
+      if (!showSystemCash && next.cash_amount) next.cash_amount = "";
       if (!showMerchantCash && next.merchant_cash_amount) next.merchant_cash_amount = "";
       if (!showMerchantPhysical && next.merchant_cash_physical_amount) next.merchant_cash_physical_amount = "";
       return next;
     });
-  }, [showMerchantInsta, showMerchantCash, showMerchantPhysical]);
+  }, [showSystemInsta, showSystemCash, showMerchantInsta, showMerchantCash, showMerchantPhysical]);
 
-  const insta = showMerchantInsta ? Math.round(Number(form.instapay_amount || 0)) : 0;
-  const cash = Math.round(Number(form.cash_amount || 0));
+  const insta = (showSystemInsta || showMerchantInsta) ? Math.round(Number(form.instapay_amount || 0)) : 0;
+  const cash = showSystemCash ? Math.round(Number(form.cash_amount || 0)) : 0;
   const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
   const merchantNet = merchant;
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
   const totalPaid = insta + cash + merchantNet + merchantPhysical;
-  const usesMerchant = insta > 0 || merchant > 0 || merchantPhysical > 0;
+  const usesMerchant = !!selectedMerchant;
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
+    if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
     if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
-    if (usesMerchant && !form.merchant_id) return toast.error("برجاء اختيار التاجر");
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
