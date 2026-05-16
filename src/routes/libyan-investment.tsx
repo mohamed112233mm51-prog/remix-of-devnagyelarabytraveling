@@ -486,6 +486,9 @@ function EditInvestmentModal({ approval, agents, companies, onClose }: { approva
     status: approval.status || "",
     government_fee: String(approval.government_fee ?? ""),
     notes: approval.notes || "",
+    count: String(approval.count ?? 1),
+    price: String(approval.price ?? ""),
+    company_value: String(approval.company_value ?? ""),
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -516,17 +519,36 @@ function EditInvestmentModal({ approval, agents, companies, onClose }: { approva
       issuing_company: form.issuing_company || null,
       travel_statement: travelStatement || null,
     };
+    const count = Math.max(1, Math.round(Number(form.count) || 1));
+    const price = Number(form.price) || 0;
+    const companyValue = Number(form.company_value) || 0;
     const payload = {
       ...shared,
       issuing_company_id,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
       government_fee: Number(form.government_fee || 0),
+      count, price, company_value: companyValue,
     };
     try {
       const { error } = await supabase.from("approvals").update({ ...payload, service_type: "libyan_investment" }).eq("id", approval.id);
       if (error) return toast.error(error.message);
       await syncCounterpart("approvals", shared);
+      try {
+        await updateServiceFinancials({
+          serviceId: approval.id,
+          serviceKind: "libyan_investment",
+          agentId: shared.agent_id,
+          companyId: issuing_company_id,
+          date: shared.travel_date,
+          destination: shared.destination,
+          travelStatement: shared.travel_statement,
+          passengerName: shared.passenger_name,
+          count, price, companyValue,
+        });
+      } catch (postErr: any) {
+        toast.warning(postErr?.message || "تعذر تحديث الحركة المالية");
+      }
       toast.success("تم حفظ التعديلات بنجاح");
       onClose();
     } catch (error: any) {
