@@ -914,7 +914,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
     authority: a.authority || "—",
     submit: a.submit_date || "—",
     issue: a.issue_date || "—",
-    amount: fmtDL(Number(a.agent_price || a.price || 0)),
+    amount: fmtDL(Number((a as any).agent_price || a.price || 0)),
     status: a.status,
   }));
 
