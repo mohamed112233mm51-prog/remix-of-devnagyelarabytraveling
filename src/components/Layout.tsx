@@ -85,6 +85,7 @@ export default function Layout() {
   const loc = useLocation();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
   const { isAdmin, user, signOut, permissions } = useAuth();
   const branding = useBranding();
   const allowed = (it: Item) => {
