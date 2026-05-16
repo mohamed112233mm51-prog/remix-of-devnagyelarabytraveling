@@ -447,43 +447,42 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   const eligibleMerchants = activeMerchants.filter(
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
   );
-  const hasEligible = eligibleMerchants.length > 0;
-  const selectedMerchant = eligibleMerchants.find((m) => m.id === form.merchant_id) || null;
+  const selectedMerchant = activeMerchants.find((m) => m.id === form.merchant_id) || null;
+  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_instapay || selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
+  const showSystemInsta = !selectedMerchant;
+  const showSystemCash = !selectedMerchant;
+  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
   const showMerchantCash = !!selectedMerchant && selectedMerchant.supports_cash_wallet;
   const showMerchantPhysical = !!selectedMerchant && selectedMerchant.supports_physical_cash;
-  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
 
   useEffect(() => {
-    if (eligibleMerchants.length === 1 && form.merchant_id !== eligibleMerchants[0].id) {
-      setForm((p) => ({ ...p, merchant_id: eligibleMerchants[0].id }));
-    } else if (eligibleMerchants.length === 0 && form.merchant_id) {
-      setForm((p) => ({ ...p, merchant_id: "" }));
-    } else if (form.merchant_id && !eligibleMerchants.find((m) => m.id === form.merchant_id)) {
+    if (form.merchant_id && !activeMerchants.find((m) => m.id === form.merchant_id)) {
       setForm((p) => ({ ...p, merchant_id: "" }));
     }
-  }, [eligibleMerchants.map((m) => m.id).join(",")]);
+  }, [activeMerchants.map((m) => m.id).join(",")]);
 
   useEffect(() => {
     setForm((p) => {
       const next = { ...p };
-      if (!showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
+      if (!showSystemInsta && !showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
+      if (!showSystemCash && next.cash_amount) next.cash_amount = "";
       if (!showMerchantCash && next.merchant_cash_amount) next.merchant_cash_amount = "";
       if (!showMerchantPhysical && next.merchant_cash_physical_amount) next.merchant_cash_physical_amount = "";
       return next;
     });
-  }, [showMerchantInsta, showMerchantCash, showMerchantPhysical]);
+  }, [showSystemInsta, showSystemCash, showMerchantInsta, showMerchantCash, showMerchantPhysical]);
 
-  const insta = showMerchantInsta ? Math.round(Number(form.instapay_amount || 0)) : 0;
-  const cash = Math.round(Number(form.cash_amount || 0));
+  const insta = (showSystemInsta || showMerchantInsta) ? Math.round(Number(form.instapay_amount || 0)) : 0;
+  const cash = showSystemCash ? Math.round(Number(form.cash_amount || 0)) : 0;
   const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
   const merchantNet = merchant;
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
   const totalPaid = insta + cash + merchantNet + merchantPhysical;
-  const usesMerchant = insta > 0 || merchant > 0 || merchantPhysical > 0;
+  const usesMerchant = !!selectedMerchant;
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
+    if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
     if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
-    if (usesMerchant && !form.merchant_id) return toast.error("برجاء اختيار التاجر");
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
@@ -581,27 +580,32 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
           <div className="form-group" style={{ marginBottom: 12 }}>
-            <label>التاجر</label>
-            {hasEligible ? (
+            <label>التاجر <span style={{ fontWeight: 400, fontSize: 12, color: "var(--muted-foreground, #6b7280)" }}>(اتركه فارغاً للدفع من خزينة الشركة)</span></label>
+            {eligibleMerchants.length > 0 ? (
               <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="">اختر التاجر...</option>
+                <option value="">— بدون تاجر (دفع من الشركة) —</option>
                 {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
               </select>
             ) : (
               <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
             )}
+            {selectedMerchant && !merchantHasMethods && (
+              <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
+            )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {showMerchantInsta && (
+            {(showSystemInsta || showMerchantInsta) && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
                 <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
               </div>
             )}
-            <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي</div>
-              <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
-            </div>
+            {showSystemCash && (
+              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي</div>
+                <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
+              </div>
+            )}
             {showMerchantCash && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
