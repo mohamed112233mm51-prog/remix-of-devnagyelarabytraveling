@@ -45,6 +45,7 @@ const DEMO_TABLES = [
   "investor_transactions",
   "expenses",
   "expense_deductions",
+  "usd_treasury_transactions",
 ] as const;
 
 type DemoTable = (typeof DEMO_TABLES)[number];
