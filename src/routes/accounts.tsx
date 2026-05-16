@@ -335,7 +335,7 @@ function AgentPricingSection({ agentId }: { agentId: string }) {
           </tbody>
         </table>
       </div>
-    </div>,
+    </div>
   );
 }
 
