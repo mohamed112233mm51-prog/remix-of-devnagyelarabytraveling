@@ -103,7 +103,23 @@ function CompaniesPage() {
             <div className="val">{fmtDL(totalDue)}</div>
           </div>
         </div>
+        <div className="sum-box" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
+          <div className="kpi-icon"><DollarSign size={18} strokeWidth={2} /></div>
+          <div className="kpi-text">
+            <div className="label">رصيد الخزينة بالدولار</div>
+            <div className="val">{fmtUSD(usdBalance)}</div>
+          </div>
+        </div>
       </div>
+
+      {perm.create && (
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={() => setShowConvert(true)}>
+            <ArrowRightLeft size={14} strokeWidth={2} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} />
+            تحويل إلى الخزينة الدولارية
+          </button>
+        </div>
+      )}
 
       <div className="action-toolbar">
         <div className={`tool-tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>
