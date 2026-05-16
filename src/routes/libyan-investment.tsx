@@ -26,7 +26,10 @@ function LibyanInvestmentPage() {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const DESTINATIONS = useDropdownOptions("destination");
-  const [tab, setTab] = useState<"list" | "add">("list");
+  const [tab, setTab] = useState<"list" | "add">(() => {
+    if (typeof window === "undefined") return "list";
+    return new URLSearchParams(window.location.search).get("tab") === "add" && perm.create ? "add" : "list";
+  });
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [destination, setDestination] = useState("");
