@@ -580,27 +580,32 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
           <div className="form-group" style={{ marginBottom: 12 }}>
-            <label>التاجر</label>
-            {hasEligible ? (
+            <label>التاجر <span style={{ fontWeight: 400, fontSize: 12, color: "var(--muted-foreground, #6b7280)" }}>(اتركه فارغاً للدفع من خزينة الشركة)</span></label>
+            {eligibleMerchants.length > 0 ? (
               <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="">اختر التاجر...</option>
+                <option value="">— بدون تاجر (دفع من الشركة) —</option>
                 {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
               </select>
             ) : (
               <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
             )}
+            {selectedMerchant && !merchantHasMethods && (
+              <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
+            )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {showMerchantInsta && (
+            {(showSystemInsta || showMerchantInsta) && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
                 <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
               </div>
             )}
-            <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي</div>
-              <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
-            </div>
+            {showSystemCash && (
+              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي</div>
+                <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
+              </div>
+            )}
             {showMerchantCash && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
