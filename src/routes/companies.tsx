@@ -507,10 +507,18 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
   const totalPaid = insta + cash + merchantNet + merchantPhysical;
   const usesMerchant = !!selectedMerchant;
+  const usdAmt = Number(form.usd_amount || 0);
+  const rateUsed = Number(form.exchange_rate || 0) || null;
+  const payCurrency: "EGP" | "USD" | "MIXED" = form.payment_currency;
+  const includeEgp = payCurrency === "EGP" || payCurrency === "MIXED";
+  const includeUsd = payCurrency === "USD" || payCurrency === "MIXED";
+
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
     if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
-    if (totalPaid <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
+    const egpPaid = includeEgp ? totalPaid : 0;
+    const usdPaid = includeUsd ? usdAmt : 0;
+    if (egpPaid <= 0 && usdPaid <= 0) return toast.error("يجب إدخال قيمة دفع بالجنيه أو بالدولار");
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
@@ -518,18 +526,28 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
       company_id = data.id;
     }
     if (selectedService) {
-      const newTotal = Number(selectedService.total_paid || 0) + totalPaid;
+      const newTotal = Number(selectedService.total_paid || 0) + egpPaid;
       const { error } = await supabase.from("company_transactions").update({
-        instapay_amount: Number(selectedService.instapay_amount || 0) + insta,
-        cash_amount: Number(selectedService.cash_amount || 0) + cash,
-        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + merchant,
-        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + merchantNet,
-        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + merchantPhysical,
-        merchant_id: usesMerchant ? form.merchant_id : selectedService.merchant_id,
+        instapay_amount: Number(selectedService.instapay_amount || 0) + (includeEgp ? insta : 0),
+        cash_amount: Number(selectedService.cash_amount || 0) + (includeEgp ? cash : 0),
+        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + (includeEgp ? merchant : 0),
+        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + (includeEgp ? merchantNet : 0),
+        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + (includeEgp ? merchantPhysical : 0),
+        merchant_id: usesMerchant && includeEgp ? form.merchant_id : selectedService.merchant_id,
         total_paid: newTotal,
+        usd_amount: Number(selectedService.usd_amount || 0) + usdPaid,
+        exchange_rate_used: rateUsed ?? selectedService.exchange_rate_used ?? null,
+        payment_currency: payCurrency,
         note: form.note || selectedService.note,
       }).eq("id", selectedService.id);
       if (error) return toast.error(error.message);
+      if (usdPaid > 0) {
+        await supabase.from("usd_treasury_transactions").insert({
+          date: form.date, type: "company_payment", egp_amount: 0,
+          usd_amount: usdPaid, exchange_rate: rateUsed, company_id,
+          note: form.note || `دفع للشركة (${form.company_name})`,
+        });
+      }
       toast.success("تم تسجيل الدفعة على الخدمة المستحقة");
       onDone();
       return;
@@ -540,16 +558,26 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
       service_type: form.service_type || null,
       count: Number(form.count || 0), price: Number(form.price || 0),
       trip_value: tv,
-      instapay_amount: insta,
-      cash_amount: cash,
-      merchant_cash_amount: merchant,
-      merchant_cash_net_amount: merchantNet,
-      merchant_cash_physical_amount: merchantPhysical,
-      merchant_id: usesMerchant ? form.merchant_id : null,
-      total_paid: totalPaid,
+      instapay_amount: includeEgp ? insta : 0,
+      cash_amount: includeEgp ? cash : 0,
+      merchant_cash_amount: includeEgp ? merchant : 0,
+      merchant_cash_net_amount: includeEgp ? merchantNet : 0,
+      merchant_cash_physical_amount: includeEgp ? merchantPhysical : 0,
+      merchant_id: usesMerchant && includeEgp ? form.merchant_id : null,
+      total_paid: egpPaid,
+      usd_amount: usdPaid,
+      exchange_rate_used: rateUsed,
+      payment_currency: payCurrency,
       note: form.note || null,
     });
     if (error) return toast.error(error.message);
+    if (usdPaid > 0) {
+      await supabase.from("usd_treasury_transactions").insert({
+        date: form.date, type: "company_payment", egp_amount: 0,
+        usd_amount: usdPaid, exchange_rate: rateUsed, company_id,
+        note: form.note || `دفع للشركة (${form.company_name})`,
+      });
+    }
     onDone();
   };
   return (
