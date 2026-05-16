@@ -475,22 +475,91 @@ function Dashboard() {
       </div>
 
       {/* === Recent activity feed === */}
-      <div className="erp-panel" style={{ marginTop: 14 }}>
-        <div className="erp-panel-head">
-          <div className="erp-panel-title"><Activity size={14} /> آخر العمليات</div>
-        </div>
-        <div className="erp-feed">
-          {recent.length === 0 && <div className="erp-empty">لا توجد عمليات حديثة</div>}
-          {recent.map((a, i) => (
-            <div key={i} className={`erp-feed-row tone-${a.tone}`}>
-              <div className="erp-feed-dot" />
-              <div className="erp-feed-body">
-                <div className="erp-feed-label">{a.label}</div>
-                <div className="erp-feed-sub">{a.sub}</div>
+      {/* === ERP Analytics === */}
+      <div className="erp-section-title">تحليلات الأداء</div>
+      <div className="erp-analytics-grid">
+        {/* 1. Top agents by collection */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Users size={14} /> أكثر الوكلاء تحصيلاً</div>
+            <span className="erp-chip">أعلى 5</span>
+          </div>
+          <div className="erp-analytic-table">
+            {topAgents.length === 0 && <div className="erp-empty">لا توجد بيانات</div>}
+            {topAgents.map((a, i) => (
+              <div key={a.id} className="erp-rank-row">
+                <div className="erp-rank-no">{i + 1}</div>
+                <div className="erp-rank-body">
+                  <div className="erp-rank-name">{a.name}</div>
+                  <div className="erp-rank-sub">{fmtNum(a.count)} عملية</div>
+                </div>
+                <div className="erp-rank-value tone-green">{fmtDL(a.collected)}</div>
               </div>
-              <div className="erp-feed-time">{new Date(a.date).toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" })}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* 2. Top issuing companies */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Building2 size={14} /> أكثر الشركات تقديمًا للخدمات</div>
+            <span className="erp-chip">أعلى 5</span>
+          </div>
+          <div className="erp-analytic-table">
+            {topCompanies.length === 0 && <div className="erp-empty">لا توجد بيانات</div>}
+            {topCompanies.map((c, i) => (
+              <div key={c.id} className="erp-rank-row">
+                <div className="erp-rank-no">{i + 1}</div>
+                <div className="erp-rank-body">
+                  <div className="erp-rank-name">{c.name}</div>
+                  <div className="erp-rank-sub">أكثر خدمة: {c.topService}</div>
+                </div>
+                <div className="erp-rank-value">{fmtNum(c.count)} طلب</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. Service type donut */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Briefcase size={14} /> توزيع أنواع الخدمات</div>
+            <span className="erp-chip erp-chip-strong">{fmtNum(serviceTotal)}</span>
+          </div>
+          <div className="erp-donut-wrap">
+            <Donut data={serviceDist} total={serviceTotal} />
+            <div className="erp-donut-legend">
+              {serviceDist.map((s) => (
+                <div key={s.label} className="erp-legend-row">
+                  <span className="erp-legend-dot" style={{ background: s.color }} />
+                  <span className="erp-legend-label">{s.label}</span>
+                  <span className="erp-legend-val">{s.pct}% · {fmtNum(s.value)}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* 4. Travel authorities — horizontal bars */}
+        <div className="erp-panel">
+          <div className="erp-panel-head">
+            <div className="erp-panel-title"><Plane size={14} /> جهات السفر الأكثر استخدامًا</div>
+            <span className="erp-chip">أعلى 6</span>
+          </div>
+          <div className="erp-hbar-list">
+            {topAuthorities.length === 0 && <div className="erp-empty">لا توجد بيانات</div>}
+            {topAuthorities.map((a) => (
+              <div key={a.name} className="erp-hbar-row">
+                <div className="erp-hbar-head">
+                  <span className="erp-hbar-name">{a.name}</span>
+                  <span className="erp-hbar-meta">{fmtNum(a.count)} رحلة · {a.pct}%</span>
+                </div>
+                <div className="erp-hbar-track">
+                  <div className="erp-hbar-fill" style={{ width: `${Math.max(4, (a.count / authMax) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
