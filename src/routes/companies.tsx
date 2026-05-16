@@ -475,6 +475,23 @@ function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: Iss
       if (cErr) return toast.error(cErr.message);
       company_id = data.id;
     }
+    if (selectedService) {
+      const newTotal = Number(selectedService.total_paid || 0) + totalPaid;
+      const { error } = await supabase.from("company_transactions").update({
+        instapay_amount: Number(selectedService.instapay_amount || 0) + insta,
+        cash_amount: Number(selectedService.cash_amount || 0) + cash,
+        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + merchant,
+        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + merchantNet,
+        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + merchantPhysical,
+        merchant_id: usesMerchant ? form.merchant_id : selectedService.merchant_id,
+        total_paid: newTotal,
+        note: form.note || selectedService.note,
+      }).eq("id", selectedService.id);
+      if (error) return toast.error(error.message);
+      toast.success("تم تسجيل الدفعة على الخدمة المستحقة");
+      onDone();
+      return;
+    }
     const { error } = await supabase.from("company_transactions").insert({
       company_id, date: form.date,
       destination: form.destination || null,
