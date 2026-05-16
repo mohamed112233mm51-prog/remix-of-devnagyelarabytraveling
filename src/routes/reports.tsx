@@ -903,7 +903,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
     { header: "الجهة", key: "authority" },
     { header: "تاريخ التقديم", key: "submit" },
     { header: "تاريخ الصدور", key: "issue" },
-    { header: "قيمة الموافقة", key: "amount" },
+    { header: "سعر الوكيل", key: "amount" },
     { header: "الحالة", key: "status" },
   ];
   const rows = filtered.map((a) => ({
@@ -914,7 +914,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
     authority: a.authority || "—",
     submit: a.submit_date || "—",
     issue: a.issue_date || "—",
-    amount: fmtDL(Number(a.government_fee || 0)),
+    amount: fmtDL(Number(a.agent_price || a.price || 0)),
     status: a.status,
   }));
 
