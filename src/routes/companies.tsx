@@ -383,12 +383,12 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 
-function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; onDone: () => void }) {
+function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; onDone: () => void }) {
   const [form, setForm] = useState({
     company_name: "", date: new Date().toISOString().slice(0, 10),
     destination: "", count: "", price: "", service_type: "",
     instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
-    note: "", merchant_id: "",
+    note: "", merchant_id: "", service_id: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
