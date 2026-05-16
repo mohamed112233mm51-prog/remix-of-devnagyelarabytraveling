@@ -480,6 +480,9 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
     status: flight.status || "",
     notes: flight.notes || "",
     issuing_company: flight.issuing_company || "",
+    count: String(flight.count ?? 1),
+    price: String(flight.price ?? ""),
+    company_value: String(flight.company_value ?? ""),
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -507,6 +510,7 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
   const save = async () => {
     if (!form.passenger_name.trim()) return toast.error("اسم المسافر مطلوب");
     setSaving(true);
+    const companyId = companies.find((c) => c.company_name === form.issuing_company)?.id || null;
     const payload = {
       passenger_name: form.passenger_name,
       national_id: form.national_id || null,
@@ -520,6 +524,9 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
       notes: form.notes || null,
       issuing_company: form.issuing_company || null,
       travel_statement: travelStatement || null,
+      count: Math.max(1, Math.round(Number(form.count) || 1)),
+      price: Number(form.price) || 0,
+      company_value: Number(form.company_value) || 0,
     };
     try {
       const { error } = await supabase.from("flights").update(payload).eq("id", flight.id);
@@ -538,6 +545,23 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
         issuing_company: payload.issuing_company,
         travel_statement: payload.travel_statement,
       });
+      try {
+        await updateServiceFinancials({
+          serviceId: flight.id,
+          serviceKind: "flight_ticket",
+          agentId: payload.agent_id,
+          companyId,
+          date: payload.travel_date,
+          destination: payload.destination,
+          travelStatement: payload.travel_statement,
+          passengerName: payload.passenger_name,
+          count: payload.count,
+          price: payload.price,
+          companyValue: payload.company_value,
+        });
+      } catch (postErr: any) {
+        toast.warning(postErr?.message || "تم حفظ الرحلة لكن تعذر تحديث الحركة المالية");
+      }
       toast.success("تم حفظ التعديلات بنجاح");
       onClose();
     } catch (error: any) {
@@ -596,6 +620,10 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
             {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
           </select>
         </div>
+        <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
+        <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
+        <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
+        <div className="form-group"><label>قيمة الشركة الصادرة</label><input type="number" min={0} value={form.company_value} onChange={(e) => set("company_value", e.target.value)} /></div>
         <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
         <div className="form-group full"><label>ملاحظات</label><textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       </div>
