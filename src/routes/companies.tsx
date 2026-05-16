@@ -421,6 +421,8 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
     destination: "", count: "", price: "", service_type: "",
     instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
     note: "", merchant_id: "", service_id: "",
+    payment_currency: "EGP" as "EGP" | "USD" | "MIXED",
+    usd_amount: "", exchange_rate: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
