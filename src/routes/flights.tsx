@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
+import { badgeFor, fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
