@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, fmtUSD, useLive, useDropdownOptions, withSelected, buildTravelStatement,
+  fmtDL, fmtNum, fmtUSD, useLive, useDropdownOptions, withSelected, buildTravelStatement, useTreasuryBalances,
   type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
@@ -513,12 +513,22 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
   const includeEgp = payCurrency === "EGP" || payCurrency === "MIXED";
   const includeUsd = payCurrency === "USD" || payCurrency === "MIXED";
 
+  const balances = useTreasuryBalances();
+
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
     if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
     const egpPaid = includeEgp ? totalPaid : 0;
     const usdPaid = includeUsd ? usdAmt : 0;
     if (egpPaid <= 0 && usdPaid <= 0) return toast.error("يجب إدخال قيمة دفع بالجنيه أو بالدولار");
+    if (payCurrency === "MIXED") {
+      if (egpPaid > balances.egp) return toast.error("لا يوجد رصيد كافي في خزينة الجنيه");
+      if (usdPaid > balances.usd) return toast.error("لا يوجد رصيد كافي في الخزينة الدولارية");
+    } else if (payCurrency === "EGP") {
+      if (egpPaid > balances.egp) return toast.error("لا يوجد رصيد كافي في الخزينة");
+    } else if (payCurrency === "USD") {
+      if (usdPaid > balances.usd) return toast.error("لا يوجد رصيد كافي في الخزينة الدولارية");
+    }
     let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
     if (!company_id) {
       const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
@@ -738,10 +748,12 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
   const egp = Number(form.egp_amount || 0);
   const rate = Number(form.exchange_rate || 0);
   const usd = rate > 0 ? egp / rate : 0;
+  const balances = useTreasuryBalances();
 
   const save = async () => {
     if (egp <= 0) return toast.error("أدخل المبلغ بالجنيه");
     if (rate <= 0) return toast.error("أدخل سعر الصرف");
+    if (egp > balances.egp) return toast.error("لا يوجد رصيد كافي في الخزينة");
     setSaving(true);
     const { error } = await supabase.from("usd_treasury_transactions").insert({
       date: form.date,
