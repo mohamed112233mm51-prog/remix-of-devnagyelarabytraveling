@@ -460,12 +460,11 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
     (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
   );
   const selectedMerchant = activeMerchants.find((m) => m.id === form.merchant_id) || null;
-  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_instapay || selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
-  // System (company-owned) methods: only when no merchant is selected
-  const showSystemInsta = !selectedMerchant;
-  const showSystemCash = !selectedMerchant;
+  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
+  // Company methods are always available
+  const showSystemInsta = true;
+  const showSystemCash = true;
   // Merchant methods: only when merchant is selected and supports them
-  const showMerchantInsta = !!selectedMerchant && selectedMerchant.supports_instapay;
   const showMerchantCash = !!selectedMerchant && selectedMerchant.supports_cash_wallet;
   const showMerchantPhysical = !!selectedMerchant && selectedMerchant.supports_physical_cash;
 
@@ -476,20 +475,18 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
     }
   }, [activeMerchants.map((m) => m.id).join(",")]);
 
-  // Clear payment fields whose method is not currently visible
+  // Clear merchant-only fields when not visible
   useEffect(() => {
     setForm((p) => {
       const next = { ...p };
-      if (!showSystemInsta && !showMerchantInsta && next.instapay_amount) next.instapay_amount = "";
-      if (!showSystemCash && next.cash_amount) next.cash_amount = "";
       if (!showMerchantCash && next.merchant_cash_amount) next.merchant_cash_amount = "";
       if (!showMerchantPhysical && next.merchant_cash_physical_amount) next.merchant_cash_physical_amount = "";
       return next;
     });
-  }, [showSystemInsta, showSystemCash, showMerchantInsta, showMerchantCash, showMerchantPhysical]);
+  }, [showMerchantCash, showMerchantPhysical]);
 
-  const insta = (showSystemInsta || showMerchantInsta) ? Math.round(Number(form.instapay_amount || 0)) : 0;
-  const cash = showSystemCash ? Math.round(Number(form.cash_amount || 0)) : 0;
+  const insta = Math.round(Number(form.instapay_amount || 0));
+  const cash = Math.round(Number(form.cash_amount || 0));
   const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
   const merchantNet = merchantCashNetAmount(merchant);
   const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
@@ -605,21 +602,21 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
             )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {(showSystemInsta || showMerchantInsta) && (
+            {showSystemInsta && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
                 <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
               </div>
             )}
             {showSystemCash && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
                 <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
               </div>
             )}
             {showMerchantCash && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
                 <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
                 <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
                   صافي كاش التاجر بعد خصم 1%: <strong>{fmtNum(merchantNet)}</strong>
@@ -628,7 +625,7 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
             )}
             {showMerchantPhysical && (
               <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي تاجر{selectedMerchant ? ` — ${selectedMerchant.merchant_name}` : ""}</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
                 <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
               </div>
             )}
