@@ -4,8 +4,8 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, useLive, useDropdownOptions, withSelected,
-  type IssuingCompany, type CompanyTransaction, type Merchant,
+  fmtDL, fmtNum, useLive, useDropdownOptions, withSelected, buildTravelStatement,
+  type IssuingCompany, type CompanyTransaction, type Merchant, type Flight, type Approval, type Agent,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
@@ -25,6 +25,9 @@ function CompaniesPage() {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: txns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: flights } = useLive<Flight>("flights");
+  const { rows: approvals } = useLive<Approval>("approvals");
+  const { rows: agents } = useLive<Agent>("agents");
   const [tab, setTab] = useState<"list" | "add" | "txn" | "statement">("list");
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -171,7 +174,7 @@ function CompaniesPage() {
       )}
 
       {tab === "add" && perm.create && <CompanyForm onDone={() => setTab("list")} />}
-      {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} txns={txns} onDone={() => setTab("list")} />}
+      {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} txns={txns} flights={flights} approvals={approvals} agents={agents} onDone={() => setTab("list")} />}
       {tab === "statement" && <CompanyStatementTab companies={companies} txns={txns} initialCompanyId={statementCompanyId} canExport={perm.export} />}
 
       {editCompany && perm.edit && (
@@ -383,7 +386,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 
-function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; onDone: () => void }) {
+function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: Flight[]; approvals: Approval[]; agents: Agent[]; onDone: () => void }) {
   const [form, setForm] = useState({
     company_name: "", date: new Date().toISOString().slice(0, 10),
     destination: "", count: "", price: "", service_type: "",
@@ -410,6 +413,15 @@ function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: Iss
   }, [txns, selectedCompanyId, form.service_type]);
   const selectedService = dueServices.find((s) => s.id === form.service_id) || null;
 
+  const sourceLookup = useMemo(() => {
+    const m = new Map<string, { passenger_name: string; agent_id: string | null; travel_statement: string | null; destination: string | null; airline: string | null; travel_date: string | null }>();
+    for (const f of flights) m.set(f.id, { passenger_name: f.passenger_name, agent_id: f.agent_id, travel_statement: f.travel_statement, destination: f.destination, airline: f.airline, travel_date: f.travel_date });
+    for (const a of approvals) m.set(a.id, { passenger_name: a.passenger_name, agent_id: a.agent_id, travel_statement: a.travel_statement, destination: a.destination, airline: a.airline, travel_date: a.travel_date });
+    return m;
+  }, [flights, approvals]);
+  const sourceForSelected = selectedService ? sourceLookup.get(selectedService.source_service_id || "") : null;
+  const selectedAgent = sourceForSelected?.agent_id ? agents.find((a) => a.id === sourceForSelected.agent_id) : null;
+
   useEffect(() => {
     if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
       setForm((p) => ({ ...p, service_id: "" }));
@@ -418,12 +430,15 @@ function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: Iss
 
   useEffect(() => {
     if (!selectedService) return;
+    const src = sourceLookup.get(selectedService.source_service_id || "");
+    const autoStatement = src?.travel_statement || buildTravelStatement(selectedService.destination, src?.travel_date, src?.airline);
     setForm((p) => ({
       ...p,
       destination: selectedService.destination || "",
       count: String(selectedService.count || ""),
       price: String(selectedService.price || ""),
       service_type: selectedService.service_type || p.service_type,
+      note: src?.passenger_name ? `${src.passenger_name}${autoStatement ? ` — ${autoStatement}` : ""}` : p.note,
     }));
   }, [form.service_id]);
 
@@ -536,13 +551,23 @@ function CompanyTxnForm({ companies, merchants, txns, onDone }: { companies: Iss
             <option value="">{selectedCompanyId ? (dueServices.length ? "اختر الخدمة..." : "لا توجد خدمات مستحقة") : "اختر الشركة أولاً"}</option>
             {dueServices.map((s) => {
               const remaining = Number(s.trip_value || 0) - Number(s.total_paid || 0);
+              const src = sourceLookup.get(s.source_service_id || "");
+              const passenger = src?.passenger_name || "—";
               return (
                 <option key={s.id} value={s.id}>
-                  {s.date} — {s.service_type || "—"} — {s.destination || "—"} — متبقي {fmtNum(remaining)}
+                  {s.service_type || "—"} — {passenger} — متبقي {fmtNum(remaining)}
                 </option>
               );
             })}
           </select>
+          {selectedService && (
+            <div style={{ marginTop: 6, fontSize: 12, color: "var(--text2)", display: "flex", flexDirection: "column", gap: 2 }}>
+              <span><strong>المسافر:</strong> {sourceForSelected?.passenger_name || "—"}</span>
+              <span><strong>الوكيل:</strong> {selectedAgent?.name || "—"}</span>
+              <span><strong>بيان السفر:</strong> {sourceForSelected?.travel_statement || buildTravelStatement(selectedService.destination, sourceForSelected?.travel_date, sourceForSelected?.airline) || "—"}</span>
+              <span><strong>المتبقي:</strong> {fmtNum(Number(selectedService.trip_value || 0) - Number(selectedService.total_paid || 0))}</span>
+            </div>
+          )}
         </div>
         <div className="form-group"><label>الوجهة</label>
           <select value={form.destination} onChange={(e) => set("destination", e.target.value)} disabled={lockFields}>
