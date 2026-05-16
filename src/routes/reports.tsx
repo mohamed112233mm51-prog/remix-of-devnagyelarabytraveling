@@ -288,6 +288,7 @@ function ReportsPage() {
       {tab === "flights" && <FlightsReport inRange={inRange} data={data} />}
       {tab === "approvals" && <ApprovalsReport inRange={inRange} data={data} />}
       {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
+      {tab === "usd_treasury" && <UsdTreasuryReport inRange={inRange} data={data} />}
       <style>{chartsCss}</style>
     </div>
   );
