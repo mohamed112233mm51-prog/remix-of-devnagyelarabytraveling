@@ -230,6 +230,22 @@ export default function Layout() {
             )}
           </div>
           <div className="topbar-actions">
+            <button
+              type="button"
+              onClick={() => setSubmitOpen(true)}
+              title="تقديم خدمة جديدة"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                height: 36, padding: "0 14px", borderRadius: 10,
+                background: "linear-gradient(135deg,#d4af37,#e0b65c)",
+                color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 12.5,
+                cursor: "pointer", boxShadow: "0 4px 12px rgba(212,175,55,.35)",
+                flexShrink: 0,
+              }}
+            >
+              <PlusCircle size={15} strokeWidth={2.4} />
+              <span>تقديم خدمة</span>
+            </button>
             <SearchBox />
             <NotificationsBell />
             <div className="topbar-divider" />
@@ -241,6 +257,8 @@ export default function Layout() {
           <Outlet />
         </div>
       </div>
+
+      <ServiceSubmissionModal open={submitOpen} onClose={() => setSubmitOpen(false)} />
 
       <nav className="bottom-nav">
         <div className="bottom-nav-inner">
