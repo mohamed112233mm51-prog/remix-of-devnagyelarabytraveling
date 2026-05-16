@@ -3,11 +3,13 @@ import { useMemo, useState } from "react";
 import {
   fmtDL,
   fmtNum,
+  fmtUSD,
   merchantCashGross,
   merchantCashNet,
   tripValue,
   txnTotalPaid,
   type CompanyTransaction,
+  type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
