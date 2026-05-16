@@ -43,14 +43,14 @@ function safeDate(d: string | null | undefined): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function agentRow(input: ServicePostingInput) {
+function agentRow(input: ServicePostingInput & { agentId: string }) {
   const count = Math.max(1, Math.round(Number(input.count) || 1));
   const price = Math.max(0, Number(input.price) || 0);
   return {
     agent_id: input.agentId,
     date: safeDate(input.date),
-    destination: input.destination || null,
-    travel_statement: input.travelStatement || null,
+    destination: input.destination ?? undefined,
+    travel_statement: input.travelStatement ?? undefined,
     service_type: SERVICE_LABEL_AR[input.serviceKind],
     count,
     price,
@@ -63,21 +63,21 @@ function agentRow(input: ServicePostingInput) {
     merchant_cash_amount: 0,
     merchant_cash_net_amount: 0,
     merchant_cash_physical_amount: 0,
-    merchant_id: null,
+    merchant_id: undefined,
     total_paid: 0,
     paid: 0,
-    note: input.passengerName || null,
+    note: input.passengerName ?? undefined,
     source_service_id: input.serviceId,
     source_service_type: input.serviceKind,
   };
 }
 
-function companyRow(input: ServicePostingInput) {
+function companyRow(input: ServicePostingInput & { companyId: string }) {
   const value = Math.max(0, Number(input.companyValue) || 0);
   return {
     company_id: input.companyId,
     date: safeDate(input.date),
-    destination: input.destination || null,
+    destination: input.destination ?? undefined,
     service_type: SERVICE_LABEL_AR[input.serviceKind],
     count: 1,
     price: value,
@@ -91,9 +91,9 @@ function companyRow(input: ServicePostingInput) {
     merchant_cash_amount: 0,
     merchant_cash_net_amount: 0,
     merchant_cash_physical_amount: 0,
-    merchant_id: null,
+    merchant_id: undefined,
     total_paid: 0,
-    note: input.passengerName || null,
+    note: input.passengerName ?? undefined,
     source_service_id: input.serviceId,
     source_service_type: input.serviceKind,
   };
@@ -101,14 +101,16 @@ function companyRow(input: ServicePostingInput) {
 
 /** Called after INSERT of a new service record. Creates both debt rows. */
 export async function postServiceFinancials(input: ServicePostingInput): Promise<void> {
-  // Agent debt — only if agent selected
   if (input.agentId) {
-    const { error } = await supabase.from("transactions").insert(agentRow(input));
+    const { error } = await supabase
+      .from("transactions")
+      .insert(agentRow({ ...input, agentId: input.agentId }));
     if (error) throw new Error(`فشل إنشاء حركة الوكيل: ${error.message}`);
   }
-  // Company debt — only if company selected and value > 0
   if (input.companyId && Number(input.companyValue) > 0) {
-    const { error } = await supabase.from("company_transactions").insert(companyRow(input));
+    const { error } = await supabase
+      .from("company_transactions")
+      .insert(companyRow({ ...input, companyId: input.companyId }));
     if (error) throw new Error(`فشل إنشاء حركة الشركة: ${error.message}`);
   }
 }
