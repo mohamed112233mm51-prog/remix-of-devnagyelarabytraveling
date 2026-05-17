@@ -149,8 +149,29 @@ function AgentDetail() {
         <div className="sum-box red"><div className="label">الصافي المستحق</div><div className="val">{fmtDL(due)}</div></div>
       </div>
 
-      <AgentPricingSection agentId={agent.id} />
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 12 }}>
+          <button
+            type="button"
+            className={activeTab === "statement" ? "btn btn-gold" : "action-btn"}
+            onClick={() => setActiveTab("statement")}
+          >💳 كشف الحساب</button>
+          <button
+            type="button"
+            className={activeTab === "pricing" ? "btn btn-gold" : "action-btn"}
+            onClick={() => setActiveTab("pricing")}
+          >💰 تسعير الخدمات</button>
+          <button
+            type="button"
+            className={activeTab === "services" ? "btn btn-gold" : "action-btn"}
+            onClick={() => setActiveTab("services")}
+          >✈️ الرحلات والتقديمات</button>
+        </div>
+      </div>
 
+      {activeTab === "pricing" && <AgentPricingSection agentId={agent.id} />}
+
+      {activeTab === "statement" && (
       <div className="card">
         <div className="card-header"><div className="card-title">💳 كشف الحساب (الحركات المالية)</div></div>
         <div className="card-body">
@@ -192,7 +213,9 @@ function AgentDetail() {
           </div>
         </div>
       </div>
+      )}
 
+      {activeTab === "services" && (
       <div className="two-col">
         <div className="card">
           <div className="card-header"><div className="card-title">✈️ رحلات الوكيل ({myFlights.length})</div></div>
@@ -242,6 +265,7 @@ function AgentDetail() {
           </div>
         </div>
       </div>
+      )}
 
       {editOpen && <EditAgentModal agent={agent} onClose={() => setEditOpen(false)} />}
     </div>
