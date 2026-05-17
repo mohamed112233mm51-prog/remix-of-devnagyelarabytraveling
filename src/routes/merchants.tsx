@@ -682,11 +682,12 @@ function MerchantStatementTab({
               <tbody>
                 {withRunning.length === 0 ? (
                   <tr><td colSpan={8}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
-                ) : withRunning.map((m, i) => {
+                ) : pageMovements.map((m, i) => {
+                  const idx = page * pageSize + i;
                   const color = m.type === "وارد من وكيل" ? "#15803D" : "#B91C1C";
                   return (
                     <tr key={m.id}>
-                      <td data-label="#">{i + 1}</td>
+                      <td data-label="#">{idx + 1}</td>
                       <td data-label="التاريخ">{m.date}</td>
                       <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>
                       <td data-label="البيان">{m.statement}</td>
@@ -703,6 +704,7 @@ function MerchantStatementTab({
               </tfoot>
             </table>
           </div>
+          <Controls />
         </div>
       </div>
     </>
