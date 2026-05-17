@@ -45,9 +45,12 @@ function AccountsPage() {
   const totalPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
   const totalDue = totalTrips - totalPaid;
 
-  const filtered = agents.filter((a) =>
-    !search || a.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => agents.filter((a) =>
+    !debouncedSearch || a.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+  ), [agents, debouncedSearch]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   return (
     <div className="section active accounts-page">
