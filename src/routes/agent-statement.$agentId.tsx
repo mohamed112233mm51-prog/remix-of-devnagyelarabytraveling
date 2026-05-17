@@ -104,7 +104,7 @@ function AgentDetail() {
 
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"statement" | "pricing" | "services">("statement");
+  const [activeTab, setActiveTab] = useState<"statement" | "services">("statement");
 
   useEffect(() => {
     if (!agentsLoading && !agent) {
