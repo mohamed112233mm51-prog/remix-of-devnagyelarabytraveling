@@ -802,7 +802,7 @@ function TodayStat({ label, value, tone }: { label: string; value: string; tone?
   );
 }
 
-function SectionCard({
+const SectionCard = memo(function SectionCard({
   title, icon, accent, children,
 }: { title: string; icon: ReactNode; accent: "navy" | "gold"; children: ReactNode }) {
   return (
@@ -814,9 +814,9 @@ function SectionCard({
       <div className="dash-stats">{children}</div>
     </div>
   );
-}
+});
 
-function Stat({
+const Stat = memo(function Stat({
   label, value, tone, highlight,
 }: { label: string; value: string; tone?: "gold" | "green" | "red"; highlight?: boolean }) {
   return (
@@ -825,7 +825,7 @@ function Stat({
       <div className={`dash-stat-value ${tone ? `tone-${tone}` : ""}`}>{value}</div>
     </div>
   );
-}
+});
 
 const NAVY = BRAND_NAVY;
 const GOLD = BRAND_GOLD;
