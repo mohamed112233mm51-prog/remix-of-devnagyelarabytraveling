@@ -40,10 +40,12 @@ function LibyanInvestmentPage() {
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
+  const debouncedSearch = useDebouncedValue(search, 250);
+
   const filtered = useMemo(() => approvals.filter((a) => {
     if (a.service_type !== "libyan_investment") return false;
-    if (search) {
-      const q = search.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       const aName = (agents.find((ag) => ag.id === a.agent_id)?.name || "").toLowerCase();
       const hay = `${a.passenger_name} ${a.passport || ""} ${a.national_id || ""} ${aName}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -51,7 +53,9 @@ function LibyanInvestmentPage() {
     if (status && a.status !== status) return false;
     if (destination && a.destination !== destination) return false;
     return true;
-  }), [approvals, agents, search, status, destination]);
+  }), [approvals, agents, debouncedSearch, status, destination]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const today = new Date().toISOString().slice(0, 10);
