@@ -382,22 +382,19 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const updateRow = (st: string, patch: Partial<PricingRow>, source: "prices" | "percentage") => {
+  const updateRow = (st: string, patch: Partial<PricingRow>) => {
     setRows((prev) => {
       const cur = { ...(prev[st] || EMPTY_PRICING_ROW), ...patch };
       const cp = Number(cur.company_price) || 0;
       const ap = Number(cur.agent_price) || 0;
-      const pct = Number(cur.company_percentage) || 0;
-      if (source === "prices") {
+      if (ap >= cp && ap > 0) {
         const profit = r2(ap - cp);
-        const percentage = ap > 0 ? r2((profit / ap) * 100) : 0;
+        const percentage = r2((profit / ap) * 100);
         cur.company_profit_value = String(profit);
         cur.company_percentage = String(percentage);
       } else {
-        const profit = r2((ap * pct) / 100);
-        const newCp = r2(ap - profit);
-        cur.company_profit_value = String(profit);
-        cur.company_price = String(newCp);
+        cur.company_profit_value = "";
+        cur.company_percentage = "";
       }
       return { ...prev, [st]: cur };
     });
@@ -406,6 +403,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const confirmRow = (st: string) => {
     const r = rows[st];
     if (!r || (!Number(r.company_price) && !Number(r.agent_price))) return toast.error("أدخل السعر أولاً");
+    if (Number(r.agent_price) < Number(r.company_price)) return toast.error("سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة");
     toast.success(`تم تجهيز تسعير: ${st}`);
   };
   const clearRow = (st: string) => {
@@ -425,16 +423,22 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     if (error) return toast.error(error.message);
     const agentId = data?.id;
     if (agentId) {
-      const pricingRows = PRICING_SERVICE_TYPES
-        .filter((st) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0)
-        .map((st) => ({
-          agent_id: agentId,
-          service_type: st,
-          company_price: Number(rows[st].company_price) || 0,
-          agent_price: Number(rows[st].agent_price) || 0,
-          company_percentage: Number(rows[st].company_percentage) || 0,
-          company_profit_value: Number(rows[st].company_profit_value) || 0,
-        }));
+      const candidates = PRICING_SERVICE_TYPES
+        .filter((st) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0);
+      const invalid = candidates.find((st) => Number(rows[st].agent_price) < Number(rows[st].company_price));
+      if (invalid) {
+        toast.error(`(${invalid}) سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة`);
+        onDone();
+        return;
+      }
+      const pricingRows = candidates.map((st) => ({
+        agent_id: agentId,
+        service_type: st,
+        company_price: Number(rows[st].company_price) || 0,
+        agent_price: Number(rows[st].agent_price) || 0,
+        company_percentage: Number(rows[st].company_percentage) || 0,
+        company_profit_value: Number(rows[st].company_profit_value) || 0,
+      }));
       if (pricingRows.length) {
         const { error: pErr } = await supabase.from("agent_service_pricing").insert(pricingRows);
         if (pErr) toast.error("تم حفظ الوكيل لكن فشل حفظ التسعير: " + pErr.message);
@@ -479,9 +483,9 @@ function AgentForm({ onDone }: { onDone: () => void }) {
                   return (
                     <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value }, "prices")} /></td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value }, "prices")} /></td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} onChange={(e) => updateRow(st, { company_percentage: e.target.value }, "percentage")} /></td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value })} /></td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value })} /></td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                       <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
                         <button type="button" className="btn btn-gold" onClick={() => confirmRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>

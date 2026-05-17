@@ -26,22 +26,19 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
     setRows(next);
   }, [map]);
 
-  const updateRow = (st: string, patch: Partial<PricingRowState>, source: "prices" | "percentage") => {
+  const updateRow = (st: string, patch: Partial<PricingRowState>) => {
     setRows((prev) => {
       const cur = { ...(prev[st] || EMPTY_ROW), ...patch };
       const cp = Number(cur.company_price) || 0;
       const ap = Number(cur.agent_price) || 0;
-      const pct = Number(cur.company_percentage) || 0;
-      if (source === "prices") {
+      if (ap >= cp && ap > 0) {
         const profit = round2(ap - cp);
-        const percentage = ap > 0 ? round2((profit / ap) * 100) : 0;
+        const percentage = round2((profit / ap) * 100);
         cur.company_profit_value = String(profit);
         cur.company_percentage = String(percentage);
       } else {
-        const profit = round2((ap * pct) / 100);
-        const newCp = round2(ap - profit);
-        cur.company_profit_value = String(profit);
-        cur.company_price = String(newCp);
+        cur.company_profit_value = "";
+        cur.company_percentage = "";
       }
       return { ...prev, [st]: cur };
     });
@@ -49,12 +46,15 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
 
   const saveRow = async (st: string) => {
     const r = rows[st]; if (!r) return;
+    const cp = Number(r.company_price) || 0;
+    const ap = Number(r.agent_price) || 0;
+    if (ap < cp) return toast.error("سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة");
     setSaving(st);
     const payload = {
       agent_id: agentId,
       service_type: st,
-      company_price: Number(r.company_price) || 0,
-      agent_price: Number(r.agent_price) || 0,
+      company_price: cp,
+      agent_price: ap,
       company_percentage: Number(r.company_percentage) || 0,
       company_profit_value: Number(r.company_profit_value) || 0,
       updated_at: new Date().toISOString(),
@@ -97,9 +97,9 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
                 return (
                   <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value }, "prices")} /></td>
-                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value }, "prices")} /></td>
-                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} onChange={(e) => updateRow(st, { company_percentage: e.target.value }, "percentage")} /></td>
+                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value })} /></td>
+                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value })} /></td>
+                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                     <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                     <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
                       <button className="btn btn-gold" disabled={saving === st} onClick={() => saveRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
