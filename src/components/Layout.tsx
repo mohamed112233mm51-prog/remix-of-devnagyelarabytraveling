@@ -18,6 +18,7 @@ import {
   ChevronDown,
   UserCircle,
   PlusCircle,
+  Upload,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm } from "@/hooks/usePerm";
@@ -68,7 +69,10 @@ const NAV: { label: string; items: Item[] }[] = [
   },
   {
     label: "الإعدادات",
-    items: [{ to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", adminOnly: true }],
+    items: [
+      { to: "/data-import", icon: Upload, label: "مركز استيراد البيانات", section: "الإعدادات", adminOnly: true },
+      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", adminOnly: true },
+    ],
   },
 ];
 
@@ -85,6 +89,7 @@ const TITLES: Record<string, ReactNode> = {
   "/expenses": (<>إدارة <span>المصروفات</span></>),
   "/reports": (<>التقارير <span>والإحصائيات</span></>),
   "/settings": (<>الإعدادات <span>والصلاحيات</span></>),
+  "/data-import": (<>مركز <span>استيراد البيانات</span></>),
 };
 
 export default function Layout() {
