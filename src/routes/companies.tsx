@@ -10,6 +10,8 @@ import {
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, DollarSign, ArrowRightLeft } from "lucide-react";
