@@ -97,9 +97,9 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
                 return (
                   <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value }, "prices")} /></td>
-                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value }, "prices")} /></td>
-                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} onChange={(e) => updateRow(st, { company_percentage: e.target.value }, "percentage")} /></td>
+                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value })} /></td>
+                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value })} /></td>
+                    <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                     <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                     <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
                       <button className="btn btn-gold" disabled={saving === st} onClick={() => saveRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
