@@ -138,11 +138,12 @@ function AccountsPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr><td colSpan={11}><div className="empty"><div className="empty-icon">👥</div><div className="empty-text">أضف وكلاء من تبويب "وكيل جديد"</div></div></td></tr>
-                    ) : filtered.map((a, i) => {
+                    ) : pageRows.map((a, i) => {
+                      const idx = page * pageSize + i;
                       const s = stats.get(a.id) || { trips: 0, paid: 0 };
                       return (
                         <tr key={a.id}>
-                          <td data-label="#">{i + 1}</td>
+                          <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الاسم">{a.name}</td>
                           <td data-label="الرقم القومي">{a.national_id || "—"}</td>
                           <td data-label="الهاتف">{a.phone || "—"}</td>
