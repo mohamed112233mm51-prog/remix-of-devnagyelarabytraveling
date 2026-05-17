@@ -323,6 +323,7 @@ function LibyanInvestmentPage() {
                 </table>
               </div>
             )}
+            <Controls />
           </div>
         </>
       ) : (
