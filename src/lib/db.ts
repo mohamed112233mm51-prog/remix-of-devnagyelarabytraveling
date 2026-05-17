@@ -347,6 +347,11 @@ export type Expense = {
   notes: string | null;
   auto_deduct_enabled: boolean;
   auto_deduct_day: number | null;
+  funding_source: string | null;
+  merchant_id: string | null;
+  currency: string;
+  usd_amount: number;
+  exchange_rate: number | null;
   created_at: string;
 };
 
@@ -356,6 +361,11 @@ export type ExpenseDeduction = {
   deduction_date: string;
   amount: number;
   status: string;
+  funding_source: string | null;
+  merchant_id: string | null;
+  currency: string;
+  usd_amount: number;
+  exchange_rate: number | null;
   created_at: string;
 };
 
