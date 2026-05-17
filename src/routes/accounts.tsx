@@ -189,14 +189,18 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
   const save = async () => {
     if (!form.name.trim()) return toast.error("برجاء إدخال اسم الوكيل");
     if (!form.phone.trim()) return toast.error("برجاء إدخال رقم الهاتف");
-    const { error } = await supabase.from("agents").update({
+    const patch = {
       name: form.name.trim(),
       national_id: form.national_id.trim() || null,
       phone: form.phone.trim(),
       whatsapp: form.whatsapp.trim() || null,
       governorate: form.governorate || null,
-    }).eq("id", agent.id);
-    if (error) return toast.error(error.message);
+    };
+    const { ok } = await applyOptimistic({
+      table: "agents", type: "update", id: agent.id, patch,
+      run: () => supabase.from("agents").update(patch).eq("id", agent.id),
+    });
+    if (!ok) return;
     toast.success("تم تحديث بيانات الوكيل بنجاح");
     onClose();
   };
