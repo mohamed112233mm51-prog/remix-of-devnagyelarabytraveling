@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { openConfirmSave } from "@/components/ConfirmSaveModal";
 
 /**
  * Global ERP-style keyboard navigation.
