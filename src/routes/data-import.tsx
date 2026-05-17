@@ -26,6 +26,8 @@ const norm = (s: any) =>
 
 function DataImportPage() {
   const { isAdmin, user } = useAuth();
+  const { view: canView, create: canImport, delete: canUndo } = usePerm("data_import");
+  const allowed = isAdmin || canView;
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: merchants } = useLive<Merchant>("merchants");
@@ -72,18 +74,18 @@ function DataImportPage() {
       .select("*").order("created_at", { ascending: false }).limit(10);
     setBatches(Array.isArray(data) ? data : []);
   };
-  useEffect(() => { if (isAdmin) loadBatches(); }, [isAdmin]);
+  useEffect(() => { if (allowed) loadBatches(); }, [allowed]);
 
   const validation = useMemo(() => {
     if (!spec || !parsed) return null;
     return validateRows(spec, parsed.rows, mapping, lookups, existingKeys);
   }, [spec, parsed, mapping, lookups, existingKeys]);
 
-  if (!isAdmin) {
+  if (!allowed) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
         <h2 style={{ marginBottom: 8 }}>غير مصرح</h2>
-        <p style={{ color: "var(--text2)" }}>هذه الصفحة متاحة للمسؤولين فقط.</p>
+        <p style={{ color: "var(--text2)" }}>تحتاج صلاحية "إدارة واستيراد البيانات" للوصول إلى هذه الصفحة.</p>
         <Link to="/" style={{ display: "inline-block", marginTop: 16, color: "var(--primary)" }}>عودة للوحة التحكم</Link>
       </div>
     );
