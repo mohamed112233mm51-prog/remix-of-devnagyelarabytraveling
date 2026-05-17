@@ -149,6 +149,8 @@ function AgentDetail() {
         <div className="sum-box red"><div className="label">الصافي المستحق</div><div className="val">{fmtDL(due)}</div></div>
       </div>
 
+      <AgentPricingSection agentId={agent.id} />
+
       <div className="card">
         <div className="card-header"><div className="card-title">💳 كشف الحساب (الحركات المالية)</div></div>
         <div className="card-body">
