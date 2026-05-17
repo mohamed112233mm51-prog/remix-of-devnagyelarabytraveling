@@ -20,10 +20,14 @@ export function detectAppEnv(): AppEnv {
   if (override === "production" || override === "development") return override;
 
   // Hard pin: this project's Supabase ref is the DEV backend.
+  // Any OTHER Supabase project (i.e. a remixed Production clone with its own
+  // Cloud backend) defaults to production unless explicitly overridden.
   const projectId =
     (import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined) ?? "";
-  if (projectId === DEV_PROJECT_ID) return "development";
+  if (projectId && projectId === DEV_PROJECT_ID) return "development";
+  if (projectId && projectId !== DEV_PROJECT_ID) return "production";
 
+  // No project ID available — fall back to hostname heuristics.
   const host = readHostname();
   if (!host) return "development";
   if (host === "localhost" || host.endsWith(".localhost") || host.startsWith("127.")) {
@@ -32,8 +36,7 @@ export function detectAppEnv(): AppEnv {
   if (host.includes("id-preview--") || host.includes("-dev.lovable.app") || host.includes(".lovable.dev")) {
     return "development";
   }
-  // Default to development for this project — Production lives in a separate Lovable project.
-  return "development";
+  return "production";
 }
 
 export function isDevEnv(): boolean {
