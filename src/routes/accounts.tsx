@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashNetAmount, useLive, useDropdownOptions, withSelected, GOVERNORATES, buildTravelStatement, PRICING_SERVICE_TYPES, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashNetAmount, useLive, useDropdownOptions, withSelected, GOVERNORATES, buildTravelStatement, PRICING_SERVICE_TYPES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { AgentPricingSection } from "@/components/AgentPricingSection";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
@@ -189,14 +189,18 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
   const save = async () => {
     if (!form.name.trim()) return toast.error("برجاء إدخال اسم الوكيل");
     if (!form.phone.trim()) return toast.error("برجاء إدخال رقم الهاتف");
-    const { error } = await supabase.from("agents").update({
+    const patch = {
       name: form.name.trim(),
       national_id: form.national_id.trim() || null,
       phone: form.phone.trim(),
       whatsapp: form.whatsapp.trim() || null,
       governorate: form.governorate || null,
-    }).eq("id", agent.id);
-    if (error) return toast.error(error.message);
+    };
+    const { ok } = await applyOptimistic({
+      table: "agents", type: "update", id: agent.id, patch,
+      run: async () => await supabase.from("agents").update(patch).eq("id", agent.id),
+    });
+    if (!ok) return;
     toast.success("تم تحديث بيانات الوكيل بنجاح");
     onClose();
   };
@@ -631,7 +635,8 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
       return;
     }
 
-    const { error } = await supabase.from("transactions").insert({
+    const tempId = (crypto as any)?.randomUUID?.() || `tmp-${Date.now()}`;
+    const insertPayload = {
       agent_id: form.agent_id, date: form.date,
       destination: form.destination || null,
       travel_statement: travelStatement || null,
@@ -645,8 +650,13 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
       merchant_id: usesMerchant ? form.merchant_id : null,
       total_paid: newPayment,
       paid: newPayment,
+    };
+    const { ok } = await applyOptimistic({
+      table: "transactions", type: "insert", id: tempId,
+      patch: { ...insertPayload, created_at: new Date().toISOString() },
+      run: async () => await supabase.from("transactions").insert(insertPayload),
     });
-    if (error) return toast.error(error.message);
+    if (!ok) return;
     onDone();
   };
   return (

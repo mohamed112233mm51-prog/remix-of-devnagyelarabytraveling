@@ -484,6 +484,59 @@ export function patchLive(table: LiveTable, change: { type: "insert" | "update" 
   else applyChange(store, { eventType: "DELETE", old: change.row });
 }
 
+/** Read a row snapshot from the live cache (for optimistic rollback). */
+export function getLiveRow(table: LiveTable, id: string): any | undefined {
+  const store = liveStores.get(table);
+  return store?.rows.find((r) => r.id === id);
+}
+
+/**
+ * Run a server mutation with optimistic local-state updates + auto rollback.
+ * - update: patches the cached row immediately, rolls back to snapshot on error.
+ * - delete: removes the row immediately, restores snapshot on error.
+ * - insert: adds an optimistic row with a temp id, removes it on completion
+ *   (Realtime delivers the real row, deduped by server id).
+ */
+export async function applyOptimistic<T = any>(opts: {
+  table: LiveTable;
+  type: "update" | "delete" | "insert";
+  id: string;
+  patch?: Record<string, any>;
+  run: () => Promise<any>;
+  errorMessage?: string;
+}): Promise<{ ok: boolean; data?: T; error?: string }> {
+  const { table, type, id, patch, run, errorMessage } = opts;
+  const snapshot = getLiveRow(table, id);
+
+  if (type === "update" && snapshot) {
+    patchLive(table, { type: "update", row: { ...snapshot, ...patch, id } });
+  } else if (type === "delete" && snapshot) {
+    patchLive(table, { type: "delete", row: { id } });
+  } else if (type === "insert") {
+    patchLive(table, { type: "insert", row: { id, ...(patch || {}) } });
+  }
+
+  try {
+    const result: any = await run();
+    if (result?.error) throw new Error(result.error.message || "تعذر إتمام العملية");
+    if (type === "insert") {
+      patchLive(table, { type: "delete", row: { id } });
+    }
+    return { ok: true, data: result?.data ?? result };
+  } catch (e: any) {
+    if (type === "update" && snapshot) {
+      patchLive(table, { type: "update", row: snapshot });
+    } else if (type === "delete" && snapshot) {
+      patchLive(table, { type: "insert", row: snapshot });
+    } else if (type === "insert") {
+      patchLive(table, { type: "delete", row: { id } });
+    }
+    const msg = e?.message || errorMessage || "تعذر إتمام العملية";
+    toast.error(msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export const fmtNum = (n: number) =>
   new Intl.NumberFormat("ar-LY", { maximumFractionDigits: 0 }).format(n || 0);
 
