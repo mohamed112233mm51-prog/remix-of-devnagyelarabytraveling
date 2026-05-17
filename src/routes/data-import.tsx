@@ -113,17 +113,22 @@ function DataImportPage() {
 
   const runImport = async () => {
     if (!spec || !parsed) return;
+    if (!(isAdmin || canImport)) {
+      toast.error("لا تملك صلاحية تنفيذ الاستيراد");
+      return;
+    }
+    if (!confirm(`تأكيد استيراد البيانات إلى "${spec.label}"؟ سيتم إضافتها كسجلات حقيقية داخل النظام.`)) return;
     setImporting(true);
     setProgress(0);
+    let insertedIds: string[] = [];
+    let failed = 0;
+    let createdMsg = "";
     try {
-      // 1) Auto-create missing lookups (agents/companies/merchants/investors) so
-      //    referenced names become real records — exactly like manual entry.
       const { created } = await autoCreateMissingLookups(spec, parsed.rows, mapping, lookups);
-      const createdMsg = Object.entries(created)
+      createdMsg = Object.entries(created)
         .map(([k, n]) => `${n} ${k === "agent" ? "وكيل" : k === "company" ? "شركة" : k === "merchant" ? "تاجر" : "مستثمر"}`)
         .join("، ");
 
-      // 2) Revalidate with the now-complete lookups.
       const v2 = validateRows(spec, parsed.rows, mapping, lookups, existingKeys);
       if (!v2.validRows.length) {
         toast.error("لا توجد صفوف صالحة للاستيراد");
@@ -131,13 +136,12 @@ function DataImportPage() {
         return;
       }
 
-      // 3) Batch insert into the real operational table.
-      const { insertedIds, failed } = await batchInsert(spec.table, v2.validRows, (d, t) => {
+      const res = await batchInsert(spec.table, v2.validRows, (d, t) => {
         setProgress(Math.round((d / t) * 100));
       });
+      insertedIds = res.insertedIds;
+      failed = res.failed;
 
-      // 4) For expenses: mirror each inserted expense into expense_deductions so
-      //    it actually affects treasury balances (instapay/cash/USD/merchants).
       if (spec.id === "expenses" && insertedIds.length) {
         const deductions = v2.validRows.slice(0, insertedIds.length).map((r, i) => ({
           expense_id: insertedIds[i],
@@ -163,6 +167,28 @@ function DataImportPage() {
         userEmail: user?.email ?? null,
         insertedIds,
       });
+
+      // Full activity log entry: user, date, type, count, errors
+      try {
+        await supabase.from("activity_logs").insert({
+          user_id: user?.id ?? null,
+          user_email: user?.email ?? null,
+          action: "data_import",
+          entity: spec.table,
+          details: {
+            import_type: spec.id,
+            label: spec.label,
+            file_name: file?.name || "",
+            rows_total: parsed.rows.length,
+            rows_inserted: insertedIds.length,
+            rows_failed: failed,
+            rows_invalid: v2.errors.length,
+            duplicates: v2.duplicates,
+            auto_created: created,
+          },
+        });
+      } catch { /* logging best-effort */ }
+
       toast.success(
         `تم استيراد ${insertedIds.length} سجل${failed ? ` — فشل ${failed}` : ""}` +
         (createdMsg ? ` — وأُنشئ تلقائيًا: ${createdMsg}` : ""),
@@ -177,9 +203,22 @@ function DataImportPage() {
   };
 
   const handleUndo = async (b: any) => {
+    if (!(isAdmin || canUndo)) {
+      toast.error("لا تملك صلاحية التراجع عن الاستيراد");
+      return;
+    }
     if (!confirm(`تأكيد التراجع عن استيراد ${b.rows_inserted} سجل؟`)) return;
     try {
       await undoBatch(b.id, b.target_table, Array.isArray(b.inserted_ids) ? b.inserted_ids : []);
+      try {
+        await supabase.from("activity_logs").insert({
+          user_id: user?.id ?? null,
+          user_email: user?.email ?? null,
+          action: "data_import_undo",
+          entity: b.target_table,
+          details: { batch_id: b.id, rows: b.rows_inserted, import_type: b.import_type },
+        });
+      } catch {}
       toast.success("تم التراجع");
       await loadBatches();
     } catch (e: any) {
