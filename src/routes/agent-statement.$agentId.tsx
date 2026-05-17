@@ -151,22 +151,31 @@ function AgentDetail() {
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 12 }}>
-          <button
-            type="button"
-            className={activeTab === "statement" ? "btn btn-gold" : "action-btn"}
-            onClick={() => setActiveTab("statement")}
-          >💳 كشف الحساب</button>
-          <button
-            type="button"
-            className={activeTab === "pricing" ? "btn btn-gold" : "action-btn"}
-            onClick={() => setActiveTab("pricing")}
-          >💰 تسعير الخدمات</button>
-          <button
-            type="button"
-            className={activeTab === "services" ? "btn btn-gold" : "action-btn"}
-            onClick={() => setActiveTab("services")}
-          >✈️ الرحلات والتقديمات</button>
+        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 12, justifyContent: "flex-start" }}>
+          {([
+            { k: "statement", label: "💳 كشف الحساب" },
+            { k: "pricing", label: "💰 تسعير الخدمات" },
+            { k: "services", label: "✈️ الرحلات والتقديمات" },
+          ] as const).map((t) => (
+            <button
+              key={t.k}
+              type="button"
+              onClick={() => setActiveTab(t.k)}
+              style={{
+                padding: "10px 16px",
+                fontSize: 14,
+                fontWeight: 700,
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+                background: activeTab === t.k ? "var(--primary)" : "var(--card)",
+                color: activeTab === t.k ? "#fff" : "var(--text)",
+                minWidth: 140,
+                flex: "1 1 auto",
+                transition: "all .15s ease",
+              }}
+            >{t.label}</button>
+          ))}
         </div>
       </div>
 
