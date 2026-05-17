@@ -275,9 +275,11 @@ function ApprovalsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((a, i) => (
-                      <tr key={a.id} className="fl-row" style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
-                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{i + 1}</td>
+                    {pageRows.map((a, i) => {
+                      const idx = page * pageSize + i;
+                      return (
+                      <tr key={a.id} className="fl-row" style={{ background: idx % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{idx + 1}</td>
                         <td data-label="الاسم" style={{ padding: "10px 12px", fontWeight: 700, color: "#0f172a" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
@@ -308,7 +310,8 @@ function ApprovalsPage() {
                           ) : "—"}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#f8fafc" }}>
