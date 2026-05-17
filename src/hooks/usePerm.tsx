@@ -15,6 +15,7 @@ export const SECTION_KEYS = [
   "companies",
   "merchants",
   "investors",
+  "data_import",
 ] as const;
 
 // Map route path -> permission section key (null = always allowed)
@@ -29,6 +30,7 @@ export const ROUTE_PERM: Record<string, string | null> = {
   "/investors": "investors",
   "/expenses": "expenses",
   "/reports": "reports",
+  "/data-import": "data_import",
 };
 
 export function checkPerm(
