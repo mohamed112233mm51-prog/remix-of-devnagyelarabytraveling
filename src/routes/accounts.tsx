@@ -371,18 +371,40 @@ function AgentStatementTab({ agents, txns, merchants: _merchants, initialAgentId
 
 function AgentForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
+  const [prices, setPrices] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const st of PRICING_SERVICE_TYPES) m[st] = "";
+    return m;
+  });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
     if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
-    const { error } = await supabase.from("agents").insert({
+    const { data, error } = await supabase.from("agents").insert({
       name: form.name,
       national_id: form.national_id || null,
       phone: form.phone,
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
-    });
+    }).select("id").single();
     if (error) return toast.error(error.message);
+    const agentId = data?.id;
+    if (agentId) {
+      const rows = PRICING_SERVICE_TYPES
+        .filter((st) => Number(prices[st]) > 0)
+        .map((st) => ({
+          agent_id: agentId,
+          service_type: st,
+          agent_price: Number(prices[st]) || 0,
+          company_price: 0,
+          company_percentage: 0,
+          company_profit_value: 0,
+        }));
+      if (rows.length) {
+        const { error: pErr } = await supabase.from("agent_service_pricing").insert(rows);
+        if (pErr) toast.error("تم حفظ الوكيل لكن فشل حفظ التسعير: " + pErr.message);
+      }
+    }
     onDone();
   };
   return (
@@ -400,6 +422,38 @@ function AgentForm({ onDone }: { onDone: () => void }) {
           </select>
         </div>
       </div>
+
+      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+        <div className="card-header"><div className="card-title">💰 تسعير الخدمات</div></div>
+        <div className="card-body">
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "var(--card)" }}>
+                  <th style={{ padding: 8, textAlign: "right" }}>نوع الخدمة</th>
+                  <th style={{ padding: 8 }}>السعر</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PRICING_SERVICE_TYPES.map((st) => (
+                  <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: 8, fontWeight: 700 }}>{st}</td>
+                    <td style={{ padding: 6 }}>
+                      <input
+                        type="number"
+                        style={{ width: "100%" }}
+                        value={prices[st]}
+                        onChange={(e) => setPrices((p) => ({ ...p, [st]: e.target.value }))}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button></div>
     </div>
   );
