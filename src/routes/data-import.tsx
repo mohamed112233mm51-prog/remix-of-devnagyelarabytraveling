@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, FileSpreadsheet, Download, Check, AlertTriangle, Undo2, ArrowRight, ArrowLeft, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { usePerm } from "@/hooks/usePerm";
 import { useLive, type Agent, type IssuingCompany, type Merchant, type Investor } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
