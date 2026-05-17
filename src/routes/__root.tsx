@@ -128,6 +128,7 @@ import SetPassword from "../components/SetPassword";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "../hooks/useAuth";
 import { useGlobalKeyboardNav } from "../hooks/useKeyboardNav";
+import { ConfirmSaveModalHost } from "../components/ConfirmSaveModal";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
