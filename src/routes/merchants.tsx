@@ -9,6 +9,8 @@ import {
   type Transaction, type CompanyTransaction,
 } from "@/lib/db";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 
