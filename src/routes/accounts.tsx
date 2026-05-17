@@ -169,6 +169,7 @@ function AccountsPage() {
                   </tfoot>
                 </table>
               </div>
+              <Controls />
             </div>
           </div>
         </>
