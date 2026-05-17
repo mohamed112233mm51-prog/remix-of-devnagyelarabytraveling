@@ -373,47 +373,115 @@ export type UsdTreasuryTransaction = {
   created_at: string;
 };
 
-export function useLive<T>(table: "agents" | "flights" | "approvals" | "transactions" | "issuing_companies" | "company_transactions" | "merchants" | "merchant_cash_collections" | "investors" | "investor_transactions" | "expenses" | "expense_deductions" | "usd_treasury_transactions") {
-  const [rows, setRows] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type LiveTable =
+  | "agents" | "flights" | "approvals" | "transactions" | "issuing_companies"
+  | "company_transactions" | "merchants" | "merchant_cash_collections"
+  | "investors" | "investor_transactions" | "expenses" | "expense_deductions"
+  | "usd_treasury_transactions";
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const { data, error: queryError } = await supabase.from(table).select("*").order("created_at", { ascending: false });
-        if (!mounted) return;
-        if (queryError) {
-          setRows([]);
-          setError(queryError.message);
-          toast.error(queryError.message || "تعذر تحميل البيانات");
-          return;
-        }
-        setRows(Array.isArray(data) ? (data as T[]) : []);
-        setError(null);
-      } catch (err: any) {
-        if (!mounted) return;
-        setRows([]);
-        setError(err?.message || "تعذر تحميل البيانات");
-        toast.error(err?.message || "تعذر تحميل البيانات");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    const channelName = `live-${table}-${Math.random().toString(36).slice(2)}`;
+type LiveStore = {
+  rows: any[];
+  loading: boolean;
+  error: string | null;
+  subscribers: Set<() => void>;
+  refCount: number;
+  channel: any;
+  loaded: boolean;
+};
+
+// Module-level shared cache: one fetch + one realtime channel per table,
+// shared across every component instance. Realtime payloads are applied
+// in-memory (no refetch), so updates are O(1) and propagate to all
+// subscribers instantly.
+const liveStores: Map<LiveTable, LiveStore> = new Map();
+
+function getStore(table: LiveTable): LiveStore {
+  let s = liveStores.get(table);
+  if (!s) {
+    s = { rows: [], loading: true, error: null, subscribers: new Set(), refCount: 0, channel: null, loaded: false };
+    liveStores.set(table, s);
+  }
+  return s;
+}
+
+function notify(store: LiveStore) {
+  store.subscribers.forEach((fn) => fn());
+}
+
+async function loadStore(table: LiveTable, store: LiveStore) {
+  try {
+    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
+    if (error) {
+      store.rows = [];
+      store.error = error.message;
+      toast.error(error.message || "تعذر تحميل البيانات");
+    } else {
+      store.rows = Array.isArray(data) ? data : [];
+      store.error = null;
+    }
+  } catch (err: any) {
+    store.rows = [];
+    store.error = err?.message || "تعذر تحميل البيانات";
+    toast.error(store.error!);
+  } finally {
+    store.loading = false;
+    store.loaded = true;
+    notify(store);
+  }
+}
+
+function applyChange(store: LiveStore, payload: any) {
+  const { eventType, new: newRow, old: oldRow } = payload;
+  if (eventType === "INSERT" && newRow) {
+    if (!store.rows.some((r) => r.id === newRow.id)) {
+      store.rows = [newRow, ...store.rows];
+    }
+  } else if (eventType === "UPDATE" && newRow) {
+    store.rows = store.rows.map((r) => (r.id === newRow.id ? { ...r, ...newRow } : r));
+  } else if (eventType === "DELETE" && oldRow) {
+    store.rows = store.rows.filter((r) => r.id !== oldRow.id);
+  }
+  notify(store);
+}
+
+function subscribe(table: LiveTable, cb: () => void): () => void {
+  const store = getStore(table);
+  store.subscribers.add(cb);
+  store.refCount += 1;
+  if (store.refCount === 1) {
+    loadStore(table, store);
     const channel = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table }, () => load())
+      .channel(`live-${table}`)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table }, (payload: any) => applyChange(store, payload))
       .subscribe();
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [table]);
+    store.channel = channel;
+  }
+  return () => {
+    store.subscribers.delete(cb);
+    store.refCount -= 1;
+    if (store.refCount === 0 && store.channel) {
+      supabase.removeChannel(store.channel);
+      store.channel = null;
+      store.loaded = false;
+      store.loading = true;
+    }
+  };
+}
 
-  return { rows, loading, error };
+export function useLive<T>(table: LiveTable) {
+  const [, force] = useState(0);
+  useEffect(() => subscribe(table, () => force((n) => n + 1)), [table]);
+  const store = getStore(table);
+  return { rows: store.rows as T[], loading: store.loading, error: store.error };
+}
+
+/** Optimistic helper: mutate the local cache for a table immediately. */
+export function patchLive(table: LiveTable, change: { type: "insert" | "update" | "delete"; row: any }) {
+  const store = liveStores.get(table);
+  if (!store) return;
+  if (change.type === "insert") applyChange(store, { eventType: "INSERT", new: change.row });
+  else if (change.type === "update") applyChange(store, { eventType: "UPDATE", new: change.row });
+  else applyChange(store, { eventType: "DELETE", old: change.row });
 }
 
 export const fmtNum = (n: number) =>
