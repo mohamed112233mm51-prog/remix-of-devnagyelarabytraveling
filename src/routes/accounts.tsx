@@ -382,22 +382,19 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const updateRow = (st: string, patch: Partial<PricingRow>, source: "prices" | "percentage") => {
+  const updateRow = (st: string, patch: Partial<PricingRow>) => {
     setRows((prev) => {
       const cur = { ...(prev[st] || EMPTY_PRICING_ROW), ...patch };
       const cp = Number(cur.company_price) || 0;
       const ap = Number(cur.agent_price) || 0;
-      const pct = Number(cur.company_percentage) || 0;
-      if (source === "prices") {
+      if (ap >= cp && ap > 0) {
         const profit = r2(ap - cp);
-        const percentage = ap > 0 ? r2((profit / ap) * 100) : 0;
+        const percentage = r2((profit / ap) * 100);
         cur.company_profit_value = String(profit);
         cur.company_percentage = String(percentage);
       } else {
-        const profit = r2((ap * pct) / 100);
-        const newCp = r2(ap - profit);
-        cur.company_profit_value = String(profit);
-        cur.company_price = String(newCp);
+        cur.company_profit_value = "";
+        cur.company_percentage = "";
       }
       return { ...prev, [st]: cur };
     });
@@ -406,6 +403,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const confirmRow = (st: string) => {
     const r = rows[st];
     if (!r || (!Number(r.company_price) && !Number(r.agent_price))) return toast.error("أدخل السعر أولاً");
+    if (Number(r.agent_price) < Number(r.company_price)) return toast.error("سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة");
     toast.success(`تم تجهيز تسعير: ${st}`);
   };
   const clearRow = (st: string) => {
