@@ -43,10 +43,12 @@ function FlightsPage() {
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
+  const debouncedSearch = useDebouncedValue(search, 250);
+
   const filtered = useMemo(() => {
     return flights.filter((f) => {
-      if (search) {
-        const q = search.toLowerCase();
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase();
         const aName = (agents.find((a) => a.id === f.agent_id)?.name || "").toLowerCase();
         const hay = `${f.passenger_name} ${f.passport || ""} ${f.national_id || ""} ${aName}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -57,7 +59,9 @@ function FlightsPage() {
       if (issuingCompany && f.issuing_company !== issuingCompany) return false;
       return true;
     });
-  }, [flights, agents, search, airline, destination, status, issuingCompany]);
+  }, [flights, agents, debouncedSearch, airline, destination, status, issuingCompany]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const today = new Date().toISOString().slice(0, 10);
