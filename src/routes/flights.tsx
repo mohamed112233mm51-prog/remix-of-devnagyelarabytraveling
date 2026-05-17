@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
+import { badgeFor, fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, applyOptimistic, type Agent, type Flight, type IssuingCompany } from "@/lib/db";
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
@@ -580,8 +580,11 @@ function EditFlightModal({ flight, agents, companies, onClose }: { flight: Fligh
       company_value: Number(form.company_value) || 0,
     };
     try {
-      const { error } = await supabase.from("flights").update(payload).eq("id", flight.id);
-      if (error) return toast.error(error.message);
+      const r = await applyOptimistic({
+        table: "flights", type: "update", id: flight.id, patch: payload,
+        run: async () => await supabase.from("flights").update(payload).eq("id", flight.id),
+      });
+      if (!r.ok) { setSaving(false); return; }
       try {
         await updateServiceFinancials({
           serviceId: flight.id,

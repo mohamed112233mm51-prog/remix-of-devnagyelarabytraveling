@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
+import { fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, buildTravelStatement, applyOptimistic, type Agent, type Approval, type IssuingCompany } from "@/lib/db";
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
@@ -581,8 +581,12 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
       count, price, company_value: companyValue,
     };
     try {
-      const { error } = await supabase.from("approvals").update({ ...payload, service_type: "security_approval" }).eq("id", approval.id);
-      if (error) return toast.error(error.message);
+      const updatePayload = { ...payload, service_type: "security_approval" };
+      const r = await applyOptimistic({
+        table: "approvals", type: "update", id: approval.id, patch: updatePayload,
+        run: async () => await supabase.from("approvals").update(updatePayload).eq("id", approval.id),
+      });
+      if (!r.ok) { setSaving(false); return; }
       try {
         await updateServiceFinancials({
           serviceId: approval.id,
