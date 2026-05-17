@@ -198,7 +198,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     };
     const { ok } = await applyOptimistic({
       table: "agents", type: "update", id: agent.id, patch,
-      run: () => supabase.from("agents").update(patch).eq("id", agent.id),
+      run: async () => await supabase.from("agents").update(patch).eq("id", agent.id),
     });
     if (!ok) return;
     toast.success("تم تحديث بيانات الوكيل بنجاح");
