@@ -206,6 +206,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AuthGate />
+        <ConfirmSaveModalHost />
         <Toaster position="top-center" dir="rtl" richColors />
       </AuthProvider>
     </QueryClientProvider>
