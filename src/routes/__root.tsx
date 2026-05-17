@@ -127,6 +127,7 @@ import Login from "../components/Login";
 import SetPassword from "../components/SetPassword";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "../hooks/useAuth";
+import { useGlobalKeyboardNav } from "../hooks/useKeyboardNav";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
@@ -164,6 +165,7 @@ function SplashScreen() {
 function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
+  useGlobalKeyboardNav();
   useEffect(() => { installServerFnAuthFetch(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
