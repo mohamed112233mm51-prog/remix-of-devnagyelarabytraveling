@@ -169,12 +169,13 @@ function CompaniesPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
-                    ) : filtered.map((c, i) => {
+                    ) : pageRows.map((c, i) => {
+                      const idx = page * pageSize + i;
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
                       const due = s.trips - s.paid;
                       return (
                         <tr key={c.id}>
-                          <td data-label="#">{i + 1}</td>
+                          <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
                           <td data-label="الواتساب">{c.whatsapp || "—"}</td>
