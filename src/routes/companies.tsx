@@ -60,9 +60,12 @@ function CompaniesPage() {
   const totalPaid = txns.reduce((s, t) => s + Number(t.total_paid || 0), 0);
   const totalDue = totalTrips - totalPaid;
 
-  const filtered = companies.filter((c) =>
-    !search || c.company_name.toLowerCase().includes(search.toLowerCase())
-  );
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => companies.filter((c) =>
+    !debouncedSearch || c.company_name.toLowerCase().includes(debouncedSearch.toLowerCase())
+  ), [companies, debouncedSearch]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   return (
     <div className="section active fin-page accounts-page">
