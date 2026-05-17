@@ -8,6 +8,7 @@ import {
   type Agent, type Approval, type Flight, type Transaction, type Merchant,
 } from "@/lib/db";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
+import { AgentPricingSection } from "@/components/AgentPricingSection";
 
 export const Route = createFileRoute("/agent-statement/$agentId")({
   component: AgentDetail,
@@ -147,6 +148,8 @@ function AgentDetail() {
         <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPaid)}</div></div>
         <div className="sum-box red"><div className="label">الصافي المستحق</div><div className="val">{fmtDL(due)}</div></div>
       </div>
+
+      <AgentPricingSection agentId={agent.id} />
 
       <div className="card">
         <div className="card-header"><div className="card-title">💳 كشف الحساب (الحركات المالية)</div></div>

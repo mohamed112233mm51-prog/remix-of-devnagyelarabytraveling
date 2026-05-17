@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashNetAmount, useLive, useDropdownOptions, useAgentPricingMap, withSelected, GOVERNORATES, PRICING_SERVICE_TYPES, buildTravelStatement, type Agent, type AgentServicePricing, type Merchant, type Transaction } from "@/lib/db";
+import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashNetAmount, useLive, useDropdownOptions, withSelected, GOVERNORATES, buildTravelStatement, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { AgentPricingSection } from "@/components/AgentPricingSection";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { toast } from "sonner";
@@ -227,117 +228,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
   );
 }
 
-type PricingRowState = { company_price: string; agent_price: string; company_percentage: string; company_profit_value: string };
-const EMPTY_ROW: PricingRowState = { company_price: "", agent_price: "", company_percentage: "", company_profit_value: "" };
 
-function round2(n: number) { return Math.round(n * 100) / 100; }
-
-function AgentPricingSection({ agentId }: { agentId: string }) {
-  const map = useAgentPricingMap(agentId);
-  const [rows, setRows] = useState<Record<string, PricingRowState>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-
-  useEffect(() => {
-    const next: Record<string, PricingRowState> = {};
-    for (const st of PRICING_SERVICE_TYPES) {
-      const r = map[st];
-      next[st] = r ? {
-        company_price: String(r.company_price ?? 0),
-        agent_price: String(r.agent_price ?? 0),
-        company_percentage: String(r.company_percentage ?? 0),
-        company_profit_value: String(r.company_profit_value ?? 0),
-      } : { ...EMPTY_ROW };
-    }
-    setRows(next);
-  }, [map]);
-
-  const updateRow = (st: string, patch: Partial<PricingRowState>, source: "prices" | "percentage") => {
-    setRows((prev) => {
-      const cur = { ...(prev[st] || EMPTY_ROW), ...patch };
-      const cp = Number(cur.company_price) || 0;
-      const ap = Number(cur.agent_price) || 0;
-      const pct = Number(cur.company_percentage) || 0;
-      if (source === "prices") {
-        const profit = round2(ap - cp);
-        const percentage = ap > 0 ? round2((profit / ap) * 100) : 0;
-        cur.company_profit_value = String(profit);
-        cur.company_percentage = String(percentage);
-      } else {
-        const profit = round2((ap * pct) / 100);
-        const newCp = round2(ap - profit);
-        cur.company_profit_value = String(profit);
-        cur.company_price = String(newCp);
-      }
-      return { ...prev, [st]: cur };
-    });
-  };
-
-  const saveRow = async (st: string) => {
-    const r = rows[st]; if (!r) return;
-    setSaving(st);
-    const payload = {
-      agent_id: agentId,
-      service_type: st,
-      company_price: Number(r.company_price) || 0,
-      agent_price: Number(r.agent_price) || 0,
-      company_percentage: Number(r.company_percentage) || 0,
-      company_profit_value: Number(r.company_profit_value) || 0,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from("agent_service_pricing").upsert(payload, { onConflict: "agent_id,service_type" });
-    setSaving(null);
-    if (error) return toast.error(error.message);
-    toast.success("تم حفظ التسعير");
-  };
-
-  const deleteRow = async (st: string) => {
-    if (!map[st]) {
-      setRows((p) => ({ ...p, [st]: { ...EMPTY_ROW } }));
-      return;
-    }
-    const { error } = await supabase.from("agent_service_pricing").delete().eq("agent_id", agentId).eq("service_type", st);
-    if (error) return toast.error(error.message);
-    toast.success("تم حذف التسعير");
-  };
-
-  return (
-    <div style={{ marginTop: 16, padding: 12, border: "1px solid var(--border)", borderRadius: 10, background: "#f8fafc" }}>
-      <div style={{ fontSize: 14, fontWeight: 800, color: "#0f1b3d", marginBottom: 10 }}>💰 تسعير الخدمات</div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ background: "var(--card)" }}>
-              <th style={{ padding: 6, textAlign: "right" }}>نوع الخدمة</th>
-              <th style={{ padding: 6 }}>سعر الشركة</th>
-              <th style={{ padding: 6 }}>سعر الوكيل</th>
-              <th style={{ padding: 6 }}>نسبة الشركة %</th>
-              <th style={{ padding: 6 }}>ربح الشركة</th>
-              <th style={{ padding: 6 }}>إجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {PRICING_SERVICE_TYPES.map((st) => {
-              const r = rows[st] || EMPTY_ROW;
-              return (
-                <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                  <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value }, "prices")} /></td>
-                  <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value }, "prices")} /></td>
-                  <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} onChange={(e) => updateRow(st, { company_percentage: e.target.value }, "percentage")} /></td>
-                  <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
-                  <td style={{ padding: 6, display: "flex", gap: 4 }}>
-                    <button className="btn btn-gold" disabled={saving === st} onClick={() => saveRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
-                    <button className="action-btn" onClick={() => deleteRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حذف</button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 function AgentStatementTab({ agents, txns, merchants: _merchants, initialAgentId, canExport }: { agents: Agent[]; txns: Transaction[]; merchants: Merchant[]; initialAgentId: string; canExport: boolean }) {
   const [agentId, setAgentId] = useState(initialAgentId || "");
