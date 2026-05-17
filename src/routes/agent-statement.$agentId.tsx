@@ -8,6 +8,7 @@ import {
   type Agent, type Approval, type Flight, type Transaction, type Merchant,
 } from "@/lib/db";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
+import { AgentPricingSection } from "@/components/AgentPricingSection";
 
 export const Route = createFileRoute("/agent-statement/$agentId")({
   component: AgentDetail,
