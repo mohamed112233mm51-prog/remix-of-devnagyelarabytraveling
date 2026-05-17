@@ -369,14 +369,49 @@ function AgentStatementTab({ agents, txns, merchants: _merchants, initialAgentId
   );
 }
 
+type PricingRow = { company_price: string; agent_price: string; company_percentage: string; company_profit_value: string };
+const EMPTY_PRICING_ROW: PricingRow = { company_price: "", agent_price: "", company_percentage: "", company_profit_value: "" };
+function r2(n: number) { return Math.round(n * 100) / 100; }
+
 function AgentForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
-  const [prices, setPrices] = useState<Record<string, string>>(() => {
-    const m: Record<string, string> = {};
-    for (const st of PRICING_SERVICE_TYPES) m[st] = "";
+  const [rows, setRows] = useState<Record<string, PricingRow>>(() => {
+    const m: Record<string, PricingRow> = {};
+    for (const st of PRICING_SERVICE_TYPES) m[st] = { ...EMPTY_PRICING_ROW };
     return m;
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  const updateRow = (st: string, patch: Partial<PricingRow>, source: "prices" | "percentage") => {
+    setRows((prev) => {
+      const cur = { ...(prev[st] || EMPTY_PRICING_ROW), ...patch };
+      const cp = Number(cur.company_price) || 0;
+      const ap = Number(cur.agent_price) || 0;
+      const pct = Number(cur.company_percentage) || 0;
+      if (source === "prices") {
+        const profit = r2(ap - cp);
+        const percentage = ap > 0 ? r2((profit / ap) * 100) : 0;
+        cur.company_profit_value = String(profit);
+        cur.company_percentage = String(percentage);
+      } else {
+        const profit = r2((ap * pct) / 100);
+        const newCp = r2(ap - profit);
+        cur.company_profit_value = String(profit);
+        cur.company_price = String(newCp);
+      }
+      return { ...prev, [st]: cur };
+    });
+  };
+
+  const confirmRow = (st: string) => {
+    const r = rows[st];
+    if (!r || (!Number(r.company_price) && !Number(r.agent_price))) return toast.error("أدخل السعر أولاً");
+    toast.success(`تم تجهيز تسعير: ${st}`);
+  };
+  const clearRow = (st: string) => {
+    setRows((p) => ({ ...p, [st]: { ...EMPTY_PRICING_ROW } }));
+  };
+
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
     if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
@@ -390,18 +425,18 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     if (error) return toast.error(error.message);
     const agentId = data?.id;
     if (agentId) {
-      const rows = PRICING_SERVICE_TYPES
-        .filter((st) => Number(prices[st]) > 0)
+      const pricingRows = PRICING_SERVICE_TYPES
+        .filter((st) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0)
         .map((st) => ({
           agent_id: agentId,
           service_type: st,
-          agent_price: Number(prices[st]) || 0,
-          company_price: 0,
-          company_percentage: 0,
-          company_profit_value: 0,
+          company_price: Number(rows[st].company_price) || 0,
+          agent_price: Number(rows[st].agent_price) || 0,
+          company_percentage: Number(rows[st].company_percentage) || 0,
+          company_profit_value: Number(rows[st].company_profit_value) || 0,
         }));
-      if (rows.length) {
-        const { error: pErr } = await supabase.from("agent_service_pricing").insert(rows);
+      if (pricingRows.length) {
+        const { error: pErr } = await supabase.from("agent_service_pricing").insert(pricingRows);
         if (pErr) toast.error("تم حفظ الوكيل لكن فشل حفظ التسعير: " + pErr.message);
       }
     }
@@ -431,23 +466,30 @@ function AgentForm({ onDone }: { onDone: () => void }) {
               <thead>
                 <tr style={{ background: "var(--card)" }}>
                   <th style={{ padding: 8, textAlign: "right" }}>نوع الخدمة</th>
-                  <th style={{ padding: 8 }}>السعر</th>
+                  <th style={{ padding: 8 }}>سعر الشركة</th>
+                  <th style={{ padding: 8 }}>سعر الوكيل</th>
+                  <th style={{ padding: 8 }}>نسبة الشركة %</th>
+                  <th style={{ padding: 8 }}>ربح الشركة</th>
+                  <th style={{ padding: 8 }}>إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {PRICING_SERVICE_TYPES.map((st) => (
-                  <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: 8, fontWeight: 700 }}>{st}</td>
-                    <td style={{ padding: 6 }}>
-                      <input
-                        type="number"
-                        style={{ width: "100%" }}
-                        value={prices[st]}
-                        onChange={(e) => setPrices((p) => ({ ...p, [st]: e.target.value }))}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {PRICING_SERVICE_TYPES.map((st) => {
+                  const r = rows[st] || EMPTY_PRICING_ROW;
+                  return (
+                    <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value }, "prices")} /></td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value }, "prices")} /></td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} onChange={(e) => updateRow(st, { company_percentage: e.target.value }, "percentage")} /></td>
+                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
+                      <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        <button type="button" className="btn btn-gold" onClick={() => confirmRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
+                        <button type="button" className="action-btn" onClick={() => clearRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حذف</button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
