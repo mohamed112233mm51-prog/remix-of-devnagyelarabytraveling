@@ -11,6 +11,8 @@ import { suggestMapping } from "@/lib/dataImport/mapper";
 import { validateRows, type Lookups, type RowError } from "@/lib/dataImport/validate";
 import { batchInsert, recordBatch, undoBatch } from "@/lib/dataImport/insert";
 import { downloadTemplate } from "@/lib/dataImport/templates";
+import { autoCreateMissingLookups } from "@/lib/dataImport/autoCreate";
+import { patchLive } from "@/lib/db";
 
 export const Route = createFileRoute("/data-import")({
   component: DataImportPage,
@@ -107,17 +109,50 @@ function DataImportPage() {
   };
 
   const runImport = async () => {
-    if (!spec || !validation) return;
-    if (!validation.validRows.length) {
-      toast.error("لا توجد صفوف صالحة للاستيراد");
-      return;
-    }
+    if (!spec || !parsed) return;
     setImporting(true);
     setProgress(0);
     try {
-      const { insertedIds, failed } = await batchInsert(spec.table, validation.validRows, (d, t) => {
+      // 1) Auto-create missing lookups (agents/companies/merchants/investors) so
+      //    referenced names become real records — exactly like manual entry.
+      const { created } = await autoCreateMissingLookups(spec, parsed.rows, mapping, lookups);
+      const createdMsg = Object.entries(created)
+        .map(([k, n]) => `${n} ${k === "agent" ? "وكيل" : k === "company" ? "شركة" : k === "merchant" ? "تاجر" : "مستثمر"}`)
+        .join("، ");
+
+      // 2) Revalidate with the now-complete lookups.
+      const v2 = validateRows(spec, parsed.rows, mapping, lookups, existingKeys);
+      if (!v2.validRows.length) {
+        toast.error("لا توجد صفوف صالحة للاستيراد");
+        setImporting(false);
+        return;
+      }
+
+      // 3) Batch insert into the real operational table.
+      const { insertedIds, failed } = await batchInsert(spec.table, v2.validRows, (d, t) => {
         setProgress(Math.round((d / t) * 100));
       });
+
+      // 4) For expenses: mirror each inserted expense into expense_deductions so
+      //    it actually affects treasury balances (instapay/cash/USD/merchants).
+      if (spec.id === "expenses" && insertedIds.length) {
+        const deductions = v2.validRows.slice(0, insertedIds.length).map((r, i) => ({
+          expense_id: insertedIds[i],
+          deduction_date: r.date,
+          amount: Number(r.amount || 0),
+          currency: r.currency || "EGP",
+          usd_amount: Number(r.usd_amount || 0),
+          exchange_rate: r.exchange_rate ?? null,
+          funding_source: r.funding_source ?? null,
+          merchant_id: r.merchant_id ?? null,
+          status: "مكتمل",
+        }));
+        const { data: dedData } = await (supabase.from("expense_deductions" as any) as any).insert(deductions).select("*");
+        if (Array.isArray(dedData)) {
+          for (const row of dedData) patchLive("expense_deductions", { type: "insert", row });
+        }
+      }
+
       await recordBatch({
         importType: spec.id,
         targetTable: spec.table,
@@ -125,7 +160,10 @@ function DataImportPage() {
         userEmail: user?.email ?? null,
         insertedIds,
       });
-      toast.success(`تم استيراد ${insertedIds.length} سجل${failed ? ` — فشل ${failed}` : ""}`);
+      toast.success(
+        `تم استيراد ${insertedIds.length} سجل${failed ? ` — فشل ${failed}` : ""}` +
+        (createdMsg ? ` — وأُنشئ تلقائيًا: ${createdMsg}` : ""),
+      );
       await loadBatches();
       setStep(1); setSpecId(null); setFile(null); setParsed(null); setMapping({});
     } catch (e: any) {
