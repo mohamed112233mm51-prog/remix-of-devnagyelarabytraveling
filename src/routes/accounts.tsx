@@ -446,6 +446,8 @@ function AgentStatementTab({ agents, txns, merchants: _merchants, initialAgentId
           </div>
         )}
 
+        {agent && <AgentPricingSection agentId={agent.id} />}
+
         <div className="table-wrap">
           <table className="mobile-cards">
             <thead><tr><th>#</th><th>التاريخ</th><th>نوع الخدمة</th><th>الوجهة</th><th>العدد</th><th>السعر</th><th>قيمة الرحلة</th><th>المدفوع</th><th>الصافي</th><th>بيان</th></tr></thead>
