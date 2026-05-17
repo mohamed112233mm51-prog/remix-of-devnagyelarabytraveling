@@ -371,29 +371,44 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          currency: string
           deduction_date: string
+          exchange_rate: number | null
           expense_id: string
+          funding_source: string | null
           id: string
           is_demo: boolean
+          merchant_id: string | null
           status: string
+          usd_amount: number
         }
         Insert: {
           amount?: number
           created_at?: string
+          currency?: string
           deduction_date?: string
+          exchange_rate?: number | null
           expense_id: string
+          funding_source?: string | null
           id?: string
           is_demo?: boolean
+          merchant_id?: string | null
           status?: string
+          usd_amount?: number
         }
         Update: {
           amount?: number
           created_at?: string
+          currency?: string
           deduction_date?: string
+          exchange_rate?: number | null
           expense_id?: string
+          funding_source?: string | null
           id?: string
           is_demo?: boolean
+          merchant_id?: string | null
           status?: string
+          usd_amount?: number
         }
         Relationships: []
       }
@@ -403,39 +418,54 @@ export type Database = {
           auto_deduct_day: number | null
           auto_deduct_enabled: boolean
           created_at: string
+          currency: string
           date: string
+          exchange_rate: number | null
           expense_name: string
           expense_type: string
+          funding_source: string | null
           id: string
           is_demo: boolean
+          merchant_id: string | null
           notes: string | null
           payment_method: string
+          usd_amount: number
         }
         Insert: {
           amount?: number
           auto_deduct_day?: number | null
           auto_deduct_enabled?: boolean
           created_at?: string
+          currency?: string
           date?: string
+          exchange_rate?: number | null
           expense_name: string
           expense_type?: string
+          funding_source?: string | null
           id?: string
           is_demo?: boolean
+          merchant_id?: string | null
           notes?: string | null
           payment_method?: string
+          usd_amount?: number
         }
         Update: {
           amount?: number
           auto_deduct_day?: number | null
           auto_deduct_enabled?: boolean
           created_at?: string
+          currency?: string
           date?: string
+          exchange_rate?: number | null
           expense_name?: string
           expense_type?: string
+          funding_source?: string | null
           id?: string
           is_demo?: boolean
+          merchant_id?: string | null
           notes?: string | null
           payment_method?: string
+          usd_amount?: number
         }
         Relationships: []
       }
