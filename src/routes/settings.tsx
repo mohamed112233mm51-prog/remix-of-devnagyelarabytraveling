@@ -43,6 +43,7 @@ const PERMISSION_KEYS: { key: string; label: string }[] = [
   { key: "companies", label: "الشركات" },
   { key: "merchants", label: "التجار" },
   { key: "investors", label: "المستثمرين" },
+  { key: "data_import", label: "إدارة واستيراد البيانات" },
 ];
 
 const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: string }[] = [
