@@ -154,7 +154,6 @@ function AgentDetail() {
         <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 12, justifyContent: "flex-start" }}>
           {([
             { k: "statement", label: "💳 كشف الحساب" },
-            { k: "pricing", label: "💰 تسعير الخدمات" },
             { k: "services", label: "✈️ الرحلات والتقديمات" },
           ] as const).map((t) => (
             <button
@@ -178,8 +177,6 @@ function AgentDetail() {
           ))}
         </div>
       </div>
-
-      {activeTab === "pricing" && <AgentPricingSection agentId={agent.id} />}
 
       {activeTab === "statement" && (
       <div className="card">
