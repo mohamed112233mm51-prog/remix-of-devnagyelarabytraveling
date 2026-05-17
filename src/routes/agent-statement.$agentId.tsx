@@ -8,7 +8,7 @@ import {
   type Agent, type Approval, type Flight, type Transaction, type Merchant,
 } from "@/lib/db";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
-import { AgentPricingSection } from "@/components/AgentPricingSection";
+
 
 export const Route = createFileRoute("/agent-statement/$agentId")({
   component: AgentDetail,
@@ -104,7 +104,7 @@ function AgentDetail() {
 
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"statement" | "pricing" | "services">("statement");
+  const [activeTab, setActiveTab] = useState<"statement" | "services">("statement");
 
   useEffect(() => {
     if (!agentsLoading && !agent) {
@@ -154,7 +154,6 @@ function AgentDetail() {
         <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 12, justifyContent: "flex-start" }}>
           {([
             { k: "statement", label: "💳 كشف الحساب" },
-            { k: "pricing", label: "💰 تسعير الخدمات" },
             { k: "services", label: "✈️ الرحلات والتقديمات" },
           ] as const).map((t) => (
             <button
@@ -178,8 +177,6 @@ function AgentDetail() {
           ))}
         </div>
       </div>
-
-      {activeTab === "pricing" && <AgentPricingSection agentId={agent.id} />}
 
       {activeTab === "statement" && (
       <div className="card">
