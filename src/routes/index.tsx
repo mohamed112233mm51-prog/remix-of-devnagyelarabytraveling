@@ -756,7 +756,7 @@ function AnimatedNumber({
   return <>{format(display)}</>;
 }
 
-function HeroKpi({
+const HeroKpi = memo(function HeroKpi({
   label, value, format, icon, tone, sub, delta, deltaPositive,
 }: {
   label: string; value: number; format: (n: number) => string; icon: ReactNode;
@@ -782,25 +782,25 @@ function HeroKpi({
       </div>
     </div>
   );
-}
+});
 
-function QuickAction({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+const QuickAction = memo(function QuickAction({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
   return (
     <Link to={to} className="erp-qa">
       <span className="erp-qa-icon">{icon}</span>
       <span>{label}</span>
     </Link>
   );
-}
+});
 
-function TodayStat({ label, value, tone }: { label: string; value: string; tone?: "green" }) {
+const TodayStat = memo(function TodayStat({ label, value, tone }: { label: string; value: string; tone?: "green" }) {
   return (
     <div className="erp-today">
       <div className="erp-today-label">{label}</div>
       <div className={`erp-today-value ${tone === "green" ? "tone-green" : ""}`}>{value}</div>
     </div>
   );
-}
+});
 
 const SectionCard = memo(function SectionCard({
   title, icon, accent, children,
