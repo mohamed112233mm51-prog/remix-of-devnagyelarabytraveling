@@ -154,17 +154,18 @@ export function useGlobalKeyboardNav() {
       const isTextarea = target instanceof HTMLTextAreaElement;
       const inputType = target instanceof HTMLInputElement ? target.type : "";
 
-      // Ctrl+Enter in textarea = submit
-      if (isTextarea && key === "Enter" && e.ctrlKey) {
+      // Enter inside textarea = open save-confirmation modal (no newline).
+      // Shift+Enter still inserts a newline for the rare case the user needs it.
+      if (isTextarea && key === "Enter" && !e.shiftKey) {
+        if (e.isComposing) return;
         const container = findContainer(target);
         if (!container) return;
         e.preventDefault();
-        submitContainer(container);
+        openConfirmSave(() => submitContainer(container));
         return;
       }
 
       if (key === "Enter" && !e.shiftKey && !e.ctrlKey) {
-        if (isTextarea) return; // newline
         if (e.isComposing) return;
         const container = findContainer(target);
         if (!container) return;
@@ -175,7 +176,7 @@ export function useGlobalKeyboardNav() {
         if (idx < fields.length - 1) {
           focusField(fields[idx + 1]);
         } else {
-          submitContainer(container);
+          openConfirmSave(() => submitContainer(container));
         }
         return;
       }
