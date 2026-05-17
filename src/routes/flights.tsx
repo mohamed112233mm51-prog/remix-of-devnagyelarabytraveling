@@ -331,6 +331,7 @@ function FlightsPage() {
                 </table>
               </div>
             )}
+            <Controls />
           </div>
         </>
       ) : (
