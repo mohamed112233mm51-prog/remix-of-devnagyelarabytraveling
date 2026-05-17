@@ -555,6 +555,42 @@ export type Database = {
           },
         ]
       }
+      import_batches: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          id: string
+          import_type: string
+          inserted_ids: Json
+          rows_inserted: number
+          target_table: string
+          undone_at: string | null
+          user_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          import_type: string
+          inserted_ids?: Json
+          rows_inserted?: number
+          target_table: string
+          undone_at?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          import_type?: string
+          inserted_ids?: Json
+          rows_inserted?: number
+          target_table?: string
+          undone_at?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
       investor_transactions: {
         Row: {
           amount: number

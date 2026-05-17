@@ -18,6 +18,7 @@ import { Route as LibyanInvestmentRouteImport } from './routes/libyan-investment
 import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as FlightsRouteImport } from './routes/flights'
 import { Route as ExpensesRouteImport } from './routes/expenses'
+import { Route as DataImportRouteImport } from './routes/data-import'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as AccountsRouteImport } from './routes/accounts'
@@ -71,6 +72,11 @@ const ExpensesRoute = ExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DataImportRoute = DataImportRouteImport.update({
+  id: '/data-import',
+  path: '/data-import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompaniesRoute = CompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/accounts': typeof AccountsRoute
   '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
+  '/data-import': typeof DataImportRoute
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/accounts': typeof AccountsRoute
   '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
+  '/data-import': typeof DataImportRoute
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/accounts': typeof AccountsRoute
   '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
+  '/data-import': typeof DataImportRoute
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/approvals'
     | '/companies'
+    | '/data-import'
     | '/expenses'
     | '/flights'
     | '/investors'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/approvals'
     | '/companies'
+    | '/data-import'
     | '/expenses'
     | '/flights'
     | '/investors'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/approvals'
     | '/companies'
+    | '/data-import'
     | '/expenses'
     | '/flights'
     | '/investors'
@@ -225,6 +237,7 @@ export interface RootRouteChildren {
   AccountsRoute: typeof AccountsRoute
   ApprovalsRoute: typeof ApprovalsRoute
   CompaniesRoute: typeof CompaniesRoute
+  DataImportRoute: typeof DataImportRoute
   ExpensesRoute: typeof ExpensesRoute
   FlightsRoute: typeof FlightsRoute
   InvestorsRoute: typeof InvestorsRoute
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpensesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/data-import': {
+      id: '/data-import'
+      path: '/data-import'
+      fullPath: '/data-import'
+      preLoaderRoute: typeof DataImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/companies': {
       id: '/companies'
       path: '/companies'
@@ -361,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsRoute: AccountsRoute,
   ApprovalsRoute: ApprovalsRoute,
   CompaniesRoute: CompaniesRoute,
+  DataImportRoute: DataImportRoute,
   ExpensesRoute: ExpensesRoute,
   FlightsRoute: FlightsRoute,
   InvestorsRoute: InvestorsRoute,
