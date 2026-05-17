@@ -635,7 +635,8 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
       return;
     }
 
-    const { error } = await supabase.from("transactions").insert({
+    const tempId = (crypto as any)?.randomUUID?.() || `tmp-${Date.now()}`;
+    const insertPayload = {
       agent_id: form.agent_id, date: form.date,
       destination: form.destination || null,
       travel_statement: travelStatement || null,
@@ -649,8 +650,13 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
       merchant_id: usesMerchant ? form.merchant_id : null,
       total_paid: newPayment,
       paid: newPayment,
+    };
+    const { ok } = await applyOptimistic({
+      table: "transactions", type: "insert", id: tempId,
+      patch: { ...insertPayload, created_at: new Date().toISOString() },
+      run: async () => await supabase.from("transactions").insert(insertPayload),
     });
-    if (error) return toast.error(error.message);
+    if (!ok) return;
     onDone();
   };
   return (
