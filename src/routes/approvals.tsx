@@ -331,7 +331,7 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
     destination: "", authority: "", issuing_company: "",
     agent_id: "", submit_date: "", issue_date: "",
     travel_date: "", airline: "",
-    status: "", government_fee: "", notes: "",
+    status: "", notes: "",
     count: "1", price: "", company_value: "",
   });
   const [linkFlight, setLinkFlight] = useState(false);
@@ -388,7 +388,6 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
       issuing_company_id,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
-      government_fee: Number(form.government_fee || 0),
       count, price, company_value: companyValue,
       company_price: companyValue,
       agent_price: price,
@@ -498,7 +497,6 @@ export function ApprovalForm({ agents, companies, onDone }: { agents: Agent[]; c
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" placeholder="0" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
         <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
         <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} placeholder="0" value={form.price} onChange={(e) => { set("price", e.target.value); setPricingTouched(true); }} /></div>
         <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>
@@ -538,7 +536,6 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
     travel_date: approval.travel_date || "",
     airline: approval.airline || "",
     status: approval.status || "",
-    government_fee: String(approval.government_fee ?? ""),
     notes: approval.notes || "",
     count: String(approval.count ?? 1),
     price: String(approval.price ?? ""),
@@ -581,7 +578,6 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
       issuing_company_id,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
-      government_fee: Number(form.government_fee || 0),
       count, price, company_value: companyValue,
     };
     try {
@@ -668,7 +664,6 @@ function EditApprovalModal({ approval, agents, companies, onClose }: { approval:
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div className="form-group"><label>مبلغ الموافقة</label><input type="number" value={form.government_fee} onChange={(e) => set("government_fee", e.target.value)} /></div>
         <div className="form-group"><label>العدد</label><input type="number" min={1} value={form.count} onChange={(e) => set("count", e.target.value)} /></div>
         <div className="form-group"><label>السعر (للوكيل)</label><input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} /></div>
         <div className="form-group"><label>قيمة الرحلة (تلقائي)</label><input value={fmtNum(Number(form.count || 0) * Number(form.price || 0))} disabled readOnly /></div>

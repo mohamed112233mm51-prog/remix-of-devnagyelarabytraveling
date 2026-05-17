@@ -3,11 +3,13 @@ import { useMemo, useState } from "react";
 import {
   fmtDL,
   fmtNum,
+  fmtUSD,
   merchantCashGross,
   merchantCashNet,
   tripValue,
   txnTotalPaid,
   type CompanyTransaction,
+  type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
@@ -31,7 +33,7 @@ import {
 } from "recharts";
 import {
   BarChart3, Users, Building2, Handshake, Briefcase, Plane, ShieldCheck, Receipt,
-  Calendar, RefreshCw, FileSpreadsheet, FileText, TrendingUp, TrendingDown, Wallet, Activity,
+  Calendar, RefreshCw, FileSpreadsheet, FileText, TrendingUp, TrendingDown, Wallet, Activity, DollarSign,
 } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
@@ -39,7 +41,7 @@ export const Route = createFileRoute("/reports")({
   errorComponent: () => <div className="card" style={{ padding: 24 }}>تعذر تحميل التقارير مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>,
 });
 
-type Tab = "agents" | "companies" | "merchants" | "investors" | "flights" | "approvals" | "expenses";
+type Tab = "agents" | "companies" | "merchants" | "investors" | "flights" | "approvals" | "expenses" | "usd_treasury";
 type Period = "30d" | "1y" | "custom";
 
 // Professional, soft palette
@@ -224,6 +226,7 @@ function ReportsPage() {
     { id: "flights", label: "الرحلات", icon: <Plane size={15} strokeWidth={2} /> },
     { id: "approvals", label: "الموافقات الأمنية", icon: <ShieldCheck size={15} strokeWidth={2} /> },
     { id: "expenses", label: "المصروفات", icon: <Receipt size={15} strokeWidth={2} /> },
+    { id: "usd_treasury", label: "الخزينة الدولارية", icon: <DollarSign size={15} strokeWidth={2} /> },
   ];
 
   return (
@@ -285,6 +288,7 @@ function ReportsPage() {
       {tab === "flights" && <FlightsReport inRange={inRange} data={data} />}
       {tab === "approvals" && <ApprovalsReport inRange={inRange} data={data} />}
       {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
+      {tab === "usd_treasury" && <UsdTreasuryReport inRange={inRange} data={data} />}
       <style>{chartsCss}</style>
     </div>
   );
@@ -903,7 +907,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
     { header: "الجهة", key: "authority" },
     { header: "تاريخ التقديم", key: "submit" },
     { header: "تاريخ الصدور", key: "issue" },
-    { header: "قيمة الموافقة", key: "amount" },
+    { header: "سعر الوكيل", key: "amount" },
     { header: "الحالة", key: "status" },
   ];
   const rows = filtered.map((a) => ({
@@ -914,7 +918,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
     authority: a.authority || "—",
     submit: a.submit_date || "—",
     issue: a.issue_date || "—",
-    amount: fmtDL(Number(a.government_fee || 0)),
+    amount: fmtDL(Number((a as any).agent_price || a.price || 0)),
     status: a.status,
   }));
 
@@ -1056,6 +1060,189 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
                   <td data-label="التاريخ">{e.date}</td>
                   <td data-label="طريقة الدفع">{e.payment_method}</td>
                   <td data-label="ملاحظات">{e.notes || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- USD TREASURY ----------
+const USD_SOURCE_LABELS: Record<string, string> = {
+  insta_company: "انستا الشركة",
+  cash_company: "نقدي الشركة",
+  merchant_wallet: "كاش التاجر",
+  merchant_physical: "نقدي التاجر",
+};
+
+function usdMovementLabel(r: UsdTreasuryTransaction): string {
+  if (r.type === "conversion") return "تحويل إلى الخزينة الدولارية";
+  if (r.type === "company_payment") {
+    return Number(r.egp_amount || 0) > 0
+      ? "دفع مختلط جنيه/دولار"
+      : "دفع لشركة صادرة بالدولار";
+  }
+  return r.type || "—";
+}
+
+function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
+  const { usdTreasury, companyName, merchantName, loading } = rd;
+
+  // All-time sorted asc to build running balance, then filter for display
+  const allSorted = useMemo(() => {
+    return [...usdTreasury].sort((a, b) => {
+      const da = (a.date || "") + " " + (a.created_at || "");
+      const db = (b.date || "") + " " + (b.created_at || "");
+      return da.localeCompare(db);
+    });
+  }, [usdTreasury]);
+
+  const withBalance = useMemo(() => {
+    let bal = 0;
+    return allSorted.map((r) => {
+      const amt = Number(r.usd_amount || 0);
+      bal += r.type === "company_payment" ? -amt : amt;
+      return { row: r, balance: bal };
+    });
+  }, [allSorted]);
+
+  const filtered = useMemo(
+    () => withBalance.filter((x) => inRange(x.row.date)).reverse(),
+    [withBalance, inRange],
+  );
+
+  // KPIs (period scope)
+  const periodConversions = filtered
+    .filter((x) => x.row.type === "conversion")
+    .reduce((s, x) => s + Number(x.row.usd_amount || 0), 0);
+  const periodPayments = filtered
+    .filter((x) => x.row.type === "company_payment")
+    .reduce((s, x) => s + Number(x.row.usd_amount || 0), 0);
+  const periodEgpUsed = filtered
+    .filter((x) => x.row.type === "conversion")
+    .reduce((s, x) => s + Number(x.row.egp_amount || 0), 0);
+  const currentBalance = withBalance.length ? withBalance[withBalance.length - 1].balance : 0;
+
+  // Monthly chart (period)
+  const monthlyMap = new Map<string, { conv: number; pay: number }>();
+  for (const x of filtered) {
+    const k = (x.row.date || "").slice(0, 7);
+    if (!k) continue;
+    const cur = monthlyMap.get(k) || { conv: 0, pay: 0 };
+    if (x.row.type === "conversion") cur.conv += Number(x.row.usd_amount || 0);
+    else if (x.row.type === "company_payment") cur.pay += Number(x.row.usd_amount || 0);
+    monthlyMap.set(k, cur);
+  }
+  const monthly = Array.from(monthlyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, v]) => ({ month, "تحويلات": v.conv, "مدفوعات": v.pay }));
+
+  // Source breakdown (period, conversions only)
+  const sourceMap = new Map<string, number>();
+  for (const x of filtered) {
+    if (x.row.type !== "conversion") continue;
+    const key = USD_SOURCE_LABELS[x.row.source_type || ""] || "—";
+    sourceMap.set(key, (sourceMap.get(key) || 0) + Number(x.row.usd_amount || 0));
+  }
+  const sourcePie = Array.from(sourceMap.entries()).map(([name, value]) => ({ name, value }));
+
+  const cols = [
+    { header: "التاريخ", key: "date" },
+    { header: "نوع الحركة", key: "movement" },
+    { header: "المبلغ بالجنيه", key: "egp" },
+    { header: "سعر الصرف", key: "rate" },
+    { header: "المبلغ بالدولار", key: "usd" },
+    { header: "مصدر التحويل", key: "source" },
+    { header: "اسم التاجر", key: "merchant" },
+    { header: "الشركة الصادرة", key: "company" },
+    { header: "الخدمة / المسافر", key: "service" },
+    { header: "بيان الحركة", key: "note" },
+    { header: "الرصيد الدولاري بعد الحركة", key: "balance" },
+  ];
+
+  const rows = filtered.map((x) => {
+    const r = x.row;
+    const isMerchantSrc = r.source_type === "merchant_wallet" || r.source_type === "merchant_physical";
+    return {
+      date: r.date,
+      movement: usdMovementLabel(r),
+      egp: fmtDL(Number(r.egp_amount || 0)),
+      egp__excel: Number(r.egp_amount || 0),
+      rate: r.exchange_rate ? Number(r.exchange_rate).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—",
+      rate__excel: Number(r.exchange_rate || 0),
+      usd: fmtUSD(Number(r.usd_amount || 0)),
+      usd__excel: Number(r.usd_amount || 0),
+      source: USD_SOURCE_LABELS[r.source_type || ""] || "—",
+      merchant: isMerchantSrc ? merchantName(r.merchant_id) : "—",
+      company: r.company_id ? companyName(r.company_id) : "—",
+      service: r.note || "—",
+      note: r.note || "—",
+      balance: fmtUSD(x.balance),
+      balance__excel: x.balance,
+    };
+  });
+
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">💵 تقرير الخزينة الدولارية</div></div>
+      <div className="card-body">
+        <KpiRow items={[
+          { label: "الرصيد الدولاري الحالي", value: fmtUSD(currentBalance), tone: "gold" },
+          { label: "إجمالي التحويلات بالدولار", value: fmtUSD(periodConversions), tone: "green" },
+          { label: "إجمالي المدفوعات بالدولار", value: fmtUSD(periodPayments), tone: "red" },
+          { label: "إجمالي الجنيه المُحوّل", value: fmtDL(periodEgpUsed) },
+        ]} />
+
+        <ChartsGrid>
+          <ChartCard title="حركة الخزينة الدولارية" subtitle="تحويلات مقابل مدفوعات شهرياً" isEmpty={monthly.length === 0}>
+            <BarChart data={monthly} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              <XAxis dataKey="month" tick={axisTick} tickMargin={8} />
+              <YAxis tick={axisTick} tickFormatter={fmtCount} width={60} />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} formatter={(v: number, n: string) => [`${fmtCount(v)} $`, n]} />
+              <Legend verticalAlign="top" height={28} iconType="circle" />
+              <Bar dataKey="تحويلات" fill={COLORS.positive} radius={[8, 8, 0, 0]} maxBarSize={36} />
+              <Bar dataKey="مدفوعات" fill={COLORS.negative} radius={[8, 8, 0, 0]} maxBarSize={36} />
+            </BarChart>
+          </ChartCard>
+
+          <ChartCard title="مصادر التحويل" subtitle="توزيع التحويلات على المصادر" isEmpty={sourcePie.length === 0}>
+            <PieChart>
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [`${fmtCount(v)} $`, n]} />
+              <Legend verticalAlign="bottom" height={30} iconType="circle" />
+              <Pie data={sourcePie} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius={60} outerRadius={95} paddingAngle={3} stroke="var(--card,#fff)" strokeWidth={2}>
+                {sourcePie.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+              </Pie>
+            </PieChart>
+          </ChartCard>
+        </ChartsGrid>
+
+        <ExportBar
+          onExcel={() => exportStatementToExcel({ title: "تقرير الخزينة الدولارية", columns: cols, rows, fileName: "usd-treasury-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير الخزينة الدولارية", columns: cols, rows })}
+        />
+        <div className="table-wrap">
+          <table className="mobile-cards">
+            <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <EmptyOrLoading loading={loading} label="لا توجد حركات للخزينة الدولارية" colSpan={cols.length} />
+              ) : rows.map((r, i) => (
+                <tr key={i}>
+                  <td data-label="التاريخ">{r.date}</td>
+                  <td className="bold" data-label="نوع الحركة">{r.movement}</td>
+                  <td data-label="بالجنيه">{r.egp}</td>
+                  <td data-label="سعر الصرف">{r.rate}</td>
+                  <td data-label="بالدولار">{r.usd}</td>
+                  <td data-label="المصدر">{r.source}</td>
+                  <td data-label="التاجر">{r.merchant}</td>
+                  <td data-label="الشركة">{r.company}</td>
+                  <td data-label="الخدمة">{r.service}</td>
+                  <td data-label="بيان">{r.note}</td>
+                  <td data-label="الرصيد">{r.balance}</td>
                 </tr>
               ))}
             </tbody>

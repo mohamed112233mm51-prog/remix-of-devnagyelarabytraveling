@@ -45,6 +45,7 @@ const DEMO_TABLES = [
   "investor_transactions",
   "expenses",
   "expense_deductions",
+  "usd_treasury_transactions",
 ] as const;
 
 type DemoTable = (typeof DEMO_TABLES)[number];
@@ -456,6 +457,7 @@ export const productionCleanup = createServerFn({ method: "POST" })
       "expenses",
       "investor_transactions",
       "merchant_cash_collections",
+      "usd_treasury_transactions",
       "company_transactions",
       "transactions",
       "approvals",
@@ -474,6 +476,19 @@ export const productionCleanup = createServerFn({ method: "POST" })
         .eq("is_demo", true);
       summary[t] = count ?? 0;
       totalDeleted += count ?? 0;
+    }
+
+    // Extra safety: USD treasury must read zero after a production cleanup.
+    // Wipe ALL remaining usd_treasury_transactions (deposits, conversions,
+    // company payments, mixed EGP/USD records) so the balance resets to 0.
+    {
+      const { count } = await sb
+        .from("usd_treasury_transactions")
+        .delete({ count: "exact" })
+        .not("id", "is", null);
+      const extra = count ?? 0;
+      summary["usd_treasury_transactions"] = (summary["usd_treasury_transactions"] ?? 0) + extra;
+      totalDeleted += extra;
     }
 
     // 3) Verification — confirm no demo rows remain.
@@ -517,12 +532,12 @@ export type WipeCategory =
 
 const CATEGORY_TABLES: Record<WipeCategory, readonly string[]> = {
   agents: ["agents"],
-  companies: ["issuing_companies", "company_transactions"],
+  companies: ["issuing_companies", "company_transactions", "usd_treasury_transactions"],
   merchants: ["merchants", "merchant_cash_collections"],
   investors: ["investors", "investor_transactions"],
   flights: ["flights"],
   approvals: ["approvals"],
-  transactions: ["transactions"],
+  transactions: ["transactions", "usd_treasury_transactions"],
   collections: ["merchant_cash_collections"],
   expenses: ["expenses", "expense_deductions"],
   notifications: ["activity_logs"],
@@ -535,6 +550,7 @@ const DELETE_ORDER: readonly string[] = [
   "expenses",
   "investor_transactions",
   "merchant_cash_collections",
+  "usd_treasury_transactions",
   "company_transactions",
   "transactions",
   "approvals",
