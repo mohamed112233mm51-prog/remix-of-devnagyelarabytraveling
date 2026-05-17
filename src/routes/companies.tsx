@@ -200,6 +200,7 @@ function CompaniesPage() {
                   </tfoot>
                 </table>
               </div>
+              <Controls />
             </div>
           </div>
         </>
