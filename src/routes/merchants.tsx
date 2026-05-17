@@ -541,21 +541,24 @@ function MerchantStatementTab({
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }, [merchantId, incomingTxns, outgoingTxns, collections, agents, companies]);
 
+  const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
     if (from && m.date < from) return false;
     if (to && m.date > to) return false;
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
     if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
-    if (search && !`${m.type} ${m.statement}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  }), [movements, from, to, typeFilter, search]);
+  }), [movements, from, to, typeFilter, debouncedSearch]);
 
   // Running balance starts from 0 then accumulates over filtered movements (chronological).
   const withRunning = useMemo(() => {
     let bal = 0;
     return filtered.map((m) => { bal += m.delta; return { ...m, balance: bal }; });
   }, [filtered]);
+
+  const { pageRows: pageMovements, Controls, page, pageSize } = usePagination(withRunning, 50);
 
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
