@@ -10,6 +10,8 @@ import {
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, DollarSign, ArrowRightLeft } from "lucide-react";
@@ -58,9 +60,12 @@ function CompaniesPage() {
   const totalPaid = txns.reduce((s, t) => s + Number(t.total_paid || 0), 0);
   const totalDue = totalTrips - totalPaid;
 
-  const filtered = companies.filter((c) =>
-    !search || c.company_name.toLowerCase().includes(search.toLowerCase())
-  );
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => companies.filter((c) =>
+    !debouncedSearch || c.company_name.toLowerCase().includes(debouncedSearch.toLowerCase())
+  ), [companies, debouncedSearch]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   return (
     <div className="section active fin-page accounts-page">
@@ -164,12 +169,13 @@ function CompaniesPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
-                    ) : filtered.map((c, i) => {
+                    ) : pageRows.map((c, i) => {
+                      const idx = page * pageSize + i;
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
                       const due = s.trips - s.paid;
                       return (
                         <tr key={c.id}>
-                          <td data-label="#">{i + 1}</td>
+                          <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
                           <td data-label="الواتساب">{c.whatsapp || "—"}</td>
@@ -194,6 +200,7 @@ function CompaniesPage() {
                   </tfoot>
                 </table>
               </div>
+              <Controls />
             </div>
           </div>
         </>

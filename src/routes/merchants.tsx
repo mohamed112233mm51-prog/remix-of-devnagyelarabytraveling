@@ -9,6 +9,8 @@ import {
   type Transaction, type CompanyTransaction,
 } from "@/lib/db";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 
@@ -539,21 +541,24 @@ function MerchantStatementTab({
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   }, [merchantId, incomingTxns, outgoingTxns, collections, agents, companies]);
 
+  const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
     if (from && m.date < from) return false;
     if (to && m.date > to) return false;
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
     if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
-    if (search && !`${m.type} ${m.statement}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  }), [movements, from, to, typeFilter, search]);
+  }), [movements, from, to, typeFilter, debouncedSearch]);
 
   // Running balance starts from 0 then accumulates over filtered movements (chronological).
   const withRunning = useMemo(() => {
     let bal = 0;
     return filtered.map((m) => { bal += m.delta; return { ...m, balance: bal }; });
   }, [filtered]);
+
+  const { pageRows: pageMovements, Controls, page, pageSize } = usePagination(withRunning, 50);
 
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
@@ -677,11 +682,12 @@ function MerchantStatementTab({
               <tbody>
                 {withRunning.length === 0 ? (
                   <tr><td colSpan={8}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
-                ) : withRunning.map((m, i) => {
+                ) : pageMovements.map((m, i) => {
+                  const idx = page * pageSize + i;
                   const color = m.type === "وارد من وكيل" ? "#15803D" : "#B91C1C";
                   return (
                     <tr key={m.id}>
-                      <td data-label="#">{i + 1}</td>
+                      <td data-label="#">{idx + 1}</td>
                       <td data-label="التاريخ">{m.date}</td>
                       <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>
                       <td data-label="البيان">{m.statement}</td>
@@ -698,6 +704,7 @@ function MerchantStatementTab({
               </tfoot>
             </table>
           </div>
+          <Controls />
         </div>
       </div>
     </>

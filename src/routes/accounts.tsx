@@ -8,6 +8,8 @@ import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
@@ -43,9 +45,12 @@ function AccountsPage() {
   const totalPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
   const totalDue = totalTrips - totalPaid;
 
-  const filtered = agents.filter((a) =>
-    !search || a.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const filtered = useMemo(() => agents.filter((a) =>
+    !debouncedSearch || a.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+  ), [agents, debouncedSearch]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   return (
     <div className="section active accounts-page">
@@ -133,11 +138,12 @@ function AccountsPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr><td colSpan={11}><div className="empty"><div className="empty-icon">👥</div><div className="empty-text">أضف وكلاء من تبويب "وكيل جديد"</div></div></td></tr>
-                    ) : filtered.map((a, i) => {
+                    ) : pageRows.map((a, i) => {
+                      const idx = page * pageSize + i;
                       const s = stats.get(a.id) || { trips: 0, paid: 0 };
                       return (
                         <tr key={a.id}>
-                          <td data-label="#">{i + 1}</td>
+                          <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الاسم">{a.name}</td>
                           <td data-label="الرقم القومي">{a.national_id || "—"}</td>
                           <td data-label="الهاتف">{a.phone || "—"}</td>
@@ -163,6 +169,7 @@ function AccountsPage() {
                   </tfoot>
                 </table>
               </div>
+              <Controls />
             </div>
           </div>
         </>

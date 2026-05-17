@@ -6,6 +6,8 @@ import { fmtNum, useLive, useDropdownOptions, useAgentPricingMap, withSelected, 
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import { Modal } from "@/components/Modal";
@@ -38,10 +40,12 @@ function ApprovalsPage() {
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
+  const debouncedSearch = useDebouncedValue(search, 250);
+
   const filtered = useMemo(() => approvals.filter((a) => {
     if (a.service_type === "libyan_investment") return false;
-    if (search) {
-      const q = search.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       const aName = (agents.find((ag) => ag.id === a.agent_id)?.name || "").toLowerCase();
       const hay = `${a.passenger_name} ${a.passport || ""} ${a.national_id || ""} ${aName}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -49,7 +53,9 @@ function ApprovalsPage() {
     if (status && a.status !== status) return false;
     if (destination && a.destination !== destination) return false;
     return true;
-  }), [approvals, agents, search, status, destination]);
+  }), [approvals, agents, debouncedSearch, status, destination]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const today = new Date().toISOString().slice(0, 10);
@@ -269,9 +275,11 @@ function ApprovalsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((a, i) => (
-                      <tr key={a.id} className="fl-row" style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
-                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{i + 1}</td>
+                    {pageRows.map((a, i) => {
+                      const idx = page * pageSize + i;
+                      return (
+                      <tr key={a.id} className="fl-row" style={{ background: idx % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{idx + 1}</td>
                         <td data-label="الاسم" style={{ padding: "10px 12px", fontWeight: 700, color: "#0f172a" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
@@ -302,7 +310,8 @@ function ApprovalsPage() {
                           ) : "—"}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#f8fafc" }}>
@@ -313,6 +322,7 @@ function ApprovalsPage() {
                 </table>
               </div>
             )}
+            <Controls />
           </div>
         </>
       ) : (

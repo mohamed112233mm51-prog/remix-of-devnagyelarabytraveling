@@ -7,6 +7,8 @@ import { badgeFor, fmtNum, useLive, useDropdownOptions, useAgentPricingMap, with
 
 import { postServiceFinancials, updateServiceFinancials } from "@/lib/servicePosting";
 import { usePerm } from "@/hooks/usePerm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 
@@ -41,10 +43,12 @@ function FlightsPage() {
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
+  const debouncedSearch = useDebouncedValue(search, 250);
+
   const filtered = useMemo(() => {
     return flights.filter((f) => {
-      if (search) {
-        const q = search.toLowerCase();
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase();
         const aName = (agents.find((a) => a.id === f.agent_id)?.name || "").toLowerCase();
         const hay = `${f.passenger_name} ${f.passport || ""} ${f.national_id || ""} ${aName}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -55,7 +59,9 @@ function FlightsPage() {
       if (issuingCompany && f.issuing_company !== issuingCompany) return false;
       return true;
     });
-  }, [flights, agents, search, airline, destination, status, issuingCompany]);
+  }, [flights, agents, debouncedSearch, airline, destination, status, issuingCompany]);
+
+  const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const today = new Date().toISOString().slice(0, 10);
@@ -276,9 +282,11 @@ function FlightsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((f, i) => (
-                      <tr key={f.id} className="fl-row" style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
-                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{i + 1}</td>
+                    {pageRows.map((f, i) => {
+                      const idx = page * pageSize + i;
+                      return (
+                      <tr key={f.id} className="fl-row" style={{ background: idx % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                        <td data-label="#" style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>{idx + 1}</td>
                         <td data-label="الاسم" style={{ padding: "10px 12px", fontWeight: 700, color: "#0f172a" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg, ${NAVY}, #1e3a8a)`, color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
@@ -311,7 +319,8 @@ function FlightsPage() {
                           ) : "—"}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#f8fafc" }}>
@@ -322,6 +331,7 @@ function FlightsPage() {
                 </table>
               </div>
             )}
+            <Controls />
           </div>
         </>
       ) : (
