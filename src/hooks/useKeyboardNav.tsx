@@ -3,41 +3,33 @@ import { useEffect } from "react";
 /**
  * Global ERP-style keyboard navigation.
  *
- * Behaviour (system-wide, opt-out via `data-no-kbd-nav` on a field or container):
- *  - Enter inside <input>/<select> moves focus to the next field in the same
- *    form/modal/container. If it is the last field, the primary submit button
- *    of that container is clicked (HTML5 validation still runs).
- *  - Enter inside <textarea> inserts a newline (native). Ctrl/Cmd+Enter submits.
- *  - ArrowDown / ArrowUp move to next / previous field for text-like inputs and
- *    <select>. Number/date/range/radio/checkbox keep native arrow behaviour.
- *  - ArrowLeft / ArrowRight are NOT intercepted (RTL caret movement stays intact).
- *  - Escape on Modal is already handled by <Modal />.
- *  - Tab / Shift+Tab keep native behaviour.
- *  - Mouse and touch are not affected.
+ * Works on ALL forms in the app — including the many "form-like cards" that
+ * are not wrapped in a real <form> element. Detects:
+ *   - <form>, [data-kbd-form], [data-kbd-scope]
+ *   - .modal-box (our Modal component)
+ *   - .card (ERP cards used as forms across expenses, agents, settings, …)
+ *
+ * Behaviour:
+ *   - Enter on input/select: prevent default, move to next eligible field;
+ *     on last field, click the primary action button (btn-gold / btn-primary /
+ *     [data-kbd-submit] / button[type=submit] / first button labelled حفظ /
+ *     إضافة / تأكيد / save).
+ *   - Enter on textarea: native newline. Ctrl/Cmd+Enter: submit.
+ *   - ArrowDown/ArrowUp on text inputs: move to next/previous field.
+ *     Left/Right untouched (RTL caret stays intact). Number/date/etc keep
+ *     native arrow behaviour. Native <select> keeps native arrow handling.
+ *   - Skips disabled / readonly / hidden / aria-hidden / display:none fields.
+ *   - Skips any field or container marked with [data-no-kbd-nav].
+ *   - Tab / Shift+Tab / mouse / Escape behave natively.
  */
 
 const TEXT_INPUT_TYPES = new Set([
-  "text",
-  "email",
-  "tel",
-  "url",
-  "password",
-  "search",
-  "",
+  "text", "email", "tel", "url", "password", "search", "",
 ]);
 
 const SKIP_ARROW_INPUT_TYPES = new Set([
-  "number",
-  "range",
-  "date",
-  "time",
-  "datetime-local",
-  "month",
-  "week",
-  "radio",
-  "checkbox",
-  "color",
-  "file",
+  "number", "range", "date", "time", "datetime-local",
+  "month", "week", "radio", "checkbox", "color", "file",
 ]);
 
 function isVisible(el: HTMLElement): boolean {
@@ -49,78 +41,99 @@ function isVisible(el: HTMLElement): boolean {
   return rect.width > 0 && rect.height > 0;
 }
 
-function isFieldEligible(el: Element): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
+function isFieldEligible(el: Element): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (el.closest("[data-no-kbd-nav]")) return false;
-  if ((el as HTMLInputElement).disabled) return false;
-  if ((el as HTMLInputElement).readOnly) return false;
+  const anyEl = el as HTMLInputElement;
+  if (anyEl.disabled) return false;
+  if (anyEl.readOnly) return false;
   if (el.tabIndex < 0) return false;
   if (!isVisible(el)) return false;
   if (el instanceof HTMLInputElement) {
     if (el.type === "hidden") return false;
-    if (["button", "submit", "reset", "image"].includes(el.type)) return false;
+    if (["button", "submit", "reset", "image", "checkbox", "radio", "file"].includes(el.type)) return false;
     return true;
   }
   return el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement;
 }
 
 function findContainer(target: HTMLElement): HTMLElement | null {
-  return (
-    target.closest("[data-kbd-form]") as HTMLElement | null) ||
-    (target.closest("form") as HTMLElement | null) ||
-    (target.closest(".modal-box") as HTMLElement | null) ||
+  // Explicit opt-in / opt-out
+  const explicit =
+    (target.closest("[data-kbd-form]") as HTMLElement | null) ||
     (target.closest("[data-kbd-scope]") as HTMLElement | null);
+  if (explicit) return explicit;
+  // Modal takes precedence over card (modal may sit inside a card)
+  const modal = target.closest(".modal-box") as HTMLElement | null;
+  if (modal) return modal;
+  // Native <form>
+  const form = target.closest("form") as HTMLElement | null;
+  if (form) return form;
+  // ERP "card-as-form": nearest card that has at least one primary action
+  // button or contains a form-footer / form-grid (typical add/edit cards).
+  let node: HTMLElement | null = target.closest(".card") as HTMLElement | null;
+  while (node) {
+    if (
+      node.querySelector(".form-footer, .form-grid, [data-kbd-submit], button.btn-gold, button.btn-primary, button[type='submit']")
+    ) {
+      return node;
+    }
+    node = node.parentElement?.closest(".card") as HTMLElement | null;
+  }
+  return null;
 }
 
 function collectFields(container: HTMLElement): HTMLElement[] {
-  const nodes = container.querySelectorAll<HTMLElement>(
-    "input, select, textarea",
-  );
+  const nodes = container.querySelectorAll<HTMLElement>("input, select, textarea");
   const list: HTMLElement[] = [];
-  nodes.forEach((n) => {
-    if (isFieldEligible(n)) list.push(n);
-  });
+  nodes.forEach((n) => { if (isFieldEligible(n)) list.push(n); });
   return list;
 }
 
 function focusField(el: HTMLElement) {
   el.focus();
-  // Place caret at end for text inputs / textareas for fast typing.
   if (el instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(el.type)) {
     try { el.setSelectionRange(el.value.length, el.value.length); } catch {}
   } else if (el instanceof HTMLTextAreaElement) {
     try { el.setSelectionRange(el.value.length, el.value.length); } catch {}
-  } else if (el instanceof HTMLSelectElement) {
-    // no-op
   }
 }
 
+const SUBMIT_TEXT_RE = /(حفظ|إضافة|اضافة|تأكيد|تاكيد|إرسال|ارسال|تسجيل|دخول|save|submit|confirm|add|sign\s*in|log\s*in)/i;
+
+function findSubmitButton(container: HTMLElement): HTMLButtonElement | null {
+  // Priority order
+  const selectors = [
+    "[data-kbd-submit]:not([disabled])",
+    "button[type='submit']:not([disabled])",
+    ".form-footer button.btn-gold:not([disabled])",
+    ".form-footer button.btn-primary:not([disabled])",
+    ".modal-footer button.btn-gold:not([disabled])",
+    ".modal-footer button.btn-primary:not([disabled])",
+    "button.btn-gold:not([disabled])",
+    "button.btn-primary:not([disabled])",
+  ];
+  for (const sel of selectors) {
+    const el = container.querySelector<HTMLButtonElement>(sel);
+    if (el) return el;
+  }
+  // Fallback: any visible button whose label matches the submit verbs.
+  const buttons = container.querySelectorAll<HTMLButtonElement>("button:not([disabled])");
+  for (const b of Array.from(buttons)) {
+    const txt = (b.textContent || "").trim();
+    if (txt && SUBMIT_TEXT_RE.test(txt)) return b;
+  }
+  return null;
+}
+
 function submitContainer(container: HTMLElement) {
-  // Native <form>: rely on requestSubmit so validation runs.
   if (container instanceof HTMLFormElement) {
-    if (typeof container.requestSubmit === "function") {
-      container.requestSubmit();
-    } else {
-      container.submit();
-    }
+    if (typeof container.requestSubmit === "function") container.requestSubmit();
+    else container.submit();
     return;
   }
-  // Modal / custom container: click the explicit submit button.
-  const explicit = container.querySelector<HTMLButtonElement>(
-    "[data-kbd-submit]:not([disabled])",
-  );
-  if (explicit) { explicit.click(); return; }
-  const submitBtn = container.querySelector<HTMLButtonElement>(
-    "button[type='submit']:not([disabled])",
-  );
-  if (submitBtn) { submitBtn.click(); return; }
-  // Last resort: first primary button in footer / container.
-  const footer = container.querySelector<HTMLElement>(".modal-footer");
-  const scope = footer || container;
-  const primary = scope.querySelector<HTMLButtonElement>(
-    "button.btn-primary:not([disabled]), button.btn.btn-primary:not([disabled])",
-  );
-  if (primary) primary.click();
+  const btn = findSubmitButton(container);
+  if (btn) btn.click();
 }
 
 export function useGlobalKeyboardNav() {
@@ -136,26 +149,24 @@ export function useGlobalKeyboardNav() {
       if (target.closest("[data-no-kbd-nav]")) return;
       if ((target as HTMLElement).isContentEditable) return;
 
-      const container = findContainer(target);
-      if (!container) return;
-
       const key = e.key;
       const isTextarea = target instanceof HTMLTextAreaElement;
       const inputType = target instanceof HTMLInputElement ? target.type : "";
 
-      // Ctrl+Enter inside textarea = submit
+      // Ctrl+Enter in textarea = submit
       if (isTextarea && key === "Enter" && e.ctrlKey) {
+        const container = findContainer(target);
+        if (!container) return;
         e.preventDefault();
         submitContainer(container);
         return;
       }
 
-      // Plain Enter
       if (key === "Enter" && !e.shiftKey && !e.ctrlKey) {
         if (isTextarea) return; // newline
-        // Let composition (IME) finish naturally
         if (e.isComposing) return;
-        // Skip if it's a button-like input we shouldn't intercept
+        const container = findContainer(target);
+        if (!container) return;
         const fields = collectFields(container);
         const idx = fields.indexOf(target);
         if (idx === -1) return;
@@ -168,12 +179,12 @@ export function useGlobalKeyboardNav() {
         return;
       }
 
-      // Arrow navigation (Up/Down only — Left/Right stays native for RTL caret)
       if (key === "ArrowDown" || key === "ArrowUp") {
-        if (isTextarea) return; // native caret movement
+        if (isTextarea) return;
         if (SKIP_ARROW_INPUT_TYPES.has(inputType)) return;
-        // <select> native handling cycles options; don't hijack.
         if (target instanceof HTMLSelectElement) return;
+        const container = findContainer(target);
+        if (!container) return;
         const fields = collectFields(container);
         const idx = fields.indexOf(target);
         if (idx === -1) return;
@@ -185,7 +196,7 @@ export function useGlobalKeyboardNav() {
       }
     }
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, []);
 }
