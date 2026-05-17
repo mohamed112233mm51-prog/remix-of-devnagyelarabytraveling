@@ -322,6 +322,7 @@ function ApprovalsPage() {
                 </table>
               </div>
             )}
+            <Controls />
           </div>
         </>
       ) : (
