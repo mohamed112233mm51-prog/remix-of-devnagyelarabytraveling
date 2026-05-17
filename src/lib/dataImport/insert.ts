@@ -12,18 +12,17 @@ export async function batchInsert(
   let failed = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
     const chunk = rows.slice(i, i + BATCH);
-    const { data, error } = await supabase.from(table as any).insert(chunk).select("id");
+    const { data, error } = await (supabase.from(table as any) as any).insert(chunk).select("id");
     if (error) {
-      // Fallback: try one-by-one to skip bad rows
       for (const r of chunk) {
-        const { data: d2, error: e2 } = await supabase.from(table as any).insert(r).select("id").single();
+        const { data: d2, error: e2 } = await (supabase.from(table as any) as any).insert(r).select("id").single();
         if (e2) failed++;
         else if (d2?.id) {
           insertedIds.push(d2.id);
           patchLive(table as any, { type: "insert", row: { ...r, id: d2.id, created_at: new Date().toISOString() } });
         }
       }
-    } else if (data) {
+    } else if (Array.isArray(data)) {
       for (let j = 0; j < data.length; j++) {
         const id = (data[j] as any).id;
         insertedIds.push(id);
