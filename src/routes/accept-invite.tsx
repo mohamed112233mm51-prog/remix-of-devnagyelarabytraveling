@@ -18,15 +18,29 @@ const inviteInitCache = new Map<string, InviteInitResult>();
 function AcceptInvitePage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const hasProcessedInviteRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     async function init() {
+      const cacheKey = window.location.href;
+      if (hasProcessedInviteRef.current) return;
+      hasProcessedInviteRef.current = true;
+
+      const cached = inviteInitCache.get(cacheKey);
+      if (cached) {
+        setEmail(cached.email);
+        setUserId(cached.userId);
+        setReady(cached.ready);
+        return;
+      }
+
       try {
         const url = new URL(window.location.href);
         const hash = window.location.hash || "";
@@ -86,15 +100,23 @@ function AcceptInvitePage() {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         if (!data.session?.user) {
-          setErr("رابط الدعوة غير صالح أو منتهي الصلاحية");
+          setEmail("");
+          setUserId(null);
           setReady(true);
+          inviteInitCache.set(cacheKey, { ready: true, email: "", userId: null });
           return;
         }
         setEmail(data.session.user.email ?? "");
+        setUserId(data.session.user.id);
         setReady(true);
+        inviteInitCache.set(cacheKey, {
+          ready: true,
+          email: data.session.user.email ?? "",
+          userId: data.session.user.id,
+        });
       } catch (e: any) {
         if (cancelled) return;
-        setErr(e?.message || "تعذر التحقق من رابط الدعوة");
+        setErr(e?.message || "تعذر قراءة رابط الدعوة");
         setReady(true);
       }
     }
