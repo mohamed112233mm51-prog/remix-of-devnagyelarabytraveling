@@ -185,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           supabase.from("user_roles").select("role").eq("user_id", uid),
           supabase
             .from("profiles")
-            .select("is_active, invite_accepted, permissions")
+            .select("is_active, invite_accepted, permissions, is_super_admin")
             .eq("id", uid)
             .maybeSingle(),
         ]);
@@ -193,11 +193,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast.error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
         setRoles([]);
         setPermissions({});
+        setIsSuperAdmin(false);
         setBlocked(null);
         return;
       }
       setRoles((roleRows ?? []).map((r: any) => r.role));
       setPermissions(((profile as any)?.permissions as Record<string, any>) ?? {});
+      setIsSuperAdmin(!!(profile as any)?.is_super_admin);
       if (!profile) setBlocked("not_invited");
       else if ((profile as any).is_active === false) setBlocked("disabled");
       else if ((profile as any).invite_accepted === false) setBlocked("disabled");
@@ -206,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error(error?.message || "تعذر تحميل صلاحيات المستخدم");
       setRoles([]);
       setPermissions({});
+      setIsSuperAdmin(false);
       setBlocked(null);
     } finally {
       setProfileLoaded(true);
@@ -219,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profileLoaded,
     roles,
     isAdmin: roles.includes("admin"),
+    isSuperAdmin,
     needsPassword,
     blocked,
     permissions,
