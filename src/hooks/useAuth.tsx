@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Record<string, any>>({});
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
 
