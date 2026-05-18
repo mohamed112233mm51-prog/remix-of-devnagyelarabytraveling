@@ -12,6 +12,7 @@ type AuthCtx = {
   profileLoaded: boolean;
   roles: Role[];
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   needsPassword: boolean;
   blocked: null | "not_invited" | "disabled";
   permissions: Record<string, any>;
