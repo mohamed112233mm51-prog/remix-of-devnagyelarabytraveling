@@ -73,8 +73,12 @@ export const bootstrapAdmin = createServerFn({ method: "POST" }).handler(async (
 });
 
 async function ensureAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
-  if (!data) throw new Response("Forbidden", { status: 403 });
+  const sb = admin();
+  const { data: roleRow } = await sb.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
+  if (roleRow) return;
+  const { data: profile } = await sb.from("profiles").select("is_super_admin").eq("id", userId).maybeSingle();
+  if (profile?.is_super_admin) return;
+  throw new Error("Forbidden: admin access required");
 }
 
 export const listUsers = createServerFn({ method: "GET" })
