@@ -39,7 +39,10 @@ const inviteInitCache = new Map<string, InviteInitResult>();
 function getCacheKey() {
   if (typeof window === "undefined") return "/accept-invite";
   const href = window.location.href;
-  return href.includes("access_token") || href.includes("token_hash") || href.includes("code=") || href.includes("type=invite")
+  return href.includes("access_token") ||
+    href.includes("token_hash") ||
+    href.includes("code=") ||
+    href.includes("type=invite")
     ? href
     : "/accept-invite";
 }
@@ -76,7 +79,7 @@ function decodeEmailFromJwt(token?: string) {
       atob(normalized)
         .split("")
         .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`)
-        .join("")
+        .join(""),
     );
     const data = JSON.parse(json);
     return typeof data.email === "string" ? data.email : "";
@@ -232,13 +235,32 @@ function AcceptInvitePage() {
         <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
           أهلاً بك — أنشئ كلمة مرور لحسابك للمتابعة.
         </p>
-        {err && <p style={{ marginTop: 10, color: "#dc2626", fontSize: 13, fontWeight: 700 }}>{err}</p>}
+        {err && (
+          <p style={{ marginTop: 10, color: "#dc2626", fontSize: 13, fontWeight: 700 }}>{err}</p>
+        )}
         <label style={lbl}>البريد الإلكتروني</label>
-        <input value={email || "سيتم تحديد البريد من رابط الدعوة"} readOnly style={{ ...inp, background: "#f3f4f6" }} />
+        <input
+          value={email || "سيتم تحديد البريد من رابط الدعوة"}
+          readOnly
+          style={{ ...inp, background: "#f3f4f6" }}
+        />
         <label style={lbl}>كلمة المرور الجديدة</label>
-        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required autoFocus style={inp} />
+        <input
+          type="password"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          required
+          autoFocus
+          style={inp}
+        />
         <label style={lbl}>تأكيد كلمة المرور</label>
-        <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} required style={inp} />
+        <input
+          type="password"
+          value={pw2}
+          onChange={(e) => setPw2(e.target.value)}
+          required
+          style={inp}
+        />
         <button type="submit" disabled={busy} style={btn}>
           {busy ? "..." : "قبول الدعوة وتفعيل الحساب"}
         </button>
@@ -247,8 +269,38 @@ function AcceptInvitePage() {
   );
 }
 
-const wrap: React.CSSProperties = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#f5f7fb", padding: 16 };
-const card: React.CSSProperties = { width: "100%", maxWidth: 420, background: "#fff", padding: 28, borderRadius: 16, boxShadow: "0 8px 30px rgba(0,0,0,.08)" };
+const wrap: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "grid",
+  placeItems: "center",
+  background: "#f5f7fb",
+  padding: 16,
+};
+const card: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 420,
+  background: "#fff",
+  padding: 28,
+  borderRadius: 16,
+  boxShadow: "0 8px 30px rgba(0,0,0,.08)",
+};
 const lbl: React.CSSProperties = { display: "block", fontSize: 13, marginTop: 12 };
-const inp: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 14, marginTop: 4 };
-const btn: React.CSSProperties = { marginTop: 18, width: "100%", padding: "12px 16px", borderRadius: 10, background: "#2563eb", color: "#fff", border: 0, fontWeight: 700, cursor: "pointer" };
+const inp: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid #e5e7eb",
+  fontSize: 14,
+  marginTop: 4,
+};
+const btn: React.CSSProperties = {
+  marginTop: 18,
+  width: "100%",
+  padding: "12px 16px",
+  borderRadius: 10,
+  background: "#2563eb",
+  color: "#fff",
+  border: 0,
+  fontWeight: 700,
+  cursor: "pointer",
+};
