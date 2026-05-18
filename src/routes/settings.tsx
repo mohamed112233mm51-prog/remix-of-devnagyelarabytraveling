@@ -62,21 +62,38 @@ function normalizePerm(v: any): Record<string, boolean> {
 }
 
 function SettingsPage() {
-  const { isAdmin, loading } = useAuth();
-  const [tab, setTab] = useState<Tab>("users");
+  const { permissions, isSuperAdmin, loading } = useAuth();
+  const can = (sub: SettingsSubKey | "view") => checkSettingsPerm(permissions, isSuperAdmin, sub);
+
+  const allTabs: { id: Tab; label: string; icon: React.ReactNode; perm: SettingsSubKey }[] = [
+    { id: "users", label: "المستخدمين", icon: <Users size={15} strokeWidth={2} />, perm: "users_manage" },
+    { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} />, perm: "users_manage" },
+    { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} />, perm: "roles_manage" },
+    { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} />, perm: "company_manage" },
+    { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
+    { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
+    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "diagnostics" as SettingsSubKey }] : []),
+  ];
+  const tabs = allTabs.filter((t) => can(t.perm));
+  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "users");
+
+  // Keep selected tab valid as permissions change
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.find((t) => t.id === tab)) setTab(tabs[0].id);
+  }, [tabs.map((t) => t.id).join("|")]);
 
   if (loading) return <div style={{ padding: 24 }}>...</div>;
-  if (!isAdmin) return <div className="card" style={{ padding: 24 }}>هذه الصفحة للمسؤول فقط</div>;
-
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "users", label: "المستخدمين", icon: <Users size={15} strokeWidth={2} /> },
-    { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} /> },
-    { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} /> },
-    { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} /> },
-    { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} /> },
-    { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} /> },
-    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} /> }] : []),
-  ];
+  if (!can("view")) {
+    return (
+      <div className="card" style={{ padding: 40, textAlign: "center", display: "grid", gap: 12, placeItems: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 14, display: "grid", placeItems: "center", background: "#FEE2E2", color: "#B91C1C" }}>
+          <ShieldCheck size={28} />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>غير مصرح لك</div>
+        <div style={{ color: "#64748B", fontSize: 13 }}>ليس لديك صلاحية الوصول إلى الإعدادات. تواصل مع مالك النظام.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="accounts-page" style={{ display: "grid", gap: 16 }}>
@@ -106,13 +123,13 @@ function SettingsPage() {
         ))}
       </div>
 
-      {tab === "users" && <UsersTab />}
-      {tab === "add" && <InviteUserTab />}
-      {tab === "perms" && <PermsTab />}
-      {tab === "general" && <GeneralTab />}
-      {tab === "backups" && <BackupsTab />}
-      {tab === "production" && <ProductionCleanupTab />}
-      {tab === "devtools" && !isProdEnv() && <DevToolsTab />}
+      {tab === "users" && can("users_manage") && <UsersTab />}
+      {tab === "add" && can("users_manage") && <InviteUserTab />}
+      {tab === "perms" && can("roles_manage") && <PermsTab />}
+      {tab === "general" && can("company_manage") && <GeneralTab />}
+      {tab === "backups" && can("backups_manage") && <BackupsTab />}
+      {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
+      {tab === "devtools" && can("diagnostics") && !isProdEnv() && <DevToolsTab />}
     </div>
   );
 }
