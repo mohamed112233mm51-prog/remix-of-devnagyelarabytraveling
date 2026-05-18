@@ -203,7 +203,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     needsPassword,
     blocked,
     permissions,
-    setPasswordDone: () => setNeedsPassword(false),
+    setPasswordDone: () => {
+      setNeedsPassword(false);
+      setBlocked(null);
+      if (session?.user?.id) loadProfile(session.user.id);
+    },
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return error ? { error: error.message } : {};
