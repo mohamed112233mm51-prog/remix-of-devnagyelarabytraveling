@@ -96,9 +96,10 @@ export default function Layout() {
   const loc = useLocation();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { isAdmin, user, signOut, permissions } = useAuth();
+  const { isAdmin, isSuperAdmin, user, signOut, permissions } = useAuth();
   const branding = useBranding();
   const allowed = (it: Item) => {
+    if (it.permKey === "__settings__") return checkSettingsPerm(permissions, isSuperAdmin, "view");
     if (it.adminOnly) return isAdmin;
     return checkPerm(permissions, isAdmin, it.permKey ?? null, "view");
   };
