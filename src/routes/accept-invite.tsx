@@ -24,6 +24,16 @@ type InviteInitResult = {
   link: InviteLinkData;
 };
 
+const inviteOtpTypes = ["invite", "recovery", "signup", "magiclink", "email"] as const;
+
+function isInviteOtpType(type?: string): type is (typeof inviteOtpTypes)[number] {
+  return !!type && inviteOtpTypes.includes(type as (typeof inviteOtpTypes)[number]);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 const inviteInitCache = new Map<string, InviteInitResult>();
 
 function getCacheKey() {
