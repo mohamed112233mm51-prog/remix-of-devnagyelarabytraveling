@@ -21,7 +21,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { checkPerm } from "@/hooks/usePerm";
+import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
 import { useBranding } from "@/lib/branding";
 import { SearchBox, NotificationsBell } from "@/components/TopbarTools";
 import { isDevEnv } from "@/lib/env";
@@ -71,7 +71,7 @@ const NAV: { label: string; items: Item[] }[] = [
     label: "الإعدادات",
     items: [
       { to: "/data-import", icon: Upload, label: "مركز استيراد البيانات", section: "الإعدادات", permKey: "data_import" },
-      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", adminOnly: true },
+      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", permKey: "__settings__" },
     ],
   },
 ];
@@ -96,9 +96,10 @@ export default function Layout() {
   const loc = useLocation();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { isAdmin, user, signOut, permissions } = useAuth();
+  const { isAdmin, isSuperAdmin, user, signOut, permissions } = useAuth();
   const branding = useBranding();
   const allowed = (it: Item) => {
+    if (it.permKey === "__settings__") return checkSettingsPerm(permissions, isSuperAdmin, "view");
     if (it.adminOnly) return isAdmin;
     return checkPerm(permissions, isAdmin, it.permKey ?? null, "view");
   };

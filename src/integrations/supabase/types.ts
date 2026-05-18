@@ -766,6 +766,7 @@ export type Database = {
           invite_accepted: boolean
           invited_by: string | null
           is_active: boolean
+          is_super_admin: boolean
           permissions: Json
         }
         Insert: {
@@ -777,6 +778,7 @@ export type Database = {
           invite_accepted?: boolean
           invited_by?: string | null
           is_active?: boolean
+          is_super_admin?: boolean
           permissions?: Json
         }
         Update: {
@@ -788,6 +790,7 @@ export type Database = {
           invite_accepted?: boolean
           invited_by?: string | null
           is_active?: boolean
+          is_super_admin?: boolean
           permissions?: Json
         }
         Relationships: []

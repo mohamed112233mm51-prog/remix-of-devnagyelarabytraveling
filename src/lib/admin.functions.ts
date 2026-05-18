@@ -97,6 +97,7 @@ export const listUsers = createServerFn({ method: "GET" })
         invited_at: u.invited_at,
         confirmed_at: u.confirmed_at,
         is_active: profile?.is_active ?? true,
+        is_super_admin: profile?.is_super_admin ?? false,
         agent_id: profile?.agent_id ?? null,
         permissions: profile?.permissions ?? {},
         roles: userRoles,
@@ -223,7 +224,8 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     id: string;
     full_name?: string;
     agent_id?: string | null;
-    permissions?: Record<string, boolean>;
+    permissions?: Record<string, any>;
+    is_super_admin?: boolean;
   }) => d)
   .handler(async ({ context, data }) => {
     await ensureAdmin(context.supabase, context.userId);
@@ -232,6 +234,7 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     if (data.full_name !== undefined) patch.full_name = data.full_name;
     if (data.agent_id !== undefined) patch.agent_id = data.agent_id;
     if (data.permissions !== undefined) patch.permissions = data.permissions;
+    if (data.is_super_admin !== undefined) patch.is_super_admin = data.is_super_admin;
     await sb.from("profiles").update(patch).eq("id", data.id);
     return { ok: true };
   });

@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { normalizeDropdownValue, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
@@ -61,21 +62,38 @@ function normalizePerm(v: any): Record<string, boolean> {
 }
 
 function SettingsPage() {
-  const { isAdmin, loading } = useAuth();
-  const [tab, setTab] = useState<Tab>("users");
+  const { permissions, isSuperAdmin, loading } = useAuth();
+  const can = (sub: SettingsSubKey | "view") => checkSettingsPerm(permissions, isSuperAdmin, sub);
+
+  const allTabs: { id: Tab; label: string; icon: React.ReactNode; perm: SettingsSubKey }[] = [
+    { id: "users", label: "المستخدمين", icon: <Users size={15} strokeWidth={2} />, perm: "users_manage" },
+    { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} />, perm: "users_manage" },
+    { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} />, perm: "roles_manage" },
+    { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} />, perm: "company_manage" },
+    { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
+    { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
+    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "diagnostics" as SettingsSubKey }] : []),
+  ];
+  const tabs = allTabs.filter((t) => can(t.perm));
+  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "users");
+
+  // Keep selected tab valid as permissions change
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.find((t) => t.id === tab)) setTab(tabs[0].id);
+  }, [tabs.map((t) => t.id).join("|")]);
 
   if (loading) return <div style={{ padding: 24 }}>...</div>;
-  if (!isAdmin) return <div className="card" style={{ padding: 24 }}>هذه الصفحة للمسؤول فقط</div>;
-
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "users", label: "المستخدمين", icon: <Users size={15} strokeWidth={2} /> },
-    { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} /> },
-    { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} /> },
-    { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} /> },
-    { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} /> },
-    { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} /> },
-    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} /> }] : []),
-  ];
+  if (!can("view")) {
+    return (
+      <div className="card" style={{ padding: 40, textAlign: "center", display: "grid", gap: 12, placeItems: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 14, display: "grid", placeItems: "center", background: "#FEE2E2", color: "#B91C1C" }}>
+          <ShieldCheck size={28} />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>غير مصرح لك</div>
+        <div style={{ color: "#64748B", fontSize: 13 }}>ليس لديك صلاحية الوصول إلى الإعدادات. تواصل مع مالك النظام.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="accounts-page" style={{ display: "grid", gap: 16 }}>
@@ -105,13 +123,13 @@ function SettingsPage() {
         ))}
       </div>
 
-      {tab === "users" && <UsersTab />}
-      {tab === "add" && <InviteUserTab />}
-      {tab === "perms" && <PermsTab />}
-      {tab === "general" && <GeneralTab />}
-      {tab === "backups" && <BackupsTab />}
-      {tab === "production" && <ProductionCleanupTab />}
-      {tab === "devtools" && !isProdEnv() && <DevToolsTab />}
+      {tab === "users" && can("users_manage") && <UsersTab />}
+      {tab === "add" && can("users_manage") && <InviteUserTab />}
+      {tab === "perms" && can("roles_manage") && <PermsTab />}
+      {tab === "general" && can("company_manage") && <GeneralTab />}
+      {tab === "backups" && can("backups_manage") && <BackupsTab />}
+      {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
+      {tab === "devtools" && can("diagnostics") && !isProdEnv() && <DevToolsTab />}
     </div>
   );
 }
@@ -748,6 +766,59 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
               </select>
             </div>
           </div>
+
+          {/* Super Admin + Settings sub-permissions */}
+          <div style={{ background: "linear-gradient(180deg,#FFFBEB,#FEF3C7)", border: "1px solid #FCD34D", borderRadius: 10, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <ShieldCheck size={15} color="#92400E" />
+                <strong style={{ fontSize: 13, color: "#78350F" }}>صاحب النظام (Super Admin)</strong>
+              </div>
+              <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer", color: "#78350F", fontWeight: 700 }}>
+                <input
+                  type="checkbox"
+                  checked={!!u.is_super_admin}
+                  onChange={async (e) => {
+                    await updFn({ data: { id: u.id, is_super_admin: e.target.checked } });
+                    toast.success(e.target.checked ? "تم تعيين كصاحب نظام" : "تم إلغاء صلاحية صاحب النظام");
+                    onChanged();
+                  }}
+                />
+                تفعيل (يتجاوز جميع صلاحيات الإعدادات)
+              </label>
+            </div>
+            <div style={{ fontSize: 11.5, color: "#92400E" }}>صاحب النظام يرى كل تبويبات الإعدادات تلقائيًا. غير ذلك، يجب منح كل صلاحية صراحةً أدناه.</div>
+          </div>
+
+          <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <SettingsIcon size={15} color="#0F1F44" />
+              <strong style={{ fontSize: 13, color: "#0F172A" }}>صلاحيات الإعدادات</strong>
+              {u.is_super_admin && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", background: "#FEF3C7", padding: "1px 7px", borderRadius: 999, border: "1px solid #FDE68A" }}>متجاوزة بواسطة Super Admin</span>}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(["view", ...SETTINGS_SUB_KEYS] as const).map((k) => {
+                const label = k === "view" ? "عرض الإعدادات" : SETTINGS_SUB_LABELS[k as SettingsSubKey];
+                const s = (u.permissions?.settings ?? {}) as Record<string, boolean>;
+                const checked = !!s[k];
+                return (
+                  <label key={k} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155", padding: "6px 10px", background: checked ? "#EFF6FF" : "transparent", border: `1px solid ${checked ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = { ...s, [k]: e.target.checked };
+                        if (k !== "view" && e.target.checked) next.view = true;
+                        commit("settings", next as any);
+                      }}
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={{ display: "grid", gap: 8 }}>
             {PERMISSION_KEYS.map((p) => {
               const cur = normalizePerm(u.permissions?.[p.key]);
