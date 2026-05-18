@@ -141,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setBlocked(null);
+        setIsSuperAdmin(!!(profile as any).is_super_admin);
         const nextPerms = ((profile as any).permissions ?? {}) as Record<string, any>;
         setPermissions((prev) =>
           JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms,
