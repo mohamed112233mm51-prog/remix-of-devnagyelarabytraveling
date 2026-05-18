@@ -39,15 +39,35 @@ function AcceptInvitePage() {
           return;
         }
 
-        // 2) PKCE code flow: ?code=...
+        const hashParams = hash ? new URLSearchParams(hash.replace(/^#/, "")) : null;
+
+        // 2) Modern Supabase verify link: ?token_hash=...&type=invite|recovery|signup
+        //    or legacy ?token=...&type=...
+        const tokenHash = url.searchParams.get("token_hash") || url.searchParams.get("token");
+        const otpType = (url.searchParams.get("type") || hashParams?.get("type") || "").toLowerCase();
         const code = url.searchParams.get("code");
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          // Clean URL regardless
+
+        if (tokenHash && (otpType === "invite" || otpType === "recovery" || otpType === "signup" || otpType === "magiclink" || otpType === "email")) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: otpType as any,
+          });
           window.history.replaceState(null, "", "/accept-invite");
           if (error) {
             const m = (error.message || "").toLowerCase();
             if (m.includes("expired")) setErr("انتهت صلاحية رابط الدعوة، اطلب دعوة جديدة");
+            else setErr("رابط الدعوة غير صالح أو منتهي الصلاحية");
+            setReady(true);
+            return;
+          }
+        } else if (code) {
+          // 3) PKCE code flow (only works when verifier exists locally — rare for admin invites)
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          window.history.replaceState(null, "", "/accept-invite");
+          if (error) {
+            const m = (error.message || "").toLowerCase();
+            if (m.includes("expired")) setErr("انتهت صلاحية رابط الدعوة، اطلب دعوة جديدة");
+            else if (m.includes("verifier")) setErr("افتح رابط الدعوة في نفس المتصفح، أو اطلب دعوة جديدة");
             else if (m.includes("project") || m.includes("issuer") || m.includes("audience"))
               setErr("تم إنشاء الدعوة من نسخة مختلفة من النظام");
             else setErr("رابط الدعوة غير صالح أو منتهي الصلاحية");
@@ -55,7 +75,7 @@ function AcceptInvitePage() {
             return;
           }
         } else if (hash && (hash.includes("access_token") || hash.includes("type=invite") || hash.includes("type=recovery"))) {
-          // 3) Legacy implicit flow: tokens in hash — let supabase consume them
+          // 4) Legacy implicit flow: tokens in hash — let supabase consume them
           await new Promise((r) => setTimeout(r, 80));
         }
 
