@@ -163,11 +163,10 @@ function AcceptInvitePage() {
     }
 
     if (link.tokenHash && link.otpType) {
-      const allowedTypes = ["invite", "recovery", "signup", "magiclink", "email"];
-      if (!allowedTypes.includes(link.otpType)) throw new Error("نوع رابط الدعوة غير مدعوم");
+      if (!isInviteOtpType(link.otpType)) throw new Error("نوع رابط الدعوة غير مدعوم");
       const { data, error } = await supabase.auth.verifyOtp({
         token_hash: link.tokenHash,
-        type: link.otpType as any,
+        type: link.otpType,
       });
       if (error || !data.user) throw new Error(error?.message || "تعذر التحقق من رابط الدعوة");
       return data.user;
@@ -208,9 +207,9 @@ function AcceptInvitePage() {
       setPasswordDone();
       toast.success("تم تفعيل الحساب بنجاح");
       navigate({ to: "/" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       hasSubmittedInviteRef.current = false;
-      const message = error?.message || "رابط الدعوة غير صالح أو منتهي الصلاحية";
+      const message = getErrorMessage(error, "رابط الدعوة غير صالح أو منتهي الصلاحية");
       setErr(message);
       toast.error(message);
     } finally {
