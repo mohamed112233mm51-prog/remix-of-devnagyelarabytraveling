@@ -21,7 +21,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { checkPerm } from "@/hooks/usePerm";
+import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
 import { useBranding } from "@/lib/branding";
 import { SearchBox, NotificationsBell } from "@/components/TopbarTools";
 import { isDevEnv } from "@/lib/env";
