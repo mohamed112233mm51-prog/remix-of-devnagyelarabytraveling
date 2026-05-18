@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data: profile, error } = await supabase
           .from("profiles")
-          .select("is_active, invite_accepted, permissions")
+          .select("is_active, invite_accepted, permissions, is_super_admin")
           .eq("id", uid)
           .maybeSingle();
         if (error) return;
