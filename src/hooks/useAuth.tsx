@@ -35,7 +35,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
-      if (event === "PASSWORD_RECOVERY" || (s?.user && (s.user as any).recovery_sent_at && !s.user.last_sign_in_at)) {
+      if (
+        event === "PASSWORD_RECOVERY" ||
+        (s?.user && (s.user as any).recovery_sent_at && !s.user.last_sign_in_at)
+      ) {
         setNeedsPassword(true);
       }
       // detect invite: user has app_metadata.provider invite OR no last_sign_in
@@ -67,6 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const uid = session?.user?.id;
     if (!uid) return;
+    const isAcceptInviteRoute =
+      typeof window !== "undefined" && window.location.pathname === "/accept-invite";
+    if (isAcceptInviteRoute) return;
 
     const handleDisabled = async () => {
       toast.error("تم تعطيل حسابك بواسطة الإدارة");
@@ -97,17 +103,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             handleDisabled();
             return;
           }
+          if (next && next.is_active !== false && next.invite_accepted !== false) {
+            setBlocked(null);
+          }
           if (next && next.permissions) {
             setPermissions(next.permissions as Record<string, any>);
           }
-        }
+        },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
         () => {
           loadProfile(uid);
-        }
+        },
       )
       .subscribe();
 
@@ -120,13 +129,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq("id", uid)
           .maybeSingle();
         if (error) return;
-        if (!profile || (profile as any).is_active === false || (profile as any).invite_accepted === false) {
+        if (
+          !profile ||
+          (profile as any).is_active === false ||
+          (profile as any).invite_accepted === false
+        ) {
           handleDisabled();
           return;
         }
+        setBlocked(null);
         const nextPerms = ((profile as any).permissions ?? {}) as Record<string, any>;
         setPermissions((prev) =>
-          JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms
+          JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms,
         );
         const { data: roleRows } = await supabase
           .from("user_roles")
@@ -136,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRoles((prev) =>
           prev.length === nextRoles.length && prev.every((r) => nextRoles.includes(r))
             ? prev
-            : nextRoles
+            : nextRoles,
         );
       } catch {}
     }, 8000);
@@ -162,10 +176,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadProfile(uid: string) {
     try {
-      const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", uid),
-        supabase.from("profiles").select("is_active, invite_accepted, permissions").eq("id", uid).maybeSingle(),
-      ]);
+      const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
+        await Promise.all([
+          supabase.from("user_roles").select("role").eq("user_id", uid),
+          supabase
+            .from("profiles")
+            .select("is_active, invite_accepted, permissions")
+            .eq("id", uid)
+            .maybeSingle(),
+        ]);
       if (roleError || profileError) {
         toast.error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
         setRoles([]);
@@ -199,7 +218,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     needsPassword,
     blocked,
     permissions,
-    setPasswordDone: () => setNeedsPassword(false),
+    setPasswordDone: () => {
+      setNeedsPassword(false);
+      setBlocked(null);
+      if (session?.user?.id) loadProfile(session.user.id);
+    },
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return error ? { error: error.message } : {};
