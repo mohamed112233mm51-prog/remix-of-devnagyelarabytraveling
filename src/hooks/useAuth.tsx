@@ -70,6 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const uid = session?.user?.id;
     if (!uid) return;
+    const isAcceptInviteRoute =
+      typeof window !== "undefined" && window.location.pathname === "/accept-invite";
+    if (isAcceptInviteRoute) return;
 
     const handleDisabled = async () => {
       toast.error("تم تعطيل حسابك بواسطة الإدارة");
