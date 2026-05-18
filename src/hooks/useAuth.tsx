@@ -245,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
       setRoles([]);
       setPermissions({});
+      setIsSuperAdmin(false);
       setBlocked(null);
     },
   };
