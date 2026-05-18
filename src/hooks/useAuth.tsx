@@ -97,6 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             handleDisabled();
             return;
           }
+          if (next && next.is_active !== false && next.invite_accepted !== false) {
+            setBlocked(null);
+          }
           if (next && next.permissions) {
             setPermissions(next.permissions as Record<string, any>);
           }
@@ -124,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           handleDisabled();
           return;
         }
+        setBlocked(null);
         const nextPerms = ((profile as any).permissions ?? {}) as Record<string, any>;
         setPermissions((prev) =>
           JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms
