@@ -71,7 +71,7 @@ const NAV: { label: string; items: Item[] }[] = [
     label: "الإعدادات",
     items: [
       { to: "/data-import", icon: Upload, label: "مركز استيراد البيانات", section: "الإعدادات", permKey: "data_import" },
-      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", adminOnly: true },
+      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", permKey: "__settings__" },
     ],
   },
 ];
