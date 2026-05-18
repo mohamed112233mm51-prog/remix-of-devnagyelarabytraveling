@@ -97,6 +97,7 @@ export const listUsers = createServerFn({ method: "GET" })
         invited_at: u.invited_at,
         confirmed_at: u.confirmed_at,
         is_active: profile?.is_active ?? true,
+        is_super_admin: profile?.is_super_admin ?? false,
         agent_id: profile?.agent_id ?? null,
         permissions: profile?.permissions ?? {},
         roles: userRoles,
