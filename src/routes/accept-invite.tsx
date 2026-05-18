@@ -1,11 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/accept-invite")({
   component: AcceptInvitePage,
 });
+
+type InviteInitResult = {
+  ready: boolean;
+  email: string;
+  userId: string | null;
+};
+
+const inviteInitCache = new Map<string, InviteInitResult>();
 
 function AcceptInvitePage() {
   const navigate = useNavigate();
