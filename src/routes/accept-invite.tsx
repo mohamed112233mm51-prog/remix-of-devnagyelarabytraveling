@@ -106,12 +106,15 @@ function AcceptInvitePage() {
       const link = parseInviteLink();
       inviteLinkRef.current = link;
 
-      // Do not verify or consume token_hash/code on page open. Only read the
-      // current Lovable Cloud browser session if it already exists.
-      const { data } = await supabase.auth.getSession();
+      // Do not verify or consume token_hash/code on page open. For hash links,
+      // decode the visible email from the token and wait for the user submit.
+      const shouldReadExistingSession = !link.accessToken && !link.tokenHash && !link.code;
+      const { data } = shouldReadExistingSession
+        ? await supabase.auth.getSession()
+        : { data: { session: null } };
       if (cancelled) return;
 
-      const initialEmail = data.session?.user?.email ?? decodeEmailFromJwt(link.accessToken);
+      const initialEmail = decodeEmailFromJwt(link.accessToken) || data.session?.user?.email || "";
       const result: InviteInitResult = {
         ready: true,
         email: initialEmail,
