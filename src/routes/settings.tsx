@@ -766,6 +766,59 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
               </select>
             </div>
           </div>
+
+          {/* Super Admin + Settings sub-permissions */}
+          <div style={{ background: "linear-gradient(180deg,#FFFBEB,#FEF3C7)", border: "1px solid #FCD34D", borderRadius: 10, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <ShieldCheck size={15} color="#92400E" />
+                <strong style={{ fontSize: 13, color: "#78350F" }}>صاحب النظام (Super Admin)</strong>
+              </div>
+              <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer", color: "#78350F", fontWeight: 700 }}>
+                <input
+                  type="checkbox"
+                  checked={!!u.is_super_admin}
+                  onChange={async (e) => {
+                    await updFn({ data: { id: u.id, is_super_admin: e.target.checked } });
+                    toast.success(e.target.checked ? "تم تعيين كصاحب نظام" : "تم إلغاء صلاحية صاحب النظام");
+                    onChanged();
+                  }}
+                />
+                تفعيل (يتجاوز جميع صلاحيات الإعدادات)
+              </label>
+            </div>
+            <div style={{ fontSize: 11.5, color: "#92400E" }}>صاحب النظام يرى كل تبويبات الإعدادات تلقائيًا. غير ذلك، يجب منح كل صلاحية صراحةً أدناه.</div>
+          </div>
+
+          <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <SettingsIcon size={15} color="#0F1F44" />
+              <strong style={{ fontSize: 13, color: "#0F172A" }}>صلاحيات الإعدادات</strong>
+              {u.is_super_admin && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", background: "#FEF3C7", padding: "1px 7px", borderRadius: 999, border: "1px solid #FDE68A" }}>متجاوزة بواسطة Super Admin</span>}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(["view", ...SETTINGS_SUB_KEYS] as const).map((k) => {
+                const label = k === "view" ? "عرض الإعدادات" : SETTINGS_SUB_LABELS[k as SettingsSubKey];
+                const s = (u.permissions?.settings ?? {}) as Record<string, boolean>;
+                const checked = !!s[k];
+                return (
+                  <label key={k} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155", padding: "6px 10px", background: checked ? "#EFF6FF" : "transparent", border: `1px solid ${checked ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = { ...s, [k]: e.target.checked };
+                        if (k !== "view" && e.target.checked) next.view = true;
+                        commit("settings", next as any);
+                      }}
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={{ display: "grid", gap: 8 }}>
             {PERMISSION_KEYS.map((p) => {
               const cur = normalizePerm(u.permissions?.[p.key]);
