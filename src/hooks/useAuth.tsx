@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setRoles([]);
         setPermissions({});
+        setIsSuperAdmin(false);
         setBlocked(null);
         setNeedsPassword(false);
         setProfileLoaded(false);
