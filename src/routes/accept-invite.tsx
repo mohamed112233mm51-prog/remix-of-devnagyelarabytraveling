@@ -140,9 +140,6 @@ function AcceptInvitePage() {
   }, []);
 
   async function ensureInviteSession() {
-    const current = await supabase.auth.getSession();
-    if (current.data.session?.user) return current.data.session.user;
-
     const link = inviteLinkRef.current;
     if (link.urlError) throw new Error("رابط الدعوة غير صالح أو منتهي الصلاحية");
 
@@ -171,6 +168,9 @@ function AcceptInvitePage() {
       if (error || !data.user) throw new Error(error?.message || "تعذر تفعيل رابط الدعوة");
       return data.user;
     }
+
+    const current = await supabase.auth.getSession();
+    if (current.data.session?.user) return current.data.session.user;
 
     throw new Error("رابط الدعوة غير صالح أو منتهي الصلاحية");
   }
