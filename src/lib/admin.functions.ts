@@ -72,12 +72,23 @@ export const bootstrapAdmin = createServerFn({ method: "POST" }).handler(async (
   return { repaired: true };
 });
 
-async function ensureAdmin(supabase: any, userId: string) {
+async function ensureAdmin(_supabase: any, userId: string, subKey: string = "users_manage") {
   const sb = admin();
-  const { data: roleRow } = await sb.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
-  if (roleRow) return;
-  const { data: profile } = await sb.from("profiles").select("is_super_admin").eq("id", userId).maybeSingle();
+  const { data: profile } = await sb
+    .from("profiles")
+    .select("is_super_admin, permissions")
+    .eq("id", userId)
+    .maybeSingle();
   if (profile?.is_super_admin) return;
+  const perms: any = profile?.permissions ?? {};
+  if (perms?.settings?.[subKey] === true || perms?.settings?.view === true) return;
+  const { data: roleRow } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (roleRow) return;
   throw new Error("Forbidden: admin access required");
 }
 
