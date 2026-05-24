@@ -36,6 +36,8 @@ type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "d
 const PERMISSION_KEYS: { key: string; label: string }[] = [
   { key: "dashboard", label: "لوحة التحكم" },
   { key: "agents", label: "الوكلاء" },
+  { key: "submissions", label: "التقديمات" },
+  { key: "executions", label: "التنفيذ" },
   { key: "flights", label: "الرحلات" },
   { key: "approvals", label: "الموافقات" },
   { key: "accounts", label: "الحسابات" },
