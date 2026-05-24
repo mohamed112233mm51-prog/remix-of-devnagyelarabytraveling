@@ -235,11 +235,12 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
 }
 
 function ExecutionForm({
-  editing, agents, companies, statuses, departures, destinations, airlines, serviceKinds, onDone,
+  editing, agents, companies, merchants, statuses, departures, destinations, airlines, serviceKinds, onDone,
 }: {
   editing: Execution | null;
   agents: Agent[];
   companies: IssuingCompany[];
+  merchants: Merchant[];
   statuses: readonly string[];
   departures: readonly string[];
   destinations: readonly string[];
