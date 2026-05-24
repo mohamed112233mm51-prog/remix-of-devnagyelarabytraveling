@@ -201,6 +201,7 @@ function ExecutionsPage() {
           editing={editing}
           agents={agents}
           companies={companies}
+          merchants={merchants}
           statuses={STATUSES}
           departures={DEPARTURES}
           destinations={DESTINATIONS}
@@ -209,6 +210,26 @@ function ExecutionsPage() {
           onDone={() => { setTab("list"); setEditing(null); }}
         />
       )}
+    </div>
+  );
+}
+
+function KpiCard({ icon, label, value, tone }: { icon: string; label: string; value: number | string; tone: "navy" | "emerald" | "sky" | "rose" | "amber" }) {
+  const tones: Record<string, { bg: string; fg: string; bd: string }> = {
+    navy:    { bg: "#eef2ff", fg: NAVY,      bd: "#dbe3ee" },
+    emerald: { bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
+    sky:     { bg: "#f0f9ff", fg: "#0369a1", bd: "#bae6fd" },
+    rose:    { bg: "#fef2f2", fg: "#b91c1c", bd: "#fecaca" },
+    amber:   { bg: "#fffbeb", fg: "#b45309", bd: "#fde68a" },
+  };
+  const t = tones[tone];
+  return (
+    <div style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+      <div style={{ width: 42, height: 42, borderRadius: 10, background: t.bg, color: t.fg, border: `1px solid ${t.bd}`, display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 3 }}>{label}</div>
+        <div style={{ fontSize: 18, color: "#0f172a", fontWeight: 800 }}>{typeof value === "number" ? value.toLocaleString("ar") : value}</div>
+      </div>
     </div>
   );
 }
