@@ -399,6 +399,11 @@ export type ExecutionServiceItem = {
   agent_price?: number;
   company_price?: number;
   company_value?: number;
+  // Payment linkage (optional). When provided, postExecutionFinancials
+  // writes paid_amount into the matching bucket on the agent transaction row.
+  payment_method?: string | null;     // 'نقدي' | 'إنستاباي' | 'محفظة' | 'تاجر إنستاباي' | 'تاجر محفظة' | 'تاجر نقدي'
+  paid_amount?: number;
+  merchant_id?: string | null;
 };
 
 export type Submission = {
