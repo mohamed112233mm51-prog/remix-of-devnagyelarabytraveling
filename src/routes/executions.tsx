@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plane, Plus, Pencil, Trash2, Search, X, CheckCircle2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useLive, useDropdownOptions, withSelected,
-  type Agent, type Execution, type ExecutionServiceItem, type IssuingCompany,
+  type Agent, type Execution, type ExecutionServiceItem, type IssuingCompany, type Merchant,
 } from "@/lib/db";
 import { postExecutionFinancials, deleteExecutionLinkedRows } from "@/lib/executionPosting";
 import { usePerm } from "@/hooks/usePerm";
@@ -17,6 +17,9 @@ import { confirmDialog } from "@/lib/confirm";
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
 });
+
+const NAVY = "#0f1b3d", GOLD = "#d4af37";
+const PAYMENT_METHODS = ["نقدي", "إنستاباي", "محفظة", "تاجر إنستاباي", "تاجر محفظة", "تاجر نقدي"] as const;
 
 const SERVICE_KINDS = ["موافقة أمنية", "تذكرة طيران", "استثمار ليبي"] as const;
 
