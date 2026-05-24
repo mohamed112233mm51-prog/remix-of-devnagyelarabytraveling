@@ -37,7 +37,7 @@ const NAV: { label: string; items: Item[] }[] = [
   {
     label: "تقديم",
     items: [
-      { to: "/submit", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: null },
+      { to: "/submissions", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: "submissions" },
     ],
   },
   {
