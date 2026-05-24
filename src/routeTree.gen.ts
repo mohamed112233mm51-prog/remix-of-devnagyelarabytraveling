@@ -19,6 +19,7 @@ import { Route as LibyanInvestmentRouteImport } from './routes/libyan-investment
 import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as FlightsRouteImport } from './routes/flights'
 import { Route as ExpensesRouteImport } from './routes/expenses'
+import { Route as ExecutionsRouteImport } from './routes/executions'
 import { Route as DataImportRouteImport } from './routes/data-import'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
@@ -78,6 +79,11 @@ const ExpensesRoute = ExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExecutionsRoute = ExecutionsRouteImport.update({
+  id: '/executions',
+  path: '/executions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DataImportRoute = DataImportRouteImport.update({
   id: '/data-import',
   path: '/data-import',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
   '/data-import': typeof DataImportRoute
+  '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
   '/data-import': typeof DataImportRoute
+  '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
   '/data-import': typeof DataImportRoute
+  '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
   '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
@@ -189,6 +198,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/companies'
     | '/data-import'
+    | '/executions'
     | '/expenses'
     | '/flights'
     | '/investors'
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/companies'
     | '/data-import'
+    | '/executions'
     | '/expenses'
     | '/flights'
     | '/investors'
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/companies'
     | '/data-import'
+    | '/executions'
     | '/expenses'
     | '/flights'
     | '/investors'
@@ -250,6 +262,7 @@ export interface RootRouteChildren {
   ApprovalsRoute: typeof ApprovalsRoute
   CompaniesRoute: typeof CompaniesRoute
   DataImportRoute: typeof DataImportRoute
+  ExecutionsRoute: typeof ExecutionsRoute
   ExpensesRoute: typeof ExpensesRoute
   FlightsRoute: typeof FlightsRoute
   InvestorsRoute: typeof InvestorsRoute
@@ -336,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpensesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/executions': {
+      id: '/executions'
+      path: '/executions'
+      fullPath: '/executions'
+      preLoaderRoute: typeof ExecutionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/data-import': {
       id: '/data-import'
       path: '/data-import'
@@ -402,6 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApprovalsRoute: ApprovalsRoute,
   CompaniesRoute: CompaniesRoute,
   DataImportRoute: DataImportRoute,
+  ExecutionsRoute: ExecutionsRoute,
   ExpensesRoute: ExpensesRoute,
   FlightsRoute: FlightsRoute,
   InvestorsRoute: InvestorsRoute,
@@ -418,3 +439,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
