@@ -383,11 +383,61 @@ export type UsdTreasuryTransaction = {
   created_at: string;
 };
 
+export type ExecutionServiceItem = {
+  service_type: string;
+  company_id?: string | null;
+  count?: number;
+  agent_price?: number;
+  company_price?: number;
+  company_value?: number;
+};
+
+export type Submission = {
+  id: string;
+  services: string[];
+  passenger_name: string;
+  national_id: string | null;
+  dob: string | null;
+  passport: string | null;
+  birth_place: string | null;
+  agent_id: string | null;
+  status: string;
+  departure_from: string | null;
+  submit_date: string | null;
+  issue_date: string | null;
+  approval_authority: string | null;
+  notes: string | null;
+  executed_at: string | null;
+  execution_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Execution = {
+  id: string;
+  submission_id: string | null;
+  passenger_name: string;
+  national_id: string | null;
+  dob: string | null;
+  passport: string | null;
+  birth_place: string | null;
+  agent_id: string | null;
+  status: string;
+  departure_from: string | null;
+  destination: string | null;
+  airline: string | null;
+  travel_date: string | null;
+  notes: string | null;
+  services: ExecutionServiceItem[];
+  created_at: string;
+  updated_at: string;
+};
+
 type LiveTable =
   | "agents" | "flights" | "approvals" | "transactions" | "issuing_companies"
   | "company_transactions" | "merchants" | "merchant_cash_collections"
   | "investors" | "investor_transactions" | "expenses" | "expense_deductions"
-  | "usd_treasury_transactions";
+  | "usd_treasury_transactions" | "submissions" | "executions";
 
 type LiveStore = {
   rows: any[];
