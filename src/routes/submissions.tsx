@@ -147,7 +147,7 @@ function SubmissionsPage() {
                 </tbody>
               </table>
             </div>
-            {Controls}
+            <Controls />
           </div>
         </>
       ) : (
