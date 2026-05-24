@@ -36,6 +36,8 @@ type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "d
 const PERMISSION_KEYS: { key: string; label: string }[] = [
   { key: "dashboard", label: "لوحة التحكم" },
   { key: "agents", label: "الوكلاء" },
+  { key: "submissions", label: "التقديمات" },
+  { key: "executions", label: "التنفيذ" },
   { key: "flights", label: "الرحلات" },
   { key: "approvals", label: "الموافقات" },
   { key: "accounts", label: "الحسابات" },
@@ -1139,6 +1141,10 @@ function GeneralTab() {
           <DropdownListManager category="destination" title="الوجهات" icon={<MapPin size={16} />} />
           <DropdownListManager category="airline" title="شركات الطيران" icon={<Plane size={16} />} />
           <DropdownListManager category="service_type" title="أنواع الخدمة" icon={<Wrench size={16} />} />
+          <DropdownListManager category="departure_from" title="جهات المغادرة" icon={<MapPin size={16} />} />
+          <DropdownListManager category="service_kind" title="أنواع خدمات التنفيذ" icon={<Wrench size={16} />} />
+          <DropdownListManager category="submission_status" title="حالات التقديمات" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="execution_status" title="حالات التنفيذ" icon={<ListChecks size={16} />} />
         </div>
       </div>
 

@@ -122,15 +122,24 @@ export const AUTHORITIES = ["مطار برج العرب", "مطار القاهر
 export const AIRLINES = ["برنيق", "بنغازي", "البرج"] as const;
 export const SERVICE_TYPES = ["تذاكر طيران", "موافقة أمنية", "استثمار عسكري"] as const;
 
-export type DropdownCategory = "authority" | "destination" | "airline" | "service_type";
+export type DropdownCategory =
+  | "authority" | "destination" | "airline" | "service_type"
+  | "execution_status" | "submission_status" | "departure_from" | "service_kind";
 
-export const VALID_DROPDOWN_CATEGORIES: DropdownCategory[] = ["authority", "destination", "airline", "service_type"];
+export const VALID_DROPDOWN_CATEGORIES: DropdownCategory[] = [
+  "authority", "destination", "airline", "service_type",
+  "execution_status", "submission_status", "departure_from", "service_kind",
+];
 
 const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
   authority: AUTHORITIES,
   destination: DESTINATIONS,
   airline: AIRLINES,
   service_type: SERVICE_TYPES,
+  execution_status: ["قيد التنفيذ", "منفذ", "ملغي", "مؤجل"],
+  submission_status: ["قيد المتابعة", "جاهز للتنفيذ", "مؤجل", "ملغي"],
+  departure_from: ["مطار القاهرة", "مطار برج العرب", "منفذ السلوم"],
+  service_kind: ["تذكرة طيران", "موافقة أمنية", "استثمار ليبي"],
 };
 
 function fallbackDropdownOptions(category: DropdownCategory): string[] {
@@ -390,6 +399,11 @@ export type ExecutionServiceItem = {
   agent_price?: number;
   company_price?: number;
   company_value?: number;
+  // Payment linkage (optional). When provided, postExecutionFinancials
+  // writes paid_amount into the matching bucket on the agent transaction row.
+  payment_method?: string | null;     // 'نقدي' | 'إنستاباي' | 'محفظة' | 'تاجر إنستاباي' | 'تاجر محفظة' | 'تاجر نقدي'
+  paid_amount?: number;
+  merchant_id?: string | null;
 };
 
 export type Submission = {
