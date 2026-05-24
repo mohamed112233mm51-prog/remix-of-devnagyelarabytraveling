@@ -71,6 +71,31 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     const agentPrice = Math.max(0, Number(s.agent_price) || 0);
     const companyValue = Math.max(0, Number(s.company_value) || 0);
 
+    // Distribute paid_amount into the matching bucket
+    const paid = Math.max(0, Number(s.paid_amount) || 0);
+    const pm = s.payment_method || "";
+    const buckets = {
+      instapay_amount: 0,
+      cash_amount: 0,
+      mobile_cash_amount: 0,
+      mobile_cash_net_amount: 0,
+      arabic_tourism_cash_amount: 0,
+      arabic_tourism_cash_net_amount: 0,
+      merchant_cash_amount: 0,
+      merchant_cash_net_amount: 0,
+      merchant_cash_physical_amount: 0,
+    };
+    if (paid > 0) {
+      if (pm === "إنستاباي") buckets.instapay_amount = paid;
+      else if (pm === "نقدي") buckets.cash_amount = paid;
+      else if (pm === "محفظة") { buckets.mobile_cash_amount = paid; buckets.mobile_cash_net_amount = Math.round(paid - paid * 0.01); }
+      else if (pm === "تاجر إنستاباي") buckets.merchant_cash_amount = paid;
+      else if (pm === "تاجر محفظة") { buckets.merchant_cash_amount = paid; buckets.merchant_cash_net_amount = Math.round(paid - paid * 0.01); }
+      else if (pm === "تاجر نقدي") buckets.merchant_cash_physical_amount = paid;
+      else buckets.cash_amount = paid;
+    }
+    const totalPaid = buckets.instapay_amount + buckets.cash_amount + buckets.mobile_cash_net_amount + buckets.merchant_cash_net_amount + buckets.merchant_cash_physical_amount + (buckets.merchant_cash_amount && !buckets.merchant_cash_net_amount ? buckets.merchant_cash_amount : 0);
+
     if (input.agentId) {
       agentRows.push({
         agent_id: input.agentId,
@@ -80,17 +105,11 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
         service_type: s.service_type,
         count,
         price: agentPrice,
-        instapay_amount: 0,
-        cash_amount: 0,
-        mobile_cash_amount: 0,
-        mobile_cash_net_amount: 0,
-        arabic_tourism_cash_amount: 0,
-        arabic_tourism_cash_net_amount: 0,
-        merchant_cash_amount: 0,
-        merchant_cash_net_amount: 0,
-        merchant_cash_physical_amount: 0,
-        total_paid: 0,
-        paid: 0,
+        ...buckets,
+        merchant_id: s.merchant_id || null,
+        payment_method: pm || "نقدي",
+        total_paid: totalPaid,
+        paid: totalPaid,
         note,
         source_service_id: linkId,
         source_service_type: "execution",
