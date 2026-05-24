@@ -367,6 +367,69 @@ export type Database = {
         }
         Relationships: []
       }
+      executions: {
+        Row: {
+          agent_id: string | null
+          airline: string | null
+          birth_place: string | null
+          created_at: string
+          departure_from: string | null
+          destination: string | null
+          dob: string | null
+          id: string
+          is_demo: boolean
+          national_id: string | null
+          notes: string | null
+          passenger_name: string
+          passport: string | null
+          services: Json
+          status: string
+          submission_id: string | null
+          travel_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          airline?: string | null
+          birth_place?: string | null
+          created_at?: string
+          departure_from?: string | null
+          destination?: string | null
+          dob?: string | null
+          id?: string
+          is_demo?: boolean
+          national_id?: string | null
+          notes?: string | null
+          passenger_name: string
+          passport?: string | null
+          services?: Json
+          status?: string
+          submission_id?: string | null
+          travel_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          airline?: string | null
+          birth_place?: string | null
+          created_at?: string
+          departure_from?: string | null
+          destination?: string | null
+          dob?: string | null
+          id?: string
+          is_demo?: boolean
+          national_id?: string | null
+          notes?: string | null
+          passenger_name?: string
+          passport?: string | null
+          services?: Json
+          status?: string
+          submission_id?: string | null
+          travel_date?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expense_deductions: {
         Row: {
           amount: number
@@ -792,6 +855,72 @@ export type Database = {
           is_active?: boolean
           is_super_admin?: boolean
           permissions?: Json
+        }
+        Relationships: []
+      }
+      submissions: {
+        Row: {
+          agent_id: string | null
+          approval_authority: string | null
+          birth_place: string | null
+          created_at: string
+          departure_from: string | null
+          dob: string | null
+          executed_at: string | null
+          execution_id: string | null
+          id: string
+          is_demo: boolean
+          issue_date: string | null
+          national_id: string | null
+          notes: string | null
+          passenger_name: string
+          passport: string | null
+          services: string[]
+          status: string
+          submit_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          approval_authority?: string | null
+          birth_place?: string | null
+          created_at?: string
+          departure_from?: string | null
+          dob?: string | null
+          executed_at?: string | null
+          execution_id?: string | null
+          id?: string
+          is_demo?: boolean
+          issue_date?: string | null
+          national_id?: string | null
+          notes?: string | null
+          passenger_name: string
+          passport?: string | null
+          services?: string[]
+          status?: string
+          submit_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          approval_authority?: string | null
+          birth_place?: string | null
+          created_at?: string
+          departure_from?: string | null
+          dob?: string | null
+          executed_at?: string | null
+          execution_id?: string | null
+          id?: string
+          is_demo?: boolean
+          issue_date?: string | null
+          national_id?: string | null
+          notes?: string | null
+          passenger_name?: string
+          passport?: string | null
+          services?: string[]
+          status?: string
+          submit_date?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
