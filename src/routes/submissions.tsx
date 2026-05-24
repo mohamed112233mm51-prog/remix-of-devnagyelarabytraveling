@@ -49,12 +49,7 @@ function SubmissionsPage() {
 
   const onDelete = async (row: Submission) => {
     if (!perm.delete) return;
-    const ok = await confirmAction({
-      title: "حذف التقديم",
-      message: `سيتم حذف التقديم الخاص بـ "${row.passenger_name}". هل تريد المتابعة؟`,
-      confirmLabel: "حذف",
-      tone: "danger",
-    });
+    const ok = await confirmDialog(`سيتم حذف التقديم الخاص بـ "${row.passenger_name}". هل تريد المتابعة؟`, { confirmLabel: "حذف" });
     if (!ok) return;
     const { error } = await supabase.from("submissions").delete().eq("id", row.id);
     if (error) toast.error(error.message);
