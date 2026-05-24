@@ -9,6 +9,8 @@ export const SECTION_KEYS = [
   "agents",
   "flights",
   "approvals",
+  "submissions",
+  "executions",
   "accounts",
   "expenses",
   "reports",
@@ -43,6 +45,8 @@ export const SETTINGS_SUB_LABELS: Record<SettingsSubKey, string> = {
 // Map route path -> permission section key (null = always allowed)
 export const ROUTE_PERM: Record<string, string | null> = {
   "/": "dashboard",
+  "/submissions": "submissions",
+  "/executions": "executions",
   "/flights": "flights",
   "/approvals": "approvals",
   "/libyan-investment": "approvals",

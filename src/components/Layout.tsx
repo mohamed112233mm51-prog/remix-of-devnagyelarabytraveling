@@ -37,15 +37,14 @@ const NAV: { label: string; items: Item[] }[] = [
   {
     label: "تقديم",
     items: [
-      { to: "/submit", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: null },
+      { to: "/submissions", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: "submissions" },
     ],
   },
   {
     label: "العمليات",
     items: [
-      { to: "/flights", icon: Plane, label: "قائمة الرحلات", section: "العمليات", permKey: "flights" },
-      { to: "/approvals", icon: ClipboardCheck, label: "قائمة الموافقات الأمنية", section: "العمليات", permKey: "approvals" },
-      { to: "/libyan-investment", icon: Landmark, label: "قائمة الاستثمار الليبي", section: "العمليات", permKey: "approvals" },
+      { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", section: "العمليات", permKey: "submissions" },
+      { to: "/executions", icon: Plane, label: "التنفيذ", section: "العمليات", permKey: "executions" },
     ],
   },
   {
@@ -79,6 +78,8 @@ const NAV: { label: string; items: Item[] }[] = [
 const TITLES: Record<string, ReactNode> = {
   "/": (<>لوحة <span>التحكم</span></>),
   "/submit": (<>تقديم <span>خدمة</span></>),
+  "/submissions": (<>قائمة <span>التقديمات</span></>),
+  "/executions": (<>قائمة <span>التنفيذ</span></>),
   "/flights": (<>قائمة <span>الرحلات</span></>),
   "/approvals": (<>قائمة <span>الموافقات الأمنية</span></>),
   "/libyan-investment": (<>قائمة <span>الاستثمار الليبي</span></>),
@@ -131,8 +132,8 @@ export default function Layout() {
 
   const bottomItems: { to: string; icon: IconType; label: string; permKey: string | null }[] = [
     { to: "/", icon: LayoutDashboard, label: "الرئيسية", permKey: "dashboard" },
-    { to: "/flights", icon: Plane, label: "الرحلات", permKey: "flights" },
-    { to: "/approvals", icon: ClipboardCheck, label: "تقديمات", permKey: "approvals" },
+    { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", permKey: "submissions" },
+    { to: "/executions", icon: Plane, label: "التنفيذ", permKey: "executions" },
     { to: "/accounts", icon: Users, label: "حسابات", permKey: "accounts" },
     { to: "/investors", icon: Briefcase, label: "مستثمرين", permKey: "investors" },
   ];
