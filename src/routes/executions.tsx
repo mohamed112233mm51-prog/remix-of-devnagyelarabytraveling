@@ -400,6 +400,21 @@ function ExecutionForm({
                 <Field label="سعر الوكيل (للوحدة)"><input type="number" min={0} value={s.agent_price ?? 0} onChange={(e) => updateService(i, { agent_price: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
                 <Field label="سعر الشركة (للوحدة)"><input type="number" min={0} value={s.company_price ?? 0} onChange={(e) => updateService(i, { company_price: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
                 <Field label="قيمة الشركة (إجمالي)"><input type="number" min={0} value={s.company_value ?? 0} onChange={(e) => updateService(i, { company_value: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
+                <Field label="طريقة الدفع">
+                  <select value={s.payment_method || ""} onChange={(e) => updateService(i, { payment_method: e.target.value || null })} style={inputStyle}>
+                    <option value="">— لم يُسدّد —</option>
+                    {PAYMENT_METHODS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Field>
+                <Field label="المبلغ المدفوع"><input type="number" min={0} value={s.paid_amount ?? 0} onChange={(e) => updateService(i, { paid_amount: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
+                {(s.payment_method || "").startsWith("تاجر") && (
+                  <Field label="التاجر">
+                    <select value={s.merchant_id || ""} onChange={(e) => updateService(i, { merchant_id: e.target.value || null })} style={inputStyle}>
+                      <option value="">— اختر —</option>
+                      {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+                    </select>
+                  </Field>
+                )}
               </div>
               {services.length > 1 && (
                 <div style={{ marginTop: 8, textAlign: "end" }}>
