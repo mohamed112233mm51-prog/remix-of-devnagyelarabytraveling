@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubmitRouteImport } from './routes/submit'
+import { Route as SubmissionsRouteImport } from './routes/submissions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -30,6 +31,11 @@ import { Route as ApiPublicHooksBackupRouteImport } from './routes/api/public/ho
 const SubmitRoute = SubmitRouteImport.update({
   id: '/submit',
   path: '/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubmissionsRoute = SubmissionsRouteImport.update({
+  id: '/submissions',
+  path: '/submissions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -128,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/submissions': typeof SubmissionsRoute
   '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/submissions': typeof SubmissionsRoute
   '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
+  '/submissions': typeof SubmissionsRoute
   '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/reset-password'
     | '/settings'
+    | '/submissions'
     | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/reset-password'
     | '/settings'
+    | '/submissions'
     | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/reset-password'
     | '/settings'
+    | '/submissions'
     | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
@@ -246,6 +258,7 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
+  SubmissionsRoute: typeof SubmissionsRoute
   SubmitRoute: typeof SubmitRoute
   AgentStatementAgentIdRoute: typeof AgentStatementAgentIdRoute
   ApiPublicHooksBackupRoute: typeof ApiPublicHooksBackupRoute
@@ -258,6 +271,13 @@ declare module '@tanstack/react-router' {
       path: '/submit'
       fullPath: '/submit'
       preLoaderRoute: typeof SubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submissions': {
+      id: '/submissions'
+      path: '/submissions'
+      fullPath: '/submissions'
+      preLoaderRoute: typeof SubmissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -390,6 +410,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
+  SubmissionsRoute: SubmissionsRoute,
   SubmitRoute: SubmitRoute,
   AgentStatementAgentIdRoute: AgentStatementAgentIdRoute,
   ApiPublicHooksBackupRoute: ApiPublicHooksBackupRoute,
@@ -397,3 +418,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
