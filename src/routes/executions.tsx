@@ -96,23 +96,46 @@ function ExecutionsPage() {
     }
   };
 
+  const totalCount = executions.length;
+  const doneCount = executions.filter((e) => e.status === "منفذ").length;
+  const pendingCount = executions.filter((e) => e.status === "قيد التنفيذ").length;
+  const cancelledCount = executions.filter((e) => e.status === "ملغي").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
+
   return (
     <div dir="rtl" style={{ display: "grid", gap: 14 }}>
-      <div className="card" style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--primary)", color: "#fff", display: "grid", placeItems: "center" }}>
-            <Plane size={20} />
+      {/* Navy hero header */}
+      <div style={{
+        padding: "16px 20px", borderRadius: 14, border: "1px solid #1e3a8a44",
+        background: `linear-gradient(135deg, ${NAVY} 0%, #1e3a8a 60%, #1e40af 100%)`,
+        boxShadow: `0 10px 30px ${NAVY}2e`, color: "#fff", overflow: "hidden", position: "relative",
+      }}>
+        <div aria-hidden style={{ position: "absolute", top: -40, left: -40, width: 200, height: 200, borderRadius: "50%", background: `radial-gradient(circle, ${GOLD}30, transparent 65%)` }} />
+        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, flex: "1 1 320px" }}>
+            <div style={{ width: 42, height: 42, borderRadius: 11, background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, display: "grid", placeItems: "center", fontSize: 22, boxShadow: `0 6px 16px ${GOLD}55` }}>⚙️</div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em" }}>التنفيذ</h1>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#cbd5e1" }}>اعتماد الخدمات ماليًا — يؤثر على حسابات الوكلاء والشركات والداشبورد</p>
+            </div>
           </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>التنفيذ</h2>
-            <div style={{ fontSize: 12, color: "#64748b" }}>اعتماد الخدمات ماليًا — يؤثر على حسابات الوكلاء والشركات والداشبورد</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => setTab("list")} style={{ height: 38, padding: "0 14px", borderRadius: 10, background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>📋 القائمة</button>
+            {perm.create && <button onClick={() => { setEditing(null); setTab("add"); }} style={{ height: 38, padding: "0 16px", borderRadius: 10, background: `linear-gradient(135deg, ${GOLD}, #e0b65c)`, color: NAVY, border: 0, fontWeight: 800, fontSize: 12.5, cursor: "pointer", boxShadow: `0 6px 16px ${GOLD}4d`, display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={14} /> إضافة تنفيذ</button>}
           </div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={() => setTab("list")}>📋 القائمة</button>
-          {perm.create && <button className="btn btn-gold" onClick={() => { setEditing(null); setTab("add"); }}><Plus size={14} /> إضافة تنفيذ</button>}
         </div>
       </div>
+
+      {/* KPI strip */}
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+        <KpiCard icon="📋" label="إجمالي عمليات التنفيذ" value={totalCount} tone="navy" />
+        <KpiCard icon="✅" label="منفذ" value={doneCount} tone="emerald" />
+        <KpiCard icon="⏳" label="قيد التنفيذ" value={pendingCount} tone="sky" />
+        <KpiCard icon="⛔" label="ملغي" value={cancelledCount} tone="rose" />
+        <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" />
+      </div>
+
 
       {tab === "list" ? (
         <>
