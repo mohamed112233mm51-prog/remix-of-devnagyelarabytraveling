@@ -132,8 +132,8 @@ export default function Layout() {
 
   const bottomItems: { to: string; icon: IconType; label: string; permKey: string | null }[] = [
     { to: "/", icon: LayoutDashboard, label: "الرئيسية", permKey: "dashboard" },
-    { to: "/flights", icon: Plane, label: "الرحلات", permKey: "flights" },
-    { to: "/approvals", icon: ClipboardCheck, label: "تقديمات", permKey: "approvals" },
+    { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", permKey: "submissions" },
+    { to: "/executions", icon: Plane, label: "التنفيذ", permKey: "executions" },
     { to: "/accounts", icon: Users, label: "حسابات", permKey: "accounts" },
     { to: "/investors", icon: Briefcase, label: "مستثمرين", permKey: "investors" },
   ];
