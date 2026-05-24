@@ -43,9 +43,8 @@ const NAV: { label: string; items: Item[] }[] = [
   {
     label: "العمليات",
     items: [
-      { to: "/flights", icon: Plane, label: "قائمة الرحلات", section: "العمليات", permKey: "flights" },
-      { to: "/approvals", icon: ClipboardCheck, label: "قائمة الموافقات الأمنية", section: "العمليات", permKey: "approvals" },
-      { to: "/libyan-investment", icon: Landmark, label: "قائمة الاستثمار الليبي", section: "العمليات", permKey: "approvals" },
+      { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", section: "العمليات", permKey: "submissions" },
+      { to: "/executions", icon: Plane, label: "التنفيذ", section: "العمليات", permKey: "executions" },
     ],
   },
   {
