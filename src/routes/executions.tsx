@@ -28,6 +28,7 @@ function ExecutionsPage() {
   const { rows: executions } = useLive<Execution>("executions");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
+  const { rows: merchants } = useLive<Merchant>("merchants");
   const STATUSES = useDropdownOptions("execution_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
   const DESTINATIONS = useDropdownOptions("destination");
