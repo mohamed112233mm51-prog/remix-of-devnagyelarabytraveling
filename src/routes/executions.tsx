@@ -251,13 +251,14 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
 }
 
 function ExecutionForm({
-  editing, agents, companies, merchants, statuses, departures, destinations, airlines, serviceKinds, onDone,
+  editing, agents, companies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
 }: {
   editing: Execution | null;
   agents: Agent[];
   companies: IssuingCompany[];
   merchants: Merchant[];
-  statuses: readonly string[];
+  approvalStatuses: readonly string[];
+  operationStatuses: readonly string[];
   departures: readonly string[];
   destinations: readonly string[];
   airlines: readonly string[];
@@ -271,7 +272,8 @@ function ExecutionForm({
     passport: editing?.passport || "",
     birth_place: editing?.birth_place || "",
     agent_id: editing?.agent_id || "",
-    status: editing?.status || (statuses[0] ?? "قيد التنفيذ"),
+    status: editing?.status || (approvalStatuses[0] ?? "بطيء"),
+    operation_status: editing?.operation_status || (operationStatuses[0] ?? "قيد التنفيذ"),
     departure_from: editing?.departure_from || "",
     destination: editing?.destination || "",
     airline: editing?.airline || "",
@@ -302,6 +304,7 @@ function ExecutionForm({
       birth_place: form.birth_place || null,
       agent_id: form.agent_id || null,
       status: form.status,
+      operation_status: form.operation_status,
       departure_from: form.departure_from || null,
       destination: form.destination || null,
       airline: form.airline || null,
@@ -324,14 +327,14 @@ function ExecutionForm({
           await supabase.from("submissions").update({
             execution_id: executionId,
             executed_at: new Date().toISOString(),
-            status: "جاهز للتنفيذ",
+            operation_status: "جاهز للتنفيذ",
           }).eq("id", form.submission_id);
         }
       }
-      // Post / unpost financials based on status
+      // Post / unpost financials based on حالة العملية
       await postExecutionFinancials({
         executionId,
-        status: form.status,
+        operationStatus: form.operation_status,
         agentId: form.agent_id || null,
         date: form.travel_date || null,
         destination: form.destination || null,
@@ -339,13 +342,14 @@ function ExecutionForm({
         passengerName: form.passenger_name,
         services,
       });
-      toast.success(form.status === "منفذ" ? "تم التنفيذ واعتماد الحركات المالية" : "تم الحفظ");
+      toast.success(form.operation_status === "منفذ" ? "تم التنفيذ واعتماد الحركات المالية" : "تم الحفظ");
       onDone();
     } catch (e: any) {
       toast.error(e?.message || "حدث خطأ أثناء الحفظ");
     } finally {
       setSaving(false);
     }
+
   };
 
   return (
