@@ -81,6 +81,7 @@ function ExecutionsPage() {
   const filtered = useMemo(() => executions.filter((e) => {
     if (approvalFilter && e.status !== approvalFilter) return false;
     if (operationFilter && e.operation_status !== operationFilter) return false;
+    if (companyFilter && (e as any).approval_company_id !== companyFilter) return false;
     if (debounced) {
       const q = debounced.toLowerCase();
       const aName = (agents.find((a) => a.id === e.agent_id)?.name || "").toLowerCase();
@@ -88,7 +89,7 @@ function ExecutionsPage() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [executions, agents, approvalFilter, operationFilter, debounced]);
+  }), [executions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
