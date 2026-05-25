@@ -412,6 +412,15 @@ function ExecutionForm({
           </select>
         </Field>
         <Field label="تاريخ المغادرة"><input type="date" value={form.travel_date} onChange={(e) => setForm({ ...form, travel_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="جهة الموافقة (الشركة الصادرة)">
+          <select value={form.approval_company_id} onChange={(e) => setForm({ ...form, approval_company_id: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {activeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+            {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
+              <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
+            )}
+          </select>
+        </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
       </div>
 
