@@ -42,6 +42,7 @@ function SubmissionsPage() {
   const filtered = useMemo(() => submissions.filter((s) => {
     if (approvalFilter && s.status !== approvalFilter) return false;
     if (operationFilter && (s as any).operation_status !== operationFilter) return false;
+    if (companyFilter && (s as any).approval_company_id !== companyFilter) return false;
     if (debounced) {
       const q = debounced.toLowerCase();
       const aName = (agents.find((a) => a.id === s.agent_id)?.name || "").toLowerCase();
