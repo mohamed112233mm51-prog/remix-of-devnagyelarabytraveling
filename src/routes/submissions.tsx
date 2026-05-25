@@ -212,13 +212,14 @@ function SubmissionsPage() {
 }
 
 function SubmissionForm({
-  editing, agents, statuses, departures, authorities, onDone,
+  editing, agents, statuses, departures, companies, activeCompanies, onDone,
 }: {
   editing: Submission | null;
   agents: Agent[];
   statuses: readonly string[];
   departures: readonly string[];
-  authorities: readonly string[];
+  companies: IssuingCompany[];
+  activeCompanies: IssuingCompany[];
   onDone: () => void;
 }) {
   const [form, setForm] = useState({
@@ -233,7 +234,7 @@ function SubmissionForm({
     departure_from: editing?.departure_from || "",
     submit_date: editing?.submit_date || new Date().toISOString().slice(0, 10),
     issue_date: editing?.issue_date || "",
-    approval_authority: editing?.approval_authority || "",
+    approval_company_id: (editing as any)?.approval_company_id || "",
     notes: editing?.notes || "",
   });
   const [saving, setSaving] = useState(false);
