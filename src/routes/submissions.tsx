@@ -50,7 +50,7 @@ function SubmissionsPage() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [submissions, agents, approvalFilter, operationFilter, debounced]);
+  }), [submissions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
 
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
