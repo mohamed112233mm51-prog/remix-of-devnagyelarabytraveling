@@ -216,7 +216,9 @@ function ExecutionsPage() {
           agents={agents}
           companies={companies}
           merchants={merchants}
-          statuses={STATUSES}
+          approvalStatuses={APPROVAL_STATUSES}
+          operationStatuses={OPERATION_STATUSES}
+
           departures={DEPARTURES}
           destinations={DESTINATIONS}
           airlines={AIRLINES}
