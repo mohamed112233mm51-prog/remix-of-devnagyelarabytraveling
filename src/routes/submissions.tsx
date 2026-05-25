@@ -333,10 +333,13 @@ function SubmissionForm({
         </Field>
         <Field label="تاريخ التقديم"><input type="date" value={form.submit_date} onChange={(e) => setForm({ ...form, submit_date: e.target.value })} style={inputStyle} /></Field>
         <Field label="تاريخ الصدور"><input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} style={inputStyle} /></Field>
-        <Field label="جهة الموافقة">
-          <select value={form.approval_authority} onChange={(e) => setForm({ ...form, approval_authority: e.target.value })} style={inputStyle}>
+        <Field label="جهة الموافقة (الشركة الصادرة)">
+          <select value={form.approval_company_id} onChange={(e) => setForm({ ...form, approval_company_id: e.target.value })} style={inputStyle}>
             <option value="">— اختر —</option>
-            {withSelected(authorities, form.approval_authority).map((a) => <option key={a} value={a}>{a}</option>)}
+            {activeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+            {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
+              <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
+            )}
           </select>
         </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
