@@ -428,7 +428,10 @@ export type Submission = {
   passport: string | null;
   birth_place: string | null;
   agent_id: string | null;
+  /** حالة الموافقة: بطيء / سريع / رفض أمني */
   status: string;
+  /** حالة العملية: قيد المتابعة / منفذ / ملغي ... */
+  operation_status: string;
   departure_from: string | null;
   submit_date: string | null;
   issue_date: string | null;
@@ -449,7 +452,10 @@ export type Execution = {
   passport: string | null;
   birth_place: string | null;
   agent_id: string | null;
+  /** حالة الموافقة: بطيء / سريع / رفض أمني */
   status: string;
+  /** حالة العملية: قيد التنفيذ / منفذ / ملغي ... */
+  operation_status: string;
   departure_from: string | null;
   destination: string | null;
   airline: string | null;
@@ -459,6 +465,7 @@ export type Execution = {
   created_at: string;
   updated_at: string;
 };
+
 
 type LiveTable =
   | "agents" | "flights" | "approvals" | "transactions" | "issuing_companies"
