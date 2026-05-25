@@ -124,22 +124,31 @@ export const SERVICE_TYPES = ["تذاكر طيران", "موافقة أمنية"
 
 export type DropdownCategory =
   | "authority" | "destination" | "airline" | "service_type"
-  | "execution_status" | "submission_status" | "departure_from" | "service_kind";
+  | "execution_status" | "submission_status" | "departure_from" | "service_kind"
+  | "submission_notes" | "airport";
 
 export const VALID_DROPDOWN_CATEGORIES: DropdownCategory[] = [
   "authority", "destination", "airline", "service_type",
   "execution_status", "submission_status", "departure_from", "service_kind",
+  "submission_notes", "airport",
 ];
 
 const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
   authority: AUTHORITIES,
-  destination: DESTINATIONS,
-  airline: AIRLINES,
+  destination: ["بنغازي", "طرابلس", "مصراته", "سبها"],
+  airline: ["العراق", "البرنيق", "الليبية", "إير كايرو", "تاج", "مصر للطيران", "الإفريقية"],
   service_type: SERVICE_TYPES,
-  execution_status: ["قيد التنفيذ", "منفذ", "ملغي", "مؤجل"],
-  submission_status: ["قيد المتابعة", "جاهز للتنفيذ", "مؤجل", "ملغي"],
-  departure_from: ["مطار القاهرة", "مطار برج العرب", "منفذ السلوم"],
-  service_kind: ["تذكرة طيران", "موافقة أمنية", "استثمار ليبي"],
+  execution_status: ["بطيء", "سريع", "رفض أمني"],
+  submission_status: ["بطيء", "سريع", "رفض أمني"],
+  departure_from: ["برج العرب", "القاهرة"],
+  service_kind: [
+    "موافقة أمنية","تذكرة","استثمار","استثمار بري","تذكرة واستثمار",
+    "بنغازي شغل كامل","طرابلس شغل كامل","مصراته شغل كامل","سبها شغل كامل","بري شغل كامل",
+    "نقل بري (طبرق واجدابيا)","نقل طرابلس","نقل مصراته","نقل ........",
+    "موافقة واستثمار بري","تأشيرة طرابلس","مصراته تنسيق","خدمات أخرى","نقل عن طريق سبها",
+  ],
+  submission_notes: ["سيدات", "رضيع", "طفل تحت 8", "طفل تحت 12"],
+  airport: ["برج العرب", "القاهرة"],
 };
 
 function fallbackDropdownOptions(category: DropdownCategory): string[] {
