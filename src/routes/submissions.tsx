@@ -202,7 +202,8 @@ function SubmissionsPage() {
           agents={agents}
           statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
-          authorities={AUTHORITIES}
+          companies={companies}
+          activeCompanies={activeCompanies}
           onDone={() => { setTab("list"); setEditing(null); }}
         />
       )}
