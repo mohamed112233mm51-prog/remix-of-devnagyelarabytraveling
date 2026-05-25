@@ -29,7 +29,9 @@ function ExecutionsPage() {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const STATUSES = useDropdownOptions("execution_status" as any);
+  // status = حالة الموافقة, operation_status = حالة العملية
+  const APPROVAL_STATUSES = useDropdownOptions("execution_status" as any);
+  const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
   const DESTINATIONS = useDropdownOptions("destination");
   const AIRLINES = useDropdownOptions("airline");
@@ -37,9 +39,11 @@ function ExecutionsPage() {
 
   const [tab, setTab] = useState<"list" | "add">("list");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [approvalFilter, setApprovalFilter] = useState("");
+  const [operationFilter, setOperationFilter] = useState("");
   const [editing, setEditing] = useState<Execution | null>(null);
   const debounced = useDebouncedValue(search, 250);
+
 
   // If arriving from a submission, prefill the form
   useEffect(() => {
