@@ -371,6 +371,7 @@ export type Database = {
         Row: {
           agent_id: string | null
           airline: string | null
+          approval_company_id: string | null
           birth_place: string | null
           created_at: string
           departure_from: string | null
@@ -392,6 +393,7 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           airline?: string | null
+          approval_company_id?: string | null
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
@@ -413,6 +415,7 @@ export type Database = {
         Update: {
           agent_id?: string | null
           airline?: string | null
+          approval_company_id?: string | null
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
@@ -865,6 +868,7 @@ export type Database = {
         Row: {
           agent_id: string | null
           approval_authority: string | null
+          approval_company_id: string | null
           birth_place: string | null
           created_at: string
           departure_from: string | null
@@ -887,6 +891,7 @@ export type Database = {
         Insert: {
           agent_id?: string | null
           approval_authority?: string | null
+          approval_company_id?: string | null
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
@@ -909,6 +914,7 @@ export type Database = {
         Update: {
           agent_id?: string | null
           approval_authority?: string | null
+          approval_company_id?: string | null
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
