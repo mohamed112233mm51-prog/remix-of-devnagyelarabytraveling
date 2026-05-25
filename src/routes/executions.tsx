@@ -262,11 +262,12 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
 }
 
 function ExecutionForm({
-  editing, agents, companies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
+  editing, agents, companies, activeCompanies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
 }: {
   editing: Execution | null;
   agents: Agent[];
   companies: IssuingCompany[];
+  activeCompanies: IssuingCompany[];
   merchants: Merchant[];
   approvalStatuses: readonly string[];
   operationStatuses: readonly string[];
@@ -290,6 +291,7 @@ function ExecutionForm({
     airline: editing?.airline || "",
     travel_date: editing?.travel_date || "",
     notes: editing?.notes || "",
+    approval_company_id: (editing as any)?.approval_company_id || "",
     submission_id: editing?.submission_id || null as string | null,
   });
   const [services, setServices] = useState<ExecutionServiceItem[]>(
