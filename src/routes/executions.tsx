@@ -452,12 +452,13 @@ function ExecutionForm({
         </div>
       </div>
 
-      <div style={{ marginTop: 16, padding: 12, borderRadius: 10, background: form.status === "منفذ" ? "#ecfdf5" : "#f8fafc", border: `1px solid ${form.status === "منفذ" ? "#a7f3d0" : "#e2e8f0"}`, fontSize: 12, color: "#475569" }}>
+      <div style={{ marginTop: 16, padding: 12, borderRadius: 10, background: form.operation_status === "منفذ" ? "#ecfdf5" : "#f8fafc", border: `1px solid ${form.operation_status === "منفذ" ? "#a7f3d0" : "#e2e8f0"}`, fontSize: 12, color: "#475569" }}>
         <CheckCircle2 size={14} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} />
-        {form.status === "منفذ"
-          ? "عند الحفظ بحالة «منفذ» سيتم إنشاء الحركات المالية على حساب الوكيل والشركة."
-          : "الحركات المالية تُنشأ فقط عند الحفظ بحالة «منفذ». باقي الحالات للمتابعة فقط."}
+        {form.operation_status === "منفذ"
+          ? "عند الحفظ بحالة العملية «منفذ» سيتم إنشاء الحركات المالية على حساب الوكيل والشركة."
+          : "الحركات المالية تُنشأ فقط عند حالة العملية «منفذ». حالة الموافقة لا تؤثر ماليًا."}
       </div>
+
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
         <button className="btn" onClick={onDone} disabled={saving}>إلغاء</button>
