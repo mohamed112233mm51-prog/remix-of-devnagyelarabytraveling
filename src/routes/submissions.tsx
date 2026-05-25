@@ -124,7 +124,7 @@ function SubmissionsPage() {
       {tab === "list" ? (
         <>
           {/* Filters */}
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
+          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
@@ -137,6 +137,10 @@ function SubmissionsPage() {
             <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
               <option value="">حالة العملية (الكل)</option>
               {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
+              <option value="">الشركة الصادرة (الكل)</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
             </select>
             <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
               {filtered.length.toLocaleString("ar")} سجل
