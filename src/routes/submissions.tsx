@@ -71,8 +71,8 @@ function SubmissionsPage() {
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const totalCount = submissions.length;
-  const readyCount = submissions.filter((s) => (s.status || "").includes("جاهز")).length;
   const readyCount = submissions.filter((s) => ((s as any).operation_status || "").includes("جاهز")).length;
+
   const pendingCount = submissions.filter((s) => ((s as any).operation_status || "").includes("متابعة")).length;
   const cancelledCount = submissions.filter((s) => ((s as any).operation_status || "").includes("ملغي")).length;
 
