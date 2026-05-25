@@ -61,7 +61,8 @@ function ExecutionsPage() {
           passport: sub.passport,
           birth_place: sub.birth_place,
           agent_id: sub.agent_id,
-          status: "قيد التنفيذ",
+          status: sub.status || "بطيء",
+          operation_status: "قيد التنفيذ",
           departure_from: sub.departure_from,
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
@@ -74,7 +75,8 @@ function ExecutionsPage() {
   }, []);
 
   const filtered = useMemo(() => executions.filter((e) => {
-    if (statusFilter && e.status !== statusFilter) return false;
+    if (approvalFilter && e.status !== approvalFilter) return false;
+    if (operationFilter && e.operation_status !== operationFilter) return false;
     if (debounced) {
       const q = debounced.toLowerCase();
       const aName = (agents.find((a) => a.id === e.agent_id)?.name || "").toLowerCase();
@@ -82,7 +84,7 @@ function ExecutionsPage() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [executions, agents, statusFilter, debounced]);
+  }), [executions, agents, approvalFilter, operationFilter, debounced]);
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
@@ -102,11 +104,12 @@ function ExecutionsPage() {
   };
 
   const totalCount = executions.length;
-  const doneCount = executions.filter((e) => e.status === "منفذ").length;
-  const pendingCount = executions.filter((e) => e.status === "قيد التنفيذ").length;
-  const cancelledCount = executions.filter((e) => e.status === "ملغي").length;
+  const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;
+  const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;
+  const cancelledCount = executions.filter((e) => e.operation_status === "ملغي").length;
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
+
 
   return (
     <div dir="rtl" style={{ display: "grid", gap: 14 }}>
