@@ -225,6 +225,7 @@ function ExecutionsPage() {
           editing={editing}
           agents={agents}
           companies={companies}
+          activeCompanies={activeCompanies}
           merchants={merchants}
           approvalStatuses={APPROVAL_STATUSES}
           operationStatuses={OPERATION_STATUSES}
