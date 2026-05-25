@@ -323,6 +323,7 @@ function ExecutionForm({
       airline: form.airline || null,
       travel_date: form.travel_date || null,
       notes: form.notes || null,
+      approval_company_id: form.approval_company_id || null,
       services: services as any,
       submission_id: form.submission_id,
     };
