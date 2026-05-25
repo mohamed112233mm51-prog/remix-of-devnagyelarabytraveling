@@ -262,7 +262,10 @@ function SubmissionForm({
       departure_from: form.departure_from || null,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
-      approval_authority: form.approval_authority || null,
+      approval_company_id: form.approval_company_id || null,
+      approval_authority: form.approval_company_id
+        ? (companies.find((c) => c.id === form.approval_company_id)?.company_name || null)
+        : null,
       notes: form.notes || null,
     };
     try {
