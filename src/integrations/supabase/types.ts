@@ -380,6 +380,7 @@ export type Database = {
           is_demo: boolean
           national_id: string | null
           notes: string | null
+          operation_status: string
           passenger_name: string
           passport: string | null
           services: Json
@@ -400,6 +401,7 @@ export type Database = {
           is_demo?: boolean
           national_id?: string | null
           notes?: string | null
+          operation_status?: string
           passenger_name: string
           passport?: string | null
           services?: Json
@@ -420,6 +422,7 @@ export type Database = {
           is_demo?: boolean
           national_id?: string | null
           notes?: string | null
+          operation_status?: string
           passenger_name?: string
           passport?: string | null
           services?: Json
@@ -873,6 +876,7 @@ export type Database = {
           issue_date: string | null
           national_id: string | null
           notes: string | null
+          operation_status: string
           passenger_name: string
           passport: string | null
           services: string[]
@@ -894,6 +898,7 @@ export type Database = {
           issue_date?: string | null
           national_id?: string | null
           notes?: string | null
+          operation_status?: string
           passenger_name: string
           passport?: string | null
           services?: string[]
@@ -915,6 +920,7 @@ export type Database = {
           issue_date?: string | null
           national_id?: string | null
           notes?: string | null
+          operation_status?: string
           passenger_name?: string
           passport?: string | null
           services?: string[]
