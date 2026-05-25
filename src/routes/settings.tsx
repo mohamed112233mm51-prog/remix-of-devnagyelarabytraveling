@@ -1360,7 +1360,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
           message={`هل أنت متأكد من حذف "${confirmDel.value}"؟ لا يمكن التراجع عن هذه العملية.`}
           confirmLabel="حذف"
           danger
-          onConfirm={() => { const id = confirmDel.id; setConfirmDel(null); del(id); }}
+          onConfirm={() => { const d = confirmDel; setConfirmDel(null); del(d.id, d.value); }}
           onCancel={() => setConfirmDel(null)}
         />
       )}
