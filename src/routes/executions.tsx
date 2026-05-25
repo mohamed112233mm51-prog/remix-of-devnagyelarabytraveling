@@ -70,6 +70,7 @@ function ExecutionsPage() {
           departure_from: sub.departure_from,
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
+          approval_company_id: sub.approval_company_id || null,
           services: (sub.services || []).map((s: string) => ({ service_type: s, count: 1, agent_price: 0, company_price: 0, company_value: 0 })),
           created_at: "", updated_at: "",
         } as Execution);
