@@ -15,14 +15,15 @@ import type { ExecutionServiceItem } from "@/lib/db";
  * so re-posting / cancellation can wipe & rewrite cleanly without touching
  * unrelated rows.
  *
- * Status policy:
- *  - status === "منفذ" → rows exist
- *  - any other status   → rows are removed
+ * Status policy (uses حالة العملية / operation_status — NOT approval status):
+ *  - operationStatus === "منفذ" → rows exist
+ *  - any other value             → rows are removed
  */
 
 export interface ExecutionPostingInput {
   executionId: string;
-  status: string;
+  /** حالة العملية (operation_status). Financial posting only happens when "منفذ". */
+  operationStatus: string;
   agentId: string | null;
   date: string | null;          // travel_date or today
   destination: string | null;
@@ -30,6 +31,7 @@ export interface ExecutionPostingInput {
   passengerName: string | null;
   services: ExecutionServiceItem[];
 }
+
 
 function safeDate(d: string | null | undefined): string {
   if (d && typeof d === "string" && d.length >= 8) return d;
