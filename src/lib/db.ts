@@ -436,6 +436,7 @@ export type Submission = {
   submit_date: string | null;
   issue_date: string | null;
   approval_authority: string | null;
+  approval_company_id: string | null;
   notes: string | null;
   executed_at: string | null;
   execution_id: string | null;
