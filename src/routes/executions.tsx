@@ -41,8 +41,12 @@ function ExecutionsPage() {
   const [search, setSearch] = useState("");
   const [approvalFilter, setApprovalFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Execution | null>(null);
   const debounced = useDebouncedValue(search, 250);
+  const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
+  const companyName = (id: string | null | undefined) =>
+    (id && companies.find((c) => c.id === id)?.company_name) || "—";
 
 
   // If arriving from a submission, prefill the form
@@ -66,6 +70,7 @@ function ExecutionsPage() {
           departure_from: sub.departure_from,
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
+          approval_company_id: sub.approval_company_id || null,
           services: (sub.services || []).map((s: string) => ({ service_type: s, count: 1, agent_price: 0, company_price: 0, company_value: 0 })),
           created_at: "", updated_at: "",
         } as Execution);
@@ -77,6 +82,7 @@ function ExecutionsPage() {
   const filtered = useMemo(() => executions.filter((e) => {
     if (approvalFilter && e.status !== approvalFilter) return false;
     if (operationFilter && e.operation_status !== operationFilter) return false;
+    if (companyFilter && (e as any).approval_company_id !== companyFilter) return false;
     if (debounced) {
       const q = debounced.toLowerCase();
       const aName = (agents.find((a) => a.id === e.agent_id)?.name || "").toLowerCase();
@@ -84,7 +90,7 @@ function ExecutionsPage() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [executions, agents, approvalFilter, operationFilter, debounced]);
+  }), [executions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
@@ -147,7 +153,7 @@ function ExecutionsPage() {
 
       {tab === "list" ? (
         <>
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
+          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
@@ -161,6 +167,10 @@ function ExecutionsPage() {
               <option value="">حالة العملية (الكل)</option>
               {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
+              <option value="">الشركة الصادرة (الكل)</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
+            </select>
             <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
               {filtered.length.toLocaleString("ar")} سجل
             </div>
@@ -172,14 +182,14 @@ function ExecutionsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1200, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
-                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","حالة العملية","جهة المغادرة","الوجهة","الطيران","تاريخ المغادرة","الخدمات","ملاحظات","إجراءات"].map((h) => (
+                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","حالة العملية","جهة المغادرة","الوجهة","الطيران","تاريخ المغادرة","جهة الموافقة","الخدمات","ملاحظات","إجراءات"].map((h) => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={16} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
+                    <tr><td colSpan={17} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
                   ) : pageRows.map((e, i) => (
                     <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
@@ -195,6 +205,7 @@ function ExecutionsPage() {
                       <td style={tdStyle}>{e.destination || "—"}</td>
                       <td style={tdStyle}>{e.airline || "—"}</td>
                       <td style={tdStyle}>{e.travel_date || "—"}</td>
+                      <td style={tdStyle}>{companyName((e as any).approval_company_id)}</td>
                       <td style={tdStyle}>{(e.services || []).map((s) => s.service_type).join(" + ") || "—"}</td>
                       <td style={tdStyle}>{e.notes || "—"}</td>
 
@@ -215,6 +226,7 @@ function ExecutionsPage() {
           editing={editing}
           agents={agents}
           companies={companies}
+          activeCompanies={activeCompanies}
           merchants={merchants}
           approvalStatuses={APPROVAL_STATUSES}
           operationStatuses={OPERATION_STATUSES}
@@ -251,11 +263,12 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
 }
 
 function ExecutionForm({
-  editing, agents, companies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
+  editing, agents, companies, activeCompanies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
 }: {
   editing: Execution | null;
   agents: Agent[];
   companies: IssuingCompany[];
+  activeCompanies: IssuingCompany[];
   merchants: Merchant[];
   approvalStatuses: readonly string[];
   operationStatuses: readonly string[];
@@ -279,6 +292,7 @@ function ExecutionForm({
     airline: editing?.airline || "",
     travel_date: editing?.travel_date || "",
     notes: editing?.notes || "",
+    approval_company_id: (editing as any)?.approval_company_id || "",
     submission_id: editing?.submission_id || null as string | null,
   });
   const [services, setServices] = useState<ExecutionServiceItem[]>(
@@ -310,6 +324,7 @@ function ExecutionForm({
       airline: form.airline || null,
       travel_date: form.travel_date || null,
       notes: form.notes || null,
+      approval_company_id: form.approval_company_id || null,
       services: services as any,
       submission_id: form.submission_id,
     };
@@ -398,6 +413,15 @@ function ExecutionForm({
           </select>
         </Field>
         <Field label="تاريخ المغادرة"><input type="date" value={form.travel_date} onChange={(e) => setForm({ ...form, travel_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="جهة الموافقة (الشركة الصادرة)">
+          <select value={form.approval_company_id} onChange={(e) => setForm({ ...form, approval_company_id: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {activeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+            {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
+              <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
+            )}
+          </select>
+        </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
       </div>
 

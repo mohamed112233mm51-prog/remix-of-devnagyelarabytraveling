@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ClipboardCheck, Plus, Pencil, Trash2, Search, X, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useLive, useDropdownOptions, withSelected, type Agent, type Submission } from "@/lib/db";
+import { useLive, useDropdownOptions, withSelected, type Agent, type Submission, type IssuingCompany } from "@/lib/db";
 import { Modal } from "@/components/Modal";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -22,15 +22,19 @@ function SubmissionsPage() {
   const router = useRouter();
   const { rows: submissions } = useLive<Submission>("submissions");
   const { rows: agents } = useLive<Agent>("agents");
+  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const APPROVAL_STATUSES = useDropdownOptions("submission_status" as any);
   const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
-  const AUTHORITIES = useDropdownOptions("authority");
+  const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
+  const companyName = (id: string | null | undefined, fallback?: string | null) =>
+    (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
 
   const [tab, setTab] = useState<"list" | "add">("list");
   const [search, setSearch] = useState("");
   const [approvalFilter, setApprovalFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Submission | null>(null);
 
   const debounced = useDebouncedValue(search, 250);
@@ -38,6 +42,7 @@ function SubmissionsPage() {
   const filtered = useMemo(() => submissions.filter((s) => {
     if (approvalFilter && s.status !== approvalFilter) return false;
     if (operationFilter && (s as any).operation_status !== operationFilter) return false;
+    if (companyFilter && (s as any).approval_company_id !== companyFilter) return false;
     if (debounced) {
       const q = debounced.toLowerCase();
       const aName = (agents.find((a) => a.id === s.agent_id)?.name || "").toLowerCase();
@@ -45,7 +50,7 @@ function SubmissionsPage() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [submissions, agents, approvalFilter, operationFilter, debounced]);
+  }), [submissions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
 
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
@@ -119,7 +124,7 @@ function SubmissionsPage() {
       {tab === "list" ? (
         <>
           {/* Filters */}
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
+          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
@@ -132,6 +137,10 @@ function SubmissionsPage() {
             <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
               <option value="">حالة العملية (الكل)</option>
               {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
+              <option value="">الشركة الصادرة (الكل)</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
             </select>
             <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
               {filtered.length.toLocaleString("ar")} سجل
@@ -166,7 +175,7 @@ function SubmissionsPage() {
                       <td style={tdStyle}>{s.departure_from || "—"}</td>
                       <td style={tdStyle}>{s.submit_date || "—"}</td>
                       <td style={tdStyle}>{s.issue_date || "—"}</td>
-                      <td style={tdStyle}>{s.approval_authority || "—"}</td>
+                      <td style={tdStyle}>{companyName((s as any).approval_company_id, s.approval_authority)}</td>
                       <td style={tdStyle}>{(s.services || []).join(" + ") || "—"}</td>
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
@@ -193,7 +202,8 @@ function SubmissionsPage() {
           agents={agents}
           statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
-          authorities={AUTHORITIES}
+          companies={companies}
+          activeCompanies={activeCompanies}
           onDone={() => { setTab("list"); setEditing(null); }}
         />
       )}
@@ -202,13 +212,14 @@ function SubmissionsPage() {
 }
 
 function SubmissionForm({
-  editing, agents, statuses, departures, authorities, onDone,
+  editing, agents, statuses, departures, companies, activeCompanies, onDone,
 }: {
   editing: Submission | null;
   agents: Agent[];
   statuses: readonly string[];
   departures: readonly string[];
-  authorities: readonly string[];
+  companies: IssuingCompany[];
+  activeCompanies: IssuingCompany[];
   onDone: () => void;
 }) {
   const [form, setForm] = useState({
@@ -223,7 +234,7 @@ function SubmissionForm({
     departure_from: editing?.departure_from || "",
     submit_date: editing?.submit_date || new Date().toISOString().slice(0, 10),
     issue_date: editing?.issue_date || "",
-    approval_authority: editing?.approval_authority || "",
+    approval_company_id: (editing as any)?.approval_company_id || "",
     notes: editing?.notes || "",
   });
   const [saving, setSaving] = useState(false);
@@ -251,7 +262,10 @@ function SubmissionForm({
       departure_from: form.departure_from || null,
       submit_date: form.submit_date || null,
       issue_date: form.issue_date || null,
-      approval_authority: form.approval_authority || null,
+      approval_company_id: form.approval_company_id || null,
+      approval_authority: form.approval_company_id
+        ? (companies.find((c) => c.id === form.approval_company_id)?.company_name || null)
+        : null,
       notes: form.notes || null,
     };
     try {
@@ -319,10 +333,13 @@ function SubmissionForm({
         </Field>
         <Field label="تاريخ التقديم"><input type="date" value={form.submit_date} onChange={(e) => setForm({ ...form, submit_date: e.target.value })} style={inputStyle} /></Field>
         <Field label="تاريخ الصدور"><input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} style={inputStyle} /></Field>
-        <Field label="جهة الموافقة">
-          <select value={form.approval_authority} onChange={(e) => setForm({ ...form, approval_authority: e.target.value })} style={inputStyle}>
+        <Field label="جهة الموافقة (الشركة الصادرة)">
+          <select value={form.approval_company_id} onChange={(e) => setForm({ ...form, approval_company_id: e.target.value })} style={inputStyle}>
             <option value="">— اختر —</option>
-            {withSelected(authorities, form.approval_authority).map((a) => <option key={a} value={a}>{a}</option>)}
+            {activeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+            {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
+              <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
+            )}
           </select>
         </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
