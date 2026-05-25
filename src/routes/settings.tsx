@@ -1170,10 +1170,17 @@ function GeneralTab() {
 }
 
 function SystemListsTab() {
+  const cardSt: React.CSSProperties = { padding: 20, borderRadius: 14, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04), 0 4px 14px rgba(15,23,42,.04)" };
   return (
     <div style={{ display: "grid", gap: 14 }}>
-      <div style={cardStyle}>
-        <SectionHeader icon={<ListChecks size={20} />} title="قوائم النظام" desc="إدارة القيم المنسدلة المستخدمة في نماذج التقديمات والتنفيذ. أي تعديل ينعكس فورًا للجميع." />
+      <div style={cardSt}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eef2f7" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: `${BRAND_NAVY}10`, color: BRAND_NAVY, display: "grid", placeItems: "center" }}><ListChecks size={20} /></div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: "#0f172a" }}>قوائم النظام</div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>إدارة القيم المنسدلة المستخدمة في نماذج التقديمات والتنفيذ. أي تعديل ينعكس فورًا للجميع.</div>
+          </div>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
           <DropdownListManager category="submission_status" title="الحالة (التقديمات)" icon={<ListChecks size={16} />} />
           <DropdownListManager category="execution_status" title="الحالة (التنفيذ)" icon={<ListChecks size={16} />} />
