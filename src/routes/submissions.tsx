@@ -191,7 +191,7 @@ function SubmissionsPage() {
         <SubmissionForm
           editing={editing}
           agents={agents}
-          statuses={STATUSES}
+          statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
           authorities={AUTHORITIES}
           onDone={() => { setTab("list"); setEditing(null); }}
