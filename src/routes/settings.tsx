@@ -1169,6 +1169,28 @@ function GeneralTab() {
   );
 }
 
+function SystemListsTab() {
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={cardStyle}>
+        <SectionHeader icon={<ListChecks size={20} />} title="قوائم النظام" desc="إدارة القيم المنسدلة المستخدمة في نماذج التقديمات والتنفيذ. أي تعديل ينعكس فورًا للجميع." />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
+          <DropdownListManager category="submission_status" title="الحالة (التقديمات)" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="execution_status" title="الحالة (التنفيذ)" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="submission_notes" title="الملاحظات" icon={<Inbox size={16} />} />
+          <DropdownListManager category="destination" title="الوجهة" icon={<MapPin size={16} />} />
+          <DropdownListManager category="airline" title="الطيران" icon={<Plane size={16} />} />
+          <DropdownListManager category="airport" title="المطار" icon={<MapPin size={16} />} />
+          <DropdownListManager category="service_kind" title="الخدمة" icon={<Wrench size={16} />} />
+          <DropdownListManager category="departure_from" title="جهة المغادرة" icon={<MapPin size={16} />} />
+          <DropdownListManager category="authority" title="الجهات / جهة الموافقة" icon={<Building2 size={16} />} />
+          <DropdownListManager category="service_type" title="أنواع الخدمة (قديم)" icon={<Wrench size={16} />} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Returns usage count for a dropdown value across known referencing tables. */
 async function countDropdownUsage(category: DropdownCategory, value: string): Promise<number> {
   const v = value.trim();
