@@ -22,15 +22,19 @@ function SubmissionsPage() {
   const router = useRouter();
   const { rows: submissions } = useLive<Submission>("submissions");
   const { rows: agents } = useLive<Agent>("agents");
+  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const APPROVAL_STATUSES = useDropdownOptions("submission_status" as any);
   const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
-  const AUTHORITIES = useDropdownOptions("authority");
+  const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
+  const companyName = (id: string | null | undefined, fallback?: string | null) =>
+    (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
 
   const [tab, setTab] = useState<"list" | "add">("list");
   const [search, setSearch] = useState("");
   const [approvalFilter, setApprovalFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Submission | null>(null);
 
   const debounced = useDebouncedValue(search, 250);
