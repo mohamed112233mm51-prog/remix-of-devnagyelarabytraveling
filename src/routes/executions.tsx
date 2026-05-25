@@ -179,7 +179,7 @@ function ExecutionsPage() {
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={15} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
+                    <tr><td colSpan={16} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
                   ) : pageRows.map((e, i) => (
                     <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
@@ -189,13 +189,15 @@ function ExecutionsPage() {
                       <td style={tdStyle}>{e.passport || "—"}</td>
                       <td style={tdStyle}>{e.birth_place || "—"}</td>
                       <td style={tdStyle}>{agentName(e.agent_id)}</td>
-                      <td style={tdStyle}><span style={statusBadge(e.status)}>{e.status}</span></td>
+                      <td style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>
+                      <td style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>
                       <td style={tdStyle}>{e.departure_from || "—"}</td>
                       <td style={tdStyle}>{e.destination || "—"}</td>
                       <td style={tdStyle}>{e.airline || "—"}</td>
                       <td style={tdStyle}>{e.travel_date || "—"}</td>
                       <td style={tdStyle}>{(e.services || []).map((s) => s.service_type).join(" + ") || "—"}</td>
                       <td style={tdStyle}>{e.notes || "—"}</td>
+
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && <button title="تعديل" onClick={() => { setEditing(e); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>}
                         {perm.delete && <button title="حذف" onClick={() => onDelete(e)} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={14} /></button>}
