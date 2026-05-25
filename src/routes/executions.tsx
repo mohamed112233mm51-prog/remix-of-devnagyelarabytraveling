@@ -204,6 +204,7 @@ function ExecutionsPage() {
                       <td style={tdStyle}>{e.destination || "—"}</td>
                       <td style={tdStyle}>{e.airline || "—"}</td>
                       <td style={tdStyle}>{e.travel_date || "—"}</td>
+                      <td style={tdStyle}>{companyName((e as any).approval_company_id)}</td>
                       <td style={tdStyle}>{(e.services || []).map((s) => s.service_type).join(" + ") || "—"}</td>
                       <td style={tdStyle}>{e.notes || "—"}</td>
 
