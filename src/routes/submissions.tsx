@@ -175,7 +175,7 @@ function SubmissionsPage() {
                       <td style={tdStyle}>{s.departure_from || "—"}</td>
                       <td style={tdStyle}>{s.submit_date || "—"}</td>
                       <td style={tdStyle}>{s.issue_date || "—"}</td>
-                      <td style={tdStyle}>{s.approval_authority || "—"}</td>
+                      <td style={tdStyle}>{companyName((s as any).approval_company_id, s.approval_authority)}</td>
                       <td style={tdStyle}>{(s.services || []).join(" + ") || "—"}</td>
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
