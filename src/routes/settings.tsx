@@ -72,6 +72,7 @@ function SettingsPage() {
     { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} />, perm: "users_manage" },
     { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} />, perm: "roles_manage" },
     { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} />, perm: "company_manage" },
+    { id: "system_lists", label: "قوائم النظام", icon: <ListChecks size={15} strokeWidth={2} />, perm: "system_lists" },
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
     ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "diagnostics" as SettingsSubKey }] : []),
