@@ -147,20 +147,25 @@ function ExecutionsPage() {
 
       {tab === "list" ? (
         <>
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr" }}>
+          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
               {search && <button onClick={() => setSearch("")} style={clearBtnStyle}><X size={12} /></button>}
             </div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={inputStyle}>
-              <option value="">جميع الحالات</option>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)} style={inputStyle} title="حالة الموافقة">
+              <option value="">حالة الموافقة (الكل)</option>
+              {APPROVAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
+              <option value="">حالة العملية (الكل)</option>
+              {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
               {filtered.length.toLocaleString("ar")} سجل
             </div>
           </div>
+
 
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
