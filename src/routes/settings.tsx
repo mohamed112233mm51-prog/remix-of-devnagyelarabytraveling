@@ -1169,21 +1169,56 @@ function GeneralTab() {
   );
 }
 
+/** Returns usage count for a dropdown value across known referencing tables. */
+async function countDropdownUsage(category: DropdownCategory, value: string): Promise<number> {
+  const v = value.trim();
+  if (!v) return 0;
+  type Ref = { table: string; column: string; op?: "eq" | "cs" | "ilike" };
+  const map: Record<string, Ref[]> = {
+    destination:       [{ table: "executions", column: "destination" }, { table: "approvals", column: "destination" }, { table: "flights", column: "destination" }],
+    airline:           [{ table: "executions", column: "airline" }, { table: "approvals", column: "airline" }, { table: "flights", column: "airline" }],
+    departure_from:    [{ table: "executions", column: "departure_from" }, { table: "submissions", column: "departure_from" }],
+    airport:           [{ table: "executions", column: "departure_from" }, { table: "submissions", column: "departure_from" }],
+    authority:         [{ table: "approvals", column: "authority" }, { table: "flights", column: "authority" }, { table: "submissions", column: "approval_authority" }],
+    service_type:      [{ table: "approvals", column: "service_type" }, { table: "transactions", column: "service_type" }, { table: "company_transactions", column: "service_type" }],
+    submission_status: [{ table: "submissions", column: "status" }],
+    execution_status:  [{ table: "executions", column: "status" }],
+    service_kind:      [{ table: "submissions", column: "services", op: "cs" }],
+    submission_notes:  [{ table: "submissions", column: "notes", op: "ilike" }],
+  };
+  const refs = map[category] || [];
+  let total = 0;
+  for (const r of refs) {
+    try {
+      let q: any = supabase.from(r.table as any).select("id", { count: "exact", head: true });
+      if (r.op === "cs") q = q.contains(r.column, [v]);
+      else if (r.op === "ilike") q = q.ilike(r.column, `%${v}%`);
+      else q = q.eq(r.column, v);
+      const { count } = await q;
+      if (typeof count === "number") total += count;
+    } catch { /* ignore */ }
+  }
+  return total;
+}
+
 function DropdownListManager({ category, title, icon }: { category: DropdownCategory; title: string; icon?: React.ReactNode }) {
   const [items, setItems] = useState<{ id: string; value: string; is_active: boolean }[]>([]);
   const [newValue, setNewValue] = useState("");
+  const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const safeItems = useMemo(() => {
     const seen = new Set<string>();
-    return items
+    const out = items
       .map((it) => ({ ...it, value: normalizeDropdownValue(it.value) }))
       .filter((it) => {
         if (!it.value || seen.has(it.value)) return false;
         seen.add(it.value);
         return true;
       });
-  }, [items]);
+    const q = search.trim().toLowerCase();
+    return q ? out.filter((it) => it.value.toLowerCase().includes(q)) : out;
+  }, [items, search]);
 
   const load = async () => {
     if (!VALID_DROPDOWN_CATEGORIES.includes(category)) return setItems([]);
@@ -1214,7 +1249,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
   async function add() {
     const v = normalizeDropdownValue(newValue);
     if (!v) return toast.error("لا يمكن إضافة قيمة فارغة");
-    if (safeItems.some((it) => it.value === v)) return toast.error("هذه القيمة موجودة بالفعل");
+    if (items.some((it) => normalizeDropdownValue(it.value) === v)) return toast.error("هذه القيمة موجودة بالفعل");
     const { error } = await supabase.from("system_dropdown_options").insert({ category, value: v, is_active: true });
     if (error) return toast.error(error.message);
     setNewValue("");
@@ -1224,7 +1259,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
   async function saveEdit(id: string) {
     const v = normalizeDropdownValue(editingValue);
     if (!v) return toast.error("لا يمكن حفظ قيمة فارغة");
-    if (safeItems.some((it) => it.id !== id && it.value === v)) return toast.error("هذه القيمة موجودة بالفعل");
+    if (items.some((it) => it.id !== id && normalizeDropdownValue(it.value) === v)) return toast.error("هذه القيمة موجودة بالفعل");
     const { error } = await supabase.from("system_dropdown_options").update({ value: v }).eq("id", id);
     if (error) return toast.error(error.message);
     setEditingId(null);
@@ -1237,11 +1272,20 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
   }
 
   const [confirmDel, setConfirmDel] = useState<{ id: string; value: string } | null>(null);
-  async function del(id: string) {
+  async function del(id: string, value: string) {
+    // Block hard delete if value is referenced. Auto-disable instead.
+    const used = await countDropdownUsage(category, value);
+    if (used > 0) {
+      const { error } = await supabase.from("system_dropdown_options").update({ is_active: false }).eq("id", id);
+      if (error) return toast.error(error.message);
+      toast.success(`القيمة مستخدمة في ${used.toLocaleString("ar")} سجل — تم تعطيلها بدل الحذف`);
+      return;
+    }
     const { error } = await supabase.from("system_dropdown_options").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("تم الحذف");
   }
+
 
   const activeCount = safeItems.filter(i => i.is_active).length;
 
