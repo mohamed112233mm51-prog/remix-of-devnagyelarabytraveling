@@ -368,11 +368,17 @@ function ExecutionForm({
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </Field>
-        <Field label="الحالة">
+        <Field label="حالة الموافقة">
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
-            {withSelected(statuses, form.status).map((s) => <option key={s} value={s}>{s}</option>)}
+            {withSelected(approvalStatuses, form.status).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
+        <Field label="حالة العملية">
+          <select value={form.operation_status} onChange={(e) => setForm({ ...form, operation_status: e.target.value })} style={inputStyle}>
+            {withSelected(operationStatuses, form.operation_status).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+
         <Field label="جهة المغادرة">
           <select value={form.departure_from} onChange={(e) => setForm({ ...form, departure_from: e.target.value })} style={inputStyle}>
             <option value="">— اختر —</option>
