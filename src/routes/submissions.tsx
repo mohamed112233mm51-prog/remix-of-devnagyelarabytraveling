@@ -22,19 +22,22 @@ function SubmissionsPage() {
   const router = useRouter();
   const { rows: submissions } = useLive<Submission>("submissions");
   const { rows: agents } = useLive<Agent>("agents");
-  const STATUSES = useDropdownOptions("submission_status" as any);
+  const APPROVAL_STATUSES = useDropdownOptions("submission_status" as any);
+  const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
   const AUTHORITIES = useDropdownOptions("authority");
 
   const [tab, setTab] = useState<"list" | "add">("list");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [approvalFilter, setApprovalFilter] = useState("");
+  const [operationFilter, setOperationFilter] = useState("");
   const [editing, setEditing] = useState<Submission | null>(null);
 
   const debounced = useDebouncedValue(search, 250);
 
   const filtered = useMemo(() => submissions.filter((s) => {
-    if (statusFilter && s.status !== statusFilter) return false;
+    if (approvalFilter && s.status !== approvalFilter) return false;
+    if (operationFilter && (s as any).operation_status !== operationFilter) return false;
     if (debounced) {
       const q = debounced.toLowerCase();
       const aName = (agents.find((a) => a.id === s.agent_id)?.name || "").toLowerCase();
@@ -42,7 +45,8 @@ function SubmissionsPage() {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [submissions, agents, statusFilter, debounced]);
+  }), [submissions, agents, approvalFilter, operationFilter, debounced]);
+
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
