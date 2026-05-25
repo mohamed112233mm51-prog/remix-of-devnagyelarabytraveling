@@ -462,6 +462,7 @@ export type Execution = {
   airline: string | null;
   travel_date: string | null;
   notes: string | null;
+  approval_company_id: string | null;
   services: ExecutionServiceItem[];
   created_at: string;
   updated_at: string;
