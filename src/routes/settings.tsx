@@ -31,7 +31,7 @@ function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الإعدادات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
 
-type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "devtools";
+type Tab = "users" | "add" | "perms" | "general" | "system_lists" | "backups" | "production" | "devtools";
 
 const PERMISSION_KEYS: { key: string; label: string }[] = [
   { key: "dashboard", label: "لوحة التحكم" },
@@ -72,6 +72,7 @@ function SettingsPage() {
     { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} />, perm: "users_manage" },
     { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} />, perm: "roles_manage" },
     { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} />, perm: "company_manage" },
+    { id: "system_lists", label: "قوائم النظام", icon: <ListChecks size={15} strokeWidth={2} />, perm: "system_lists" },
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
     ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "diagnostics" as SettingsSubKey }] : []),
@@ -129,6 +130,7 @@ function SettingsPage() {
       {tab === "add" && can("users_manage") && <InviteUserTab />}
       {tab === "perms" && can("roles_manage") && <PermsTab />}
       {tab === "general" && can("company_manage") && <GeneralTab />}
+      {tab === "system_lists" && can("system_lists") && <SystemListsTab />}
       {tab === "backups" && can("backups_manage") && <BackupsTab />}
       {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
       {tab === "devtools" && can("diagnostics") && !isProdEnv() && <DevToolsTab />}
@@ -1167,21 +1169,85 @@ function GeneralTab() {
   );
 }
 
+function SystemListsTab() {
+  const cardSt: React.CSSProperties = { padding: 20, borderRadius: 14, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04), 0 4px 14px rgba(15,23,42,.04)" };
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={cardSt}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eef2f7" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: `${BRAND_NAVY}10`, color: BRAND_NAVY, display: "grid", placeItems: "center" }}><ListChecks size={20} /></div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: "#0f172a" }}>قوائم النظام</div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>إدارة القيم المنسدلة المستخدمة في نماذج التقديمات والتنفيذ. أي تعديل ينعكس فورًا للجميع.</div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
+          <DropdownListManager category="submission_status" title="الحالة (التقديمات)" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="execution_status" title="الحالة (التنفيذ)" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="submission_notes" title="الملاحظات" icon={<Inbox size={16} />} />
+          <DropdownListManager category="destination" title="الوجهة" icon={<MapPin size={16} />} />
+          <DropdownListManager category="airline" title="الطيران" icon={<Plane size={16} />} />
+          <DropdownListManager category="airport" title="المطار" icon={<MapPin size={16} />} />
+          <DropdownListManager category="service_kind" title="الخدمة" icon={<Wrench size={16} />} />
+          <DropdownListManager category="departure_from" title="جهة المغادرة" icon={<MapPin size={16} />} />
+          <DropdownListManager category="authority" title="الجهات / جهة الموافقة" icon={<Building2 size={16} />} />
+          <DropdownListManager category="service_type" title="أنواع الخدمة (قديم)" icon={<Wrench size={16} />} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Returns usage count for a dropdown value across known referencing tables. */
+async function countDropdownUsage(category: DropdownCategory, value: string): Promise<number> {
+  const v = value.trim();
+  if (!v) return 0;
+  type Ref = { table: string; column: string; op?: "eq" | "cs" | "ilike" };
+  const map: Record<string, Ref[]> = {
+    destination:       [{ table: "executions", column: "destination" }, { table: "approvals", column: "destination" }, { table: "flights", column: "destination" }],
+    airline:           [{ table: "executions", column: "airline" }, { table: "approvals", column: "airline" }, { table: "flights", column: "airline" }],
+    departure_from:    [{ table: "executions", column: "departure_from" }, { table: "submissions", column: "departure_from" }],
+    airport:           [{ table: "executions", column: "departure_from" }, { table: "submissions", column: "departure_from" }],
+    authority:         [{ table: "approvals", column: "authority" }, { table: "flights", column: "authority" }, { table: "submissions", column: "approval_authority" }],
+    service_type:      [{ table: "approvals", column: "service_type" }, { table: "transactions", column: "service_type" }, { table: "company_transactions", column: "service_type" }],
+    submission_status: [{ table: "submissions", column: "status" }],
+    execution_status:  [{ table: "executions", column: "status" }],
+    service_kind:      [{ table: "submissions", column: "services", op: "cs" }],
+    submission_notes:  [{ table: "submissions", column: "notes", op: "ilike" }],
+  };
+  const refs = map[category] || [];
+  let total = 0;
+  for (const r of refs) {
+    try {
+      let q: any = supabase.from(r.table as any).select("id", { count: "exact", head: true });
+      if (r.op === "cs") q = q.contains(r.column, [v]);
+      else if (r.op === "ilike") q = q.ilike(r.column, `%${v}%`);
+      else q = q.eq(r.column, v);
+      const { count } = await q;
+      if (typeof count === "number") total += count;
+    } catch { /* ignore */ }
+  }
+  return total;
+}
+
 function DropdownListManager({ category, title, icon }: { category: DropdownCategory; title: string; icon?: React.ReactNode }) {
   const [items, setItems] = useState<{ id: string; value: string; is_active: boolean }[]>([]);
   const [newValue, setNewValue] = useState("");
+  const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const safeItems = useMemo(() => {
     const seen = new Set<string>();
-    return items
+    const out = items
       .map((it) => ({ ...it, value: normalizeDropdownValue(it.value) }))
       .filter((it) => {
         if (!it.value || seen.has(it.value)) return false;
         seen.add(it.value);
         return true;
       });
-  }, [items]);
+    const q = search.trim().toLowerCase();
+    return q ? out.filter((it) => it.value.toLowerCase().includes(q)) : out;
+  }, [items, search]);
 
   const load = async () => {
     if (!VALID_DROPDOWN_CATEGORIES.includes(category)) return setItems([]);
@@ -1212,7 +1278,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
   async function add() {
     const v = normalizeDropdownValue(newValue);
     if (!v) return toast.error("لا يمكن إضافة قيمة فارغة");
-    if (safeItems.some((it) => it.value === v)) return toast.error("هذه القيمة موجودة بالفعل");
+    if (items.some((it) => normalizeDropdownValue(it.value) === v)) return toast.error("هذه القيمة موجودة بالفعل");
     const { error } = await supabase.from("system_dropdown_options").insert({ category, value: v, is_active: true });
     if (error) return toast.error(error.message);
     setNewValue("");
@@ -1222,7 +1288,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
   async function saveEdit(id: string) {
     const v = normalizeDropdownValue(editingValue);
     if (!v) return toast.error("لا يمكن حفظ قيمة فارغة");
-    if (safeItems.some((it) => it.id !== id && it.value === v)) return toast.error("هذه القيمة موجودة بالفعل");
+    if (items.some((it) => it.id !== id && normalizeDropdownValue(it.value) === v)) return toast.error("هذه القيمة موجودة بالفعل");
     const { error } = await supabase.from("system_dropdown_options").update({ value: v }).eq("id", id);
     if (error) return toast.error(error.message);
     setEditingId(null);
@@ -1235,11 +1301,20 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
   }
 
   const [confirmDel, setConfirmDel] = useState<{ id: string; value: string } | null>(null);
-  async function del(id: string) {
+  async function del(id: string, value: string) {
+    // Block hard delete if value is referenced. Auto-disable instead.
+    const used = await countDropdownUsage(category, value);
+    if (used > 0) {
+      const { error } = await supabase.from("system_dropdown_options").update({ is_active: false }).eq("id", id);
+      if (error) return toast.error(error.message);
+      toast.success(`القيمة مستخدمة في ${used.toLocaleString("ar")} سجل — تم تعطيلها بدل الحذف`);
+      return;
+    }
     const { error } = await supabase.from("system_dropdown_options").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("تم الحذف");
   }
+
 
   const activeCount = safeItems.filter(i => i.is_active).length;
 
@@ -1258,7 +1333,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
         </span>
       </div>
       <div style={{ padding: 12 }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           <input
             style={{ flex: 1, padding: "9px 11px", borderRadius: 9, border: "1px solid #e2e8f0", fontSize: 13, outline: "none", background: "#fff" }}
             placeholder="إضافة عنصر جديد..."
@@ -1269,6 +1344,15 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
           <button onClick={add} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 9, background: `linear-gradient(135deg, ${BRAND_NAVY}, #1e3a8a)`, color: "#fff", border: 0, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
             <Plus size={14} /> إضافة
           </button>
+        </div>
+        <div style={{ position: "relative", marginBottom: 10 }}>
+          <Search size={13} style={{ position: "absolute", insetInlineStart: 9, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="بحث داخل القائمة..."
+            style={{ width: "100%", padding: "7px 11px 7px 28px", paddingInlineStart: 28, borderRadius: 9, border: "1px solid #eef2f7", fontSize: 12.5, outline: "none", background: "#fafbfd" }}
+          />
         </div>
         <div style={{ display: "grid", gap: 6, maxHeight: 320, overflow: "auto" }}>
           {safeItems.length === 0 && (
@@ -1305,7 +1389,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
           message={`هل أنت متأكد من حذف "${confirmDel.value}"؟ لا يمكن التراجع عن هذه العملية.`}
           confirmLabel="حذف"
           danger
-          onConfirm={() => { const id = confirmDel.id; setConfirmDel(null); del(id); }}
+          onConfirm={() => { const d = confirmDel; setConfirmDel(null); del(d.id, d.value); }}
           onCancel={() => setConfirmDel(null)}
         />
       )}
