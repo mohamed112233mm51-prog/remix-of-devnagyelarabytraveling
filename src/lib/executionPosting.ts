@@ -58,7 +58,7 @@ async function deleteLinked(executionId: string) {
  */
 export async function postExecutionFinancials(input: ExecutionPostingInput): Promise<void> {
   await deleteLinked(input.executionId);
-  if (input.status !== "منفذ") return;
+  if (input.operationStatus !== "منفذ") return;
 
   const date = safeDate(input.date);
   const note = input.passengerName ?? null;
