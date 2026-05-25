@@ -125,12 +125,12 @@ export const SERVICE_TYPES = ["تذاكر طيران", "موافقة أمنية"
 export type DropdownCategory =
   | "authority" | "destination" | "airline" | "service_type"
   | "execution_status" | "submission_status" | "departure_from" | "service_kind"
-  | "submission_notes" | "airport";
+  | "submission_notes" | "airport" | "operation_status";
 
 export const VALID_DROPDOWN_CATEGORIES: DropdownCategory[] = [
   "authority", "destination", "airline", "service_type",
   "execution_status", "submission_status", "departure_from", "service_kind",
-  "submission_notes", "airport",
+  "submission_notes", "airport", "operation_status",
 ];
 
 const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
@@ -138,6 +138,7 @@ const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
   destination: ["بنغازي", "طرابلس", "مصراته", "سبها"],
   airline: ["العراق", "البرنيق", "الليبية", "إير كايرو", "تاج", "مصر للطيران", "الإفريقية"],
   service_type: SERVICE_TYPES,
+  // status = حالة الموافقة (Approval status)
   execution_status: ["بطيء", "سريع", "رفض أمني"],
   submission_status: ["بطيء", "سريع", "رفض أمني"],
   departure_from: ["برج العرب", "القاهرة"],
@@ -149,7 +150,10 @@ const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
   ],
   submission_notes: ["سيدات", "رضيع", "طفل تحت 8", "طفل تحت 12"],
   airport: ["برج العرب", "القاهرة"],
+  // حالة العملية (workflow / operation status)
+  operation_status: ["قيد المتابعة", "قيد التنفيذ", "جاهز للتنفيذ", "منفذ", "مؤجل", "ملغي"],
 };
+
 
 function fallbackDropdownOptions(category: DropdownCategory): string[] {
   return [...(DROPDOWN_FALLBACKS[category] ?? [])];
@@ -424,7 +428,10 @@ export type Submission = {
   passport: string | null;
   birth_place: string | null;
   agent_id: string | null;
+  /** حالة الموافقة: بطيء / سريع / رفض أمني */
   status: string;
+  /** حالة العملية: قيد المتابعة / منفذ / ملغي ... */
+  operation_status: string;
   departure_from: string | null;
   submit_date: string | null;
   issue_date: string | null;
@@ -445,7 +452,10 @@ export type Execution = {
   passport: string | null;
   birth_place: string | null;
   agent_id: string | null;
+  /** حالة الموافقة: بطيء / سريع / رفض أمني */
   status: string;
+  /** حالة العملية: قيد التنفيذ / منفذ / ملغي ... */
+  operation_status: string;
   departure_from: string | null;
   destination: string | null;
   airline: string | null;
@@ -455,6 +465,7 @@ export type Execution = {
   created_at: string;
   updated_at: string;
 };
+
 
 type LiveTable =
   | "agents" | "flights" | "approvals" | "transactions" | "issuing_companies"
