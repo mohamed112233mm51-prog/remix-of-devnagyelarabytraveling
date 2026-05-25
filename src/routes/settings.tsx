@@ -1304,7 +1304,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
         </span>
       </div>
       <div style={{ padding: 12 }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           <input
             style={{ flex: 1, padding: "9px 11px", borderRadius: 9, border: "1px solid #e2e8f0", fontSize: 13, outline: "none", background: "#fff" }}
             placeholder="إضافة عنصر جديد..."
@@ -1315,6 +1315,15 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
           <button onClick={add} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 9, background: `linear-gradient(135deg, ${BRAND_NAVY}, #1e3a8a)`, color: "#fff", border: 0, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
             <Plus size={14} /> إضافة
           </button>
+        </div>
+        <div style={{ position: "relative", marginBottom: 10 }}>
+          <Search size={13} style={{ position: "absolute", insetInlineStart: 9, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="بحث داخل القائمة..."
+            style={{ width: "100%", padding: "7px 11px 7px 28px", paddingInlineStart: 28, borderRadius: 9, border: "1px solid #eef2f7", fontSize: 12.5, outline: "none", background: "#fafbfd" }}
+          />
         </div>
         <div style={{ display: "grid", gap: 6, maxHeight: 320, overflow: "auto" }}>
           {safeItems.length === 0 && (
