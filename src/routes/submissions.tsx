@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ClipboardCheck, Plus, Pencil, Trash2, Search, X, ArrowLeftRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useLive, useDropdownOptions, withSelected, type Agent, type Submission } from "@/lib/db";
+import { useLive, useDropdownOptions, withSelected, type Agent, type Submission, type IssuingCompany } from "@/lib/db";
 import { Modal } from "@/components/Modal";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
