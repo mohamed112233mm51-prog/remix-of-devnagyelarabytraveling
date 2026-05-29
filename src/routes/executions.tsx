@@ -95,8 +95,13 @@ function ExecutionsPage() {
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const onDelete = async (row: Execution) => {
     if (!perm.delete) return;
+    if (!row?.id || !UUID_RE.test(row.id)) {
+      toast.error("معرّف العملية غير صحيح");
+      return;
+    }
     const ok = await confirmDialog(`سيتم حذف التنفيذ "${row.passenger_name}" وإلغاء كل الحركات المالية المرتبطة. هل تريد المتابعة؟`, { confirmLabel: "حذف" });
     if (!ok) return;
     try {
