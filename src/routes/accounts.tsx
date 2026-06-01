@@ -12,6 +12,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import { AgentLedger } from "@/components/AgentLedger";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/accounts")({
@@ -177,7 +178,7 @@ function AccountsPage() {
 
       {tab === "add" && perm.create && <AgentForm onDone={() => setTab("list")} />}
       {tab === "txn" && perm.create && <TxnForm agents={agents} merchants={merchants} txns={txns} onDone={() => setTab("list")} />}
-      {tab === "statement" && <AgentStatementTab agents={agents} txns={txns} merchants={merchants} initialAgentId={statementAgentId} canExport={perm.export} />}
+      {tab === "statement" && <AgentLedger initialAgentId={statementAgentId} canExport={perm.export} />}
 
       {editAgent && perm.edit && <EditAgentModal agent={editAgent} onClose={() => setEditAgent(null)} />}
     </div>
