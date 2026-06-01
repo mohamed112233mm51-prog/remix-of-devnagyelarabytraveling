@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
 import { useBranding } from "@/lib/branding";
 import { SearchBox, NotificationsBell } from "@/components/TopbarTools";
+import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { isDevEnv } from "@/lib/env";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
