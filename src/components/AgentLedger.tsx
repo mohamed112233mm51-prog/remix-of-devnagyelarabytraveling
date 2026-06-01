@@ -90,7 +90,9 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     window.dispatchEvent(new CustomEvent("agent-statement-agent-change", {
       detail: agent ? { id: agent.id, whatsapp: agent.whatsapp || null } : null,
     }));
-    return () => window.dispatchEvent(new CustomEvent("agent-statement-agent-change", { detail: null }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("agent-statement-agent-change", { detail: null }));
+    };
   }, [agent]);
 
   useEffect(() => {
