@@ -1,0 +1,37 @@
+import { Wifi, WifiOff, Loader2 } from "lucide-react";
+import { useRealtimeStatus } from "@/hooks/useRealtime";
+
+export function RealtimeIndicator() {
+  const status = useRealtimeStatus();
+  const map = {
+    connected: { label: "Realtime Connected", color: "var(--green, #10b981)", Icon: Wifi },
+    connecting: { label: "Realtime Connecting", color: "var(--gold, #d4a017)", Icon: Loader2 },
+    disconnected: { label: "Realtime Disconnected", color: "var(--red, #ef4444)", Icon: WifiOff },
+  } as const;
+  const { label, color, Icon } = map[status];
+  return (
+    <div
+      title={label}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 600,
+        color,
+        background: "color-mix(in oklab, " + color + " 12%, transparent)",
+        border: "1px solid color-mix(in oklab, " + color + " 30%, transparent)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <Icon
+        size={13}
+        strokeWidth={2.4}
+        className={status === "connecting" ? "animate-spin" : undefined}
+      />
+      <span>{status === "connected" ? "متصل" : status === "connecting" ? "جارٍ الاتصال" : "غير متصل"}</span>
+    </div>
+  );
+}
