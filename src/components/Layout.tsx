@@ -244,6 +244,7 @@ export default function Layout() {
           </div>
           <div className="topbar-actions">
             <SearchBox />
+            <RealtimeIndicator />
             <NotificationsBell />
             <div className="topbar-divider" />
             <UserMenu email={user?.email ?? ""} onSignOut={() => signOut()} />
