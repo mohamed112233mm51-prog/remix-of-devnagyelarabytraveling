@@ -4,14 +4,13 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashNetAmount, useLive, useDropdownOptions, withSelected, GOVERNORATES, buildTravelStatement, PRICING_SERVICE_TYPES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { AgentPricingSection } from "@/components/AgentPricingSection";
-import { ExportButton } from "@/components/ExportButton";
-import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import { AgentLedger } from "@/components/AgentLedger";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/accounts")({
@@ -177,7 +176,7 @@ function AccountsPage() {
 
       {tab === "add" && perm.create && <AgentForm onDone={() => setTab("list")} />}
       {tab === "txn" && perm.create && <TxnForm agents={agents} merchants={merchants} txns={txns} onDone={() => setTab("list")} />}
-      {tab === "statement" && <AgentStatementTab agents={agents} txns={txns} merchants={merchants} initialAgentId={statementAgentId} canExport={perm.export} />}
+      {tab === "statement" && <AgentLedger initialAgentId={statementAgentId} canExport={perm.export} />}
 
       {editAgent && perm.edit && <EditAgentModal agent={editAgent} onClose={() => setEditAgent(null)} />}
     </div>
@@ -240,145 +239,6 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
 }
 
 
-
-function AgentStatementTab({ agents, txns, merchants: _merchants, initialAgentId, canExport }: { agents: Agent[]; txns: Transaction[]; merchants: Merchant[]; initialAgentId: string; canExport: boolean }) {
-  const [agentId, setAgentId] = useState(initialAgentId || "");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  const agent = agents.find((a) => a.id === agentId);
-  const filtered = txns.filter((t) =>
-    (!agentId || t.agent_id === agentId) &&
-    (!from || t.date >= from) &&
-    (!to || t.date <= to)
-  );
-
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent("agent-statement-agent-change", {
-      detail: agent ? { id: agent.id, whatsapp: agent.whatsapp || null } : null,
-    }));
-    return () => {
-      window.dispatchEvent(new CustomEvent("agent-statement-agent-change", { detail: null }));
-    };
-  }, [agent]);
-
-  const totalTrips = filtered.reduce((s, t) => s + tripValue(t), 0);
-  const totalPaid = filtered.reduce((s, t) => s + txnTotalPaid(t), 0);
-  const balance = totalTrips - totalPaid;
-
-  const buildData = () => ({
-    title: "كشف حساب الوكيل",
-    subtitle: `${agent ? agent.name : "كل الوكلاء"}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
-    fileName: `كشف-حساب-${agent?.name || "الوكلاء"}`,
-    summary: [
-      { label: "إجمالي قيمة الرحلات", value: fmtDL(totalTrips) },
-      { label: "إجمالي المدفوعات", value: fmtDL(totalPaid) },
-      { label: "الصافي المستحق", value: fmtDL(balance) },
-    ],
-    columns: [
-      { header: "#", key: "n" },
-      { header: "التاريخ", key: "date" },
-      { header: "نوع الخدمة", key: "service" },
-      { header: "الوجهة", key: "dest" },
-      { header: "العدد", key: "count" },
-      { header: "السعر", key: "price" },
-      { header: "قيمة الرحلة", key: "tv" },
-      { header: "المدفوع", key: "paid" },
-      { header: "الصافي", key: "rest" },
-      { header: "بيان", key: "note" },
-    ],
-    rows: filtered.map((t, i) => {
-      const tv = tripValue(t);
-      const paidT = txnTotalPaid(t);
-      const count = Number(t.count || 0);
-      const displayedPrice = Number(t.price || 0);
-      return {
-        n: i + 1,
-        date: t.date,
-        service: t.service_type || "—",
-        dest: t.destination || "—",
-        count: t.count,
-        count__excel: count,
-        price: fmtNum(displayedPrice),
-        price__ui: displayedPrice,
-        price__excel: displayedPrice,
-        raw_price: Number(t.price || 0),
-        tv: fmtDL(tv),
-        tv__excel: tv,
-        paid: fmtDL(paidT),
-        paid__excel: paidT,
-        rest: fmtDL(tv - paidT),
-        rest__excel: tv - paidT,
-        note: t.note || "—",
-      };
-    }),
-  });
-
-  useRegisterStatementCapture(
-    () => ({ data: buildData(), whatsapp: agent?.whatsapp || null, contextId: agent?.id || null }),
-    [agent, from, to, filtered.length, totalTrips, totalPaid],
-  );
-
-  return (
-    <div className="card">
-      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <div className="card-title">📂 كشف حساب الوكيل</div>
-        {canExport && <ExportButton disabled={filtered.length === 0} getData={buildData} />}
-      </div>
-      <div className="card-body">
-        <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <div className="form-group"><label>الوكيل</label>
-            <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">اختر...</option>
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div className="form-group"><label>التاريخ من</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label>التاريخ إلى</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        </div>
-
-        {agent && (
-          <div className="account-summary" style={{ marginBottom: 12 }}>
-            <div className="sum-box"><div className="label">الوكيل</div><div className="val">{agent.name}</div></div>
-            <div className="sum-box"><div className="label">الهاتف</div><div className="val">{agent.phone || "—"}</div></div>
-            <div className="sum-box"><div className="label">المحافظة</div><div className="val">{agent.governorate || "—"}</div></div>
-            <div className="sum-box gold"><div className="label">إجمالي قيمة الرحلات</div><div className="val">{fmtDL(totalTrips)}</div></div>
-            <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPaid)}</div></div>
-            <div className="sum-box red"><div className="label">الصافي المستحق</div><div className="val">{fmtDL(balance)}</div></div>
-          </div>
-        )}
-
-        <div className="table-wrap">
-          <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الخدمة</th><th>الوجهة</th><th>العدد</th><th>السعر</th><th>قيمة الرحلة</th><th>المدفوع</th><th>الصافي</th><th>بيان</th></tr></thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={10}><div className="empty"><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
-              ) : filtered.map((t, i) => {
-                const tv = tripValue(t);
-                const paidT = txnTotalPaid(t);
-                return (
-                  <tr key={t.id}>
-                    <td data-label="#">{i + 1}</td>
-                    <td data-label="التاريخ">{t.date}</td>
-                    <td data-label="نوع الخدمة">{t.service_type || "—"}</td>
-                    <td data-label="الوجهة">{t.destination || "—"}</td>
-                    <td data-label="العدد">{t.count}</td>
-                    <td data-label="السعر">{fmtNum(Number(t.price))}</td>
-                    <td data-label="قيمة الرحلة">{fmtDL(tv)}</td>
-                    <td data-label="المدفوع">{fmtDL(paidT)}</td>
-                    <td data-label="الصافي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(tv - paidT)}</td>
-                    <td data-label="بيان">{t.note || "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 type PricingRow = { company_price: string; agent_price: string; company_percentage: string; company_profit_value: string };
 const EMPTY_PRICING_ROW: PricingRow = { company_price: "", agent_price: "", company_percentage: "", company_profit_value: "" };
