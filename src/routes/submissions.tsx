@@ -67,11 +67,17 @@ function SubmissionsPage() {
 
   const convertToExecution = (row: Submission) => {
     if (!perm.edit) return;
-    // Carry over data via sessionStorage and open executions in add mode
+    // Already converted: open the linked execution instead of creating a new one
+    if ((row as any).execution_id) {
+      toast.info("هذا التقديم تم تحويله للتنفيذ بالفعل");
+      try { sessionStorage.setItem("executions:openId", String((row as any).execution_id)); } catch {}
+      router.navigate({ to: "/executions" });
+      return;
+    }
     try {
       sessionStorage.setItem("execution:fromSubmission", JSON.stringify(row));
     } catch {}
-    router.navigate({ to: "/executions", search: { from: row.id } as any });
+    router.navigate({ to: "/executions" });
   };
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
@@ -179,7 +185,7 @@ function SubmissionsPage() {
                       <td style={tdStyle}>{(s.services || []).join(" + ") || "—"}</td>
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
-                          <button title="تحويل إلى تنفيذ" onClick={() => convertToExecution(s)} style={iconBtn}><ArrowLeftRight size={14} /></button>
+                          <button title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
                         )}
                         {perm.edit && (
                           <button title="تعديل" onClick={() => { setEditing(s); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>
