@@ -363,7 +363,7 @@ function ExecutionForm({
           await supabase.from("submissions").update({
             execution_id: executionId,
             executed_at: new Date().toISOString(),
-            operation_status: "جاهز للتنفيذ",
+            operation_status: "تم التحويل للتنفيذ",
           }).eq("id", form.submission_id);
         }
       }
