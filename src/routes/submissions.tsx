@@ -10,6 +10,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { confirmDialog } from "@/lib/confirm";
+import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -173,7 +174,7 @@ function SubmissionsPage() {
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
                       <td style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>
                       <td style={tdStyle}>{s.national_id || "—"}</td>
-                      <td style={tdStyle}>{s.dob || "—"}</td>
+                      <td style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>
                       <td style={tdStyle}>{s.passport || "—"}</td>
                       <td style={tdStyle}>{s.birth_place || "—"}</td>
                       <td style={tdStyle}>{agentName(s.agent_id)}</td>
@@ -232,7 +233,7 @@ function SubmissionForm({
     services: editing?.services || [] as string[],
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
-    dob: editing?.dob || "",
+    dob: toDisplayDate(editing?.dob) || "",
     passport: editing?.passport || "",
     birth_place: editing?.birth_place || "",
     agent_id: editing?.agent_id || "",
@@ -255,12 +256,16 @@ function SubmissionForm({
   const save = async () => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
     if (form.services.length === 0) { toast.error("يجب اختيار نوع خدمة واحد على الأقل"); return; }
+    if (form.dob && !isValidDisplayDate(form.dob)) {
+      toast.error("تاريخ الميلاد غير صحيح. الصيغة المطلوبة: DD/MM/YYYY");
+      return;
+    }
     setSaving(true);
     const payload = {
       services: form.services,
       passenger_name: form.passenger_name.trim(),
       national_id: form.national_id || null,
-      dob: form.dob || null,
+      dob: parseDisplayDate(form.dob),
       passport: form.passport || null,
       birth_place: form.birth_place || null,
       agent_id: form.agent_id || null,
@@ -317,7 +322,7 @@ function SubmissionForm({
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
         <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} style={inputStyle} /></Field>
-        <Field label="تاريخ الميلاد"><input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} /></Field>
+        <Field label="تاريخ الميلاد"><input type="text" inputMode="numeric" placeholder="DD/MM/YYYY" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} maxLength={10} /></Field>
         <Field label="رقم الجواز"><input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} style={inputStyle} /></Field>
         <Field label="محل الميلاد"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} style={inputStyle} /></Field>
         <Field label="الوكيل">
