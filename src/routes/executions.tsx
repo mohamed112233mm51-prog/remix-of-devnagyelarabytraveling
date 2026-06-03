@@ -79,6 +79,22 @@ function ExecutionsPage() {
     } catch {}
   }, []);
 
+  // Open existing execution by id (when coming from submission already converted)
+  useEffect(() => {
+    try {
+      const openId = sessionStorage.getItem("executions:openId");
+      if (openId && executions.length) {
+        const found = executions.find((e) => e.id === openId);
+        if (found) {
+          sessionStorage.removeItem("executions:openId");
+          setEditing(found);
+          setTab("add");
+        }
+      }
+    } catch {}
+  }, [executions]);
+
+
   const filtered = useMemo(() => executions.filter((e) => {
     if (approvalFilter && e.status !== approvalFilter) return false;
     if (operationFilter && e.operation_status !== operationFilter) return false;
