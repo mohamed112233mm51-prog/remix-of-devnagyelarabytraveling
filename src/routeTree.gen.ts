@@ -9,31 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as SubmissionsRouteImport } from './routes/submissions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as MerchantsRouteImport } from './routes/merchants'
-import { Route as LibyanInvestmentRouteImport } from './routes/libyan-investment'
 import { Route as InvestorsRouteImport } from './routes/investors'
-import { Route as FlightsRouteImport } from './routes/flights'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as ExecutionsRouteImport } from './routes/executions'
 import { Route as DataImportRouteImport } from './routes/data-import'
 import { Route as CompaniesRouteImport } from './routes/companies'
-import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentStatementAgentIdRouteImport } from './routes/agent-statement.$agentId'
 import { Route as ApiPublicHooksBackupRouteImport } from './routes/api/public/hooks/backup'
 
-const SubmitRoute = SubmitRouteImport.update({
-  id: '/submit',
-  path: '/submit',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SubmissionsRoute = SubmissionsRouteImport.update({
   id: '/submissions',
   path: '/submissions',
@@ -59,19 +50,9 @@ const MerchantsRoute = MerchantsRouteImport.update({
   path: '/merchants',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LibyanInvestmentRoute = LibyanInvestmentRouteImport.update({
-  id: '/libyan-investment',
-  path: '/libyan-investment',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const InvestorsRoute = InvestorsRouteImport.update({
   id: '/investors',
   path: '/investors',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FlightsRoute = FlightsRouteImport.update({
-  id: '/flights',
-  path: '/flights',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExpensesRoute = ExpensesRouteImport.update({
@@ -92,11 +73,6 @@ const DataImportRoute = DataImportRouteImport.update({
 const CompaniesRoute = CompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApprovalsRoute = ApprovalsRouteImport.update({
-  id: '/approvals',
-  path: '/approvals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountsRoute = AccountsRouteImport.update({
@@ -129,20 +105,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
-  '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
-  '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
-  '/libyan-investment': typeof LibyanInvestmentRoute
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
-  '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
@@ -150,20 +122,16 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
-  '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
-  '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
-  '/libyan-investment': typeof LibyanInvestmentRoute
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
-  '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
@@ -172,20 +140,16 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
-  '/approvals': typeof ApprovalsRoute
   '/companies': typeof CompaniesRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
-  '/flights': typeof FlightsRoute
   '/investors': typeof InvestorsRoute
-  '/libyan-investment': typeof LibyanInvestmentRoute
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
-  '/submit': typeof SubmitRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
@@ -195,20 +159,16 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/accounts'
-    | '/approvals'
     | '/companies'
     | '/data-import'
     | '/executions'
     | '/expenses'
-    | '/flights'
     | '/investors'
-    | '/libyan-investment'
     | '/merchants'
     | '/reports'
     | '/reset-password'
     | '/settings'
     | '/submissions'
-    | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
   fileRoutesByTo: FileRoutesByTo
@@ -216,20 +176,16 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/accounts'
-    | '/approvals'
     | '/companies'
     | '/data-import'
     | '/executions'
     | '/expenses'
-    | '/flights'
     | '/investors'
-    | '/libyan-investment'
     | '/merchants'
     | '/reports'
     | '/reset-password'
     | '/settings'
     | '/submissions'
-    | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
   id:
@@ -237,20 +193,16 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/accounts'
-    | '/approvals'
     | '/companies'
     | '/data-import'
     | '/executions'
     | '/expenses'
-    | '/flights'
     | '/investors'
-    | '/libyan-investment'
     | '/merchants'
     | '/reports'
     | '/reset-password'
     | '/settings'
     | '/submissions'
-    | '/submit'
     | '/agent-statement/$agentId'
     | '/api/public/hooks/backup'
   fileRoutesById: FileRoutesById
@@ -259,33 +211,22 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptInviteRoute: typeof AcceptInviteRoute
   AccountsRoute: typeof AccountsRoute
-  ApprovalsRoute: typeof ApprovalsRoute
   CompaniesRoute: typeof CompaniesRoute
   DataImportRoute: typeof DataImportRoute
   ExecutionsRoute: typeof ExecutionsRoute
   ExpensesRoute: typeof ExpensesRoute
-  FlightsRoute: typeof FlightsRoute
   InvestorsRoute: typeof InvestorsRoute
-  LibyanInvestmentRoute: typeof LibyanInvestmentRoute
   MerchantsRoute: typeof MerchantsRoute
   ReportsRoute: typeof ReportsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SubmissionsRoute: typeof SubmissionsRoute
-  SubmitRoute: typeof SubmitRoute
   AgentStatementAgentIdRoute: typeof AgentStatementAgentIdRoute
   ApiPublicHooksBackupRoute: typeof ApiPublicHooksBackupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/submit': {
-      id: '/submit'
-      path: '/submit'
-      fullPath: '/submit'
-      preLoaderRoute: typeof SubmitRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/submissions': {
       id: '/submissions'
       path: '/submissions'
@@ -321,25 +262,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MerchantsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/libyan-investment': {
-      id: '/libyan-investment'
-      path: '/libyan-investment'
-      fullPath: '/libyan-investment'
-      preLoaderRoute: typeof LibyanInvestmentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/investors': {
       id: '/investors'
       path: '/investors'
       fullPath: '/investors'
       preLoaderRoute: typeof InvestorsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/flights': {
-      id: '/flights'
-      path: '/flights'
-      fullPath: '/flights'
-      preLoaderRoute: typeof FlightsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/expenses': {
@@ -368,13 +295,6 @@ declare module '@tanstack/react-router' {
       path: '/companies'
       fullPath: '/companies'
       preLoaderRoute: typeof CompaniesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/approvals': {
-      id: '/approvals'
-      path: '/approvals'
-      fullPath: '/approvals'
-      preLoaderRoute: typeof ApprovalsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accounts': {
@@ -419,23 +339,29 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptInviteRoute: AcceptInviteRoute,
   AccountsRoute: AccountsRoute,
-  ApprovalsRoute: ApprovalsRoute,
   CompaniesRoute: CompaniesRoute,
   DataImportRoute: DataImportRoute,
   ExecutionsRoute: ExecutionsRoute,
   ExpensesRoute: ExpensesRoute,
-  FlightsRoute: FlightsRoute,
   InvestorsRoute: InvestorsRoute,
-  LibyanInvestmentRoute: LibyanInvestmentRoute,
   MerchantsRoute: MerchantsRoute,
   ReportsRoute: ReportsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SubmissionsRoute: SubmissionsRoute,
-  SubmitRoute: SubmitRoute,
   AgentStatementAgentIdRoute: AgentStatementAgentIdRoute,
   ApiPublicHooksBackupRoute: ApiPublicHooksBackupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

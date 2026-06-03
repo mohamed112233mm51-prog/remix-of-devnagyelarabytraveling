@@ -1,17 +1,11 @@
 // Centralized data layer for the Reports page.
-// Subscribes (via useLive -> Supabase Realtime) to every table that feeds reports,
-// exposes lookup maps for joining names, and a single `loading` flag so the UI
-// can defer empty states until the initial fetch resolves.
-
 import { useMemo } from "react";
 import {
   useLive,
   type Agent,
-  type Approval,
   type CompanyTransaction,
   type Expense,
   type ExpenseDeduction,
-  type Flight,
   type Investor,
   type InvestorTransaction,
   type IssuingCompany,
@@ -24,8 +18,6 @@ import {
 export type ReportsData = {
   loading: boolean;
   agents: Agent[];
-  flights: Flight[];
-  approvals: Approval[];
   transactions: Transaction[];
   companies: IssuingCompany[];
   companyTransactions: CompanyTransaction[];
@@ -36,7 +28,6 @@ export type ReportsData = {
   expenses: Expense[];
   expenseDeductions: ExpenseDeduction[];
   usdTreasury: UsdTreasuryTransaction[];
-  // Name lookups for joins
   agentName: (id: string | null | undefined) => string;
   companyName: (id: string | null | undefined) => string;
   merchantName: (id: string | null | undefined) => string;
@@ -45,8 +36,6 @@ export type ReportsData = {
 
 export function useReportsData(): ReportsData {
   const a = useLive<Agent>("agents");
-  const f = useLive<Flight>("flights");
-  const p = useLive<Approval>("approvals");
   const t = useLive<Transaction>("transactions");
   const c = useLive<IssuingCompany>("issuing_companies");
   const ct = useLive<CompanyTransaction>("company_transactions");
@@ -59,9 +48,9 @@ export function useReportsData(): ReportsData {
   const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
 
   const loading =
-    a.loading || f.loading || p.loading || t.loading ||
-    c.loading || ct.loading || m.loading || mc.loading ||
-    inv.loading || it.loading || e.loading || ed.loading || u.loading;
+    a.loading || t.loading || c.loading || ct.loading ||
+    m.loading || mc.loading || inv.loading || it.loading ||
+    e.loading || ed.loading || u.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);
@@ -71,8 +60,6 @@ export function useReportsData(): ReportsData {
   return {
     loading,
     agents: a.rows,
-    flights: f.rows,
-    approvals: p.rows,
     transactions: t.rows,
     companies: c.rows,
     companyTransactions: ct.rows,

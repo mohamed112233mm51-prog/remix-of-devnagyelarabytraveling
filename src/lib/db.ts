@@ -17,52 +17,8 @@ export const GOVERNORATES = [
   "القاهرة","الجيزة","الإسكندرية","الدقهلية","الشرقية","القليوبية","المنوفية","الغربية","كفر الشيخ","البحيرة","دمياط","بورسعيد","الإسماعيلية","السويس","شمال سيناء","جنوب سيناء","الفيوم","بني سويف","المنيا","أسيوط","سوهاج","قنا","الأقصر","أسوان","البحر الأحمر","الوادي الجديد","مطروح",
 ] as const;
 
-export type Flight = {
-  id: string;
-  passenger_name: string;
-  national_id: string | null;
-  passport: string | null;
-  dob: string | null;
-  airline: string | null;
-  destination: string | null;
-  authority: string | null;
-  travel_date: string | null;
-  travel_statement: string | null;
-  issuing_company: string | null;
-  agent_id: string | null;
-  status: string;
-  notes: string | null;
-  count: number;
-  price: number;
-  company_value: number;
-  created_at: string;
-};
-
-export type Approval = {
-  id: string;
-  passenger_name: string;
-  national_id: string | null;
-  passport: string | null;
-  dob: string | null;
-  destination: string | null;
-  authority: string | null;
-  issuing_company: string | null;
-  issuing_company_id: string | null;
-  travel_statement: string | null;
-  travel_date: string | null;
-  airline: string | null;
-  agent_id: string | null;
-  submit_date: string | null;
-  issue_date: string | null;
-  status: string;
-  government_fee: number;
-  notes: string | null;
-  service_type: string | null;
-  count: number;
-  price: number;
-  company_value: number;
-  created_at: string;
-};
+// NOTE: Flight & Approval types were removed when the flights/approvals tables
+// were dropped in favor of the unified Submissions → Executions flow.
 
 export type Transaction = {
   id: string;
@@ -136,12 +92,12 @@ export const VALID_DROPDOWN_CATEGORIES: DropdownCategory[] = [
 const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
   authority: AUTHORITIES,
   destination: ["بنغازي", "طرابلس", "مصراته", "سبها"],
-  airline: ["العراق", "البرنيق", "الليبية", "إير كايرو", "تاج", "مصر للطيران", "الإفريقية"],
+  airline: ["البراق", "البرنيق", "الليبية", "إير كايرو", "تاج", "مصر للطيران", "الأفريقية"],
   service_type: SERVICE_TYPES,
   // status = حالة الموافقة (Approval status)
   execution_status: ["بطيء", "سريع", "رفض أمني"],
   submission_status: ["بطيء", "سريع", "رفض أمني"],
-  departure_from: ["برج العرب", "القاهرة"],
+  departure_from: ["مطار القاهرة", "برج العرب", "جمرك بري"],
   service_kind: [
     "موافقة أمنية","تذكرة","استثمار","استثمار بري","تذكرة واستثمار",
     "بنغازي شغل كامل","طرابلس شغل كامل","مصراته شغل كامل","سبها شغل كامل","بري شغل كامل",
@@ -470,7 +426,7 @@ export type Execution = {
 
 
 type LiveTable =
-  | "agents" | "flights" | "approvals" | "transactions" | "issuing_companies"
+  | "agents" | "transactions" | "issuing_companies"
   | "company_transactions" | "merchants" | "merchant_cash_collections"
   | "investors" | "investor_transactions" | "expenses" | "expense_deductions"
   | "usd_treasury_transactions" | "submissions" | "executions";
