@@ -422,7 +422,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 
-function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: Flight[]; approvals: Approval[]; agents: Agent[]; onDone: () => void }) {
+function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
   const [form, setForm] = useState({
     company_name: "", date: new Date().toISOString().slice(0, 10),
     destination: "", count: "", price: "", service_type: "",
