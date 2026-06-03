@@ -41,7 +41,7 @@ export const Route = createFileRoute("/reports")({
   errorComponent: () => <div className="card" style={{ padding: 24 }}>تعذر تحميل التقارير مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>,
 });
 
-type Tab = "agents" | "companies" | "merchants" | "investors" | "flights" | "approvals" | "expenses" | "usd_treasury";
+type Tab = "agents" | "companies" | "merchants" | "investors" | "expenses" | "usd_treasury";
 type Period = "30d" | "1y" | "custom";
 
 // Professional, soft palette
@@ -223,8 +223,6 @@ function ReportsPage() {
     { id: "companies", label: "الشركات الصادرة", icon: <Building2 size={15} strokeWidth={2} /> },
     { id: "merchants", label: "كاش التاجر", icon: <Handshake size={15} strokeWidth={2} /> },
     { id: "investors", label: "المستثمرين", icon: <Briefcase size={15} strokeWidth={2} /> },
-    { id: "flights", label: "الرحلات", icon: <Plane size={15} strokeWidth={2} /> },
-    { id: "approvals", label: "الموافقات الأمنية", icon: <ShieldCheck size={15} strokeWidth={2} /> },
     { id: "expenses", label: "المصروفات", icon: <Receipt size={15} strokeWidth={2} /> },
     { id: "usd_treasury", label: "الخزينة الدولارية", icon: <DollarSign size={15} strokeWidth={2} /> },
   ];
@@ -285,8 +283,7 @@ function ReportsPage() {
       {tab === "companies" && <CompaniesReport inRange={inRange} data={data} />}
       {tab === "merchants" && <MerchantsReport inRange={inRange} data={data} />}
       {tab === "investors" && <InvestorsReport inRange={inRange} data={data} />}
-      {tab === "flights" && <FlightsReport inRange={inRange} data={data} />}
-      {tab === "approvals" && <ApprovalsReport inRange={inRange} data={data} />}
+      {/* flights/approvals tabs removed — section unified into submissions/executions */}
       {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
       {tab === "usd_treasury" && <UsdTreasuryReport inRange={inRange} data={data} />}
       <style>{chartsCss}</style>

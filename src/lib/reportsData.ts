@@ -18,6 +18,10 @@ import {
 export type ReportsData = {
   loading: boolean;
   agents: Agent[];
+  /** @deprecated flights table removed — always [] */
+  flights: any[];
+  /** @deprecated approvals table removed — always [] */
+  approvals: any[];
   transactions: Transaction[];
   companies: IssuingCompany[];
   companyTransactions: CompanyTransaction[];
@@ -60,6 +64,8 @@ export function useReportsData(): ReportsData {
   return {
     loading,
     agents: a.rows,
+    flights: [] as any[],
+    approvals: [] as any[],
     transactions: t.rows,
     companies: c.rows,
     companyTransactions: ct.rows,
