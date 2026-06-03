@@ -8,11 +8,9 @@ import {
   txnTotalPaid,
   useLive,
   type Agent,
-  type Approval,
   type CompanyTransaction,
   type Expense,
   type ExpenseDeduction,
-  type Flight,
   type Investor,
   type InvestorTransaction,
   type IssuingCompany,
@@ -101,8 +99,8 @@ function pctDelta(curr: number, prev: number) {
 
 function Dashboard() {
   const { rows: agents } = useLive<Agent>("agents");
-  const { rows: flights } = useLive<Flight>("flights");
-  const { rows: approvals } = useLive<Approval>("approvals");
+  const flights: any[] = [];
+  const approvals: any[] = [];
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
