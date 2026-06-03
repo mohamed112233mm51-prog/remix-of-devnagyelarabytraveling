@@ -78,12 +78,8 @@ const NAV: { label: string; items: Item[] }[] = [
 
 const TITLES: Record<string, ReactNode> = {
   "/": (<>لوحة <span>التحكم</span></>),
-  "/submit": (<>تقديم <span>خدمة</span></>),
   "/submissions": (<>قائمة <span>التقديمات</span></>),
   "/executions": (<>قائمة <span>التنفيذ</span></>),
-  "/flights": (<>قائمة <span>الرحلات</span></>),
-  "/approvals": (<>قائمة <span>الموافقات الأمنية</span></>),
-  "/libyan-investment": (<>قائمة <span>الاستثمار الليبي</span></>),
   "/accounts": (<>حسابات <span>الوكلاء</span></>),
   "/companies": (<>حسابات <span>الشركات الصادرة</span></>),
   "/merchants": (<>حسابات <span>كاش التاجر</span></>),

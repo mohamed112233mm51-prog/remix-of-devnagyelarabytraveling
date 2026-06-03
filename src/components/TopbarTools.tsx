@@ -16,8 +16,6 @@ type SearchResult = {
 
 const SECTION_LABELS: Record<string, string> = {
   agents: "وكلاء",
-  flights: "رحلات",
-  approvals: "موافقات أمنية",
   companies: "شركات صادرة",
   merchants: "كاش التاجر",
   investors: "مستثمرين",
@@ -60,8 +58,6 @@ export function SearchBox() {
   const allowed = useMemo(
     () => ({
       agents: checkPerm(permissions, isAdmin, "accounts", "view"),
-      flights: checkPerm(permissions, isAdmin, "flights", "view"),
-      approvals: checkPerm(permissions, isAdmin, "approvals", "view"),
       companies: checkPerm(permissions, isAdmin, "companies", "view"),
       merchants: checkPerm(permissions, isAdmin, "merchants", "view"),
       investors: checkPerm(permissions, isAdmin, "investors", "view"),
@@ -97,32 +93,7 @@ export function SearchBox() {
             }));
       })());
     }
-    if (allowed.flights) {
-      queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("flights").select("id,passenger_name,destination,airline,passport").or(`passenger_name.ilike.${like},destination.ilike.${like},airline.ilike.${like},passport.ilike.${like}`).limit(5);
-        if (error) throw error;
-        return (data || []).map((r: any) => ({
-              section: "flights",
-              sectionLabel: SECTION_LABELS.flights,
-              title: r.passenger_name || "رحلة",
-              description: [r.destination, r.airline].filter(Boolean).join(" • "),
-              to: `/flights`,
-            }));
-      })());
-    }
-    if (allowed.approvals) {
-      queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("approvals").select("id,passenger_name,authority,destination,passport").or(`passenger_name.ilike.${like},authority.ilike.${like},destination.ilike.${like},passport.ilike.${like}`).limit(5);
-        if (error) throw error;
-        return (data || []).map((r: any) => ({
-              section: "approvals",
-              sectionLabel: SECTION_LABELS.approvals,
-              title: r.passenger_name || "موافقة",
-              description: [r.authority, r.destination].filter(Boolean).join(" • "),
-              to: `/approvals`,
-            }));
-      })());
-    }
+    // (flights/approvals search removed — those tables no longer exist)
     if (allowed.companies) {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("issuing_companies").select("id,company_name,phone,service_type").or(`company_name.ilike.${like},phone.ilike.${like},service_type.ilike.${like}`).limit(5);
@@ -272,25 +243,7 @@ export function NotificationsBell() {
       setError(null);
       const next: Notif[] = [];
 
-      // Pending approvals
-      if (checkPerm(permissions, isAdmin, "approvals", "view")) {
-        const { data, error: e } = await supabase
-          .from("approvals")
-          .select("id,passenger_name,status")
-          .not("status", "in", '("مكتمل","منتهي","مرفوض")')
-          .limit(20);
-        if (e) throw e;
-        const count = data?.length ?? 0;
-        if (count > 0) {
-          next.push({
-            id: `pending-approvals-${count}`,
-            title: `${count} موافقة قيد التنفيذ`,
-            description: "يوجد تقديمات تنتظر الإجراء",
-            icon: <ClipboardCheck size={16} />,
-            to: "/approvals",
-          });
-        }
-      }
+      // (pending approvals notification removed — moved to submissions/executions)
 
       // Unpaid company balances
       if (checkPerm(permissions, isAdmin, "companies", "view")) {

@@ -1,111 +1,118 @@
 
-# خطة إعادة هيكلة قسم العمليات
+## نطاق التغيير
 
-## الفكرة الأساسية
-
-دمج (موافقات + تذاكر طيران + استثمار ليبي) في قسمين موحّدين:
-
-1. **التقديمات** = متابعة وتجهيز فقط، **لا تأثير مالي إطلاقًا**.
-2. **التنفيذ** = هو القسم الوحيد الذي يُنشئ الحركات على حسابات الوكلاء/الشركات ويُظهر الأرقام في الداشبورد والتقارير.
-
-> الأقسام القديمة (`/flights`, `/approvals`, `/libyan-investment`) ستُحذف من القائمة الجانبية، لكن **الجداول في قاعدة البيانات تبقى كما هي** ولن نلمس بياناتها (لا فقد بيانات). البيانات القديمة تبقى ظاهرة في كشوف الحسابات لأنها مرتبطة بـ `transactions` / `company_transactions` السابقة.
+تغيير كبير ومدمّر. التأكيد قبل البدء مهم.
 
 ---
 
-## 1) قاعدة البيانات (Migration آمن)
+## 1) قاعدة البيانات (Migration)
 
-جدولان جديدان فقط، بدون أي تعديل على الجداول الحالية:
+**حذف نهائي (لا تراجع):**
+- جدول `flights`
+- جدول `approvals`
+- جدول `agent_service_pricing` (مرتبط بالتذاكر فقط — تأكيد قبل الحذف)
+- إزالة الـ trigger `prevent_issuing_company_delete_if_used` من المراجع لـ approvals
+- إزالة `flights/approvals/libyan-investment` من publication الـ Realtime
 
-### `submissions` (التقديمات — لا مالية)
-- `id`, `created_at`, `updated_at`
-- `services text[]` — Multi-select: `security_approval` / `flight_ticket` / `libyan_investment`
-- `passenger_name`, `national_id`, `dob`, `passport`, `birth_place`
-- `agent_id` (uuid)، `status` (نص — من dropdown)
-- `departure_from` (الجهة = جهة المغادرة)
-- `submit_date`, `issue_date`, `approval_authority`
-- `notes`
-- `executed_at` (nullable) — يُملأ عند التحويل للتنفيذ
-- `execution_id` (nullable) — مرجع للسجل في `executions`
+**تعديل publication الـ Realtime ليقتصر على:**
+`agents, issuing_companies, submissions, executions, transactions`
+(باقي الجداول تُزال من `supabase_realtime`)
 
-### `executions` (التنفيذ — هو الوحيد المالي)
-- `id`, `created_at`, `updated_at`
-- `submission_id` (nullable) — لو جاي من تقديم
-- `passenger_name`, `national_id`, `dob`, `passport`, `birth_place`
-- `agent_id`, `status` (قيد التنفيذ / منفذ / ملغي / مؤجل)
-- `departure_from`, `destination`, `airline`, `travel_date`
-- `notes`
-- `services jsonb` — مصفوفة عناصر `{ service_type, company_id, count, agent_price, company_price, company_value }` لدعم تنفيذ أكثر من خدمة لنفس العميل
-- روابط مالية: عند التنفيذ نُدرج صفوف في `transactions` و `company_transactions` بنفس النمط الحالي (`source_service_id` = `executions.id`, `source_service_type` = `'execution'`) لتظل كشوف الحسابات تعمل بدون أي تغيير في حساباتها.
+**تحديث `system_dropdown_options`:**
+- استبدال قيمة `airline = 'العراق'` بـ `'البراق'`
+- إضافة `departure_from = 'جمرك بري'`
+- تأكد من القيم: airline ∈ {البراق، البرنيق، الليبية، إير كايرو، تاج، مصر للطيران، الأفريقية}
+- departure_from ∈ {مطار القاهرة، برج العرب، جمرك بري}
 
-### دروب‑داون جديدة قابلة للإدارة من الإعدادات
-أضف categories جديدة في `system_dropdown_options`:
-- `execution_status`, `submission_status`, `departure_from`, `service_kind`
-(الـ `airline` / `destination` موجودة بالفعل، نُعيد استخدامها.)
-
-### RLS
-نفس نمط جداول العمليات الحالية (`auth` insert/select/update/delete = true).
-
-### Realtime
-إضافة الجدولين إلى `supabase_realtime` مع `REPLICA IDENTITY FULL`.
-
-### الصلاحيات الجديدة (في `profiles.permissions`)
-قسم `executions`: `view / add / edit / delete / approve / export`
-قسم `submissions`: `view / add / edit / delete / export / convert`
-(تُضاف في `usePerm.tsx` بنفس النمط الحالي ولا تكسر الموجود.)
+**عمود تاريخ الميلاد:** يبقى `date` في DB (submissions.dob, executions.dob). التحويل من/إلى DD/MM/YYYY في الواجهة فقط.
 
 ---
 
-## 2) واجهة المستخدم
+## 2) الكود — حذف
 
-### قائمة جانبية
-- إخفاء: تذاكر طيران / موافقات / استثمار ليبي.
-- إضافة: **التقديمات** (`/submissions`)، **التنفيذ** (`/executions`).
-- (لا حذف للراوتس القديمة من الكود الآن — تبقى مخفية كي لا نكسر روابط داخلية، ويمكن حذفها لاحقًا.)
-
-### صفحة `/submissions`
-- جدول RTL بنفس ستايل ERP الحالي، فلاتر + بحث + Realtime عبر `useLive`.
-- نموذج إضافة/تعديل بالحقول المطلوبة + Multi-select للخدمات.
-- زر **«تحويل إلى تنفيذ»** ينقل البيانات تلقائيًا ويفتح نموذج التنفيذ مع ربط `submission_id`.
-
-### صفحة `/executions`
-- جدول مطابق لتنسيق Excel المعتاد في النظام (نفس أعمدة `flights` الحالية + عمود الخدمات).
-- نموذج تنفيذ متعدد الخدمات (تكرار صف خدمة داخل النموذج).
-- عند الحفظ بحالة «منفذ» → إنشاء صفوف في `transactions` + `company_transactions` لكل خدمة (إعادة استخدام `postServiceFinancials` بعد توسيع نوع `ServiceKind` ليقبل `execution`).
-- تغيير الحالة لـ «ملغي» → حذف الصفوف المالية المرتبطة (`deleteServiceLinkedRows`).
-- جميع الحقول المطلوبة Dropdown من `system_dropdown_options`.
-
-### الداشبورد والتقارير
-- لا تغيير في منطقها؛ تستمر بالقراءة من `transactions` / `company_transactions`. وبما أن التنفيذ هو الوحيد الذي يكتب فيها، يتحقق الشرط «التقديمات لا تؤثر ماليًا» تلقائيًا.
+- حذف `src/routes/flights.tsx`
+- حذف `src/routes/approvals.tsx`
+- حذف `src/routes/libyan-investment.tsx`
+- حذف `src/components/ServiceSubmissionModal.tsx` (لم يعد له معنى)
+- حذف `src/routes/submit.tsx` (يعتمد على النماذج المحذوفة)
+- إزالة من الـ Sidebar: روابط الطيران/الموافقات/الاستثمار
+- إزالة من `ROUTE_PERM` و`SECTION_KEYS` المفاتيح: `flights, approvals`
+- إزالة استيرادات `FlightForm/ApprovalForm/InvestmentForm` في أي مكان
 
 ---
 
-## 3) التفاصيل التقنية (للمراجعة)
+## 3) الكود — تعديل
 
-- ملف migration واحد ينشئ الجدولين + الـ dropdowns + Realtime + الصلاحيات الافتراضية.
-- `src/lib/db.ts`: إضافة `Submission` و `Execution` types + إدخالهما في union `useLive`.
-- `src/lib/servicePosting.ts`: توسيع ليقبل قائمة خدمات من سجل تنفيذ واحد.
-- `src/routes/submissions.tsx` و `src/routes/executions.tsx` صفحتان جديدتان (بنفس باترن `flights.tsx`).
-- `src/components/Layout.tsx`: تحديث القائمة.
-- `src/hooks/usePerm.tsx` + `RouteGuard`: إضافة المفاتيح الجديدة.
-- `src/routes/settings.tsx`: تبويب الصلاحيات يعرض المفاتيح الجديدة تلقائيًا، وتبويب القوائم المنسدلة يعرض الـ categories الجديدة.
+**`src/routes/submissions.tsx`** (نموذج إضافة/تعديل):
+- حقل DOB: `<input type="text" placeholder="DD/MM/YYYY" />` مع تحقق `dd/mm/yyyy`
+- حقل departure_from: select من `system_dropdown_options` (يتضمن جمرك بري تلقائيًا)
+- حقل الخدمات: متعدد الاختيار (وسوم) من dropdown `service_type`
+- لا منطق مالي
+
+**`src/routes/executions.tsx`** (نموذج إضافة/تعديل):
+- نفس معالجة DOB (DD/MM/YYYY)
+- airline من dropdown (يحتوي البراق)
+- المنطق المالي الحالي (`postExecutionFinancials`) يبقى — هو المصدر الوحيد للحركات
+
+**Helper جديد `src/lib/dateFormat.ts`:**
+- `toDisplayDate(iso) → "DD/MM/YYYY"`
+- `parseDisplayDate("DD/MM/YYYY") → ISO | null`
+- `isValidDisplayDate(s) → boolean`
+
+**كل عرض DOB في الجداول والكشوف:** يستخدم `toDisplayDate`.
+
+**`src/lib/db.ts`:** تقليل الجداول المشتركة في channels Realtime إلى الخمسة المحددة.
+
+**`src/routes/settings.tsx`:** التأكد من إدارة dropdowns لكل الفئات (موجود — تحقق فقط).
+
+**`src/components/Layout.tsx` (Sidebar):** إزالة عناصر القائمة المحذوفة.
 
 ---
 
-## 4) ما لن يتغيّر
+## 4) التقاطعات والمخاطر
 
-- منطق كشف حساب الوكيل ✅
-- شكل وحسابات `transactions` / `company_transactions` ✅
-- البيانات القديمة في `flights` / `approvals` / `libyan_investment` ✅
-- نظام RTL، الستايل، Lovable Cloud Auth ✅
-- نسخة Production والـ Supabase الخارجي ✅
-
----
-
-## 5) خارج نطاق هذه المرحلة (نتفق عليها لاحقًا)
-
-- ربط التنفيذ بالخزائن وطرق الدفع تفصيليًا (مذكور في الطلب أنه «لاحقًا»).
-- حذف الأقسام القديمة نهائيًا من الكود (نُبقيها مخفية الآن لسلامة الانتقال).
+- `executions.tsx` و`agent-statement` و`accounts` تقرأ من `transactions/company_transactions` فقط — لا تتأثر.
+- `reportsData.ts` قد يستورد من flights/approvals — يحتاج فحص وإزالة المراجع.
+- `dataImport/specs.ts` يحتوي على specs لـ flights/approvals — تُزال.
+- `executionPosting.ts` لا يتأثر.
+- بيانات قديمة في `flights/approvals` ستُفقد نهائيًا (طلب المستخدم صريح).
 
 ---
 
-هل أبدأ التنفيذ بهذا الشكل؟ أو تريد تعديل أي جزء قبل ما أبدأ؟
+## 5) العلاقات النهائية
+
+```
+agents ──┐
+         ├──> submissions ──(تحويل)──> executions ──> transactions (مديونية وكيل)
+companies┘                                       └──> company_transactions (تكلفة شركة)
+```
+- التقديم لا ينشئ أي حركة مالية.
+- كل حركة مالية تخرج من التنفيذ (مربوطة بـ `source_service_id = executionId::index`).
+
+---
+
+## 6) Migrations المطلوبة (واحد فقط)
+
+1. `DROP TABLE public.flights, public.approvals, public.agent_service_pricing CASCADE`
+2. `ALTER PUBLICATION supabase_realtime DROP TABLE …` لكل الجداول غير المطلوبة، والتأكد من بقاء الخمسة.
+3. `UPDATE system_dropdown_options SET value='البراق' WHERE category='airline' AND value='العراق'`
+4. `INSERT system_dropdown_options (category, value) VALUES ('departure_from','جمرك بري') ON CONFLICT DO NOTHING`
+
+---
+
+## 7) الملفات المتأثرة (متوقعة)
+
+محذوفة: `flights.tsx, approvals.tsx, libyan-investment.tsx, submit.tsx, ServiceSubmissionModal.tsx`
+معدّلة: `submissions.tsx, executions.tsx, Layout.tsx, usePerm.tsx, db.ts, reportsData.ts, dataImport/specs.ts, agent-statement.$agentId.tsx (عرض DOB), AgentLedger.tsx (عرض DOB)`
+جديدة: `src/lib/dateFormat.ts`
+Migration: `supabase/migrations/<timestamp>_unify_system.sql`
+
+---
+
+## تأكيدات مطلوبة قبل التنفيذ
+
+1. **حذف جدول `agent_service_pricing` نهائيًا؟** (يحوي تسعير الخدمات لكل وكيل — قد يكون مفيدًا للتنفيذ).
+2. **حذف بيانات `flights` و`approvals` التاريخية نهائيًا**، أم نقلها أرشيفًا في جدول `archive_*` قبل الحذف؟
+3. هل توافق على إزالة صفحة `/submit` (الموحّدة لتقديم خدمة) واستبدالها بصفحة `/submissions` فقط؟
+
+أنتظر الإجابات قبل تنفيذ Migration والحذف.
