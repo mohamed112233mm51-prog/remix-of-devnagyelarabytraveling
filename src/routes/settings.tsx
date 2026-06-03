@@ -3042,8 +3042,6 @@ const WIZARD_CATEGORIES: { key: WipeCategory; label: string; hint: string }[] = 
   { key: "companies", label: "الشركات المصدرة", hint: "الشركات + معاملاتها" },
   { key: "merchants", label: "التجار", hint: "التجار + تحصيلاتهم" },
   { key: "investors", label: "المستثمرين", hint: "المستثمرين + حركاتهم" },
-  { key: "flights", label: "الرحلات", hint: "كل سجلات الرحلات" },
-  { key: "approvals", label: "الموافقات الأمنية", hint: "كل الموافقات" },
   { key: "transactions", label: "المعاملات/المدفوعات", hint: "كل البيع/التحصيل" },
   { key: "collections", label: "التحصيلات", hint: "تحصيلات التجار النقدية" },
   { key: "expenses", label: "المصروفات", hint: "المصروفات + خصوماتها" },
