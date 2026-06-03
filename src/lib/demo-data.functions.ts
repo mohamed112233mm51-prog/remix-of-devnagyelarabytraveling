@@ -398,8 +398,6 @@ export const productionCleanup = createServerFn({ method: "POST" })
       "usd_treasury_transactions",
       "company_transactions",
       "transactions",
-      "approvals",
-      "flights",
       "investors",
       "merchants",
       "issuing_companies",
