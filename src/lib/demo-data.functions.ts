@@ -458,8 +458,6 @@ export type WipeCategory =
   | "companies"
   | "merchants"
   | "investors"
-  | "flights"
-  | "approvals"
   | "transactions"
   | "collections"
   | "expenses"
@@ -471,8 +469,6 @@ const CATEGORY_TABLES: Record<WipeCategory, readonly string[]> = {
   companies: ["issuing_companies", "company_transactions", "usd_treasury_transactions"],
   merchants: ["merchants", "merchant_cash_collections"],
   investors: ["investors", "investor_transactions"],
-  flights: ["flights"],
-  approvals: ["approvals"],
   transactions: ["transactions", "usd_treasury_transactions"],
   collections: ["merchant_cash_collections"],
   expenses: ["expenses", "expense_deductions"],
@@ -489,8 +485,6 @@ const DELETE_ORDER: readonly string[] = [
   "usd_treasury_transactions",
   "company_transactions",
   "transactions",
-  "approvals",
-  "flights",
   "investors",
   "merchants",
   "issuing_companies",
