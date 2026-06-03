@@ -7,7 +7,7 @@ import { ExportButton } from "@/components/ExportButton";
 import {
   badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
   merchantCashNetAmount, useLive, GOVERNORATES,
-  type Agent, type Approval, type Flight, type Transaction, type Merchant,
+  type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 
@@ -69,8 +69,8 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
 export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfile = false, canExport = true }: AgentLedgerProps) {
   const router = useRouter();
   const { rows: agents, loading: agentsLoading } = useLive<Agent>("agents");
-  const { rows: flights } = useLive<Flight>("flights");
-  const { rows: approvals } = useLive<Approval>("approvals");
+  const flights: any[] = [];
+  const approvals: any[] = [];
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");

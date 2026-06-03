@@ -7,8 +7,6 @@ export const ALL_ACTIONS: PermAction[] = ["view", "create", "edit", "delete", "e
 export const SECTION_KEYS = [
   "dashboard",
   "agents",
-  "flights",
-  "approvals",
   "submissions",
   "executions",
   "accounts",
