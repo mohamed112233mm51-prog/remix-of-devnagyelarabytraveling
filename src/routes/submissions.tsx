@@ -67,11 +67,17 @@ function SubmissionsPage() {
 
   const convertToExecution = (row: Submission) => {
     if (!perm.edit) return;
-    // Carry over data via sessionStorage and open executions in add mode
+    // Already converted: open the linked execution instead of creating a new one
+    if ((row as any).execution_id) {
+      toast.info("هذا التقديم تم تحويله للتنفيذ بالفعل");
+      try { sessionStorage.setItem("executions:openId", String((row as any).execution_id)); } catch {}
+      router.navigate({ to: "/executions" });
+      return;
+    }
     try {
       sessionStorage.setItem("execution:fromSubmission", JSON.stringify(row));
     } catch {}
-    router.navigate({ to: "/executions", search: { from: row.id } as any });
+    router.navigate({ to: "/executions" });
   };
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
