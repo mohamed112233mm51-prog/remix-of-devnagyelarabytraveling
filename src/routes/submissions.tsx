@@ -185,7 +185,7 @@ function SubmissionsPage() {
                       <td style={tdStyle}>{(s.services || []).join(" + ") || "—"}</td>
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
-                          <button title="تحويل إلى تنفيذ" onClick={() => convertToExecution(s)} style={iconBtn}><ArrowLeftRight size={14} /></button>
+                          <button title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
                         )}
                         {perm.edit && (
                           <button title="تعديل" onClick={() => { setEditing(s); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>
