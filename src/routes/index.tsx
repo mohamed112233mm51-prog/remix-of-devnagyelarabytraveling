@@ -510,7 +510,7 @@ function Dashboard() {
         <div className="erp-panel">
           <div className="erp-panel-head">
             <div className="erp-panel-title"><ClipboardCheck size={14} /> موافقات قيد التنفيذ</div>
-            <Link to="/approvals" className="erp-link">عرض الكل <ChevronLeft size={12} /></Link>
+            <Link to="/submissions" className="erp-link">عرض الكل <ChevronLeft size={12} /></Link>
           </div>
           <div className="erp-list">
             {pendingApprovals.length === 0 && <div className="erp-empty">لا توجد موافقات معلقة</div>}
