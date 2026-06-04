@@ -9,6 +9,8 @@ import {
   useLive, GOVERNORATES,
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
+import { AgentPaymentForm } from "@/components/AgentPaymentForm";
+
 
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 
