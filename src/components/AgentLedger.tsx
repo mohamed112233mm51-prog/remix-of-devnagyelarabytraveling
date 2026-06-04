@@ -207,6 +207,15 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       )}
 
       {editOpen && agent && <EditAgentModal agent={agent} onClose={() => setEditOpen(false)} />}
+      {payOpen && agent && createPortal(
+        <div onClick={() => setPayOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16, overflow: "auto" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 880, maxHeight: "92vh", overflow: "auto" }}>
+            <AgentPaymentForm agents={agents} merchants={merchants} lockedAgentId={agent.id} onDone={() => setPayOpen(false)} />
+          </div>
+        </div>,
+        document.body,
+      )}
+
 
     </div>
   );
