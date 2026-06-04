@@ -463,8 +463,8 @@ function Dashboard() {
             <div className="erp-panel-title"><Plus size={14} /> إجراءات سريعة</div>
           </div>
           <div className="erp-quick-actions">
-            <QuickAction to="/flights" icon={<Plane size={16} />} label="إضافة رحلة" />
-            <QuickAction to="/approvals" icon={<ClipboardCheck size={16} />} label="تقديم موافقة" />
+            <QuickAction to="/submissions" icon={<ClipboardCheck size={16} />} label="تقديم جديد" />
+            <QuickAction to="/executions" icon={<Plane size={16} />} label="تنفيذ جديد" />
             <QuickAction to="/accounts" icon={<Users size={16} />} label="حساب وكيل" />
             <QuickAction to="/companies" icon={<Building2 size={16} />} label="شركة صادرة" />
             <QuickAction to="/expenses" icon={<Wallet size={16} />} label="تسجيل مصروف" />
