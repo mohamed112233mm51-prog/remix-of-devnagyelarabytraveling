@@ -70,14 +70,13 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const router = useRouter();
   const { rows: agents, loading: agentsLoading } = useLive<Agent>("agents");
   const flights: any[] = [];
-  const approvals: any[] = [];
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"statement" | "services">("statement");
+  const [payOpen] = useState(false);
   const [filters, setFilters] = useState({ from: "", to: "", kind: "" as "" | LedgerKind, service: "", method: "", query: "" });
+
 
   useEffect(() => { if (lockedAgentId) setSelectedAgentId(lockedAgentId); }, [lockedAgentId]);
   useEffect(() => { if (!lockedAgentId) setSelectedAgentId(initialAgentId || ""); }, [initialAgentId, lockedAgentId]);
