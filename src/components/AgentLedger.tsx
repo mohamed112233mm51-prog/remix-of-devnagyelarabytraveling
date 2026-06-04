@@ -82,6 +82,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const { rows: merchants } = useLive<Merchant>("merchants");
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+
 
   const [filters, setFilters] = useState({ from: "", to: "", kind: "" as "" | LedgerKind, service: "", method: "", query: "" });
 
