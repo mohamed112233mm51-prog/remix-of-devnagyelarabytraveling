@@ -49,6 +49,8 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
       const serviceValue = tripValue(t);
       const payment = txnTotalPaid(t);
       const isPayment = kind === "payment";
+      // for explicit agent-payment records, credit = trip_value when no merchant-cash fields set
+      const credit = isPayment ? (payment || serviceValue) : payment;
       return {
         id: t.id,
         date: t.date,
@@ -59,15 +61,16 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         count: Number(t.count || 0),
         price: Number(t.price || 0),
         serviceValue,
-        payment,
-        debit: serviceValue,
-        credit: payment,
-        paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
+        payment: credit,
+        debit: isPayment ? 0 : serviceValue,
+        credit,
+        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
         note: t.note || "—",
         raw: t,
       };
     });
 }
+
 
 export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfile = false, canExport = true }: AgentLedgerProps) {
   const router = useRouter();
