@@ -197,7 +197,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       )}
 
       {editOpen && agent && <EditAgentModal agent={agent} onClose={() => setEditOpen(false)} />}
-      {payOpen && agent && <AddPaymentModal agent={agent} merchants={merchants} onClose={() => setPayOpen(false)} />}
+
     </div>
   );
 }
