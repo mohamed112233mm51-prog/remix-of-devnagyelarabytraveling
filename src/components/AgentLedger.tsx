@@ -6,9 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { ExportButton } from "@/components/ExportButton";
 import {
   badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
-  merchantCashNetAmount, useLive, GOVERNORATES,
+  useLive, GOVERNORATES,
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
+
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 
 type LedgerKind = "service" | "payment";
@@ -70,14 +71,13 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const router = useRouter();
   const { rows: agents, loading: agentsLoading } = useLive<Agent>("agents");
   const flights: any[] = [];
-  const approvals: any[] = [];
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"statement" | "services">("statement");
+
   const [filters, setFilters] = useState({ from: "", to: "", kind: "" as "" | LedgerKind, service: "", method: "", query: "" });
+
 
   useEffect(() => { if (lockedAgentId) setSelectedAgentId(lockedAgentId); }, [lockedAgentId]);
   useEffect(() => { if (!lockedAgentId) setSelectedAgentId(initialAgentId || ""); }, [initialAgentId, lockedAgentId]);
@@ -103,7 +103,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   }, [showAgentProfile, agentsLoading, lockedAgentId, agent, router]);
 
   const myFlights = useMemo(() => flights.filter((f) => f.agent_id === selectedAgentId), [flights, selectedAgentId]);
-  const myApprovals = useMemo(() => approvals.filter((a) => a.agent_id === selectedAgentId), [approvals, selectedAgentId]);
+
   const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
   const myTxns = useMemo(() => myTxnsAll.filter((t) => {
     if (filters.from && (t.date || "") < filters.from) return false;
@@ -168,10 +168,6 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   return (
     <div className="section active">
-      <div className="card" style={{ borderColor: "var(--primary)", marginBottom: 12 }}>
-        <div className="card-body" style={{ padding: "10px 14px", fontWeight: 900, color: "var(--primary)" }}>نسخة كشف الحساب الجديدة Ledger</div>
-      </div>
-
       {showAgentProfile && agent && (
         <div className="card no-print-actions">
           <div className="card-header"><div className="card-title">ملف الوكيل: {agent.name}</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button type="button" className="action-btn" onClick={() => setEditOpen(true)}>تعديل بيانات الوكيل</button><Link to="/accounts" className="action-btn">رجوع</Link></div></div>
@@ -181,61 +177,34 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
       {!lockedAgentId && (
         <div className="card no-print-actions" style={{ marginBottom: 12 }}>
-          <div className="form-grid" style={{ padding: 12 }}><div className="form-group"><label>الوكيل</label><select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)}><option value="">اختر...</option>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div></div>
+          <div className="form-grid" style={{ padding: 12 }}><div className="form-group"><label>الوكيل</label><select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)}><option value="">— اختر وكيلاً —</option>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div></div>
         </div>
       )}
 
-      <div className="account-summary">
-        <div className="sum-box gold"><div className="label">إجمالي قيمة الخدمات</div><div className="val">{fmtDL(totalServices)}</div></div>
-        <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPayments)}</div></div>
-        <div className={`sum-box ${statusClass}`}><div className="label">الصافي ({accountStatus})</div><div className="val">{fmtDL(Math.abs(net))}</div></div>
-        <div className="sum-box"><div className="label">عدد الحركات</div><div className="val">{fmtNum(ledger.length)}</div></div>
-      </div>
+      {!agent ? (
+        <div className="card"><div className="card-body"><div className="empty"><div className="empty-text">اختر وكيلاً أولاً لعرض كشف الحساب</div></div></div></div>
+      ) : (
+        <>
+          <div className="account-summary">
+            <div className="sum-box gold"><div className="label">إجمالي قيمة الخدمات</div><div className="val">{fmtDL(totalServices)}</div></div>
+            <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPayments)}</div></div>
+            <div className={`sum-box ${statusClass}`}><div className="label">الصافي ({accountStatus})</div><div className="val">{fmtDL(Math.abs(net))}</div></div>
+            <div className="sum-box"><div className="label">عدد الحركات</div><div className="val">{fmtNum(ledger.length)}</div></div>
+          </div>
 
-      <div className="card no-print-actions">
-        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 12, justifyContent: "flex-start" }}>
-          {[{ k: "statement", label: "كشف الحساب" }, { k: "services", label: "الرحلات والتقديمات" }].map((t) => <button key={t.k} type="button" onClick={() => setActiveTab(t.k as "statement" | "services")} style={{ padding: "10px 16px", fontSize: 14, fontWeight: 700, borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer", background: activeTab === t.k ? "var(--primary)" : "var(--card)", color: activeTab === t.k ? "var(--primary-foreground, #fff)" : "var(--text)", minWidth: 140, flex: "1 1 auto", transition: "all .15s ease" }}>{t.label}</button>)}
-        </div>
-      </div>
-
-      {activeTab === "statement" && <><div className="card no-print-actions"><div className="card-header"><div className="card-title">فلاتر كشف الحساب</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button type="button" className="btn btn-gold" onClick={() => agent ? setPayOpen(true) : toast.error("اختر الوكيل أولاً")}>إضافة دفعة من الوكيل</button><button type="button" className="action-btn" onClick={printStatement}>طباعة كشف الحساب</button>{canExport && <ExportButton disabled={!agent || displayRows.length === 0} getData={buildExportData} />}</div></div><div className="form-grid" style={{ padding: 12 }}><div className="form-group"><label>من تاريخ</label><input type="date" value={filters.from} onChange={(e) => setF("from", e.target.value)} /></div><div className="form-group"><label>إلى تاريخ</label><input type="date" value={filters.to} onChange={(e) => setF("to", e.target.value)} /></div><div className="form-group"><label>نوع الحركة</label><select value={filters.kind} onChange={(e) => setF("kind", e.target.value)}><option value="">الكل</option><option value="service">خدمات</option><option value="payment">مدفوعات</option></select></div><div className="form-group"><label>الخدمة</label><select value={filters.service} onChange={(e) => setF("service", e.target.value)}><option value="">الكل</option>{serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></div><div className="form-group"><label>طريقة الدفع</label><select value={filters.method} onChange={(e) => setF("method", e.target.value)}><option value="">الكل</option>{methodOptions.map((m) => <option key={m} value={m}>{m}</option>)}</select></div><div className="form-group"><label>بحث</label><input type="search" placeholder="وجهة / خدمة / ملاحظات" value={filters.query} onChange={(e) => setF("query", e.target.value)} /></div></div></div>
-      <div className="card"><div className="card-header"><div className="card-title">كشف الحساب المالي Ledger</div></div><div className="card-body"><div className="table-wrap enterprise-table"><table className="mobile-cards"><thead><tr><th>#</th><th>التاريخ</th><th>البيان</th><th>الخدمة / الوجهة</th><th>العدد</th><th>السعر</th><th>قيمة الخدمة</th><th>مدين عليه</th><th>دائن له</th><th>الرصيد الجاري</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead><tbody>{!agent ? <tr><td colSpan={12}><div className="empty"><div className="empty-text">اختر وكيلاً لعرض كشف الحساب الجديد</div></div></td></tr> : displayRows.length === 0 ? <tr><td colSpan={12}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr> : displayRows.map((e, i) => <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}><td data-label="#">{i + 1}</td><td data-label="التاريخ">{e.date}</td><td data-label="البيان" className="bold">{e.description}</td><td data-label="الخدمة/الوجهة">{e.service} / {e.destination}</td><td data-label="العدد">{e.count || "—"}</td><td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td><td data-label="قيمة الخدمة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td><td data-label="مدين عليه" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td><td data-label="دائن له" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td><td data-label="الرصيد الجاري" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td><td data-label="طريقة الدفع">{e.paymentMethod}{e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""}</td><td data-label="ملاحظات">{e.note}</td></tr>)}</tbody><tfoot><tr><td colSpan={7}>الإجمالي</td><td>{fmtDL(totalServices)}</td><td>{fmtDL(totalPayments)}</td><td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(net))} — {accountStatus}</td></tr></tfoot></table></div></div></div></>}
-
-      {activeTab === "services" && <div className="two-col"><div className="card"><div className="card-header"><div className="card-title">رحلات الوكيل ({myFlights.length})</div></div><div className="card-body"><div className="table-wrap"><table className="mobile-cards"><thead><tr><th>#</th><th>المسافر</th><th>الوجهة</th><th>التاريخ</th><th>الحالة</th></tr></thead><tbody>{myFlights.length === 0 ? <tr><td colSpan={5}><div className="empty"><div className="empty-text">لا توجد رحلات</div></div></td></tr> : myFlights.map((f, i) => <tr key={f.id}><td data-label="#">{i + 1}</td><td className="bold" data-label="المسافر">{f.passenger_name}</td><td data-label="الوجهة">{f.destination || "—"}</td><td data-label="التاريخ">{f.travel_date || "—"}</td><td data-label="الحالة"><span className={`badge ${badgeFor(f.status)}`}>{f.status}</span></td></tr>)}</tbody></table></div></div></div><div className="card"><div className="card-header"><div className="card-title">تقديمات الوكيل ({myApprovals.length})</div></div><div className="card-body"><div className="table-wrap"><table className="mobile-cards"><thead><tr><th>#</th><th>المسافر</th><th>الوجهة</th><th>الشركة الصادرة</th><th>الحالة</th></tr></thead><tbody>{myApprovals.length === 0 ? <tr><td colSpan={5}><div className="empty"><div className="empty-text">لا توجد تقديمات</div></div></td></tr> : myApprovals.map((a, i) => <tr key={a.id}><td data-label="#">{i + 1}</td><td className="bold" data-label="المسافر">{a.passenger_name}</td><td data-label="الوجهة">{a.destination || "—"}</td><td data-label="الشركة الصادرة">{a.issuing_company || "—"}</td><td data-label="الحالة"><span className={`badge ${badgeFor(a.status)}`}>{a.status}</span></td></tr>)}</tbody></table></div></div></div></div>}
+          <div className="card no-print-actions"><div className="card-header"><div className="card-title">فلاتر كشف الحساب</div>{canExport && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><ExportButton disabled={displayRows.length === 0} getData={buildExportData} /></div>}</div><div className="form-grid" style={{ padding: 12 }}><div className="form-group"><label>من تاريخ</label><input type="date" value={filters.from} onChange={(e) => setF("from", e.target.value)} /></div><div className="form-group"><label>إلى تاريخ</label><input type="date" value={filters.to} onChange={(e) => setF("to", e.target.value)} /></div><div className="form-group"><label>نوع الحركة</label><select value={filters.kind} onChange={(e) => setF("kind", e.target.value)}><option value="">الكل</option><option value="service">خدمات</option><option value="payment">مدفوعات</option></select></div><div className="form-group"><label>الخدمة</label><select value={filters.service} onChange={(e) => setF("service", e.target.value)}><option value="">الكل</option>{serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}</select></div><div className="form-group"><label>طريقة الدفع</label><select value={filters.method} onChange={(e) => setF("method", e.target.value)}><option value="">الكل</option>{methodOptions.map((m) => <option key={m} value={m}>{m}</option>)}</select></div><div className="form-group"><label>بحث</label><input type="search" placeholder="وجهة / خدمة / ملاحظات" value={filters.query} onChange={(e) => setF("query", e.target.value)} /></div></div></div>
+          <div className="card"><div className="card-header"><div className="card-title">كشف الحساب المالي</div></div><div className="card-body"><div className="table-wrap enterprise-table"><table className="mobile-cards"><thead><tr><th>#</th><th>التاريخ</th><th>البيان</th><th>الخدمة / الوجهة</th><th>العدد</th><th>السعر</th><th>قيمة الخدمة</th><th>مدين عليه</th><th>دائن له</th><th>الرصيد الجاري</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead><tbody>{displayRows.length === 0 ? <tr><td colSpan={12}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr> : displayRows.map((e, i) => <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}><td data-label="#">{i + 1}</td><td data-label="التاريخ">{e.date}</td><td data-label="البيان" className="bold">{e.description}</td><td data-label="الخدمة/الوجهة">{e.service} / {e.destination}</td><td data-label="العدد">{e.count || "—"}</td><td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td><td data-label="قيمة الخدمة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td><td data-label="مدين عليه" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td><td data-label="دائن له" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td><td data-label="الرصيد الجاري" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td><td data-label="طريقة الدفع">{e.paymentMethod}{e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""}</td><td data-label="ملاحظات">{e.note}</td></tr>)}</tbody><tfoot><tr><td colSpan={7}>الإجمالي</td><td>{fmtDL(totalServices)}</td><td>{fmtDL(totalPayments)}</td><td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(net))} — {accountStatus}</td></tr></tfoot></table></div></div></div>
+        </>
+      )}
 
       {editOpen && agent && <EditAgentModal agent={agent} onClose={() => setEditOpen(false)} />}
-      {payOpen && agent && <AddPaymentModal agent={agent} merchants={merchants} onClose={() => setPayOpen(false)} />}
+
     </div>
   );
 }
 
-function AddPaymentModal({ agent, merchants, onClose }: { agent: Agent; merchants: Merchant[]; onClose: () => void }) {
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), method: "نقدي" as "نقدي" | "إنستاباي" | "تاجر محفظة" | "تاجر نقدي", amount: "", merchant_id: "", note: "" });
-  const [saving, setSaving] = useState(false);
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const needsMerchant = form.method === "تاجر محفظة" || form.method === "تاجر نقدي";
-  const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
-  const save = async () => {
-    const amt = Math.round(Number(form.amount || 0));
-    if (!amt || amt <= 0) return toast.error("أدخل قيمة الدفعة");
-    if (needsMerchant && !form.merchant_id) return toast.error("اختر التاجر");
-    setSaving(true);
-    const buckets = { instapay_amount: 0, cash_amount: 0, merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0 };
-    if (form.method === "إنستاباي") buckets.instapay_amount = amt;
-    else if (form.method === "نقدي") buckets.cash_amount = amt;
-    else if (form.method === "تاجر محفظة") { buckets.merchant_cash_amount = amt; buckets.merchant_cash_net_amount = merchantCashNetAmount(amt); }
-    else buckets.merchant_cash_physical_amount = amt;
-    const totalPaid = buckets.instapay_amount + buckets.cash_amount + buckets.merchant_cash_net_amount + buckets.merchant_cash_physical_amount;
-    const { error } = await supabase.from("transactions").insert({ agent_id: agent.id, date: form.date, destination: null, travel_statement: null, service_type: "دفعة من الوكيل", count: 0, price: 0, payment_method: form.method, ...buckets, merchant_id: needsMerchant ? form.merchant_id : null, total_paid: totalPaid, paid: totalPaid, note: form.note.trim() || null, source_service_type: "payment" });
-    if (!error) { try { const { data: u } = await supabase.auth.getUser(); await supabase.from("activity_logs").insert({ user_id: u.user?.id ?? null, user_email: u.user?.email ?? null, action: "agent_payment_added", entity: "transactions", details: { agent_id: agent.id, amount: amt, method: form.method, date: form.date } }); } catch { /* ignore */ } }
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("تم تسجيل الدفعة");
-    onClose();
-  };
-  if (typeof document === "undefined") return null;
-  return createPortal(<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}><div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 640, maxHeight: "90vh", overflow: "auto", margin: 0 }}><div className="card-header"><div className="card-title">إضافة دفعة من الوكيل: {agent.name}</div></div><div className="form-grid"><div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div><div className="form-group"><label>طريقة الدفع</label><select value={form.method} onChange={(e) => set("method", e.target.value)}><option value="نقدي">نقدي</option><option value="إنستاباي">إنستاباي</option><option value="تاجر محفظة">تاجر محفظة</option><option value="تاجر نقدي">تاجر نقدي</option></select></div><div className="form-group"><label>المبلغ</label><input type="number" min="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></div>{needsMerchant && <div className="form-group"><label>التاجر</label><select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}><option value="">— اختر —</option>{activeMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}</select></div>}<div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div></div><div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button><button type="button" className="btn btn-gold" onClick={save} disabled={saving}>حفظ الدفعة</button></div></div></div>, document.body);
-}
+
+
 
 function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const [form, setForm] = useState({ name: agent.name || "", national_id: agent.national_id || "", phone: agent.phone || "", whatsapp: agent.whatsapp || "", governorate: agent.governorate || "" });

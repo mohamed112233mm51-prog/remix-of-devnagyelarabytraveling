@@ -100,7 +100,7 @@ function AccountsPage() {
         </div>
         {perm.create && (
           <div className={`tool-tab ${tab === "txn" ? "active" : ""}`} onClick={() => setTab("txn")}>
-            <CreditCard size={15} strokeWidth={2} /> <span>إضافة حركة</span>
+            <CreditCard size={15} strokeWidth={2} /> <span>إضافة دفعة من الوكيل</span>
           </div>
         )}
         <div className={`tool-tab ${tab === "statement" ? "active" : ""}`} onClick={() => setTab("statement")}>
