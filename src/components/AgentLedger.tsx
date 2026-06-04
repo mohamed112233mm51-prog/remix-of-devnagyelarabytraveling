@@ -6,9 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { ExportButton } from "@/components/ExportButton";
 import {
   badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
-  merchantCashNetAmount, useLive, GOVERNORATES,
+  useLive, GOVERNORATES,
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
+
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 
 type LedgerKind = "service" | "payment";
