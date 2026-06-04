@@ -188,20 +188,8 @@ export function AgentPaymentForm({
         <div className="form-group"><label>السعر</label>
           <input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} />
         </div>
-        <div className="form-group"><label>
-          قيمة الرحلة
-          <span style={{ marginInlineStart: 8, fontSize: 11, fontWeight: 400, color: "var(--muted)" }}>
-            <input type="checkbox" checked={form.trip_value_manual} onChange={(e) => set("trip_value_manual", e.target.checked)} style={{ marginInlineEnd: 4 }} />
-            تعديل يدوي
-          </span>
-        </label>
-          <input
-            type="number"
-            min={0}
-            value={form.trip_value_manual ? form.trip_value : String(autoTripValue || "")}
-            onChange={(e) => set("trip_value", e.target.value)}
-            disabled={!form.trip_value_manual}
-          />
+        <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
+          <input type="number" value={tripValueNum || ""} disabled readOnly />
         </div>
         <div className="form-group"><label>التاجر (اختياري)</label>
           <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
