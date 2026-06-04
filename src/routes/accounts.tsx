@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashNetAmount, useLive, useDropdownOptions, withSelected, GOVERNORATES, buildTravelStatement, PRICING_SERVICE_TYPES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, useLive, useDropdownOptions, GOVERNORATES, PRICING_SERVICE_TYPES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { AgentPricingSection } from "@/components/AgentPricingSection";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
@@ -376,159 +376,142 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchants: Merchant[]; txns: Transaction[]; onDone: () => void }) {
+type PaymentMethod = "نقدي" | "تحويل بنكي" | "إنستاباي" | "كاش محفظة" | "كاش نقدي تاجر";
+type Currency = "EGP" | "USD" | "LYD";
+const PAYMENT_METHODS: PaymentMethod[] = ["نقدي", "تحويل بنكي", "إنستاباي", "كاش محفظة", "كاش نقدي تاجر"];
+const CURRENCY_LABEL: Record<Currency, string> = { EGP: "جنيه مصري", USD: "دولار", LYD: "دينار ليبي" };
+
+type SplitRow = {
+  id: string;
+  method: PaymentMethod;
+  currency: Currency;
+  cash_box_id: string;
+  amount: string;
+  exchange_rate: string;
+};
+
+type CashBox = { id: string; name: string; currency: Currency; balance: number; is_active: boolean };
+
+function newSplit(): SplitRow {
+  return {
+    id: (crypto as any)?.randomUUID?.() || `s-${Date.now()}-${Math.random()}`,
+    method: "نقدي",
+    currency: "EGP",
+    cash_box_id: "",
+    amount: "",
+    exchange_rate: "1",
+  };
+}
+
+function TxnForm({ agents, onDone }: { agents: Agent[]; merchants: Merchant[]; txns: Transaction[]; onDone: () => void }) {
+  const { rows: cashBoxesRaw } = useLive<CashBox>("cash_boxes");
+  const cashBoxes = useMemo(() => cashBoxesRaw.filter((b) => b.is_active !== false), [cashBoxesRaw]);
+  const SERVICE_TYPES = useDropdownOptions("service_type");
+
   const [form, setForm] = useState({
-    agent_id: "", date: new Date().toISOString().slice(0, 10),
-    destination: "", count: "", price: "", service_type: "",
-    instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
-    merchant_id: "",
-    service_id: "",
+    agent_id: "",
+    date: new Date().toISOString().slice(0, 10),
+    service_type: "",
+    total_amount: "",
+    note: "",
   });
+  const [splits, setSplits] = useState<SplitRow[]>([newSplit()]);
+  const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
-  const SERVICE_TYPES = withSelected(useDropdownOptions("service_type"), form.service_type);
 
-  // Outstanding services for selected agent + (optional) service type
-  const dueServices = useMemo(() => {
-    if (!form.agent_id) return [] as Transaction[];
-    return txns.filter((t) => {
-      if (t.agent_id !== form.agent_id) return false;
-      if (!t.source_service_id) return false;
-      if (form.service_type && (t.service_type || "") !== form.service_type) return false;
-      const tv = Number(t.count || 0) * Number(t.price || 0);
-      const paid = Number(t.total_paid || 0);
-      return tv - paid > 0;
-    });
-  }, [txns, form.agent_id, form.service_type]);
-
-  // Reset/auto-fill when service selection changes
-  useEffect(() => {
-    if (!form.service_id) return;
-    const svc = dueServices.find((s) => s.id === form.service_id);
-    if (!svc) {
-      setForm((p) => ({ ...p, service_id: "" }));
-      return;
-    }
-    setForm((p) => ({
-      ...p,
-      destination: svc.destination || "",
-      count: String(svc.count || 0),
-      price: String(svc.price || 0),
-      service_type: svc.service_type || p.service_type,
-    }));
-  }, [form.service_id]);
-
-  // If agent or service_type changes and selected service no longer eligible, clear it
-  useEffect(() => {
-    if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
-      setForm((p) => ({ ...p, service_id: "" }));
-    }
-  }, [dueServices, form.service_id]);
-
-  const selectedService = form.service_id ? dueServices.find((s) => s.id === form.service_id) || null : null;
-  const lockFields = !!selectedService;
-
-  const tv = Number(form.count || 0) * Number(form.price || 0);
-  const travelStatement = selectedService?.travel_statement || buildTravelStatement(form.destination, form.date, null);
-  const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
-  const eligibleMerchants = activeMerchants.filter(
-    (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
-  );
-  const selectedMerchant = activeMerchants.find((m) => m.id === form.merchant_id) || null;
-  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
-  // Company methods are always available
-  const showSystemInsta = true;
-  const showSystemCash = true;
-  // Merchant methods: only when merchant is selected and supports them
-  const showMerchantCash = !!selectedMerchant && selectedMerchant.supports_cash_wallet;
-  const showMerchantPhysical = !!selectedMerchant && selectedMerchant.supports_physical_cash;
-
-  // If merchant disappears or is no longer eligible, clear it
-  useEffect(() => {
-    if (form.merchant_id && !activeMerchants.find((m) => m.id === form.merchant_id)) {
-      setForm((p) => ({ ...p, merchant_id: "" }));
-    }
-  }, [activeMerchants.map((m) => m.id).join(",")]);
-
-  // Clear merchant-only fields when not visible
-  useEffect(() => {
-    setForm((p) => {
-      const next = { ...p };
-      if (!showMerchantCash && next.merchant_cash_amount) next.merchant_cash_amount = "";
-      if (!showMerchantPhysical && next.merchant_cash_physical_amount) next.merchant_cash_physical_amount = "";
+  const updateSplit = (id: string, patch: Partial<SplitRow>) => {
+    setSplits((prev) => prev.map((s) => {
+      if (s.id !== id) return s;
+      const next = { ...s, ...patch };
+      // reset cash_box when currency changes
+      if (patch.currency && patch.currency !== s.currency) {
+        next.cash_box_id = "";
+        if (patch.currency === "EGP") next.exchange_rate = "1";
+      }
       return next;
-    });
-  }, [showMerchantCash, showMerchantPhysical]);
+    }));
+  };
+  const addSplit = () => setSplits((p) => [...p, newSplit()]);
+  const removeSplit = (id: string) => setSplits((p) => p.length > 1 ? p.filter((s) => s.id !== id) : p);
 
-  const insta = Math.round(Number(form.instapay_amount || 0));
-  const cash = Math.round(Number(form.cash_amount || 0));
-  const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
-  const merchantNet = merchantCashNetAmount(merchant);
-  const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
-  const newPayment = insta + cash + merchantNet + merchantPhysical;
-  const usesMerchant = !!selectedMerchant;
+  const egpEquivalent = (s: SplitRow) => {
+    const amt = Number(s.amount || 0);
+    const rate = s.currency === "EGP" ? 1 : Number(s.exchange_rate || 0);
+    return Math.round(amt * rate);
+  };
+  const splitsTotalEGP = splits.reduce((acc, s) => acc + egpEquivalent(s), 0);
+  const headerTotal = Math.round(Number(form.total_amount || 0));
+  const totalsMatch = headerTotal > 0 && splitsTotalEGP === headerTotal;
+
   const save = async () => {
-    if (!form.agent_id || !form.destination) return toast.error("برجاء اختيار قيمة من القائمة");
-    if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
-    if (newPayment <= 0) return toast.error("يجب إدخال قيمة في حقل دفع واحد على الأقل");
-
-    if (selectedService) {
-      // UPDATE existing service-linked transaction with the new payment values
-      const prevInsta = Number(selectedService.instapay_amount || 0);
-      const prevCash = Number(selectedService.cash_amount || 0);
-      const prevMerchant = Number(selectedService.merchant_cash_amount || 0);
-      const prevMerchantPhysical = Number(selectedService.merchant_cash_physical_amount || 0);
-      const newInsta = prevInsta + insta;
-      const newCash = prevCash + cash;
-      const newMerchant = prevMerchant + merchant;
-      const newMerchantNet = merchantCashNetAmount(newMerchant);
-      const newMerchantPhysical = prevMerchantPhysical + merchantPhysical;
-      const newTotalPaid = Number(selectedService.total_paid || 0) + newPayment;
-      const { error } = await supabase
-        .from("transactions")
-        .update({
-          instapay_amount: newInsta,
-          cash_amount: newCash,
-          merchant_cash_amount: newMerchant,
-          merchant_cash_net_amount: newMerchantNet,
-          merchant_cash_physical_amount: newMerchantPhysical,
-          merchant_id: usesMerchant ? form.merchant_id : (selectedService.merchant_id || null),
-          total_paid: newTotalPaid,
-          paid: newTotalPaid,
-        })
-        .eq("id", selectedService.id);
-      if (error) return toast.error(error.message);
-      onDone();
-      return;
+    if (!form.agent_id) return toast.error("اختر الوكيل");
+    if (!form.service_type) return toast.error("اختر نوع الخدمة");
+    if (headerTotal <= 0) return toast.error("أدخل إجمالي مبلغ الدفعة");
+    for (const s of splits) {
+      if (!s.method) return toast.error("اختر طريقة الدفع لكل سطر");
+      if (!s.currency) return toast.error("اختر العملة لكل سطر");
+      if (!s.cash_box_id) return toast.error("اختر الخزينة لكل سطر");
+      if (Number(s.amount || 0) <= 0) return toast.error("أدخل مبلغ موجب لكل سطر");
+      if (s.currency !== "EGP" && Number(s.exchange_rate || 0) <= 0) return toast.error("أدخل سعر صرف صحيح للعملة غير الجنيه");
     }
+    if (!totalsMatch) return toast.error(`إجمالي سطور الدفع (${fmtNum(splitsTotalEGP)}) لا يطابق إجمالي مبلغ الدفعة (${fmtNum(headerTotal)})`);
 
-    const tempId = (crypto as any)?.randomUUID?.() || `tmp-${Date.now()}`;
-    const insertPayload = {
-      agent_id: form.agent_id, date: form.date,
-      destination: form.destination || null,
-      travel_statement: travelStatement || null,
-      service_type: form.service_type || null,
-      count: Number(form.count || 0), price: Number(form.price || 0),
-      instapay_amount: insta,
-      cash_amount: cash,
-      merchant_cash_amount: merchant,
-      merchant_cash_net_amount: merchantNet,
-      merchant_cash_physical_amount: merchantPhysical,
-      merchant_id: usesMerchant ? form.merchant_id : null,
-      total_paid: newPayment,
-      paid: newPayment,
-    };
-    const { ok } = await applyOptimistic({
-      table: "transactions", type: "insert", id: tempId,
-      patch: { ...insertPayload, created_at: new Date().toISOString() },
-      run: async () => await supabase.from("transactions").insert(insertPayload),
-    });
-    if (!ok) return;
+    setSaving(true);
+    const { data: txnRow, error: txnErr } = await supabase.from("transactions").insert({
+      agent_id: form.agent_id,
+      date: form.date,
+      destination: null,
+      travel_statement: null,
+      service_type: form.service_type,
+      count: 0,
+      price: 0,
+      payment_method: splits.length === 1 ? splits[0].method : "متعدد",
+      instapay_amount: 0,
+      cash_amount: 0,
+      merchant_cash_amount: 0,
+      merchant_cash_net_amount: 0,
+      merchant_cash_physical_amount: 0,
+      total_paid: headerTotal,
+      paid: headerTotal,
+      note: form.note.trim() || null,
+      source_service_type: "payment",
+    }).select("id").single();
+    if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الدفعة"); }
+
+    const splitRows = splits.map((s) => ({
+      transaction_id: txnRow.id,
+      method: s.method,
+      currency: s.currency,
+      cash_box_id: s.cash_box_id,
+      amount: Number(s.amount || 0),
+      exchange_rate: s.currency === "EGP" ? 1 : Number(s.exchange_rate || 0),
+      egp_equivalent: egpEquivalent(s),
+    }));
+    const { error: splitErr } = await supabase.from("payment_splits").insert(splitRows);
+    if (splitErr) {
+      // rollback transaction insert
+      await supabase.from("transactions").delete().eq("id", txnRow.id);
+      setSaving(false);
+      return toast.error(splitErr.message);
+    }
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      await supabase.from("activity_logs").insert({
+        user_id: u.user?.id ?? null,
+        user_email: u.user?.email ?? null,
+        action: "agent_payment_added",
+        entity: "transactions",
+        details: { agent_id: form.agent_id, amount: headerTotal, splits: splitRows.length, date: form.date },
+      });
+    } catch { /* ignore */ }
+    setSaving(false);
+    toast.success("تم تسجيل الدفعة");
     onDone();
   };
+
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">💳 إضافة حركة مالية</div></div>
+      <div className="card-header"><div className="card-title">💳 إضافة دفعة من الوكيل</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الوكيل</label>
           <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)}>
@@ -543,81 +526,84 @@ function TxnForm({ agents, merchants, txns, onDone }: { agents: Agent[]; merchan
             <SafeSelectOptions options={SERVICE_TYPES} />
           </select>
         </div>
-        <div className="form-group"><label>الخدمة المستحقة</label>
-          <select value={form.service_id} onChange={(e) => set("service_id", e.target.value)} disabled={!form.agent_id || dueServices.length === 0}>
-            <option value="">— بدون / حركة جديدة —</option>
-            {dueServices.map((s) => {
-              const tvVal = Number(s.count || 0) * Number(s.price || 0);
-              const remain = tvVal - Number(s.total_paid || 0);
-              return (
-                <option key={s.id} value={s.id}>
-                  {(s.destination || "—")} • {s.date} • متبقي {fmtNum(remain)}
-                </option>
-              );
-            })}
-          </select>
+        <div className="form-group"><label>إجمالي مبلغ الدفعة (ج.م)</label>
+          <input type="number" min={0} placeholder="0" value={form.total_amount} onChange={(e) => set("total_amount", e.target.value)} />
         </div>
-        <div className="form-group"><label>وجهة السفر</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)} disabled={lockFields}>
-            <option value="" disabled>اختر...</option>
-            <SafeSelectOptions options={DESTINATIONS} />
-          </select>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
         </div>
-        <div className="form-group"><label>العدد</label><input type="number" min={1} placeholder="0" value={form.count} onChange={(e) => set("count", e.target.value)} disabled={lockFields} /></div>
-        <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} disabled={lockFields} /></div>
-        <div className="form-group"><label>قيمة الرحلة</label><input value={fmtNum(tv)} disabled /></div>
-        <div className="form-group full">
-          <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
-          <div className="form-group" style={{ marginBottom: 12 }}>
-            <label>التاجر</label>
-            {eligibleMerchants.length > 0 ? (
-              <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="">— اختر جهة التحصيل —</option>
-                {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
-            ) : (
-              <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
-            )}
-            {selectedMerchant && !merchantHasMethods && (
-              <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
-            )}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-            {showSystemInsta && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
-                <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
-              </div>
-            )}
-            {showSystemCash && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
-                <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
-              </div>
-            )}
-            {showMerchantCash && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
-                <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
-                <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
-                  صافي كاش التاجر بعد خصم 1%: <strong>{fmtNum(merchantNet)}</strong>
-                </div>
-              </div>
-            )}
-            {showMerchantPhysical && (
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
-                <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
-              </div>
-            )}
-          </div>
-          <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
-            إجمالي المدفوع: {fmtNum(newPayment)} ج.م
-          </div>
-        </div>
-        <div className="form-group full"><label>بيان السفر (تلقائي)</label><input value={travelStatement} disabled readOnly /></div>
       </div>
-      <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button></div>
+
+      <div className="card" style={{ margin: "12px 0" }}>
+        <div className="card-header">
+          <div className="card-title">توزيع الدفعة</div>
+          <button type="button" className="action-btn" onClick={addSplit}>+ إضافة سطر دفع</button>
+        </div>
+        <div className="card-body">
+          <div className="table-wrap enterprise-table">
+            <table className="mobile-cards">
+              <thead>
+                <tr>
+                  <th>#</th><th>طريقة الدفع</th><th>العملة</th><th>الخزينة</th><th>المبلغ</th><th>سعر الصرف</th><th>المعادل بالجنيه</th><th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {splits.map((s, i) => {
+                  const boxOptions = cashBoxes.filter((b) => b.currency === s.currency);
+                  return (
+                    <tr key={s.id}>
+                      <td data-label="#">{i + 1}</td>
+                      <td data-label="طريقة الدفع">
+                        <select value={s.method} onChange={(e) => updateSplit(s.id, { method: e.target.value as PaymentMethod })}>
+                          {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </td>
+                      <td data-label="العملة">
+                        <select value={s.currency} onChange={(e) => updateSplit(s.id, { currency: e.target.value as Currency })}>
+                          {(Object.keys(CURRENCY_LABEL) as Currency[]).map((c) => <option key={c} value={c}>{CURRENCY_LABEL[c]}</option>)}
+                        </select>
+                      </td>
+                      <td data-label="الخزينة">
+                        <select value={s.cash_box_id} onChange={(e) => updateSplit(s.id, { cash_box_id: e.target.value })}>
+                          <option value="">— اختر —</option>
+                          {boxOptions.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                      </td>
+                      <td data-label="المبلغ">
+                        <input type="number" min={0} value={s.amount} onChange={(e) => updateSplit(s.id, { amount: e.target.value })} />
+                      </td>
+                      <td data-label="سعر الصرف">
+                        <input type="number" min={0} step="0.0001" value={s.exchange_rate} disabled={s.currency === "EGP"} onChange={(e) => updateSplit(s.id, { exchange_rate: e.target.value })} />
+                      </td>
+                      <td data-label="المعادل" className="num-col"><strong>{fmtNum(egpEquivalent(s))}</strong></td>
+                      <td data-label="إجراءات">
+                        <button type="button" className="action-btn" onClick={() => removeSplit(s.id)} disabled={splits.length === 1}>حذف</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={6}>إجمالي سطور الدفع بالجنيه</td>
+                  <td className="num-col" style={{ color: totalsMatch ? "var(--green)" : "var(--red)", fontWeight: 800 }}>{fmtNum(splitsTotalEGP)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {!totalsMatch && headerTotal > 0 && (
+            <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(220,38,38,0.08)", color: "var(--red)", fontWeight: 700 }}>
+              الفرق: {fmtNum(headerTotal - splitsTotalEGP)} ج.م — لا يمكن الحفظ حتى يتطابق الإجمالي.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="form-footer">
+        <button className="btn btn-gold" onClick={save} disabled={saving || !totalsMatch}>💾 حفظ الدفعة</button>
+      </div>
     </div>
   );
 }
+

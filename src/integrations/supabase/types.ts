@@ -176,6 +176,36 @@ export type Database = {
         }
         Relationships: []
       }
+      cash_boxes: {
+        Row: {
+          balance: number
+          created_at: string
+          currency: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          currency: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       company_transactions: {
         Row: {
           arabic_tourism_cash_amount: number
@@ -637,6 +667,57 @@ export type Database = {
           whatsapp?: string | null
         }
         Relationships: []
+      }
+      payment_splits: {
+        Row: {
+          amount: number
+          cash_box_id: string | null
+          created_at: string
+          currency: string
+          egp_equivalent: number
+          exchange_rate: number | null
+          id: string
+          method: string
+          transaction_id: string
+        }
+        Insert: {
+          amount?: number
+          cash_box_id?: string | null
+          created_at?: string
+          currency: string
+          egp_equivalent?: number
+          exchange_rate?: number | null
+          id?: string
+          method: string
+          transaction_id: string
+        }
+        Update: {
+          amount?: number
+          cash_box_id?: string | null
+          created_at?: string
+          currency?: string
+          egp_equivalent?: number
+          exchange_rate?: number | null
+          id?: string
+          method?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_splits_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_splits_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
