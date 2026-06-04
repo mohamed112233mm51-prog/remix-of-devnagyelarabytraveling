@@ -38,8 +38,6 @@ export function AgentPaymentForm({
     destination: "",
     count: "1",
     price: "",
-    trip_value: "",
-    trip_value_manual: false,
     payment_method: "company_instapay" as MethodKey,
     merchant_id: "",
     note: "",
@@ -52,13 +50,7 @@ export function AgentPaymentForm({
     if (lockedAgentId) setForm((p) => ({ ...p, agent_id: lockedAgentId }));
   }, [lockedAgentId]);
 
-  const autoTripValue = (Number(form.count) || 0) * (Number(form.price) || 0);
-  const tripValueNum = form.trip_value_manual ? Number(form.trip_value) || 0 : autoTripValue;
-  useEffect(() => {
-    if (!form.trip_value_manual) {
-      setForm((p) => ({ ...p, trip_value: autoTripValue ? String(autoTripValue) : "" }));
-    }
-  }, [form.count, form.price, form.trip_value_manual, autoTripValue]);
+  const tripValueNum = (Number(form.count) || 0) * (Number(form.price) || 0);
 
   const merchant = useMemo(
     () => merchants.find((m) => m.id === form.merchant_id),
@@ -66,17 +58,16 @@ export function AgentPaymentForm({
   );
 
   const methodOptions = useMemo<{ key: MethodKey; label: string }[]>(() => {
-    if (merchant) {
-      const opts: { key: MethodKey; label: string }[] = [];
-      if (merchant.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا تاجر: ${merchant.merchant_name}` });
-      if (merchant.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `كاش محفظة تاجر: ${merchant.merchant_name}` });
-      if (merchant.supports_physical_cash) opts.push({ key: "merchant_physical", label: `كاش نقدي تاجر: ${merchant.merchant_name}` });
-      return opts;
-    }
-    return [
+    const opts: { key: MethodKey; label: string }[] = [
       { key: "company_instapay", label: "إنستا الشركة" },
       { key: "company_cash", label: "نقدي الشركة" },
     ];
+    if (merchant) {
+      if (merchant.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${merchant.merchant_name}` });
+      if (merchant.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `كاش محفظة ${merchant.merchant_name}` });
+      if (merchant.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${merchant.merchant_name}` });
+    }
+    return opts;
   }, [merchant]);
 
   useEffect(() => {
