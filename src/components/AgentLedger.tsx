@@ -102,7 +102,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   }, [showAgentProfile, agentsLoading, lockedAgentId, agent, router]);
 
   const myFlights = useMemo(() => flights.filter((f) => f.agent_id === selectedAgentId), [flights, selectedAgentId]);
-  const myApprovals = useMemo(() => approvals.filter((a) => a.agent_id === selectedAgentId), [approvals, selectedAgentId]);
+
   const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
   const myTxns = useMemo(() => myTxnsAll.filter((t) => {
     if (filters.from && (t.date || "") < filters.from) return false;
