@@ -27,8 +27,10 @@ type AgentLedgerProps = {
 };
 
 function classifyTxn(t: Transaction): LedgerKind {
+  if ((t as any).source_service_type === "payment") return "payment";
   return Number(t.count || 0) * Number(t.price || 0) > 0 ? "service" : "payment";
 }
+
 
 function paymentMethodLabel(t: Transaction): string {
   const parts: string[] = [];
