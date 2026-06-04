@@ -9,7 +9,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+
 import { AgentLedger } from "@/components/AgentLedger";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
