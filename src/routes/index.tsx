@@ -463,8 +463,8 @@ function Dashboard() {
             <div className="erp-panel-title"><Plus size={14} /> إجراءات سريعة</div>
           </div>
           <div className="erp-quick-actions">
-            <QuickAction to="/flights" icon={<Plane size={16} />} label="إضافة رحلة" />
-            <QuickAction to="/approvals" icon={<ClipboardCheck size={16} />} label="تقديم موافقة" />
+            <QuickAction to="/submissions" icon={<ClipboardCheck size={16} />} label="تقديم جديد" />
+            <QuickAction to="/executions" icon={<Plane size={16} />} label="تنفيذ جديد" />
             <QuickAction to="/accounts" icon={<Users size={16} />} label="حساب وكيل" />
             <QuickAction to="/companies" icon={<Building2 size={16} />} label="شركة صادرة" />
             <QuickAction to="/expenses" icon={<Wallet size={16} />} label="تسجيل مصروف" />
@@ -510,7 +510,7 @@ function Dashboard() {
         <div className="erp-panel">
           <div className="erp-panel-head">
             <div className="erp-panel-title"><ClipboardCheck size={14} /> موافقات قيد التنفيذ</div>
-            <Link to="/approvals" className="erp-link">عرض الكل <ChevronLeft size={12} /></Link>
+            <Link to="/submissions" className="erp-link">عرض الكل <ChevronLeft size={12} /></Link>
           </div>
           <div className="erp-list">
             {pendingApprovals.length === 0 && <div className="erp-empty">لا توجد موافقات معلقة</div>}
