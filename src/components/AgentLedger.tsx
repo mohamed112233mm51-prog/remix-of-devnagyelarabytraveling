@@ -203,33 +203,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 }
 
 
-function AddPaymentModal({ agent, merchants, onClose }: { agent: Agent; merchants: Merchant[]; onClose: () => void }) {
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), method: "نقدي" as "نقدي" | "إنستاباي" | "تاجر محفظة" | "تاجر نقدي", amount: "", merchant_id: "", note: "" });
-  const [saving, setSaving] = useState(false);
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const needsMerchant = form.method === "تاجر محفظة" || form.method === "تاجر نقدي";
-  const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
-  const save = async () => {
-    const amt = Math.round(Number(form.amount || 0));
-    if (!amt || amt <= 0) return toast.error("أدخل قيمة الدفعة");
-    if (needsMerchant && !form.merchant_id) return toast.error("اختر التاجر");
-    setSaving(true);
-    const buckets = { instapay_amount: 0, cash_amount: 0, merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0 };
-    if (form.method === "إنستاباي") buckets.instapay_amount = amt;
-    else if (form.method === "نقدي") buckets.cash_amount = amt;
-    else if (form.method === "تاجر محفظة") { buckets.merchant_cash_amount = amt; buckets.merchant_cash_net_amount = merchantCashNetAmount(amt); }
-    else buckets.merchant_cash_physical_amount = amt;
-    const totalPaid = buckets.instapay_amount + buckets.cash_amount + buckets.merchant_cash_net_amount + buckets.merchant_cash_physical_amount;
-    const { error } = await supabase.from("transactions").insert({ agent_id: agent.id, date: form.date, destination: null, travel_statement: null, service_type: "دفعة من الوكيل", count: 0, price: 0, payment_method: form.method, ...buckets, merchant_id: needsMerchant ? form.merchant_id : null, total_paid: totalPaid, paid: totalPaid, note: form.note.trim() || null, source_service_type: "payment" });
-    if (!error) { try { const { data: u } = await supabase.auth.getUser(); await supabase.from("activity_logs").insert({ user_id: u.user?.id ?? null, user_email: u.user?.email ?? null, action: "agent_payment_added", entity: "transactions", details: { agent_id: agent.id, amount: amt, method: form.method, date: form.date } }); } catch { /* ignore */ } }
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("تم تسجيل الدفعة");
-    onClose();
-  };
-  if (typeof document === "undefined") return null;
-  return createPortal(<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}><div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 640, maxHeight: "90vh", overflow: "auto", margin: 0 }}><div className="card-header"><div className="card-title">إضافة دفعة من الوكيل: {agent.name}</div></div><div className="form-grid"><div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div><div className="form-group"><label>طريقة الدفع</label><select value={form.method} onChange={(e) => set("method", e.target.value)}><option value="نقدي">نقدي</option><option value="إنستاباي">إنستاباي</option><option value="تاجر محفظة">تاجر محفظة</option><option value="تاجر نقدي">تاجر نقدي</option></select></div><div className="form-group"><label>المبلغ</label><input type="number" min="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></div>{needsMerchant && <div className="form-group"><label>التاجر</label><select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}><option value="">— اختر —</option>{activeMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}</select></div>}<div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div></div><div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button><button type="button" className="btn btn-gold" onClick={save} disabled={saving}>حفظ الدفعة</button></div></div></div>, document.body);
-}
+
 
 function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const [form, setForm] = useState({ name: agent.name || "", national_id: agent.national_id || "", phone: agent.phone || "", whatsapp: agent.whatsapp || "", governorate: agent.governorate || "" });
