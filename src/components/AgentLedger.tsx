@@ -141,7 +141,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     let balance = 0;
     return ledger.map((e) => ({ ...e, balance: (balance += e.debit - e.credit) }));
   }, [ledger]);
-  const displayRows = useMemo(() => [...ledgerWithBalance].reverse(), [ledgerWithBalance]);
+  const displayRows = useMemo(() => ledgerWithBalance, [ledgerWithBalance]);
   const totalServices = ledger.reduce((s, e) => s + e.debit, 0);
   const totalPayments = ledger.reduce((s, e) => s + e.credit, 0);
   const net = totalServices - totalPayments;
