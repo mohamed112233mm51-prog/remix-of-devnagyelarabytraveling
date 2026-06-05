@@ -585,7 +585,7 @@ function MerchantStatementTab({
       { header: "المبلغ", key: "gross" },
       { header: "النسبة", key: "commission" },
       { header: "الصافي", key: "net" },
-      { header: "الرصيد بعد الحركة", key: "balance" },
+      { header: "الرصيد الحالي", key: "balance" },
     ],
     rows: withRunning.map((m, i) => ({
       n: i + 1, date: m.date, type: m.type, statement: m.statement,
@@ -678,7 +678,7 @@ function MerchantStatementTab({
         <div className="card-body">
           <div className="table-wrap enterprise-table">
             <table className="mobile-cards">
-              <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th className="num-col">المبلغ</th><th className="num-col">النسبة</th><th className="num-col">الصافي</th><th className="num-col">الرصيد بعد الحركة</th></tr></thead>
+              <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th className="num-col">المبلغ</th><th className="num-col">النسبة</th><th className="num-col">الصافي</th><th className="num-col">الرصيد الحالي</th></tr></thead>
               <tbody>
                 {withRunning.length === 0 ? (
                   <tr><td colSpan={8}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
