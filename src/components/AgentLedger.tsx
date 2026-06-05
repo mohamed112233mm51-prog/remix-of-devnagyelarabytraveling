@@ -51,13 +51,21 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
       const serviceValue = tripValue(t);
       const payment = txnTotalPaid(t);
       const isPayment = kind === "payment";
-      // for explicit agent-payment records, credit = trip_value when no merchant-cash fields set
       const credit = isPayment ? (payment || serviceValue) : payment;
+      const merchantGross = Number(t.merchant_cash_amount || 0);
+      const merchantNet = merchantCashGross(t) > 0
+        ? Math.round(Number(t.merchant_cash_net_amount || 0) || (merchantGross - merchantGross * 0.01))
+        : 0;
+      const merchantCommission = merchantGross - merchantNet;
+      let description = isPayment ? "دفعة من الوكيل" : (t.service_type || t.travel_statement || "خدمة منفذة");
+      if (isPayment && merchantGross > 0) {
+        description += ` — كاش التاجر: المستلم ${fmtDL(merchantGross)} − عمولة ${fmtDL(merchantCommission)} = صافي ${fmtDL(merchantNet)}`;
+      }
       return {
         id: t.id,
         date: t.date,
         kind,
-        description: isPayment ? "دفعة من الوكيل" : (t.service_type || t.travel_statement || "خدمة منفذة"),
+        description,
         destination: t.destination || "—",
         service: t.service_type || "—",
         count: Number(t.count || 0),
