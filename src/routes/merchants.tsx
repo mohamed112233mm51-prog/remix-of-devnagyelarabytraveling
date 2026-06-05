@@ -515,7 +515,7 @@ function MerchantStatementTab({
       const gross = merchantCashGross(t);
       const net = merchantCashNet(t);
       list.push({
-        id: `in-${t.id}`, date: t.date, type: "وارد من وكيل",
+        id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: `${aName(t.agent_id)} — ${t.travel_statement || t.destination || "—"}`,
         gross, commission: gross - net, net, delta: net,
       });
@@ -525,7 +525,7 @@ function MerchantStatementTab({
       const gross = merchantCashGross(t);
       const net = merchantCashNet(t);
       list.push({
-        id: `out-${t.id}`, date: t.date, type: "صادر لشركة",
+        id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: `${cName(t.company_id)} — ${t.destination || "—"}`,
         gross, commission: gross - net, net, delta: -net,
       });
@@ -534,12 +534,12 @@ function MerchantStatementTab({
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
       list.push({
-        id: `col-${c.id}`, date: c.date, type: "تحصيل نقدي",
+        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
         statement: c.note || "تحصيل نقدية من التاجر",
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
-    return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
   }, [merchantId, incomingTxns, outgoingTxns, collections, agents, companies]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
