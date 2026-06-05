@@ -326,7 +326,7 @@ export function AgentPaymentForm({
           الصافي المخصوم من الوكيل: {totalNet.toLocaleString()}
           {totalGross !== totalNet && (
             <span style={{ fontWeight: 400, marginInlineStart: 12, color: "var(--muted)" }}>
-              (المستلم: {totalGross.toLocaleString()} − عمولة: {(totalGross - totalNet).toLocaleString()})
+              (المستلم: {totalGross.toLocaleString()} − عمولة فودافون كاش: {(totalGross - totalNet).toLocaleString()})
             </span>
           )}
         </div>
