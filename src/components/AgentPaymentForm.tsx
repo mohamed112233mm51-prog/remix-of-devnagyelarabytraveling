@@ -123,12 +123,13 @@ export function AgentPaymentForm({
     }
 
     // Aggregate amounts onto the transaction record (used by ledger)
-    let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
+    let instapay = 0, cash = 0, merchantWalletGross = 0, merchantWalletNet = 0, merchantPhysical = 0;
     for (const r of validSplits) {
       const a = Number(r.amount) || 0;
+      const b = splitBreakdown(r);
       if (r.method === "company_instapay" || r.method === "merchant_instapay") instapay += a;
       else if (r.method === "company_cash") cash += a;
-      else if (r.method === "merchant_wallet") merchantWallet += a;
+      else if (r.method === "merchant_wallet") { merchantWalletGross += b.gross; merchantWalletNet += b.net; }
       else if (r.method === "merchant_physical") merchantPhysical += a;
     }
 
