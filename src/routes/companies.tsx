@@ -699,7 +699,7 @@ function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents
                 )}
                 {showMerchantCash && (
                   <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>كاش التاجر{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>فودافون كاش{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
                     <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
                     <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
                       صافي المرسل: <strong>{fmtNum(merchantNet)}</strong>
@@ -747,7 +747,7 @@ type ConvertSource = "" | "insta_company" | "cash_company" | "merchant_wallet" |
 const SOURCE_LABELS: Record<Exclude<ConvertSource, "">, string> = {
   insta_company: "انستا الشركة",
   cash_company: "نقدي الشركة",
-  merchant_wallet: "كاش التاجر",
+  merchant_wallet: "فودافون كاش",
   merchant_physical: "نقدي التاجر",
 };
 

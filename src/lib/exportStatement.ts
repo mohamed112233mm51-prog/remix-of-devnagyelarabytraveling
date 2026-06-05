@@ -70,7 +70,7 @@ const getExcelCellValue = (row: Record<string, string | number>, key: string) =>
 
 function debugStatementExportValues(data: StatementExportData) {
   const priceCol = data.columns.find((c) => /price|السعر/i.test(`${c.key} ${c.header}`));
-  const shouldDebug = /كشف حساب|كاش التاجر/.test(data.title) && (priceCol || data.rows.length > 0);
+  const shouldDebug = /كشف حساب|فودافون كاش/.test(data.title) && (priceCol || data.rows.length > 0);
   if (!shouldDebug) return;
   const priceKey = priceCol?.key || "price";
   console.table(data.rows.map((row) => ({

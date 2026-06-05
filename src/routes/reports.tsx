@@ -221,7 +221,7 @@ function ReportsPage() {
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "agents", label: "الوكلاء", icon: <Users size={15} strokeWidth={2} /> },
     { id: "companies", label: "الشركات الصادرة", icon: <Building2 size={15} strokeWidth={2} /> },
-    { id: "merchants", label: "كاش التاجر", icon: <Handshake size={15} strokeWidth={2} /> },
+    { id: "merchants", label: "فودافون كاش", icon: <Handshake size={15} strokeWidth={2} /> },
     { id: "investors", label: "المستثمرين", icon: <Briefcase size={15} strokeWidth={2} /> },
     { id: "expenses", label: "المصروفات", icon: <Receipt size={15} strokeWidth={2} /> },
     { id: "usd_treasury", label: "الخزينة الدولارية", icon: <DollarSign size={15} strokeWidth={2} /> },
@@ -617,8 +617,8 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
 
   const cols = [
     { header: "اسم التاجر", key: "name" },
-    { header: "وارد كاش التاجر من الوكلاء", key: "incoming" },
-    { header: "صادر كاش التاجر للشركات", key: "outgoing" },
+    { header: "وارد فودافون كاش من الوكلاء", key: "incoming" },
+    { header: "صادر فودافون كاش للشركات", key: "outgoing" },
     { header: "النقدية المحصلة", key: "collected" },
     { header: "نسبة 1%", key: "fee" },
     { header: "الرصيد", key: "balance" },
@@ -634,7 +634,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">🤝 تقرير كاش التاجر</div></div>
+      <div className="card-header"><div className="card-title">🤝 تقرير فودافون كاش</div></div>
       <div className="card-body">
         <KpiRow items={[
           { label: "إجمالي الوارد", value: fmtDL(totIn), tone: "green" },
@@ -644,7 +644,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
         ]} />
 
         <ChartsGrid>
-          <ChartCard title="حركة كاش التاجر" subtitle="مقارنة بين الوارد والصادر لكل تاجر" isEmpty={flow.length === 0}>
+          <ChartCard title="حركة فودافون كاش" subtitle="مقارنة بين الوارد والصادر لكل تاجر" isEmpty={flow.length === 0}>
             <BarChart data={flow} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
               <XAxis dataKey="name" tick={axisTick} interval={0} angle={-15} textAnchor="end" height={60} />
@@ -678,8 +678,8 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير كاش التاجر", columns: cols, rows, fileName: "merchants-report" })}
-          onPdf={() => exportStatementToPDF({ title: "تقرير كاش التاجر", columns: cols, rows })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير فودافون كاش", columns: cols, rows, fileName: "merchants-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير فودافون كاش", columns: cols, rows })}
         />
         <div className="table-wrap">
           <table className="mobile-cards">
@@ -1071,7 +1071,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
 const USD_SOURCE_LABELS: Record<string, string> = {
   insta_company: "انستا الشركة",
   cash_company: "نقدي الشركة",
-  merchant_wallet: "كاش التاجر",
+  merchant_wallet: "فودافون كاش",
   merchant_physical: "نقدي التاجر",
 };
 
