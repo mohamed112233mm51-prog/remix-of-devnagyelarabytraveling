@@ -90,8 +90,21 @@ export function AgentPaymentForm({
     return opts;
   };
 
-  const totalAmount = useMemo(
+  const splitBreakdown = (r: SplitRow) => {
+    const gross = Number(r.amount) || 0;
+    const hasCommission = r.method === "merchant_wallet";
+    const rate = hasCommission ? 1 : 0;
+    const commission = hasCommission ? Math.round(gross * 0.01) : 0;
+    const net = gross - commission;
+    return { gross, rate, commission, net, hasCommission };
+  };
+
+  const totalGross = useMemo(
     () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [splits],
+  );
+  const totalNet = useMemo(
+    () => splits.reduce((s, r) => s + splitBreakdown(r).net, 0),
     [splits],
   );
 
@@ -110,12 +123,13 @@ export function AgentPaymentForm({
     }
 
     // Aggregate amounts onto the transaction record (used by ledger)
-    let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
+    let instapay = 0, cash = 0, merchantWalletGross = 0, merchantWalletNet = 0, merchantPhysical = 0;
     for (const r of validSplits) {
       const a = Number(r.amount) || 0;
+      const b = splitBreakdown(r);
       if (r.method === "company_instapay" || r.method === "merchant_instapay") instapay += a;
       else if (r.method === "company_cash") cash += a;
-      else if (r.method === "merchant_wallet") merchantWallet += a;
+      else if (r.method === "merchant_wallet") { merchantWalletGross += b.gross; merchantWalletNet += b.net; }
       else if (r.method === "merchant_physical") merchantPhysical += a;
     }
 
@@ -140,15 +154,15 @@ export function AgentPaymentForm({
       payment_method: firstMethodLabel,
       instapay_amount: instapay,
       cash_amount: cash,
-      merchant_cash_amount: merchantWallet,
-      merchant_cash_net_amount: merchantWallet,
+      merchant_cash_amount: merchantWalletGross,
+      merchant_cash_net_amount: merchantWalletNet,
       merchant_cash_physical_amount: merchantPhysical,
       arabic_tourism_cash_amount: 0,
       arabic_tourism_cash_net_amount: 0,
       mobile_cash_amount: 0,
       mobile_cash_net_amount: 0,
-      total_paid: totalAmount,
-      paid: totalAmount,
+      total_paid: totalNet,
+      paid: totalNet,
       merchant_id: firstMerchant,
       note: form.note.trim() || description,
       source_service_type: "payment",
@@ -161,7 +175,7 @@ export function AgentPaymentForm({
 
     // Insert payment_splits for each row. Company rows → tie to cash_box; merchant rows → no cash_box.
     const splitRecords = validSplits.map((r) => {
-      const amount = Number(r.amount) || 0;
+      const b = splitBreakdown(r);
       let methodLabel = "نقدي";
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
@@ -181,9 +195,13 @@ export function AgentPaymentForm({
         method: methodLabel,
         currency: r.currency,
         cash_box_id: cashBoxId,
-        amount,
+        amount: b.net,
+        gross_amount: b.gross,
+        merchant_commission_rate: b.rate,
+        merchant_commission_amount: b.commission,
+        net_amount: b.net,
         exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? amount : 0,
+        egp_equivalent: r.currency === "EGP" ? b.net : 0,
       };
     });
     if (splitRecords.length) {
@@ -198,7 +216,7 @@ export function AgentPaymentForm({
         user_email: u.user?.email ?? null,
         action: "agent_payment_added",
         entity: "transactions",
-        details: { agent_id: form.agent_id, amount: totalAmount, splits: validSplits.length, date: form.date },
+        details: { agent_id: form.agent_id, gross: totalGross, net: totalNet, splits: validSplits.length, date: form.date },
       });
     } catch { /* ignore */ }
 
@@ -252,8 +270,9 @@ export function AgentPaymentForm({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
-        {splits.map((row, idx) => {
+        {splits.map((row) => {
           const methods = methodsForSplit(row);
+          const b = splitBreakdown(row);
           return (
             <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
               <div className="form-group"><label>جهة التحصيل</label>
@@ -281,9 +300,19 @@ export function AgentPaymentForm({
                   {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>المبلغ</label>
+              <div className="form-group"><label>{b.hasCommission ? "المبلغ المستلم من الوكيل" : "المبلغ"}</label>
                 <input type="number" min={0} value={row.amount} onChange={(e) => updateSplit(row.uid, { amount: e.target.value })} />
               </div>
+              {b.hasCommission && (
+                <>
+                  <div className="form-group"><label>عمولة التاجر 1%</label>
+                    <input type="number" value={b.commission || ""} disabled readOnly />
+                  </div>
+                  <div className="form-group"><label>الصافي المخصوم من الوكيل</label>
+                    <input type="number" value={b.net || ""} disabled readOnly style={{ fontWeight: 700, color: "var(--green)" }} />
+                  </div>
+                </>
+              )}
               <div className="form-group" style={{ alignSelf: "end" }}>
                 <button type="button" className="btn btn-sm btn-danger" onClick={() => removeSplit(row.uid)} disabled={splits.length === 1}>حذف</button>
               </div>
@@ -292,8 +321,15 @@ export function AgentPaymentForm({
         })}
       </div>
 
-      <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontWeight: 700 }}>إجمالي الدفعة: {totalAmount.toLocaleString()}</div>
+      <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontWeight: 700 }}>
+          الصافي المخصوم من الوكيل: {totalNet.toLocaleString()}
+          {totalGross !== totalNet && (
+            <span style={{ fontWeight: 400, marginInlineStart: 12, color: "var(--muted)" }}>
+              (المستلم: {totalGross.toLocaleString()} − عمولة: {(totalGross - totalNet).toLocaleString()})
+            </span>
+          )}
+        </div>
         <button className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الدفعة</button>
       </div>
     </div>
