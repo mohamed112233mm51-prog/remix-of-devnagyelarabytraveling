@@ -676,8 +676,12 @@ export type Database = {
           currency: string
           egp_equivalent: number
           exchange_rate: number | null
+          gross_amount: number
           id: string
+          merchant_commission_amount: number
+          merchant_commission_rate: number
           method: string
+          net_amount: number
           transaction_id: string
         }
         Insert: {
@@ -687,8 +691,12 @@ export type Database = {
           currency: string
           egp_equivalent?: number
           exchange_rate?: number | null
+          gross_amount?: number
           id?: string
+          merchant_commission_amount?: number
+          merchant_commission_rate?: number
           method: string
+          net_amount?: number
           transaction_id: string
         }
         Update: {
@@ -698,8 +706,12 @@ export type Database = {
           currency?: string
           egp_equivalent?: number
           exchange_rate?: number | null
+          gross_amount?: number
           id?: string
+          merchant_commission_amount?: number
+          merchant_commission_rate?: number
           method?: string
+          net_amount?: number
           transaction_id?: string
         }
         Relationships: [
