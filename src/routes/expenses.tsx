@@ -36,7 +36,7 @@ const FUNDING_SOURCES: { value: FundingSource; label: string }[] = [
   { value: "insta_company", label: "انستا الشركة" },
   { value: "cash_company", label: "نقدي الشركة" },
   { value: "usd_treasury", label: "الخزينة الدولارية" },
-  { value: "merchant_wallet", label: "كاش التاجر" },
+  { value: "merchant_wallet", label: "فودافون كاش" },
   { value: "merchant_physical", label: "نقدي التاجر" },
 ];
 

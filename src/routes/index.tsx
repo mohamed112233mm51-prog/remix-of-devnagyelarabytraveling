@@ -635,12 +635,12 @@ function Dashboard() {
           <Stat label="المتبقي" value={fmtDL(companyDue)} tone="red" />
         </SectionCard>
 
-        <SectionCard title="كاش التاجر" icon={<HandCoins size={16} />} accent="navy">
+        <SectionCard title="فودافون كاش" icon={<HandCoins size={16} />} accent="navy">
           <Stat label="عدد التجار" value={fmtNum(merchants.length)} />
           <Stat label="الوارد (صافي)" value={fmtDL(merchantIncomingNet)} tone="green" />
           <Stat label="الصادر" value={fmtDL(merchantOutgoing)} tone="red" />
           <Stat label="نسبة التاجر 1%" value={fmtDL(merchantFee)} />
-          <Stat label="رصيد كاش التاجر" value={fmtDL(merchantBalance)} highlight />
+          <Stat label="رصيد فودافون كاش" value={fmtDL(merchantBalance)} highlight />
         </SectionCard>
 
         <SectionCard title="المستثمرين" icon={<Briefcase size={16} />} accent="navy">

@@ -17,7 +17,7 @@ type SearchResult = {
 const SECTION_LABELS: Record<string, string> = {
   agents: "وكلاء",
   companies: "شركات صادرة",
-  merchants: "كاش التاجر",
+  merchants: "فودافون كاش",
   investors: "مستثمرين",
   expenses: "مصروفات",
 };
