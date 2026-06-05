@@ -270,8 +270,9 @@ export function AgentPaymentForm({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
-        {splits.map((row, idx) => {
+        {splits.map((row) => {
           const methods = methodsForSplit(row);
+          const b = splitBreakdown(row);
           return (
             <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
               <div className="form-group"><label>جهة التحصيل</label>
@@ -299,9 +300,19 @@ export function AgentPaymentForm({
                   {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>المبلغ</label>
+              <div className="form-group"><label>{b.hasCommission ? "المبلغ المستلم من الوكيل" : "المبلغ"}</label>
                 <input type="number" min={0} value={row.amount} onChange={(e) => updateSplit(row.uid, { amount: e.target.value })} />
               </div>
+              {b.hasCommission && (
+                <>
+                  <div className="form-group"><label>عمولة التاجر 1%</label>
+                    <input type="number" value={b.commission || ""} disabled readOnly />
+                  </div>
+                  <div className="form-group"><label>الصافي المخصوم من الوكيل</label>
+                    <input type="number" value={b.net || ""} disabled readOnly style={{ fontWeight: 700, color: "var(--green)" }} />
+                  </div>
+                </>
+              )}
               <div className="form-group" style={{ alignSelf: "end" }}>
                 <button type="button" className="btn btn-sm btn-danger" onClick={() => removeSplit(row.uid)} disabled={splits.length === 1}>حذف</button>
               </div>
@@ -310,8 +321,15 @@ export function AgentPaymentForm({
         })}
       </div>
 
-      <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontWeight: 700 }}>إجمالي الدفعة: {totalAmount.toLocaleString()}</div>
+      <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontWeight: 700 }}>
+          الصافي المخصوم من الوكيل: {totalNet.toLocaleString()}
+          {totalGross !== totalNet && (
+            <span style={{ fontWeight: 400, marginInlineStart: 12, color: "var(--muted)" }}>
+              (المستلم: {totalGross.toLocaleString()} − عمولة: {(totalGross - totalNet).toLocaleString()})
+            </span>
+          )}
+        </div>
         <button className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الدفعة</button>
       </div>
     </div>
