@@ -305,7 +305,7 @@ export function AgentPaymentForm({
               </div>
               {b.hasCommission && (
                 <>
-                  <div className="form-group"><label>عمولة التاجر 1%</label>
+                  <div className="form-group"><label>عمولة فودافون كاش 1%</label>
                     <input type="number" value={b.commission || ""} disabled readOnly />
                   </div>
                   <div className="form-group"><label>الصافي المخصوم من الوكيل</label>

@@ -59,7 +59,7 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
       const merchantCommission = merchantGross - merchantNet;
       let description = isPayment ? "دفعة من الوكيل" : (t.service_type || t.travel_statement || "خدمة منفذة");
       if (isPayment && merchantGross > 0) {
-        description += ` — فودافون كاش: المستلم ${fmtDL(merchantGross)} − عمولة ${fmtDL(merchantCommission)} = صافي ${fmtDL(merchantNet)}`;
+        description += ` — فودافون كاش: المستلم ${fmtDL(merchantGross)} − عمولة فودافون كاش ${fmtDL(merchantCommission)} = صافي ${fmtDL(merchantNet)}`;
       }
       return {
         id: t.id,
