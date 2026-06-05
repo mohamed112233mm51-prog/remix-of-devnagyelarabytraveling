@@ -90,8 +90,21 @@ export function AgentPaymentForm({
     return opts;
   };
 
-  const totalAmount = useMemo(
+  const splitBreakdown = (r: SplitRow) => {
+    const gross = Number(r.amount) || 0;
+    const hasCommission = r.method === "merchant_wallet";
+    const rate = hasCommission ? 1 : 0;
+    const commission = hasCommission ? Math.round(gross * 0.01) : 0;
+    const net = gross - commission;
+    return { gross, rate, commission, net, hasCommission };
+  };
+
+  const totalGross = useMemo(
     () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [splits],
+  );
+  const totalNet = useMemo(
+    () => splits.reduce((s, r) => s + splitBreakdown(r).net, 0),
     [splits],
   );
 
