@@ -478,6 +478,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
 type StatementMovement = {
   id: string;
   date: string;
+  createdAt: string;
   type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي";
   statement: string;
   gross: number;
