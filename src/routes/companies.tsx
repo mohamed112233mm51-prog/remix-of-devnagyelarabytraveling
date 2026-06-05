@@ -230,7 +230,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     (!companyId || t.company_id === companyId) &&
     (!from || t.date >= from) &&
     (!to || t.date <= to)
-  );
+  ).sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""));
   const totalServices = filtered.reduce((s, t) => s + Number(t.trip_value || 0), 0);
   const totalPaid = filtered.reduce((s, t) => s + Number(t.total_paid || 0), 0);
   const balance = totalServices - totalPaid;

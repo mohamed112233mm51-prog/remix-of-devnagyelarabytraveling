@@ -478,6 +478,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
 type StatementMovement = {
   id: string;
   date: string;
+  createdAt: string;
   type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي";
   statement: string;
   gross: number;
@@ -514,7 +515,7 @@ function MerchantStatementTab({
       const gross = merchantCashGross(t);
       const net = merchantCashNet(t);
       list.push({
-        id: `in-${t.id}`, date: t.date, type: "وارد من وكيل",
+        id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: `${aName(t.agent_id)} — ${t.travel_statement || t.destination || "—"}`,
         gross, commission: gross - net, net, delta: net,
       });
@@ -524,7 +525,7 @@ function MerchantStatementTab({
       const gross = merchantCashGross(t);
       const net = merchantCashNet(t);
       list.push({
-        id: `out-${t.id}`, date: t.date, type: "صادر لشركة",
+        id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: `${cName(t.company_id)} — ${t.destination || "—"}`,
         gross, commission: gross - net, net, delta: -net,
       });
@@ -533,12 +534,12 @@ function MerchantStatementTab({
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
       list.push({
-        id: `col-${c.id}`, date: c.date, type: "تحصيل نقدي",
+        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
         statement: c.note || "تحصيل نقدية من التاجر",
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
-    return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
   }, [merchantId, incomingTxns, outgoingTxns, collections, agents, companies]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
@@ -585,7 +586,7 @@ function MerchantStatementTab({
       { header: "المبلغ", key: "gross" },
       { header: "النسبة", key: "commission" },
       { header: "الصافي", key: "net" },
-      { header: "الرصيد بعد الحركة", key: "balance" },
+      { header: "الرصيد الحالي", key: "balance" },
     ],
     rows: withRunning.map((m, i) => ({
       n: i + 1, date: m.date, type: m.type, statement: m.statement,
@@ -678,7 +679,7 @@ function MerchantStatementTab({
         <div className="card-body">
           <div className="table-wrap enterprise-table">
             <table className="mobile-cards">
-              <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th className="num-col">المبلغ</th><th className="num-col">النسبة</th><th className="num-col">الصافي</th><th className="num-col">الرصيد بعد الحركة</th></tr></thead>
+              <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th className="num-col">المبلغ</th><th className="num-col">النسبة</th><th className="num-col">الصافي</th><th className="num-col">الرصيد الحالي</th></tr></thead>
               <tbody>
                 {withRunning.length === 0 ? (
                   <tr><td colSpan={8}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
