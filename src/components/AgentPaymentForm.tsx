@@ -154,15 +154,15 @@ export function AgentPaymentForm({
       payment_method: firstMethodLabel,
       instapay_amount: instapay,
       cash_amount: cash,
-      merchant_cash_amount: merchantWallet,
-      merchant_cash_net_amount: merchantWallet,
+      merchant_cash_amount: merchantWalletGross,
+      merchant_cash_net_amount: merchantWalletNet,
       merchant_cash_physical_amount: merchantPhysical,
       arabic_tourism_cash_amount: 0,
       arabic_tourism_cash_net_amount: 0,
       mobile_cash_amount: 0,
       mobile_cash_net_amount: 0,
-      total_paid: totalAmount,
-      paid: totalAmount,
+      total_paid: totalNet,
+      paid: totalNet,
       merchant_id: firstMerchant,
       note: form.note.trim() || description,
       source_service_type: "payment",
@@ -175,7 +175,7 @@ export function AgentPaymentForm({
 
     // Insert payment_splits for each row. Company rows → tie to cash_box; merchant rows → no cash_box.
     const splitRecords = validSplits.map((r) => {
-      const amount = Number(r.amount) || 0;
+      const b = splitBreakdown(r);
       let methodLabel = "نقدي";
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
@@ -195,9 +195,13 @@ export function AgentPaymentForm({
         method: methodLabel,
         currency: r.currency,
         cash_box_id: cashBoxId,
-        amount,
+        amount: b.net,
+        gross_amount: b.gross,
+        merchant_commission_rate: b.rate,
+        merchant_commission_amount: b.commission,
+        net_amount: b.net,
         exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? amount : 0,
+        egp_equivalent: r.currency === "EGP" ? b.net : 0,
       };
     });
     if (splitRecords.length) {
@@ -212,7 +216,7 @@ export function AgentPaymentForm({
         user_email: u.user?.email ?? null,
         action: "agent_payment_added",
         entity: "transactions",
-        details: { agent_id: form.agent_id, amount: totalAmount, splits: validSplits.length, date: form.date },
+        details: { agent_id: form.agent_id, gross: totalGross, net: totalNet, splits: validSplits.length, date: form.date },
       });
     } catch { /* ignore */ }
 
