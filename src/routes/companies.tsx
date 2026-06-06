@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -201,132 +201,231 @@ function CompaniesPage() {
   );
 }
 
+type CompanyLedgerKind = "service" | "payment";
+type CompanyLedgerEntry = {
+  id: string; date: string; kind: CompanyLedgerKind; description: string; destination: string; service: string;
+  count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
+  paymentMethod: string; note: string; raw: CompanyTransaction;
+};
+
+function companyPaymentMethodLabel(t: CompanyTransaction): string {
+  const parts: string[] = [];
+  if (Number(t.instapay_amount || 0) > 0) parts.push("إنستاباي");
+  if (Number(t.cash_amount || 0) > 0) parts.push("نقدي");
+  if (Number(t.merchant_cash_amount || 0) > 0) parts.push("تاجر محفظة");
+  if (Number(t.merchant_cash_physical_amount || 0) > 0) parts.push("تاجر نقدي");
+  return parts.length ? parts.join(" + ") : "—";
+}
+
 function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: { companies: IssuingCompany[]; txns: CompanyTransaction[]; initialCompanyId: string; canExport: boolean }) {
   const [companyId, setCompanyId] = useState(initialCompanyId || "");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const { rows: merchants } = useLive<Merchant>("merchants");
+  const merchantName = (mid: string | null | undefined) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
 
   const company = companies.find((c) => c.id === companyId);
-  const filtered = useMemo(() => txns.filter((t) =>
-    (!companyId || t.company_id === companyId) &&
-    (!from || t.date >= from) &&
-    (!to || t.date <= to)
-  ).sort((a, b) =>
-    (a.created_at || "").localeCompare(b.created_at || "") ||
-    (a.date || "").localeCompare(b.date || "")
-  ), [txns, companyId, from, to]);
+  const myTxnsAll = useMemo(
+    () => txns
+      .filter((t) => !companyId || t.company_id === companyId)
+      .slice()
+      .sort((a, b) =>
+        (a.created_at || "").localeCompare(b.created_at || "") ||
+        (a.date || "").localeCompare(b.date || ""),
+      ),
+    [txns, companyId],
+  );
 
-  type LedgerRow = {
-    id: string; date: string; description: string; debit: number; credit: number; balance: number; note: string;
-  };
-  const ledger = useMemo<LedgerRow[]>(() => {
+  const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
+    const serviceValue = Math.round(Number(t.trip_value || 0));
+    const payment = Math.round(Number(t.total_paid || 0));
+    const kind: CompanyLedgerKind = serviceValue > 0 ? "service" : "payment";
+    const description = kind === "payment"
+      ? "دفعة للشركة"
+      : (t.service_type || "خدمة مستحقة");
+    return {
+      id: t.id,
+      date: t.date,
+      kind,
+      description,
+      destination: t.destination || "—",
+      service: t.service_type || "—",
+      count: Number(t.count || 0),
+      price: Number(t.price || 0),
+      serviceValue,
+      payment,
+      debit: serviceValue,
+      credit: payment,
+      paymentMethod: payment > 0 ? companyPaymentMethodLabel(t) : "—",
+      note: t.note || "—",
+      raw: t,
+    };
+  }), [myTxnsAll]);
+
+  // Running balance computed over ALL entries (filters do not affect balance)
+  const allWithBalance = useMemo(() => {
     let bal = 0;
-    return filtered.map((t) => {
-      const debit = Math.round(Number(t.trip_value || 0));
-      const credit = Math.round(Number(t.total_paid || 0));
-      bal += debit - credit;
-      const parts: string[] = [];
-      if (debit > 0) parts.push(`${t.service_type || "خدمة"}${t.destination ? ` — ${t.destination}` : ""}`);
-      if (credit > 0) parts.push(debit > 0 ? "+ دفعة للشركة" : "دفعة للشركة");
-      return {
-        id: t.id, date: t.date,
-        description: parts.join(" ") || (t.note || "حركة"),
-        debit, credit, balance: bal,
-        note: t.note || "—",
-      };
-    });
-  }, [filtered]);
+    return allEntries.map((e) => ({ ...e, balance: (bal += e.debit - e.credit) }));
+  }, [allEntries]);
 
-  const totalServices = ledger.reduce((s, r) => s + r.debit, 0);
-  const totalPaid = ledger.reduce((s, r) => s + r.credit, 0);
+  // Column filters
+  const [filters, setFilters] = useState({
+    from: "", to: "", description: "", service: "", destination: "",
+    count: "", price: "", serviceValue: "", payment: "",
+    debit: "", credit: "", balance: "", method: "", note: "",
+  });
+  const setF = (k: keyof typeof filters, v: string) => setFilters((p) => ({ ...p, [k]: v }));
+  const resetFilters = () => setFilters({
+    from: "", to: "", description: "", service: "", destination: "",
+    count: "", price: "", serviceValue: "", payment: "",
+    debit: "", credit: "", balance: "", method: "", note: "",
+  });
+  const numMatch = (val: number, q: string) => !q || String(Math.round(val)).includes(q.trim());
+  const txtMatch = (val: string, q: string) => !q || (val || "").toLowerCase().includes(q.trim().toLowerCase());
+
+  const displayRows = useMemo(() => allWithBalance.filter((e) => {
+    if (filters.from && (e.date || "") < filters.from) return false;
+    if (filters.to && (e.date || "") > filters.to) return false;
+    if (!txtMatch(e.description, filters.description)) return false;
+    if (!txtMatch(e.service, filters.service)) return false;
+    if (!txtMatch(e.destination, filters.destination)) return false;
+    if (!numMatch(e.count, filters.count)) return false;
+    if (!numMatch(e.price, filters.price)) return false;
+    if (!numMatch(e.serviceValue, filters.serviceValue)) return false;
+    if (!numMatch(e.payment, filters.payment)) return false;
+    if (!numMatch(e.debit, filters.debit)) return false;
+    if (!numMatch(e.credit, filters.credit)) return false;
+    if (!numMatch(e.balance, filters.balance)) return false;
+    if (!txtMatch(e.paymentMethod, filters.method)) return false;
+    if (!txtMatch(e.note, filters.note)) return false;
+    return true;
+  }), [allWithBalance, filters]);
+
+  const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
+  const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
   const balance = totalServices - totalPaid;
+  const accountStatus = balance > 0 ? "مدين عليه" : balance < 0 ? "دائن له" : "متوازن";
+  const statusClass = balance > 0 ? "red" : balance < 0 ? "green" : "gold";
 
   const buildData = () => ({
     title: "كشف حساب الشركة الصادرة",
-    subtitle: `${company ? company.company_name : "كل الشركات"}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
+    subtitle: `${company ? company.company_name : "كل الشركات"}${filters.from || filters.to ? ` — من ${filters.from || "..."} إلى ${filters.to || "..."}` : ""}`,
     fileName: `كشف-حساب-${company?.company_name || "الشركات"}`,
     summary: [
-      { label: "إجمالي الخدمات (مدين للشركة)", value: fmtDL(totalServices) },
-      { label: "إجمالي المدفوعات (دائن)", value: fmtDL(totalPaid) },
-      { label: "الرصيد الحالي", value: fmtDL(balance) },
+      { label: "إجمالي قيمة الخدمات", value: fmtDL(totalServices) },
+      { label: "إجمالي المدفوعات", value: fmtDL(totalPaid) },
+      { label: "الصافي", value: fmtDL(Math.abs(balance)) },
+      { label: "حالة الحساب", value: accountStatus },
     ],
     columns: [
-      { header: "#", key: "n" },
-      { header: "التاريخ", key: "date" },
-      { header: "البيان", key: "description" },
-      { header: "مدين للشركة", key: "debit" },
-      { header: "دائن (مدفوع)", key: "credit" },
-      { header: "الرصيد الحالي", key: "balance" },
-      { header: "ملاحظات", key: "note" },
+      { header: "#", key: "n" }, { header: "التاريخ", key: "date" }, { header: "البيان", key: "description" },
+      { header: "نوع الخدمة", key: "service" }, { header: "وجهة السفر", key: "destination" },
+      { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
+      { header: "قيمة الرحلة", key: "sv" }, { header: "المدفوعات", key: "payment" },
+      { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
+      { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" },
     ],
-    rows: ledger.map((r, i) => ({
-      n: i + 1, date: r.date, description: r.description,
-      debit: r.debit > 0 ? fmtDL(r.debit) : "—", debit__excel: r.debit,
-      credit: r.credit > 0 ? fmtDL(r.credit) : "—", credit__excel: r.credit,
-      balance: fmtDL(r.balance), balance__excel: r.balance,
-      note: r.note,
+    rows: displayRows.map((e, i) => ({
+      n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
+      count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
+      sv: fmtDL(e.serviceValue), sv__excel: e.serviceValue,
+      payment: e.payment > 0 ? fmtDL(e.payment) : "—", payment__excel: e.payment,
+      debit: e.debit > 0 ? fmtDL(e.debit) : "—", debit__excel: e.debit,
+      credit: e.credit > 0 ? fmtDL(e.credit) : "—", credit__excel: e.credit,
+      balance: fmtDL(e.balance), balance__excel: e.balance,
+      method: e.paymentMethod, note: e.note,
     })),
   });
 
   useRegisterStatementCapture(
     () => ({ data: buildData(), whatsapp: (company as any)?.whatsapp || null, contextId: company?.id || null }),
-    [company, from, to, ledger.length, totalServices, totalPaid],
+    [company, displayRows, totalServices, totalPaid, balance, filters],
   );
+
+  const filterInputStyle: React.CSSProperties = { width: "100%", padding: "4px 6px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 4, background: "var(--card)" };
 
   return (
     <div className="card">
-      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div className="card-title">📂 كشف حساب الشركة الصادرة</div>
-        {canExport && <ExportButton disabled={ledger.length === 0} getData={buildData} />}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className="action-btn" onClick={resetFilters}>إعادة تعيين الفلاتر</button>
+          {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} />}
+        </div>
       </div>
       <div className="card-body">
-        <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
+        <div className="form-grid" style={{ marginBottom: 12 }}>
           <div className="form-group"><label>الشركة الصادرة</label>
             <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
               <option value="">اختر...</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
             </select>
           </div>
-          <div className="form-group"><label>التاريخ من</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label>التاريخ إلى</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         </div>
 
         {company && (
           <div className="account-summary" style={{ marginBottom: 12 }}>
-            <div className="sum-box"><div className="label">الشركة</div><div className="val">{company.company_name}</div></div>
-            <div className="sum-box"><div className="label">الهاتف</div><div className="val">{company.phone || "—"}</div></div>
-            <div className="sum-box"><div className="label">الواتساب</div><div className="val">{company.whatsapp || "—"}</div></div>
-            <div className="sum-box gold"><div className="label">إجمالي الخدمات</div><div className="val">{fmtDL(totalServices)}</div></div>
+            <div className="sum-box gold"><div className="label">إجمالي قيمة الخدمات</div><div className="val">{fmtDL(totalServices)}</div></div>
             <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPaid)}</div></div>
-            <div className="sum-box red"><div className="label">الرصيد الحالي</div><div className="val">{fmtDL(balance)}</div></div>
+            <div className={`sum-box ${statusClass}`}><div className="label">الصافي ({accountStatus})</div><div className="val">{fmtDL(Math.abs(balance))}</div></div>
+            <div className="sum-box"><div className="label">عدد الحركات</div><div className="val">{fmtNum(allEntries.length)}</div></div>
           </div>
         )}
 
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>البيان</th><th className="num-col">مدين للشركة</th><th className="num-col">دائن (مدفوع)</th><th className="num-col">الرصيد الحالي</th><th>ملاحظات</th></tr></thead>
+            <thead>
+              <tr>
+                <th>#</th><th>التاريخ</th><th>البيان</th><th>نوع الخدمة</th><th>وجهة السفر</th>
+                <th>العدد</th><th>السعر</th><th>قيمة الرحلة</th><th>المدفوعات</th>
+                <th>مدين</th><th>دائن</th><th>الرصيد الحالي</th><th>وسيلة الدفع</th><th>ملاحظات</th>
+              </tr>
+              <tr className="filter-row">
+                <th></th>
+                <th>
+                  <input type="date" value={filters.from} onChange={(e) => setF("from", e.target.value)} style={filterInputStyle} title="من تاريخ" />
+                  <input type="date" value={filters.to} onChange={(e) => setF("to", e.target.value)} style={{ ...filterInputStyle, marginTop: 2 }} title="إلى تاريخ" />
+                </th>
+                <th><input value={filters.description} onChange={(e) => setF("description", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
+                <th><input value={filters.service} onChange={(e) => setF("service", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
+                <th><input value={filters.destination} onChange={(e) => setF("destination", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
+                <th><input value={filters.count} onChange={(e) => setF("count", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.price} onChange={(e) => setF("price", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.serviceValue} onChange={(e) => setF("serviceValue", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.payment} onChange={(e) => setF("payment", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.debit} onChange={(e) => setF("debit", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.credit} onChange={(e) => setF("credit", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.balance} onChange={(e) => setF("balance", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
+                <th><input value={filters.method} onChange={(e) => setF("method", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
+                <th><input value={filters.note} onChange={(e) => setF("note", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
+              </tr>
+            </thead>
             <tbody>
-              {ledger.length === 0 ? (
-                <tr><td colSpan={7}><div className="empty"><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
-              ) : ledger.map((r, i) => (
-                <tr key={r.id}>
+              {displayRows.length === 0 ? (
+                <tr><td colSpan={14}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
+              ) : displayRows.map((e, i) => (
+                <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                   <td data-label="#">{i + 1}</td>
-                  <td data-label="التاريخ">{r.date}</td>
-                  <td data-label="البيان" className="bold">{r.description}</td>
-                  <td data-label="مدين للشركة" className="num-col" style={{ color: "var(--red)", fontWeight: 700 }}>{r.debit > 0 ? fmtDL(r.debit) : "—"}</td>
-                  <td data-label="دائن (مدفوع)" className="num-col" style={{ color: "var(--green)", fontWeight: 700 }}>{r.credit > 0 ? fmtDL(r.credit) : "—"}</td>
-                  <td data-label="الرصيد الحالي" className="num-col" style={{ fontWeight: 800, color: r.balance > 0 ? "var(--red)" : r.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(r.balance)}</td>
-                  <td data-label="ملاحظات">{r.note}</td>
+                  <td data-label="التاريخ">{e.date}</td>
+                  <td data-label="البيان" className="bold">{e.description}</td>
+                  <td data-label="نوع الخدمة">{e.service}</td>
+                  <td data-label="وجهة السفر">{e.destination}</td>
+                  <td data-label="العدد">{e.count || "—"}</td>
+                  <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>
+                  <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>
+                  <td data-label="المدفوعات">{e.payment ? fmtDL(e.payment) : "—"}</td>
+                  <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>
+                  <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>
+                  <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>
+                  <td data-label="وسيلة الدفع">{e.paymentMethod}{e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""}</td>
+                  <td data-label="ملاحظات">{e.note}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="totals-foot">
               <tr>
-                <td colSpan={3}>الإجمالي</td>
-                <td className="num-col">{fmtDL(totalServices)}</td>
-                <td className="num-col">{fmtDL(totalPaid)}</td>
-                <td className="num-col" style={{ fontWeight: 800 }}>{fmtDL(balance)}</td>
-                <td></td>
+                <td colSpan={9}>الإجمالي</td>
+                <td>{fmtDL(totalServices)}</td>
+                <td>{fmtDL(totalPaid)}</td>
+                <td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(balance))} — {accountStatus}</td>
               </tr>
             </tfoot>
           </table>
