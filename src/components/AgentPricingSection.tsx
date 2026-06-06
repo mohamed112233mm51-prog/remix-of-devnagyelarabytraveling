@@ -100,7 +100,9 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
               </tr>
             </thead>
             <tbody>
-              {PRICING_SERVICE_TYPES.map((st) => {
+              {allTypes.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>أضف أنواع الخدمة من الإعدادات → القوائم المنسدلة</td></tr>
+              ) : allTypes.map((st: string) => {
                 const r = rows[st] || EMPTY_ROW;
                 return (
                   <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
