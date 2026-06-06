@@ -117,7 +117,7 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>
