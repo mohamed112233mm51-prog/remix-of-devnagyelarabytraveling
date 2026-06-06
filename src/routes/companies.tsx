@@ -199,13 +199,38 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const [to, setTo] = useState("");
 
   const company = companies.find((c) => c.id === companyId);
-  const filtered = txns.filter((t) =>
+  const filtered = useMemo(() => txns.filter((t) =>
     (!companyId || t.company_id === companyId) &&
     (!from || t.date >= from) &&
     (!to || t.date <= to)
-  ).sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""));
-  const totalServices = filtered.reduce((s, t) => s + Number(t.trip_value || 0), 0);
-  const totalPaid = filtered.reduce((s, t) => s + Number(t.total_paid || 0), 0);
+  ).sort((a, b) =>
+    (a.created_at || "").localeCompare(b.created_at || "") ||
+    (a.date || "").localeCompare(b.date || "")
+  ), [txns, companyId, from, to]);
+
+  type LedgerRow = {
+    id: string; date: string; description: string; debit: number; credit: number; balance: number; note: string;
+  };
+  const ledger = useMemo<LedgerRow[]>(() => {
+    let bal = 0;
+    return filtered.map((t) => {
+      const debit = Math.round(Number(t.trip_value || 0));
+      const credit = Math.round(Number(t.total_paid || 0));
+      bal += debit - credit;
+      const parts: string[] = [];
+      if (debit > 0) parts.push(`${t.service_type || "خدمة"}${t.destination ? ` — ${t.destination}` : ""}`);
+      if (credit > 0) parts.push(debit > 0 ? "+ دفعة للشركة" : "دفعة للشركة");
+      return {
+        id: t.id, date: t.date,
+        description: parts.join(" ") || (t.note || "حركة"),
+        debit, credit, balance: bal,
+        note: t.note || "—",
+      };
+    });
+  }, [filtered]);
+
+  const totalServices = ledger.reduce((s, r) => s + r.debit, 0);
+  const totalPaid = ledger.reduce((s, r) => s + r.credit, 0);
   const balance = totalServices - totalPaid;
 
   const buildData = () => ({
@@ -213,59 +238,38 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     subtitle: `${company ? company.company_name : "كل الشركات"}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
     fileName: `كشف-حساب-${company?.company_name || "الشركات"}`,
     summary: [
-      { label: "إجمالي الخدمات", value: fmtDL(totalServices) },
-      { label: "إجمالي المدفوعات", value: fmtDL(totalPaid) },
-      { label: "المتبقي للشركة", value: fmtDL(balance) },
+      { label: "إجمالي الخدمات (مدين للشركة)", value: fmtDL(totalServices) },
+      { label: "إجمالي المدفوعات (دائن)", value: fmtDL(totalPaid) },
+      { label: "الرصيد الحالي", value: fmtDL(balance) },
     ],
     columns: [
       { header: "#", key: "n" },
       { header: "التاريخ", key: "date" },
-      { header: "نوع الخدمة", key: "service" },
-      { header: "الوجهة", key: "dest" },
-      { header: "العدد", key: "count" },
-      { header: "السعر", key: "price" },
-      { header: "قيمة الخدمة", key: "tv" },
-      { header: "المدفوع", key: "paid" },
-      { header: "المتبقي", key: "rest" },
-      { header: "بيان", key: "note" },
+      { header: "البيان", key: "description" },
+      { header: "مدين للشركة", key: "debit" },
+      { header: "دائن (مدفوع)", key: "credit" },
+      { header: "الرصيد الحالي", key: "balance" },
+      { header: "ملاحظات", key: "note" },
     ],
-    rows: filtered.map((t, i) => {
-      const tv = Number(t.trip_value || 0);
-      const paidT = Number(t.total_paid || 0);
-      const count = Number(t.count || 0);
-      const displayedPrice = Number(t.price || 0);
-      return {
-        n: i + 1,
-        date: t.date,
-        service: t.service_type || "—",
-        dest: t.destination || "—",
-        count: t.count,
-        count__excel: count,
-        price: fmtNum(displayedPrice),
-        price__ui: displayedPrice,
-        price__excel: displayedPrice,
-        raw_price: Number(t.price || 0),
-        tv: fmtDL(tv),
-        tv__excel: tv,
-        paid: fmtDL(paidT),
-        paid__excel: paidT,
-        rest: fmtDL(tv - paidT),
-        rest__excel: tv - paidT,
-        note: t.note || "—",
-      };
-    }),
+    rows: ledger.map((r, i) => ({
+      n: i + 1, date: r.date, description: r.description,
+      debit: r.debit > 0 ? fmtDL(r.debit) : "—", debit__excel: r.debit,
+      credit: r.credit > 0 ? fmtDL(r.credit) : "—", credit__excel: r.credit,
+      balance: fmtDL(r.balance), balance__excel: r.balance,
+      note: r.note,
+    })),
   });
 
   useRegisterStatementCapture(
     () => ({ data: buildData(), whatsapp: (company as any)?.whatsapp || null, contextId: company?.id || null }),
-    [company, from, to, filtered.length, totalServices, totalPaid],
+    [company, from, to, ledger.length, totalServices, totalPaid],
   );
 
   return (
     <div className="card">
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <div className="card-title">📂 كشف حساب الشركة الصادرة</div>
-        {canExport && <ExportButton disabled={filtered.length === 0} getData={buildData} />}
+        {canExport && <ExportButton disabled={ledger.length === 0} getData={buildData} />}
       </div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
@@ -286,41 +290,44 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             <div className="sum-box"><div className="label">الواتساب</div><div className="val">{company.whatsapp || "—"}</div></div>
             <div className="sum-box gold"><div className="label">إجمالي الخدمات</div><div className="val">{fmtDL(totalServices)}</div></div>
             <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPaid)}</div></div>
-            <div className="sum-box red"><div className="label">المتبقي للشركة</div><div className="val">{fmtDL(balance)}</div></div>
+            <div className="sum-box red"><div className="label">الرصيد الحالي</div><div className="val">{fmtDL(balance)}</div></div>
           </div>
         )}
 
-        <div className="table-wrap">
+        <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الخدمة</th><th>الوجهة</th><th>العدد</th><th>السعر</th><th>قيمة الخدمة</th><th>المدفوع</th><th>المتبقي</th><th>بيان</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>البيان</th><th className="num-col">مدين للشركة</th><th className="num-col">دائن (مدفوع)</th><th className="num-col">الرصيد الحالي</th><th>ملاحظات</th></tr></thead>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={10}><div className="empty"><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
-              ) : filtered.map((t, i) => {
-                const tv = Number(t.trip_value || 0);
-                const paidT = Number(t.total_paid || 0);
-                return (
-                  <tr key={t.id}>
-                    <td data-label="#">{i + 1}</td>
-                    <td data-label="التاريخ">{t.date}</td>
-                    <td data-label="نوع الخدمة">{t.service_type || "—"}</td>
-                    <td data-label="الوجهة">{t.destination || "—"}</td>
-                    <td data-label="العدد">{t.count}</td>
-                    <td data-label="السعر">{fmtNum(Number(t.price))}</td>
-                    <td data-label="قيمة الخدمة">{fmtDL(tv)}</td>
-                    <td data-label="المدفوع">{fmtDL(paidT)}</td>
-                    <td data-label="المتبقي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(tv - paidT)}</td>
-                    <td data-label="بيان">{t.note || "—"}</td>
-                  </tr>
-                );
-              })}
+              {ledger.length === 0 ? (
+                <tr><td colSpan={7}><div className="empty"><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
+              ) : ledger.map((r, i) => (
+                <tr key={r.id}>
+                  <td data-label="#">{i + 1}</td>
+                  <td data-label="التاريخ">{r.date}</td>
+                  <td data-label="البيان" className="bold">{r.description}</td>
+                  <td data-label="مدين للشركة" className="num-col" style={{ color: "var(--red)", fontWeight: 700 }}>{r.debit > 0 ? fmtDL(r.debit) : "—"}</td>
+                  <td data-label="دائن (مدفوع)" className="num-col" style={{ color: "var(--green)", fontWeight: 700 }}>{r.credit > 0 ? fmtDL(r.credit) : "—"}</td>
+                  <td data-label="الرصيد الحالي" className="num-col" style={{ fontWeight: 800, color: r.balance > 0 ? "var(--red)" : r.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(r.balance)}</td>
+                  <td data-label="ملاحظات">{r.note}</td>
+                </tr>
+              ))}
             </tbody>
+            <tfoot className="totals-foot">
+              <tr>
+                <td colSpan={3}>الإجمالي</td>
+                <td className="num-col">{fmtDL(totalServices)}</td>
+                <td className="num-col">{fmtDL(totalPaid)}</td>
+                <td className="num-col" style={{ fontWeight: 800 }}>{fmtDL(balance)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
     </div>
   );
 }
+
 
 function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClose: () => void }) {
   const [form, setForm] = useState({
