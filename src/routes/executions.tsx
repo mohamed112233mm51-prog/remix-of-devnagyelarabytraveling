@@ -228,7 +228,7 @@ function ExecutionsPage() {
                       <td style={tdStyle}>{e.airline || "—"}</td>
                       <td style={tdStyle}>{e.travel_date || "—"}</td>
                       <td style={tdStyle}>{companyName((e as any).approval_company_id)}</td>
-                      <td style={tdStyle}>{(e.services || []).map((s) => s.service_type).join(" + ") || "—"}</td>
+                      <td style={tdStyle}>{(Array.isArray(e.services) ? e.services : []).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—"}</td>
                       <td style={tdStyle}>{e.notes || "—"}</td>
 
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
