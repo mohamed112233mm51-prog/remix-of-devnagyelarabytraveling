@@ -99,25 +99,27 @@ export function PaymentSplits({
           const methods = methodsForSplit(row, merchants);
           return (
             <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
-              <div className="form-group"><label>جهة الدفع</label>
-                <select
-                  value={row.source}
-                  onChange={(e) => update(row.uid, {
-                    source: e.target.value as SplitSource,
-                    merchant_id: "",
-                    method: e.target.value === "company" ? "company_cash" : "",
-                  })}
-                >
-                  <option value="company">الشركة</option>
-                  <option value="merchant">تاجر</option>
-                </select>
-              </div>
+              {!hideSource && (
+                <div className="form-group"><label>جهة الدفع</label>
+                  <select
+                    value={row.source}
+                    onChange={(e) => update(row.uid, {
+                      source: e.target.value as SplitSource,
+                      merchant_id: "",
+                      method: e.target.value === "company" ? "company_cash" : "",
+                    })}
+                  >
+                    <option value="company">الشركة</option>
+                    <option value="merchant">تاجر</option>
+                  </select>
+                </div>
+              )}
               <div className="form-group"><label>العملة</label>
                 <select value={row.currency} onChange={(e) => update(row.uid, { currency: e.target.value as SplitCurrency })}>
                   {SPLIT_CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
-              {row.source === "merchant" && (
+              {row.source === "merchant" && !lockMerchantId && (
                 <div className="form-group"><label>التاجر</label>
                   <select value={row.merchant_id} onChange={(e) => update(row.uid, { merchant_id: e.target.value, method: "" })}>
                     <option value="" disabled>اختر...</option>
