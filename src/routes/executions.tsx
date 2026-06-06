@@ -318,19 +318,24 @@ function ExecutionForm({
     submission_id: editing?.submission_id || null as string | null,
   });
   const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
-    const src = editing?.services?.length ? editing.services : [];
-    // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع:
-    // - إذا كانت تحتوي على شركة + قيمة شركة، نَعتبرها سطر شركة شراء.
-    // - وفي كل الحالات نضيف سطر وكيل لو فيه سعر وكيل.
+    const raw = editing?.services;
+    const src: any[] = Array.isArray(raw) ? raw : [];
+    // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع — مع حماية ضد القيم الفاسدة.
     const out: ExecutionServiceItem[] = [];
     for (const s of src) {
-      if (s.kind === "company" || s.kind === "agent") { out.push(s); continue; }
-      // legacy
-      if (s.company_id && ((s.company_value || 0) > 0 || (s.company_price || 0) > 0)) {
-        out.push({ kind: "company", service_type: s.service_type, company_id: s.company_id, count: s.count ?? 1, company_price: s.company_price ?? 0, company_value: s.company_value ?? 0, note: s.note ?? null });
+      if (!s || typeof s !== "object") continue;
+      const service_type = (s.service_type as string) || (serviceKinds[0] || "تذكرة طيران");
+      const note = s.note ?? null;
+      if (s.kind === "company" || s.kind === "agent") {
+        out.push({ ...s, service_type, note });
+        continue;
       }
-      if ((s.agent_price || 0) > 0) {
-        out.push({ kind: "agent", service_type: s.service_type, count: s.count ?? 1, agent_price: s.agent_price ?? 0, note: s.note ?? null });
+      // legacy
+      if (s.company_id && ((Number(s.company_value) || 0) > 0 || (Number(s.company_price) || 0) > 0)) {
+        out.push({ kind: "company", service_type, company_id: s.company_id, count: Number(s.count) || 1, company_price: Number(s.company_price) || 0, company_value: Number(s.company_value) || 0, note });
+      }
+      if ((Number(s.agent_price) || 0) > 0) {
+        out.push({ kind: "agent", service_type, count: Number(s.count) || 1, agent_price: Number(s.agent_price) || 0, note });
       }
     }
     if (out.length === 0) {
