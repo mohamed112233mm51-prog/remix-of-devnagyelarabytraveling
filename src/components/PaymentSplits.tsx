@@ -66,7 +66,11 @@ export function PaymentSplits({
   merchants,
   onChange,
   title = "وسيلة الدفع",
+  hideSource = false,
+  lockMerchantId,
 }: {
+  hideSource?: boolean;
+  lockMerchantId?: string;
   splits: PaymentSplitRow[];
   merchants: Merchant[];
   onChange: (next: PaymentSplitRow[]) => void;
