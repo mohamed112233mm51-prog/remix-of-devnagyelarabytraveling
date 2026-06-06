@@ -12,7 +12,7 @@ import type { Merchant } from "@/lib/db";
  *  - amount (full value — NO 1% commission, NO net calculation)
  *
  * Designed for all financial forms EXCEPT the Agent Payment form (which keeps
- * its own 1% commission logic for فودافون كاش).
+ * its own 1% commission logic for تاجر الكاش).
  */
 
 export type SplitCurrency = "EGP" | "USD" | "LYD";
@@ -56,7 +56,7 @@ export function methodsForSplit(
   if (!m) return [];
   const opts: { key: string; label: string }[] = [];
   if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${m.merchant_name}` });
-  if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `فودافون كاش ${m.merchant_name}` });
+  if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `تاجر الكاش ${m.merchant_name}` });
   if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${m.merchant_name}` });
   return opts;
 }

@@ -85,7 +85,7 @@ export function AgentPaymentForm({
     if (!m) return [];
     const opts: { key: string; label: string }[] = [];
     if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${m.merchant_name}` });
-    if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `فودافون كاش ${m.merchant_name}` });
+    if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `تاجر الكاش ${m.merchant_name}` });
     if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${m.merchant_name}` });
     return opts;
   };
@@ -139,7 +139,7 @@ export function AgentPaymentForm({
       firstMethodKey === "company_instapay" ? "إنستاباي"
         : firstMethodKey === "company_cash" ? "نقدي"
         : firstMethodKey === "merchant_instapay" ? "إنستاباي"
-        : firstMethodKey === "merchant_wallet" ? "فودافون كاش"
+        : firstMethodKey === "merchant_wallet" ? "تاجر الكاش"
         : "كاش نقدي تاجر";
 
     const description = form.service_type || "دفعة من الوكيل";
@@ -187,7 +187,7 @@ export function AgentPaymentForm({
         const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
         cashBoxId = box?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش تاجر";
+      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
       else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
 
       return {
@@ -305,7 +305,7 @@ export function AgentPaymentForm({
               </div>
               {b.hasCommission && (
                 <>
-                  <div className="form-group"><label>عمولة فودافون كاش 1%</label>
+                  <div className="form-group"><label>عمولة تاجر الكاش 1%</label>
                     <input type="number" value={b.commission || ""} disabled readOnly />
                   </div>
                   <div className="form-group"><label>الصافي المخصوم من الوكيل</label>
@@ -326,7 +326,7 @@ export function AgentPaymentForm({
           الصافي المخصوم من الوكيل: {totalNet.toLocaleString()}
           {totalGross !== totalNet && (
             <span style={{ fontWeight: 400, marginInlineStart: 12, color: "var(--muted)" }}>
-              (المستلم: {totalGross.toLocaleString()} − عمولة فودافون كاش: {(totalGross - totalNet).toLocaleString()})
+              (المستلم: {totalGross.toLocaleString()} − عمولة تاجر الكاش: {(totalGross - totalNet).toLocaleString()})
             </span>
           )}
         </div>
