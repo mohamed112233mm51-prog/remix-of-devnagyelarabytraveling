@@ -347,7 +347,9 @@ function AgentForm({ onDone }: { onDone: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {PRICING_SERVICE_TYPES.map((st) => {
+                {serviceTypes.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>أضف أنواع الخدمة من الإعدادات → القوائم المنسدلة</td></tr>
+                ) : serviceTypes.map((st: string) => {
                   const r = rows[st] || EMPTY_PRICING_ROW;
                   return (
                     <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
