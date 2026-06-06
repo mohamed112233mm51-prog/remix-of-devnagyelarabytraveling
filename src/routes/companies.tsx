@@ -442,15 +442,14 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     if (!form.company_id) return toast.error("اختر الشركة الصادرة");
     if (!form.date) return toast.error("التاريخ مطلوب");
 
-    const validSplits = splits.filter((r) => Number(r.amount) > 0);
-    if (validSplits.length === 0) return toast.error("أضف وسيلة دفع واحدة على الأقل بمبلغ");
-
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    const validSplits = filterValidSplits(splits);
     for (const r of validSplits) {
-      if (r.source === "merchant" && !r.merchant_id) return toast.error("اختر التاجر لكل سطر تاجر");
-      if (!r.method) return toast.error("اختر وسيلة الدفع لكل سطر");
-      const allowed = methodsForSplit(r).map((m) => m.key);
+      const allowed = methodsForSplitWidget(r, merchants).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
     }
+
 
     // Aggregate (NO commission on merchant wallet for company payments)
     let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
