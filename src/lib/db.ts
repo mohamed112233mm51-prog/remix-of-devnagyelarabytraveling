@@ -132,9 +132,21 @@ export function sanitizeDropdownOptions(rows: unknown, category: DropdownCategor
   return options;
 }
 
+/** Aliases: redirect legacy/duplicate categories to the unified source list. */
+const DROPDOWN_CATEGORY_ALIASES: Partial<Record<DropdownCategory, DropdownCategory>> = {
+  service_kind: "service_type",
+  execution_status: "submission_status",
+  authority: "departure_from",
+};
+
+export function resolveDropdownCategory(category: DropdownCategory): DropdownCategory {
+  return DROPDOWN_CATEGORY_ALIASES[category] ?? category;
+}
+
 export function useDropdownOptions(category: DropdownCategory) {
-  const [values, setValues] = useState<string[]>(() => fallbackDropdownOptions(category));
-  const safeCategory = VALID_DROPDOWN_CATEGORIES.includes(category) ? category : "authority";
+  const requested = VALID_DROPDOWN_CATEGORIES.includes(category) ? category : "authority";
+  const safeCategory = resolveDropdownCategory(requested);
+  const [values, setValues] = useState<string[]>(() => fallbackDropdownOptions(safeCategory));
   useEffect(() => {
     let mounted = true;
     const load = async () => {
