@@ -189,9 +189,6 @@ function CompaniesPage() {
       {editCompany && perm.edit && (
         <EditCompanyModal company={editCompany} onClose={() => setEditCompany(null)} />
       )}
-      {showConvert && perm.create && (
-        <UsdConvertModal onClose={() => setShowConvert(false)} />
-      )}
     </div>
   );
 }
