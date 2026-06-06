@@ -14,6 +14,14 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import {
+  PaymentSplits,
+  newPaymentSplitRow,
+  methodsForSplit as methodsForSplitWidget,
+  validatePaymentSplits,
+  filterValidSplits,
+  type PaymentSplitRow,
+} from "@/components/PaymentSplits";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/companies")({
@@ -403,34 +411,6 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
-type CTCurrency = "EGP" | "USD" | "LYD";
-type CTSource = "company" | "merchant";
-type CTSplit = {
-  uid: string;
-  source: CTSource;
-  currency: CTCurrency;
-  merchant_id: string;
-  method: string;
-  amount: string;
-};
-
-const CT_CURRENCY_OPTIONS: { value: CTCurrency; label: string }[] = [
-  { value: "EGP", label: "جنيه مصري" },
-  { value: "USD", label: "دولار" },
-  { value: "LYD", label: "دينار ليبي" },
-];
-const CT_COMPANY_METHODS = [
-  { key: "company_cash", label: "نقدي الشركة" },
-  { key: "company_instapay", label: "إنستا الشركة" },
-];
-const ctNewRow = (): CTSplit => ({
-  uid: Math.random().toString(36).slice(2),
-  source: "company",
-  currency: "EGP",
-  merchant_id: "",
-  method: "company_cash",
-  amount: "",
-});
 
 function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
@@ -446,28 +426,12 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     price: "",
     note: "",
   });
-  const [splits, setSplits] = useState<CTSplit[]>([ctNewRow()]);
+  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const tripValueNum = (Number(form.count) || 0) * (Number(form.price) || 0);
 
-  const updateSplit = (uid: string, patch: Partial<CTSplit>) =>
-    setSplits((rows) => rows.map((r) => (r.uid === uid ? { ...r, ...patch } : r)));
-  const removeSplit = (uid: string) =>
-    setSplits((rows) => (rows.length === 1 ? rows : rows.filter((r) => r.uid !== uid)));
-  const addSplit = () => setSplits((rows) => [...rows, ctNewRow()]);
-
-  const methodsForSplit = (row: CTSplit): { key: string; label: string }[] => {
-    if (row.source === "company") return CT_COMPANY_METHODS;
-    const m = merchants.find((x) => x.id === row.merchant_id);
-    if (!m) return [];
-    const opts: { key: string; label: string }[] = [];
-    if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${m.merchant_name}` });
-    if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `فودافون كاش ${m.merchant_name}` });
-    if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${m.merchant_name}` });
-    return opts;
-  };
 
   const totalAmount = useMemo(
     () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
@@ -478,15 +442,14 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     if (!form.company_id) return toast.error("اختر الشركة الصادرة");
     if (!form.date) return toast.error("التاريخ مطلوب");
 
-    const validSplits = splits.filter((r) => Number(r.amount) > 0);
-    if (validSplits.length === 0) return toast.error("أضف وسيلة دفع واحدة على الأقل بمبلغ");
-
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    const validSplits = filterValidSplits(splits);
     for (const r of validSplits) {
-      if (r.source === "merchant" && !r.merchant_id) return toast.error("اختر التاجر لكل سطر تاجر");
-      if (!r.method) return toast.error("اختر وسيلة الدفع لكل سطر");
-      const allowed = methodsForSplit(r).map((m) => m.key);
+      const allowed = methodsForSplitWidget(r, merchants).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
     }
+
 
     // Aggregate (NO commission on merchant wallet for company payments)
     let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
@@ -610,51 +573,8 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         </div>
       </div>
 
-      <div className="card-header" style={{ marginTop: 8 }}>
-        <div className="card-title">وسيلة الدفع</div>
-        <button type="button" className="btn btn-sm" onClick={addSplit}>+ إضافة سطر</button>
-      </div>
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
-        {splits.map((row) => {
-          const methods = methodsForSplit(row);
-          return (
-            <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
-              <div className="form-group"><label>جهة الدفع</label>
-                <select value={row.source} onChange={(e) => updateSplit(row.uid, { source: e.target.value as CTSource, merchant_id: "", method: e.target.value === "company" ? "company_cash" : "" })}>
-                  <option value="company">الشركة</option>
-                  <option value="merchant">تاجر</option>
-                </select>
-              </div>
-              <div className="form-group"><label>العملة</label>
-                <select value={row.currency} onChange={(e) => updateSplit(row.uid, { currency: e.target.value as CTCurrency })}>
-                  {CT_CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-              </div>
-              {row.source === "merchant" && (
-                <div className="form-group"><label>التاجر</label>
-                  <select value={row.merchant_id} onChange={(e) => updateSplit(row.uid, { merchant_id: e.target.value, method: "" })}>
-                    <option value="" disabled>اختر...</option>
-                    {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="form-group"><label>وسيلة الدفع</label>
-                <select value={row.method} onChange={(e) => updateSplit(row.uid, { method: e.target.value })}>
-                  <option value="" disabled>اختر...</option>
-                  {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                </select>
-              </div>
-              <div className="form-group"><label>المبلغ</label>
-                <input type="number" min={0} value={row.amount} onChange={(e) => updateSplit(row.uid, { amount: e.target.value })} />
-              </div>
-              <div className="form-group" style={{ alignSelf: "end" }}>
-                <button type="button" className="btn btn-sm btn-danger" onClick={() => removeSplit(row.uid)} disabled={splits.length === 1}>حذف</button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
       <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontWeight: 700 }}>
