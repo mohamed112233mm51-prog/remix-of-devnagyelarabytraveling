@@ -14,6 +14,14 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import {
+  PaymentSplits,
+  newPaymentSplitRow,
+  methodsForSplit as methodsForSplitWidget,
+  validatePaymentSplits,
+  filterValidSplits,
+  type PaymentSplitRow,
+} from "@/components/PaymentSplits";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/companies")({
