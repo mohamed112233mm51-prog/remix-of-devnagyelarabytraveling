@@ -374,15 +374,21 @@ export type UsdTreasuryTransaction = {
 };
 
 export type ExecutionServiceItem = {
+  /**
+   * تصنيف السطر:
+   *  - "company" : خدمة مشتراة من شركة صادرة (تكلفة فقط، تُسجَّل في كشف الشركة)
+   *  - "agent"   : خدمة مباعة للوكيل (تُسجَّل في كشف الوكيل)
+   *  - undefined : سطر قديم (legacy) — يحافظ على السلوك السابق (وكيل + شركة معًا)
+   */
+  kind?: "company" | "agent";
   service_type: string;
   company_id?: string | null;
   count?: number;
   agent_price?: number;
   company_price?: number;
   company_value?: number;
-  // Payment linkage (optional). When provided, postExecutionFinancials
-  // writes paid_amount into the matching bucket on the agent transaction row.
-  payment_method?: string | null;     // 'نقدي' | 'إنستاباي' | 'محفظة' | 'تاجر إنستاباي' | 'تاجر محفظة' | 'تاجر نقدي'
+  note?: string | null;
+  payment_method?: string | null;
   paid_amount?: number;
   merchant_id?: string | null;
 };

@@ -317,16 +317,43 @@ function ExecutionForm({
     approval_company_id: (editing as any)?.approval_company_id || "",
     submission_id: editing?.submission_id || null as string | null,
   });
-  const [services, setServices] = useState<ExecutionServiceItem[]>(
-    editing?.services?.length
-      ? editing.services
-      : [{ service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, agent_price: 0, company_price: 0, company_value: 0 }],
-  );
+  const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
+    const src = editing?.services?.length ? editing.services : [];
+    // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع:
+    // - إذا كانت تحتوي على شركة + قيمة شركة، نَعتبرها سطر شركة شراء.
+    // - وفي كل الحالات نضيف سطر وكيل لو فيه سعر وكيل.
+    const out: ExecutionServiceItem[] = [];
+    for (const s of src) {
+      if (s.kind === "company" || s.kind === "agent") { out.push(s); continue; }
+      // legacy
+      if (s.company_id && ((s.company_value || 0) > 0 || (s.company_price || 0) > 0)) {
+        out.push({ kind: "company", service_type: s.service_type, company_id: s.company_id, count: s.count ?? 1, company_price: s.company_price ?? 0, company_value: s.company_value ?? 0, note: s.note ?? null });
+      }
+      if ((s.agent_price || 0) > 0) {
+        out.push({ kind: "agent", service_type: s.service_type, count: s.count ?? 1, agent_price: s.agent_price ?? 0, note: s.note ?? null });
+      }
+    }
+    if (out.length === 0) {
+      out.push({ kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 });
+    }
+    return out;
+  });
   const [saving, setSaving] = useState(false);
 
-  const addService = () => setServices((s) => [...s, { service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, agent_price: 0, company_price: 0, company_value: 0 }]);
-  const updateService = (i: number, patch: Partial<ExecutionServiceItem>) => setServices((s) => s.map((x, idx) => idx === i ? { ...x, ...patch } : x));
-  const removeService = (i: number) => setServices((s) => s.filter((_, idx) => idx !== i));
+  const companyServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "company");
+  const agentServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "agent");
+  const companyTotal = companyServices.reduce((sum, { s }) => {
+    const cnt = Number(s.count) || 1;
+    const cv = Number(s.company_value) || 0;
+    const cp = Number(s.company_price) || 0;
+    return sum + (cv > 0 ? cv : cp * cnt);
+  }, 0);
+  const agentTotal = agentServices.reduce((sum, { s }) => sum + ((Number(s.agent_price) || 0) * (Number(s.count) || 1)), 0);
+  const profit = agentTotal - companyTotal;
+
+  const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
+  const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
+
 
   const save = async () => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
@@ -451,56 +478,100 @@ function ExecutionForm({
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
       </div>
 
-      {/* Services */}
+      {/* خدمات الشركات الصادرة (شراء) */}
       <div style={{ marginTop: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>الخدمات</h4>
-          <button type="button" className="btn" onClick={addService}><Plus size={12} /> إضافة خدمة</button>
+          <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f1b3d" }}>أ) خدمات الشركات الصادرة (شراء)</h4>
+          <button type="button" className="btn" onClick={addCompanyService}><Plus size={12} /> إضافة خدمة شركة صادرة</button>
         </div>
         <div style={{ display: "grid", gap: 10 }}>
-          {services.map((s, i) => (
-            <div key={i} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 12, background: "#fafbfd" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
-                <Field label="نوع الخدمة">
-                  <select value={s.service_type} onChange={(e) => updateService(i, { service_type: e.target.value })} style={inputStyle}>
-                    {withSelected(serviceKinds, s.service_type).map((k) => <option key={k} value={k}>{k}</option>)}
-                  </select>
-                </Field>
-                <Field label="الشركة الصادرة">
-                  <select value={s.company_id || ""} onChange={(e) => updateService(i, { company_id: e.target.value || null })} style={inputStyle}>
-                    <option value="">— بدون —</option>
-                    {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-                  </select>
-                </Field>
-                <Field label="العدد"><input type="number" min={1} value={s.count ?? 1} onChange={(e) => updateService(i, { count: Number(e.target.value) || 1 })} style={inputStyle} /></Field>
-                <Field label="سعر الوكيل (للوحدة)"><input type="number" min={0} value={s.agent_price ?? 0} onChange={(e) => updateService(i, { agent_price: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
-                <Field label="سعر الشركة (للوحدة)"><input type="number" min={0} value={s.company_price ?? 0} onChange={(e) => updateService(i, { company_price: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
-                <Field label="قيمة الشركة (إجمالي)"><input type="number" min={0} value={s.company_value ?? 0} onChange={(e) => updateService(i, { company_value: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
-                <Field label="طريقة الدفع">
-                  <select value={s.payment_method || ""} onChange={(e) => updateService(i, { payment_method: e.target.value || null })} style={inputStyle}>
-                    <option value="">— لم يُسدّد —</option>
-                    {PAYMENT_METHODS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </Field>
-                <Field label="المبلغ المدفوع"><input type="number" min={0} value={s.paid_amount ?? 0} onChange={(e) => updateService(i, { paid_amount: Number(e.target.value) || 0 })} style={inputStyle} /></Field>
-                {(s.payment_method || "").startsWith("تاجر") && (
-                  <Field label="التاجر">
-                    <select value={s.merchant_id || ""} onChange={(e) => updateService(i, { merchant_id: e.target.value || null })} style={inputStyle}>
+          {companyServices.length === 0 && (
+            <div style={{ padding: 12, fontSize: 12, color: "#64748b", border: "1px dashed #cbd5e1", borderRadius: 10, textAlign: "center", background: "#fff" }}>لا توجد خدمات شراء من شركات صادرة</div>
+          )}
+          {companyServices.map(({ s, idx: i }) => {
+            const cnt = Number(s.count) || 1;
+            const cp = Number(s.company_price) || 0;
+            const total = (Number(s.company_value) || 0) > 0 ? Number(s.company_value) : cp * cnt;
+            return (
+              <div key={i} style={{ border: "1px solid #c7d2fe", borderRadius: 10, padding: 12, background: "#eef2ff" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
+                  <Field label="الشركة الصادرة">
+                    <select value={s.company_id || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_id: e.target.value || null } : x))} style={inputStyle}>
                       <option value="">— اختر —</option>
-                      {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+                      {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
                     </select>
                   </Field>
-                )}
-              </div>
-              {services.length > 1 && (
-                <div style={{ marginTop: 8, textAlign: "end" }}>
-                  <button type="button" onClick={() => removeService(i)} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={12} /> إزالة هذه الخدمة</button>
+                  <Field label="نوع الخدمة">
+                    <select value={s.service_type} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: e.target.value } : x))} style={inputStyle}>
+                      {withSelected(serviceKinds, s.service_type).map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="العدد"><input type="number" min={1} value={s.count ?? 1} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: Number(e.target.value) || 1 } : x))} style={inputStyle} /></Field>
+                  <Field label="سعر الشركة (للوحدة)"><input type="number" min={0} value={s.company_price ?? 0} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: Number(e.target.value) || 0 } : x))} style={inputStyle} /></Field>
+                  <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
+                  <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
-              )}
-            </div>
-          ))}
+                <div style={{ marginTop: 8, textAlign: "end" }}>
+                  <button type="button" onClick={() => setServices((arr) => arr.filter((_, k) => k !== i))} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={12} /> إزالة</button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* خدمات الوكيل (بيع) */}
+      <div style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#0f1b3d" }}>ب) خدمات الوكيل (بيع)</h4>
+          <button type="button" className="btn" onClick={addAgentService}><Plus size={12} /> إضافة خدمة وكيل</button>
+        </div>
+        <div style={{ display: "grid", gap: 10 }}>
+          {agentServices.length === 0 && (
+            <div style={{ padding: 12, fontSize: 12, color: "#64748b", border: "1px dashed #cbd5e1", borderRadius: 10, textAlign: "center", background: "#fff" }}>لا توجد خدمات بيع للوكيل</div>
+          )}
+          {agentServices.map(({ s, idx: i }) => {
+            const cnt = Number(s.count) || 1;
+            const ap = Number(s.agent_price) || 0;
+            const total = ap * cnt;
+            return (
+              <div key={i} style={{ border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
+                  <Field label="نوع الخدمة المباعة">
+                    <select value={s.service_type} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: e.target.value } : x))} style={inputStyle}>
+                      {withSelected(serviceKinds, s.service_type).map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="العدد"><input type="number" min={1} value={s.count ?? 1} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: Number(e.target.value) || 1 } : x))} style={inputStyle} /></Field>
+                  <Field label="سعر البيع للوكيل (للوحدة)"><input type="number" min={0} value={s.agent_price ?? 0} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: Number(e.target.value) || 0 } : x))} style={inputStyle} /></Field>
+                  <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
+                  <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
+                </div>
+                <div style={{ marginTop: 8, textAlign: "end" }}>
+                  <button type="button" onClick={() => setServices((arr) => arr.filter((_, k) => k !== i))} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={12} /> إزالة</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ملخص الربح */}
+      <div style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
+        <div style={{ padding: 12, borderRadius: 10, background: "#eef2ff", border: "1px solid #c7d2fe" }}>
+          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي تكاليف الشركات الصادرة</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>{companyTotal.toLocaleString("ar")}</div>
+        </div>
+        <div style={{ padding: 12, borderRadius: 10, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
+          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي بيع الوكيل</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>{agentTotal.toLocaleString("ar")}</div>
+        </div>
+        <div style={{ padding: 12, borderRadius: 10, background: profit >= 0 ? "#fffbeb" : "#fef2f2", border: `1px solid ${profit >= 0 ? "#fde68a" : "#fecaca"}` }}>
+          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>صافي الربح</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>{profit.toLocaleString("ar")}</div>
+        </div>
+      </div>
+
 
       <div style={{ marginTop: 16, padding: 12, borderRadius: 10, background: form.operation_status === "منفذ" ? "#ecfdf5" : "#f8fafc", border: `1px solid ${form.operation_status === "منفذ" ? "#a7f3d0" : "#e2e8f0"}`, fontSize: 12, color: "#475569" }}>
         <CheckCircle2 size={14} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} />
