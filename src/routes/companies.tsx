@@ -23,6 +23,7 @@ import {
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
+import * as CF from "@/components/ColumnFilter";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
