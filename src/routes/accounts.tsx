@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, tripValue, txnTotalPaid, useLive, GOVERNORATES, PRICING_SERVICE_TYPES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { badgeFor, fmtDL, tripValue, txnTotalPaid, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { AgentPricingSection } from "@/components/AgentPricingSection";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
@@ -246,12 +246,9 @@ const EMPTY_PRICING_ROW: PricingRow = { company_price: "", agent_price: "", comp
 function r2(n: number) { return Math.round(n * 100) / 100; }
 
 function AgentForm({ onDone }: { onDone: () => void }) {
+  const serviceTypes = useDropdownOptions("service_type");
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
-  const [rows, setRows] = useState<Record<string, PricingRow>>(() => {
-    const m: Record<string, PricingRow> = {};
-    for (const st of PRICING_SERVICE_TYPES) m[st] = { ...EMPTY_PRICING_ROW };
-    return m;
-  });
+  const [rows, setRows] = useState<Record<string, PricingRow>>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const updateRow = (st: string, patch: Partial<PricingRow>) => {
@@ -295,8 +292,8 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     if (error) return toast.error(error.message);
     const agentId = data?.id;
     if (agentId) {
-      const candidates = PRICING_SERVICE_TYPES
-        .filter((st) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0);
+      const candidates = serviceTypes
+        .filter((st: string) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0);
       const invalid = candidates.find((st) => Number(rows[st].agent_price) < Number(rows[st].company_price));
       if (invalid) {
         toast.error(`(${invalid}) سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة`);
@@ -350,7 +347,9 @@ function AgentForm({ onDone }: { onDone: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {PRICING_SERVICE_TYPES.map((st) => {
+                {serviceTypes.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>أضف أنواع الخدمة من الإعدادات → القوائم المنسدلة</td></tr>
+                ) : serviceTypes.map((st: string) => {
                   const r = rows[st] || EMPTY_PRICING_ROW;
                   return (
                     <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>

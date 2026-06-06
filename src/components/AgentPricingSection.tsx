@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAgentPricingMap, PRICING_SERVICE_TYPES } from "@/lib/db";
+import { useAgentPricingMap, useDropdownOptions } from "@/lib/db";
 
 type PricingRowState = { company_price: string; agent_price: string; company_percentage: string; company_profit_value: string };
 const EMPTY_ROW: PricingRowState = { company_price: "", agent_price: "", company_percentage: "", company_profit_value: "" };
@@ -9,12 +9,20 @@ function round2(n: number) { return Math.round(n * 100) / 100; }
 
 export function AgentPricingSection({ agentId }: { agentId: string }) {
   const map = useAgentPricingMap(agentId);
+  const serviceTypes = useDropdownOptions("service_type");
+  const allTypes = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const st of serviceTypes) if (st && !seen.has(st)) { seen.add(st); out.push(st); }
+    for (const st of Object.keys(map)) if (st && !seen.has(st)) { seen.add(st); out.push(st); }
+    return out;
+  }, [serviceTypes, map]);
   const [rows, setRows] = useState<Record<string, PricingRowState>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     const next: Record<string, PricingRowState> = {};
-    for (const st of PRICING_SERVICE_TYPES) {
+    for (const st of allTypes) {
       const r = map[st];
       next[st] = r ? {
         company_price: String(r.company_price ?? 0),
@@ -24,7 +32,7 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
       } : { ...EMPTY_ROW };
     }
     setRows(next);
-  }, [map]);
+  }, [map, allTypes]);
 
   const updateRow = (st: string, patch: Partial<PricingRowState>) => {
     setRows((prev) => {
@@ -92,7 +100,9 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
               </tr>
             </thead>
             <tbody>
-              {PRICING_SERVICE_TYPES.map((st) => {
+              {allTypes.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>أضف أنواع الخدمة من الإعدادات → القوائم المنسدلة</td></tr>
+              ) : allTypes.map((st: string) => {
                 const r = rows[st] || EMPTY_ROW;
                 return (
                   <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
