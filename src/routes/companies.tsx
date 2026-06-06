@@ -402,326 +402,270 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 
-function CompanyTxnForm({ companies, merchants, txns, flights, approvals, agents, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
+type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+type CTCurrency = "EGP" | "USD" | "LYD";
+type CTSource = "company" | "merchant";
+type CTSplit = {
+  uid: string;
+  source: CTSource;
+  currency: CTCurrency;
+  merchant_id: string;
+  method: string;
+  amount: string;
+};
+
+const CT_CURRENCY_OPTIONS: { value: CTCurrency; label: string }[] = [
+  { value: "EGP", label: "جنيه مصري" },
+  { value: "USD", label: "دولار" },
+  { value: "LYD", label: "دينار ليبي" },
+];
+const CT_COMPANY_METHODS = [
+  { key: "company_cash", label: "نقدي الشركة" },
+  { key: "company_instapay", label: "إنستا الشركة" },
+];
+const ctNewRow = (): CTSplit => ({
+  uid: Math.random().toString(36).slice(2),
+  source: "company",
+  currency: "EGP",
+  merchant_id: "",
+  method: "company_cash",
+  amount: "",
+});
+
+function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
+  const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
+  const SERVICE_TYPES = useDropdownOptions("service_type");
+  const DESTINATIONS = useDropdownOptions("destination");
+
   const [form, setForm] = useState({
-    company_name: "", date: new Date().toISOString().slice(0, 10),
-    destination: "", count: "", price: "", service_type: "",
-    instapay_amount: "", cash_amount: "", merchant_cash_amount: "", merchant_cash_physical_amount: "",
-    note: "", merchant_id: "", service_id: "",
-    payment_currency: "EGP" as "EGP" | "USD" | "MIXED",
-    usd_amount: "", exchange_rate: "",
+    company_id: "",
+    date: new Date().toISOString().slice(0, 10),
+    service_type: "",
+    destination: "",
+    count: "0",
+    price: "",
+    note: "",
   });
+  const [splits, setSplits] = useState<CTSplit[]>([ctNewRow()]);
+  const [saving, setSaving] = useState(false);
+
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const DESTINATIONS = withSelected(useDropdownOptions("destination"), form.destination);
-  const SERVICE_TYPES = withSelected(useDropdownOptions("service_type"), form.service_type);
-  const tv = Number(form.count || 0) * Number(form.price || 0);
+  const tripValueNum = (Number(form.count) || 0) * (Number(form.price) || 0);
 
-  const selectedCompanyId = useMemo(
-    () => companies.find((c) => c.company_name === form.company_name)?.id || "",
-    [companies, form.company_name],
+  const updateSplit = (uid: string, patch: Partial<CTSplit>) =>
+    setSplits((rows) => rows.map((r) => (r.uid === uid ? { ...r, ...patch } : r)));
+  const removeSplit = (uid: string) =>
+    setSplits((rows) => (rows.length === 1 ? rows : rows.filter((r) => r.uid !== uid)));
+  const addSplit = () => setSplits((rows) => [...rows, ctNewRow()]);
+
+  const methodsForSplit = (row: CTSplit): { key: string; label: string }[] => {
+    if (row.source === "company") return CT_COMPANY_METHODS;
+    const m = merchants.find((x) => x.id === row.merchant_id);
+    if (!m) return [];
+    const opts: { key: string; label: string }[] = [];
+    if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${m.merchant_name}` });
+    if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `فودافون كاش ${m.merchant_name}` });
+    if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${m.merchant_name}` });
+    return opts;
+  };
+
+  const totalAmount = useMemo(
+    () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [splits],
   );
-  const dueServices = useMemo(() => {
-    if (!selectedCompanyId) return [] as CompanyTransaction[];
-    return txns.filter((t) =>
-      t.company_id === selectedCompanyId &&
-      !!t.source_service_id &&
-      (!form.service_type || t.service_type === form.service_type) &&
-      Number(t.trip_value || 0) - Number(t.total_paid || 0) > 0,
-    );
-  }, [txns, selectedCompanyId, form.service_type]);
-  const selectedService = dueServices.find((s) => s.id === form.service_id) || null;
-
-  const sourceLookup = useMemo(() => {
-    const m = new Map<string, { passenger_name: string; agent_id: string | null; travel_statement: string | null; destination: string | null; airline: string | null; travel_date: string | null }>();
-    for (const f of flights) m.set(f.id, { passenger_name: f.passenger_name, agent_id: f.agent_id, travel_statement: f.travel_statement, destination: f.destination, airline: f.airline, travel_date: f.travel_date });
-    for (const a of approvals) m.set(a.id, { passenger_name: a.passenger_name, agent_id: a.agent_id, travel_statement: a.travel_statement, destination: a.destination, airline: a.airline, travel_date: a.travel_date });
-    return m;
-  }, [flights, approvals]);
-  const sourceForSelected = selectedService ? sourceLookup.get(selectedService.source_service_id || "") : null;
-  const selectedAgent = sourceForSelected?.agent_id ? agents.find((a) => a.id === sourceForSelected.agent_id) : null;
-
-  useEffect(() => {
-    if (form.service_id && !dueServices.find((s) => s.id === form.service_id)) {
-      setForm((p) => ({ ...p, service_id: "" }));
-    }
-  }, [dueServices, form.service_id]);
-
-  useEffect(() => {
-    if (!selectedService) return;
-    const src = sourceLookup.get(selectedService.source_service_id || "");
-    const autoStatement = src?.travel_statement || buildTravelStatement(selectedService.destination, src?.travel_date, src?.airline);
-    setForm((p) => ({
-      ...p,
-      destination: selectedService.destination || "",
-      count: String(selectedService.count || ""),
-      price: String(selectedService.price || ""),
-      service_type: selectedService.service_type || p.service_type,
-      note: src?.passenger_name ? `${src.passenger_name}${autoStatement ? ` — ${autoStatement}` : ""}` : p.note,
-    }));
-  }, [form.service_id]);
-
-  const lockFields = !!selectedService;
-  const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
-  const eligibleMerchants = activeMerchants.filter(
-    (m) => m.supports_instapay || m.supports_cash_wallet || m.supports_physical_cash,
-  );
-  const selectedMerchant = activeMerchants.find((m) => m.id === form.merchant_id) || null;
-  const merchantHasMethods = !!selectedMerchant && (selectedMerchant.supports_cash_wallet || selectedMerchant.supports_physical_cash);
-  const showSystemInsta = true;
-  const showSystemCash = true;
-  const showMerchantCash = !!selectedMerchant && selectedMerchant.supports_cash_wallet;
-  const showMerchantPhysical = !!selectedMerchant && selectedMerchant.supports_physical_cash;
-
-  useEffect(() => {
-    if (form.merchant_id && !activeMerchants.find((m) => m.id === form.merchant_id)) {
-      setForm((p) => ({ ...p, merchant_id: "" }));
-    }
-  }, [activeMerchants.map((m) => m.id).join(",")]);
-
-  useEffect(() => {
-    setForm((p) => {
-      const next = { ...p };
-      if (!showMerchantCash && next.merchant_cash_amount) next.merchant_cash_amount = "";
-      if (!showMerchantPhysical && next.merchant_cash_physical_amount) next.merchant_cash_physical_amount = "";
-      return next;
-    });
-  }, [showMerchantCash, showMerchantPhysical]);
-
-  const insta = Math.round(Number(form.instapay_amount || 0));
-  const cash = Math.round(Number(form.cash_amount || 0));
-  const merchant = showMerchantCash ? Math.round(Number(form.merchant_cash_amount || 0)) : 0;
-  const merchantNet = merchant;
-  const merchantPhysical = showMerchantPhysical ? Math.round(Number(form.merchant_cash_physical_amount || 0)) : 0;
-  const totalPaid = insta + cash + merchantNet + merchantPhysical;
-  const usesMerchant = !!selectedMerchant;
-  const usdAmt = Number(form.usd_amount || 0);
-  const rateUsed = Number(form.exchange_rate || 0) || null;
-  const payCurrency: "EGP" | "USD" | "MIXED" = form.payment_currency;
-  const includeEgp = payCurrency === "EGP" || payCurrency === "MIXED";
-  const includeUsd = payCurrency === "USD" || payCurrency === "MIXED";
-
-  const balances = useTreasuryBalances();
 
   const save = async () => {
-    if (!form.company_name) return toast.error("برجاء اختيار الشركة الصادرة");
-    if (selectedMerchant && !merchantHasMethods) return toast.error("لا توجد وسائل دفع مفعلة لهذا التاجر");
-    const egpPaid = includeEgp ? totalPaid : 0;
-    const usdPaid = includeUsd ? usdAmt : 0;
-    if (egpPaid <= 0 && usdPaid <= 0) return toast.error("يجب إدخال قيمة دفع بالجنيه أو بالدولار");
-    if (payCurrency === "MIXED") {
-      if (egpPaid > balances.egp) return toast.error("لا يوجد رصيد كافي في خزينة الجنيه");
-      if (usdPaid > balances.usd) return toast.error("لا يوجد رصيد كافي في الخزينة الدولارية");
-    } else if (payCurrency === "EGP") {
-      if (egpPaid > balances.egp) return toast.error("لا يوجد رصيد كافي في الخزينة");
-    } else if (payCurrency === "USD") {
-      if (usdPaid > balances.usd) return toast.error("لا يوجد رصيد كافي في الخزينة الدولارية");
+    if (!form.company_id) return toast.error("اختر الشركة الصادرة");
+    if (!form.date) return toast.error("التاريخ مطلوب");
+
+    const validSplits = splits.filter((r) => Number(r.amount) > 0);
+    if (validSplits.length === 0) return toast.error("أضف وسيلة دفع واحدة على الأقل بمبلغ");
+
+    for (const r of validSplits) {
+      if (r.source === "merchant" && !r.merchant_id) return toast.error("اختر التاجر لكل سطر تاجر");
+      if (!r.method) return toast.error("اختر وسيلة الدفع لكل سطر");
+      const allowed = methodsForSplit(r).map((m) => m.key);
+      if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
     }
-    let company_id = companies.find((c) => c.company_name === form.company_name)?.id;
-    if (!company_id) {
-      const { data, error: cErr } = await supabase.from("issuing_companies").insert({ company_name: form.company_name, status: "نشط" }).select("id").single();
-      if (cErr) return toast.error(cErr.message);
-      company_id = data.id;
+
+    // Aggregate (NO commission on merchant wallet for company payments)
+    let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
+    for (const r of validSplits) {
+      const a = Number(r.amount) || 0;
+      if (r.method === "company_instapay" || r.method === "merchant_instapay") instapay += a;
+      else if (r.method === "company_cash") cash += a;
+      else if (r.method === "merchant_wallet") merchantWallet += a;
+      else if (r.method === "merchant_physical") merchantPhysical += a;
     }
-    if (selectedService) {
-      const newTotal = Number(selectedService.total_paid || 0) + egpPaid;
-      const { error } = await supabase.from("company_transactions").update({
-        instapay_amount: Number(selectedService.instapay_amount || 0) + (includeEgp ? insta : 0),
-        cash_amount: Number(selectedService.cash_amount || 0) + (includeEgp ? cash : 0),
-        merchant_cash_amount: Number(selectedService.merchant_cash_amount || 0) + (includeEgp ? merchant : 0),
-        merchant_cash_net_amount: Number(selectedService.merchant_cash_net_amount || 0) + (includeEgp ? merchantNet : 0),
-        merchant_cash_physical_amount: Number(selectedService.merchant_cash_physical_amount || 0) + (includeEgp ? merchantPhysical : 0),
-        merchant_id: usesMerchant && includeEgp ? form.merchant_id : selectedService.merchant_id,
-        total_paid: newTotal,
-        usd_amount: Number(selectedService.usd_amount || 0) + usdPaid,
-        exchange_rate_used: rateUsed ?? selectedService.exchange_rate_used ?? null,
-        payment_currency: payCurrency,
-        note: form.note || selectedService.note,
-      }).eq("id", selectedService.id);
-      if (error) return toast.error(error.message);
-      if (usdPaid > 0) {
-        await supabase.from("usd_treasury_transactions").insert({
-          date: form.date, type: "company_payment", egp_amount: 0,
-          usd_amount: usdPaid, exchange_rate: rateUsed, company_id,
-          note: form.note || `دفع للشركة (${form.company_name})`,
-        });
-      }
-      toast.success("تم تسجيل الدفعة على الخدمة المستحقة");
-      onDone();
-      return;
-    }
-    const { error } = await supabase.from("company_transactions").insert({
-      company_id, date: form.date,
+
+    const firstMerchant = validSplits.find((r) => r.source === "merchant")?.merchant_id || null;
+
+    const payload: any = {
+      company_id: form.company_id,
+      date: form.date,
       destination: form.destination || null,
       service_type: form.service_type || null,
-      count: Number(form.count || 0), price: Number(form.price || 0),
-      trip_value: tv,
-      instapay_amount: includeEgp ? insta : 0,
-      cash_amount: includeEgp ? cash : 0,
-      merchant_cash_amount: includeEgp ? merchant : 0,
-      merchant_cash_net_amount: includeEgp ? merchantNet : 0,
-      merchant_cash_physical_amount: includeEgp ? merchantPhysical : 0,
-      merchant_id: usesMerchant && includeEgp ? form.merchant_id : null,
-      total_paid: egpPaid,
-      usd_amount: usdPaid,
-      exchange_rate_used: rateUsed,
-      payment_currency: payCurrency,
-      note: form.note || null,
+      count: Number(form.count) || 0,
+      price: Number(form.price) || 0,
+      trip_value: tripValueNum,
+      instapay_amount: instapay,
+      cash_amount: cash,
+      merchant_cash_amount: merchantWallet,
+      merchant_cash_net_amount: merchantWallet, // No 1% commission for company payments
+      merchant_cash_physical_amount: merchantPhysical,
+      arabic_tourism_cash_amount: 0,
+      arabic_tourism_cash_net_amount: 0,
+      mobile_cash_amount: 0,
+      mobile_cash_net_amount: 0,
+      total_paid: totalAmount,
+      usd_amount: 0,
+      payment_currency: "EGP",
+      merchant_id: firstMerchant,
+      note: form.note.trim() || null,
+    };
+
+    setSaving(true);
+    const { data: txnRow, error: txnErr } = await supabase
+      .from("company_transactions").insert(payload).select("id").single();
+    if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
+
+    const splitRecords = validSplits.map((r) => {
+      const a = Number(r.amount) || 0;
+      let methodLabel = "نقدي";
+      let cashBoxId: string | null = null;
+      if (r.method === "company_instapay") {
+        methodLabel = "إنستاباي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "company_cash") {
+        methodLabel = "نقدي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
+      else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش تاجر";
+      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+
+      // Company payment = outflow: negate amount so cash_boxes trigger subtracts.
+      const signed = -a;
+      return {
+        transaction_id: txnRow.id,
+        method: methodLabel,
+        currency: r.currency,
+        cash_box_id: cashBoxId,
+        amount: signed,
+        gross_amount: a,
+        merchant_commission_rate: 0,
+        merchant_commission_amount: 0,
+        net_amount: a,
+        exchange_rate: 1,
+        egp_equivalent: r.currency === "EGP" ? signed : 0,
+      };
     });
-    if (error) return toast.error(error.message);
-    if (usdPaid > 0) {
-      await supabase.from("usd_treasury_transactions").insert({
-        date: form.date, type: "company_payment", egp_amount: 0,
-        usd_amount: usdPaid, exchange_rate: rateUsed, company_id,
-        note: form.note || `دفع للشركة (${form.company_name})`,
-      });
+    if (splitRecords.length) {
+      const { error: spErr } = await supabase.from("payment_splits").insert(splitRecords);
+      if (spErr) console.warn("payment_splits insert error:", spErr.message);
     }
+
+    setSaving(false);
+    toast.success("تم تسجيل الحركة");
     onDone();
   };
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">💳 صرف حركة مالية للشركة</div></div>
       <div className="form-grid">
-        <div className="form-group"><label>الشركة الصادرة</label>
-          <select value={form.company_name} onChange={(e) => set("company_name", e.target.value)}>
+        <div className="form-group"><label>الشركة الصادرة *</label>
+          <select value={form.company_id} onChange={(e) => set("company_id", e.target.value)}>
             <option value="" disabled>اختر...</option>
-            {companies.map((c) => <option key={c.id} value={c.company_name}>{c.company_name}</option>)}
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
           </select>
         </div>
-        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-        <div className="form-group"><label>نوع الخدمة</label>
+        <div className="form-group"><label>التاريخ *</label>
+          <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+        </div>
+        <div className="form-group"><label>نوع الخدمة (اختياري)</label>
           <select value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
-            <option value="" disabled>اختر...</option>
+            <option value="">— بدون خدمة —</option>
             <SafeSelectOptions options={SERVICE_TYPES} />
           </select>
         </div>
-        <div className="form-group"><label>الخدمة المستحقة</label>
-          <select
-            value={form.service_id}
-            onChange={(e) => set("service_id", e.target.value)}
-            disabled={!selectedCompanyId}
-          >
-            <option value="">{selectedCompanyId ? (dueServices.length ? "اختر الخدمة..." : "لا توجد خدمات مستحقة") : "اختر الشركة أولاً"}</option>
-            {dueServices.map((s) => {
-              const remaining = Number(s.trip_value || 0) - Number(s.total_paid || 0);
-              const src = sourceLookup.get(s.source_service_id || "");
-              const passenger = src?.passenger_name || "—";
-              return (
-                <option key={s.id} value={s.id}>
-                  {s.service_type || "—"} — {passenger} — متبقي {fmtNum(remaining)}
-                </option>
-              );
-            })}
-          </select>
-          {selectedService && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "var(--text2)", display: "flex", flexDirection: "column", gap: 2 }}>
-              <span><strong>المسافر:</strong> {sourceForSelected?.passenger_name || "—"}</span>
-              <span><strong>الوكيل:</strong> {selectedAgent?.name || "—"}</span>
-              <span><strong>بيان السفر:</strong> {sourceForSelected?.travel_statement || buildTravelStatement(selectedService.destination, sourceForSelected?.travel_date, sourceForSelected?.airline) || "—"}</span>
-              <span><strong>المتبقي:</strong> {fmtNum(Number(selectedService.trip_value || 0) - Number(selectedService.total_paid || 0))}</span>
-            </div>
-          )}
-        </div>
-        <div className="form-group"><label>الوجهة</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)} disabled={lockFields}>
-            <option value="" disabled>اختر...</option>
+        <div className="form-group"><label>وجهة السفر (اختياري)</label>
+          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
+            <option value="">—</option>
             <SafeSelectOptions options={DESTINATIONS} />
           </select>
         </div>
-        <div className="form-group"><label>العدد</label><input type="number" min={1} placeholder="0" value={form.count} onChange={(e) => set("count", e.target.value)} disabled={lockFields} /></div>
-        <div className="form-group"><label>السعر</label><input type="number" placeholder="0" value={form.price} onChange={(e) => set("price", e.target.value)} disabled={lockFields} /></div>
-        <div className="form-group"><label>قيمة الخدمة</label><input value={fmtNum(tv)} disabled /></div>
-        <div className="form-group full">
-          <label style={{ fontWeight: 700, marginBottom: 8 }}>عملة الدفع</label>
-          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-            {([
-              { v: "EGP", label: "جنيه مصري" },
-              { v: "USD", label: "دولار" },
-              { v: "MIXED", label: "كلاهما" },
-            ] as const).map((o) => (
-              <button
-                type="button"
-                key={o.v}
-                onClick={() => set("payment_currency", o.v)}
-                className={form.payment_currency === o.v ? "btn btn-gold" : "action-btn"}
-                style={{ flex: 1 }}
-              >{o.label}</button>
-            ))}
-          </div>
-          <label style={{ fontWeight: 700, marginBottom: 8 }}>طريقة الدفع</label>
-          {includeEgp && (
-            <>
-              <div className="form-group" style={{ marginBottom: 12 }}>
-                <label>التاجر</label>
-                {eligibleMerchants.length > 0 ? (
-                  <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                    <option value="">— اختر جهة التحصيل —</option>
-                    {eligibleMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+        <div className="form-group"><label>العدد (اختياري)</label>
+          <input type="number" min={0} value={form.count} onChange={(e) => set("count", e.target.value)} />
+        </div>
+        <div className="form-group"><label>السعر (اختياري)</label>
+          <input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} />
+        </div>
+        <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
+          <input type="number" value={tripValueNum || ""} disabled readOnly />
+        </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+        </div>
+      </div>
+
+      <div className="card-header" style={{ marginTop: 8 }}>
+        <div className="card-title">وسيلة الدفع</div>
+        <button type="button" className="btn btn-sm" onClick={addSplit}>+ إضافة سطر</button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
+        {splits.map((row) => {
+          const methods = methodsForSplit(row);
+          return (
+            <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+              <div className="form-group"><label>جهة الدفع</label>
+                <select value={row.source} onChange={(e) => updateSplit(row.uid, { source: e.target.value as CTSource, merchant_id: "", method: e.target.value === "company" ? "company_cash" : "" })}>
+                  <option value="company">الشركة</option>
+                  <option value="merchant">تاجر</option>
+                </select>
+              </div>
+              <div className="form-group"><label>العملة</label>
+                <select value={row.currency} onChange={(e) => updateSplit(row.uid, { currency: e.target.value as CTCurrency })}>
+                  {CT_CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              {row.source === "merchant" && (
+                <div className="form-group"><label>التاجر</label>
+                  <select value={row.merchant_id} onChange={(e) => updateSplit(row.uid, { merchant_id: e.target.value, method: "" })}>
+                    <option value="" disabled>اختر...</option>
+                    {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
                   </select>
-                ) : (
-                  <div style={{ fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>لا يوجد تجار مفعّل لهم وسائل دفع</div>
-                )}
-                {selectedMerchant && !merchantHasMethods && (
-                  <div style={{ marginTop: 6, fontSize: 13, color: "var(--red, #dc2626)" }}>لا توجد وسائل دفع مفعلة لهذا التاجر</div>
-                )}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-                {showSystemInsta && (
-                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>انستا الشركة</div>
-                    <input type="number" placeholder="0" value={form.instapay_amount} onChange={(e) => set("instapay_amount", e.target.value)} />
-                  </div>
-                )}
-                {showSystemCash && (
-                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي الشركة</div>
-                    <input type="number" placeholder="0" value={form.cash_amount} onChange={(e) => set("cash_amount", e.target.value)} />
-                  </div>
-                )}
-                {showMerchantCash && (
-                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>فودافون كاش{selectedMerchant ? ` (${selectedMerchant.merchant_name})` : ""}</div>
-                    <input type="number" placeholder="0" value={form.merchant_cash_amount} onChange={(e) => set("merchant_cash_amount", e.target.value)} />
-                    <div style={{ marginTop: 8, fontSize: 13, color: "var(--muted-foreground, #6b7280)" }}>
-                      صافي المرسل: <strong>{fmtNum(merchantNet)}</strong>
-                    </div>
-                  </div>
-                )}
-                {showMerchantPhysical && (
-                  <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>نقدي التاجر</div>
-                    <input type="number" placeholder="0" value={form.merchant_cash_physical_amount} onChange={(e) => set("merchant_cash_physical_amount", e.target.value)} />
-                  </div>
-                )}
-              </div>
-              <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left" }}>
-                إجمالي المدفوع بالجنيه: {fmtNum(totalPaid)} ج.م
-              </div>
-            </>
-          )}
-          {includeUsd && (
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-              <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "linear-gradient(135deg, #ecfdf5, #f0fdf4)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>المبلغ بالدولار ($)</div>
-                <input type="number" step="0.01" placeholder="0.00" value={form.usd_amount} onChange={(e) => set("usd_amount", e.target.value)} />
-              </div>
-              {payCurrency === "MIXED" && (
-                <div style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 12, padding: 12, background: "var(--card, #fff)" }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>سعر الصرف (اختياري)</div>
-                  <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
                 </div>
               )}
-              <div style={{ padding: "8px 12px", borderRadius: 10, background: "var(--muted, #f3f4f6)", fontWeight: 700, textAlign: "left", alignSelf: "center" }}>
-                المدفوع بالدولار: {fmtUSD(usdAmt)}
+              <div className="form-group"><label>وسيلة الدفع</label>
+                <select value={row.method} onChange={(e) => updateSplit(row.uid, { method: e.target.value })}>
+                  <option value="" disabled>اختر...</option>
+                  {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group"><label>المبلغ</label>
+                <input type="number" min={0} value={row.amount} onChange={(e) => updateSplit(row.uid, { amount: e.target.value })} />
+              </div>
+              <div className="form-group" style={{ alignSelf: "end" }}>
+                <button type="button" className="btn btn-sm btn-danger" onClick={() => removeSplit(row.uid)} disabled={splits.length === 1}>حذف</button>
               </div>
             </div>
-          )}
-        </div>
-        <div className="form-group full"><label>بيان</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
+          );
+        })}
       </div>
-      <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button></div>
+
+      <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontWeight: 700 }}>
+          إجمالي المدفوع للشركة: {totalAmount.toLocaleString()}
+        </div>
+        <button className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الحركة</button>
+      </div>
     </div>
   );
 }
+
 
 type ConvertSource = "" | "insta_company" | "cash_company" | "merchant_wallet" | "merchant_physical";
 const SOURCE_LABELS: Record<Exclude<ConvertSource, "">, string> = {
