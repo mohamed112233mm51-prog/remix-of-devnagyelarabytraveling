@@ -463,7 +463,7 @@ function Dashboard() {
             <div className="erp-panel-title"><Plus size={14} /> إجراءات سريعة</div>
           </div>
           <div className="erp-quick-actions">
-            <QuickAction to="/submissions" icon={<ClipboardCheck size={16} />} label="تقديم جديد" />
+            <QuickAction to="/submissions" icon={<ClipboardCheck size={16} />} label="إضافة تقديم" />
             <QuickAction to="/executions" icon={<Plane size={16} />} label="تنفيذ جديد" />
             <QuickAction to="/accounts" icon={<Users size={16} />} label="حساب وكيل" />
             <QuickAction to="/companies" icon={<Building2 size={16} />} label="شركة صادرة" />
@@ -643,12 +643,6 @@ function Dashboard() {
           <Stat label="رصيد فودافون كاش" value={fmtDL(merchantBalance)} highlight />
         </SectionCard>
 
-        <SectionCard title="المستثمرين" icon={<Briefcase size={16} />} accent="navy">
-          <Stat label="عدد المستثمرين" value={fmtNum(investors.length)} />
-          <Stat label="التوريدات" value={fmtDL(investorDeposits)} tone="green" />
-          <Stat label="المسحوبات" value={fmtDL(investorWithdrawals)} tone="red" />
-          <Stat label="صافي الأرصدة" value={fmtDL(investorBalance)} highlight />
-        </SectionCard>
 
         <SectionCard title="المصروفات" icon={<Wallet size={16} />} accent="navy">
           <Stat label="الإجمالي" value={fmtDL(expensesTotal)} tone="red" />

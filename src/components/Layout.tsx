@@ -36,12 +36,6 @@ const NAV: { label: string; items: Item[] }[] = [
     items: [{ to: "/", icon: LayoutDashboard, label: "لوحة التحكم", section: "الرئيسية", permKey: "dashboard" }],
   },
   {
-    label: "تقديم",
-    items: [
-      { to: "/submissions", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: "submissions" },
-    ],
-  },
-  {
     label: "العمليات",
     items: [
       { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", section: "العمليات", permKey: "submissions" },
@@ -54,7 +48,6 @@ const NAV: { label: string; items: Item[] }[] = [
       { to: "/accounts", icon: Users, label: "حسابات الوكلاء", section: "الحسابات المالية", permKey: "accounts" },
       { to: "/companies", icon: Building2, label: "حسابات الشركات الصادرة", section: "الحسابات المالية", permKey: "companies" },
       { to: "/merchants", icon: HandCoins, label: "حسابات فودافون كاش", section: "الحسابات المالية", permKey: "merchants" },
-      { to: "/investors", icon: Briefcase, label: "حسابات المستثمرين", section: "الحسابات المالية", permKey: "investors" },
     ],
   },
   {
@@ -132,7 +125,7 @@ export default function Layout() {
     { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", permKey: "submissions" },
     { to: "/executions", icon: Plane, label: "التنفيذ", permKey: "executions" },
     { to: "/accounts", icon: Users, label: "حسابات", permKey: "accounts" },
-    { to: "/investors", icon: Briefcase, label: "مستثمرين", permKey: "investors" },
+    
   ];
 
   return (
