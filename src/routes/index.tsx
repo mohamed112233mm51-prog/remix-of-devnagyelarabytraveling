@@ -643,12 +643,6 @@ function Dashboard() {
           <Stat label="رصيد فودافون كاش" value={fmtDL(merchantBalance)} highlight />
         </SectionCard>
 
-        <SectionCard title="المستثمرين" icon={<Briefcase size={16} />} accent="navy">
-          <Stat label="عدد المستثمرين" value={fmtNum(investors.length)} />
-          <Stat label="التوريدات" value={fmtDL(investorDeposits)} tone="green" />
-          <Stat label="المسحوبات" value={fmtDL(investorWithdrawals)} tone="red" />
-          <Stat label="صافي الأرصدة" value={fmtDL(investorBalance)} highlight />
-        </SectionCard>
 
         <SectionCard title="المصروفات" icon={<Wallet size={16} />} accent="navy">
           <Stat label="الإجمالي" value={fmtDL(expensesTotal)} tone="red" />
