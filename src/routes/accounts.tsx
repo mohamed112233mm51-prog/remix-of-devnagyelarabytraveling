@@ -292,8 +292,8 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     if (error) return toast.error(error.message);
     const agentId = data?.id;
     if (agentId) {
-      const candidates = PRICING_SERVICE_TYPES
-        .filter((st) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0);
+      const candidates = serviceTypes
+        .filter((st: string) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0);
       const invalid = candidates.find((st) => Number(rows[st].agent_price) < Number(rows[st].company_price));
       if (invalid) {
         toast.error(`(${invalid}) سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة`);
