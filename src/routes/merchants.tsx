@@ -67,9 +67,9 @@ function MerchantsPage() {
           <div className="breadcrumb-row">
             <span>الحسابات المالية</span>
             <span>›</span>
-            <span className="crumb-current">حسابات فودافون كاش</span>
+            <span className="crumb-current">حسابات تاجر الكاش</span>
           </div>
-          <h1 className="page-h1"><Handshake size={22} strokeWidth={2.2} /> حسابات فودافون كاش</h1>
+          <h1 className="page-h1"><Handshake size={22} strokeWidth={2.2} /> حسابات تاجر الكاش</h1>
           <div className="page-sub">متابعة الوارد، الصادر، والنقدية المحصلة من التجار</div>
         </div>
         {perm.create && (
@@ -81,11 +81,11 @@ function MerchantsPage() {
       <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
           <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">فودافون كاش الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <div className="kpi-text"><div className="label">تاجر الكاش الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">فودافون كاش الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+          <div className="kpi-text"><div className="label">تاجر الكاش الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
         </div>
         <div className="sum-box gold">
           <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
@@ -94,7 +94,7 @@ function MerchantsPage() {
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
-            <div className="label">رصيد فودافون كاش</div>
+            <div className="label">رصيد تاجر الكاش</div>
             <div className="val">{fmtDL(balance)}</div>
             <div className="kpi-sub">الرصيد الحالي بعد التحصيلات</div>
           </div>
@@ -370,7 +370,7 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
   const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (فودافون كاش)</div></div>
+      <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (تاجر الكاش)</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
           <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
@@ -382,7 +382,7 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
         </div>
         <div className="table-wrap" style={{ marginTop: 12 }}>
           <table className="mobile-cards">
-            <thead><tr><th>التاريخ</th><th>اسم الوكيل</th><th>التاجر</th><th>بيان السفر / الوجهة</th><th>قيمة فودافون كاش</th><th>صافي فودافون كاش بعد الخصم</th><th>إجمالي المدفوع</th></tr></thead>
+            <thead><tr><th>التاريخ</th><th>اسم الوكيل</th><th>التاجر</th><th>بيان السفر / الوجهة</th><th>قيمة تاجر الكاش</th><th>صافي تاجر الكاش بعد الخصم</th><th>إجمالي المدفوع</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={7}><div className="empty"><div className="empty-text">لا توجد حركات</div></div></td></tr>
@@ -392,8 +392,8 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
                   <td className="bold" data-label="الوكيل">{agentName(t.agent_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{t.travel_statement || t.destination || "—"}</td>
-                  <td data-label="فودافون كاش">{fmtDL(merchantCashGross(t))}</td>
-                  <td data-label="صافي فودافون كاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
+                  <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
                 </tr>
               ))}
@@ -420,7 +420,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
   const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (فودافون كاش)</div></div>
+      <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
           <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
@@ -432,7 +432,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
         </div>
         <div className="table-wrap" style={{ marginTop: 12 }}>
           <table className="mobile-cards">
-            <thead><tr><th>التاريخ</th><th>الشركة الصادرة</th><th>التاجر</th><th>بيان السفر / الوجهة</th><th>قيمة فودافون كاش</th><th>صافي فودافون كاش بعد الخصم</th><th>إجمالي المدفوع</th></tr></thead>
+            <thead><tr><th>التاريخ</th><th>الشركة الصادرة</th><th>التاجر</th><th>بيان السفر / الوجهة</th><th>قيمة تاجر الكاش</th><th>صافي تاجر الكاش بعد الخصم</th><th>إجمالي المدفوع</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={7}><div className="empty"><div className="empty-text">لا توجد حركات</div></div></td></tr>
@@ -442,8 +442,8 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
                   <td className="bold" data-label="الشركة">{companyName(t.company_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{t.destination || "—"}</td>
-                  <td data-label="فودافون كاش">{fmtDL(merchantCashGross(t))}</td>
-                  <td data-label="صافي فودافون كاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
+                  <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
                 </tr>
               ))}

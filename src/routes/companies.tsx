@@ -505,7 +505,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
         cashBoxId = box?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش تاجر";
+      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
       else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
 
       // Company payment = outflow: negate amount so cash_boxes trigger subtracts.
@@ -591,7 +591,7 @@ type ConvertSource = "" | "insta_company" | "cash_company" | "merchant_wallet" |
 const SOURCE_LABELS: Record<Exclude<ConvertSource, "">, string> = {
   insta_company: "انستا الشركة",
   cash_company: "نقدي الشركة",
-  merchant_wallet: "فودافون كاش",
+  merchant_wallet: "تاجر الكاش",
   merchant_physical: "نقدي التاجر",
 };
 
