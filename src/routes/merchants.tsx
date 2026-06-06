@@ -307,7 +307,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         <div className="form-group"><label>التاريخ</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
       </div>
-      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" />
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" hideSource />
       <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
         الإجمالي: {fmtDL(total)}
       </div>
