@@ -317,16 +317,43 @@ function ExecutionForm({
     approval_company_id: (editing as any)?.approval_company_id || "",
     submission_id: editing?.submission_id || null as string | null,
   });
-  const [services, setServices] = useState<ExecutionServiceItem[]>(
-    editing?.services?.length
-      ? editing.services
-      : [{ service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, agent_price: 0, company_price: 0, company_value: 0 }],
-  );
+  const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
+    const src = editing?.services?.length ? editing.services : [];
+    // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع:
+    // - إذا كانت تحتوي على شركة + قيمة شركة، نَعتبرها سطر شركة شراء.
+    // - وفي كل الحالات نضيف سطر وكيل لو فيه سعر وكيل.
+    const out: ExecutionServiceItem[] = [];
+    for (const s of src) {
+      if (s.kind === "company" || s.kind === "agent") { out.push(s); continue; }
+      // legacy
+      if (s.company_id && ((s.company_value || 0) > 0 || (s.company_price || 0) > 0)) {
+        out.push({ kind: "company", service_type: s.service_type, company_id: s.company_id, count: s.count ?? 1, company_price: s.company_price ?? 0, company_value: s.company_value ?? 0, note: s.note ?? null });
+      }
+      if ((s.agent_price || 0) > 0) {
+        out.push({ kind: "agent", service_type: s.service_type, count: s.count ?? 1, agent_price: s.agent_price ?? 0, note: s.note ?? null });
+      }
+    }
+    if (out.length === 0) {
+      out.push({ kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 });
+    }
+    return out;
+  });
   const [saving, setSaving] = useState(false);
 
-  const addService = () => setServices((s) => [...s, { service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, agent_price: 0, company_price: 0, company_value: 0 }]);
-  const updateService = (i: number, patch: Partial<ExecutionServiceItem>) => setServices((s) => s.map((x, idx) => idx === i ? { ...x, ...patch } : x));
-  const removeService = (i: number) => setServices((s) => s.filter((_, idx) => idx !== i));
+  const companyServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "company");
+  const agentServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "agent");
+  const companyTotal = companyServices.reduce((sum, { s }) => {
+    const cnt = Number(s.count) || 1;
+    const cv = Number(s.company_value) || 0;
+    const cp = Number(s.company_price) || 0;
+    return sum + (cv > 0 ? cv : cp * cnt);
+  }, 0);
+  const agentTotal = agentServices.reduce((sum, { s }) => sum + ((Number(s.agent_price) || 0) * (Number(s.count) || 1)), 0);
+  const profit = agentTotal - companyTotal;
+
+  const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
+  const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
+
 
   const save = async () => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
