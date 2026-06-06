@@ -1137,14 +1137,11 @@ function GeneralTab() {
       <div style={cardStyle}>
         <SectionHeader icon={<ListChecks size={20} />} title="إعدادات القوائم المنسدلة" desc="إدارة القيم المتاحة في الحقول المنسدلة عبر النظام." />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
-          <DropdownListManager category="authority" title="الجهات" icon={<Building2 size={16} />} />
+          <DropdownListManager category="departure_from" title="جهات المغادرة" icon={<MapPin size={16} />} />
           <DropdownListManager category="destination" title="الوجهات" icon={<MapPin size={16} />} />
           <DropdownListManager category="airline" title="شركات الطيران" icon={<Plane size={16} />} />
-          <DropdownListManager category="service_type" title="أنواع الخدمة" icon={<Wrench size={16} />} />
-          <DropdownListManager category="departure_from" title="جهات المغادرة" icon={<MapPin size={16} />} />
-          <DropdownListManager category="service_kind" title="أنواع خدمات التنفيذ" icon={<Wrench size={16} />} />
-          <DropdownListManager category="submission_status" title="حالات التقديمات" icon={<ListChecks size={16} />} />
-          <DropdownListManager category="execution_status" title="حالات التنفيذ" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="service_type" title="نوع الخدمة" icon={<Wrench size={16} />} />
+          <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
         </div>
       </div>
 
