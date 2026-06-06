@@ -10,6 +10,7 @@ import {
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
+import * as CF from "@/components/ColumnFilter";
 
 
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
