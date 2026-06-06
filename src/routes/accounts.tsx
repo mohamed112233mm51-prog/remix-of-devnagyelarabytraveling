@@ -246,12 +246,9 @@ const EMPTY_PRICING_ROW: PricingRow = { company_price: "", agent_price: "", comp
 function r2(n: number) { return Math.round(n * 100) / 100; }
 
 function AgentForm({ onDone }: { onDone: () => void }) {
+  const serviceTypes = useDropdownOptions("service_type");
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
-  const [rows, setRows] = useState<Record<string, PricingRow>>(() => {
-    const m: Record<string, PricingRow> = {};
-    for (const st of PRICING_SERVICE_TYPES) m[st] = { ...EMPTY_PRICING_ROW };
-    return m;
-  });
+  const [rows, setRows] = useState<Record<string, PricingRow>>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const updateRow = (st: string, patch: Partial<PricingRow>) => {
