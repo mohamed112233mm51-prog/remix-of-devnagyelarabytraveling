@@ -71,21 +71,72 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     const linkId = `${input.executionId}::${i}`;
     const count = Math.max(1, Math.round(Number(s.count) || 1));
     const agentPrice = Math.max(0, Number(s.agent_price) || 0);
-    const companyValue = Math.max(0, Number(s.company_value) || 0);
+    const companyPrice = Math.max(0, Number(s.company_price) || 0);
+    const explicitCompanyValue = Math.max(0, Number(s.company_value) || 0);
+    // قيمة الشركة الفعلية: company_value إن أُدخل، وإلا count × company_price
+    const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
+    const kind = s.kind; // "company" | "agent" | undefined (legacy)
+    const itemNote = (s.note && String(s.note).trim()) ? String(s.note).trim() : note;
 
-    // Distribute paid_amount into the matching bucket
+    // ── سطر شركة صادرة فقط (شراء من شركة) ──
+    if (kind === "company") {
+      if (s.company_id && companyValue > 0) {
+        companyRows.push({
+          company_id: s.company_id,
+          date,
+          destination: input.destination ?? undefined,
+          service_type: s.service_type,
+          count,
+          price: companyPrice || (companyValue / count),
+          trip_value: companyValue,
+          instapay_amount: 0, cash_amount: 0,
+          mobile_cash_amount: 0, mobile_cash_net_amount: 0,
+          arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
+          merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
+          total_paid: 0,
+          note: itemNote,
+          source_service_id: linkId,
+          source_service_type: "execution",
+        });
+      }
+      return; // لا يُسجَّل أي شيء على الوكيل
+    }
+
+    // ── سطر وكيل فقط (بيع للوكيل) ──
+    if (kind === "agent") {
+      if (input.agentId) {
+        agentRows.push({
+          agent_id: input.agentId,
+          date,
+          destination: input.destination ?? undefined,
+          travel_statement: stmt ?? undefined,
+          service_type: s.service_type,
+          count,
+          price: agentPrice,
+          instapay_amount: 0, cash_amount: 0,
+          mobile_cash_amount: 0, mobile_cash_net_amount: 0,
+          arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
+          merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
+          merchant_id: null,
+          payment_method: "نقدي",
+          total_paid: 0,
+          paid: 0,
+          note: itemNote,
+          source_service_id: linkId,
+          source_service_type: "execution",
+        });
+      }
+      return; // لا يُسجَّل أي شيء على الشركة
+    }
+
+    // ── سلوك قديم (legacy): سطر واحد يحتوي على وكيل + شركة معًا ──
     const paid = Math.max(0, Number(s.paid_amount) || 0);
     const pm = s.payment_method || "";
     const buckets = {
-      instapay_amount: 0,
-      cash_amount: 0,
-      mobile_cash_amount: 0,
-      mobile_cash_net_amount: 0,
-      arabic_tourism_cash_amount: 0,
-      arabic_tourism_cash_net_amount: 0,
-      merchant_cash_amount: 0,
-      merchant_cash_net_amount: 0,
-      merchant_cash_physical_amount: 0,
+      instapay_amount: 0, cash_amount: 0,
+      mobile_cash_amount: 0, mobile_cash_net_amount: 0,
+      arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
+      merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
     };
     if (paid > 0) {
       if (pm === "إنستاباي") buckets.instapay_amount = paid;
@@ -100,46 +151,31 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
 
     if (input.agentId) {
       agentRows.push({
-        agent_id: input.agentId,
-        date,
+        agent_id: input.agentId, date,
         destination: input.destination ?? undefined,
         travel_statement: stmt ?? undefined,
-        service_type: s.service_type,
-        count,
-        price: agentPrice,
+        service_type: s.service_type, count, price: agentPrice,
         ...buckets,
         merchant_id: s.merchant_id || null,
         payment_method: pm || "نقدي",
-        total_paid: totalPaid,
-        paid: totalPaid,
-        note,
-        source_service_id: linkId,
-        source_service_type: "execution",
+        total_paid: totalPaid, paid: totalPaid,
+        note: itemNote,
+        source_service_id: linkId, source_service_type: "execution",
       });
     }
-
     if (s.company_id && companyValue > 0) {
       companyRows.push({
-        company_id: s.company_id,
-        date,
+        company_id: s.company_id, date,
         destination: input.destination ?? undefined,
         service_type: s.service_type,
-        count: 1,
-        price: companyValue,
-        trip_value: companyValue,
-        instapay_amount: 0,
-        cash_amount: 0,
-        mobile_cash_amount: 0,
-        mobile_cash_net_amount: 0,
-        arabic_tourism_cash_amount: 0,
-        arabic_tourism_cash_net_amount: 0,
-        merchant_cash_amount: 0,
-        merchant_cash_net_amount: 0,
-        merchant_cash_physical_amount: 0,
+        count: 1, price: companyValue, trip_value: companyValue,
+        instapay_amount: 0, cash_amount: 0,
+        mobile_cash_amount: 0, mobile_cash_net_amount: 0,
+        arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
+        merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
         total_paid: 0,
-        note,
-        source_service_id: linkId,
-        source_service_type: "execution",
+        note: itemNote,
+        source_service_id: linkId, source_service_type: "execution",
       });
     }
   });
