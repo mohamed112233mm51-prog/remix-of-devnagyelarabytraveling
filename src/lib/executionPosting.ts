@@ -67,7 +67,8 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
   const agentRows: any[] = [];
   const companyRows: any[] = [];
 
-  input.services.forEach((s, i) => {
+  const safeServices = Array.isArray(input.services) ? input.services.filter((s) => s && typeof s === "object") : [];
+  safeServices.forEach((s, i) => {
     const linkId = `${input.executionId}::${i}`;
     const count = Math.max(1, Math.round(Number(s.count) || 1));
     const agentPrice = Math.max(0, Number(s.agent_price) || 0);
