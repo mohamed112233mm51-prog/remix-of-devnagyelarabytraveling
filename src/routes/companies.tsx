@@ -14,7 +14,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
-import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, DollarSign, ArrowRightLeft } from "lucide-react";
+import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
