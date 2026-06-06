@@ -36,12 +36,6 @@ const NAV: { label: string; items: Item[] }[] = [
     items: [{ to: "/", icon: LayoutDashboard, label: "لوحة التحكم", section: "الرئيسية", permKey: "dashboard" }],
   },
   {
-    label: "تقديم",
-    items: [
-      { to: "/submissions", icon: PlusCircle, label: "تقديم خدمة", section: "تقديم", permKey: "submissions" },
-    ],
-  },
-  {
     label: "العمليات",
     items: [
       { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", section: "العمليات", permKey: "submissions" },
