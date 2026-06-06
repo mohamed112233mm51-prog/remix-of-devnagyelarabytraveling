@@ -23,6 +23,7 @@ import {
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
+import * as CF from "@/components/ColumnFilter";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
@@ -266,48 +267,60 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     return allEntries.map((e) => ({ ...e, balance: (bal += e.debit - e.credit) }));
   }, [allEntries]);
 
-  // Column filters
-  const [filters, setFilters] = useState({
-    from: "", to: "", description: "", service: "", destination: "",
-    count: "", price: "", serviceValue: "", payment: "",
-    debit: "", credit: "", balance: "", method: "", note: "",
-  });
-  const setF = (k: keyof typeof filters, v: string) => setFilters((p) => ({ ...p, [k]: v }));
-  const resetFilters = () => setFilters({
-    from: "", to: "", description: "", service: "", destination: "",
-    count: "", price: "", serviceValue: "", payment: "",
-    debit: "", credit: "", balance: "", method: "", note: "",
-  });
-  const numMatch = (val: number, q: string) => !q || String(Math.round(val)).includes(q.trim());
-  const txtMatch = (val: string, q: string) => !q || (val || "").toLowerCase().includes(q.trim().toLowerCase());
-
-  const displayRows = useMemo(() => allWithBalance.filter((e) => {
-    if (filters.from && (e.date || "") < filters.from) return false;
-    if (filters.to && (e.date || "") > filters.to) return false;
-    if (!txtMatch(e.description, filters.description)) return false;
-    if (!txtMatch(e.service, filters.service)) return false;
-    if (!txtMatch(e.destination, filters.destination)) return false;
-    if (!numMatch(e.count, filters.count)) return false;
-    if (!numMatch(e.price, filters.price)) return false;
-    if (!numMatch(e.serviceValue, filters.serviceValue)) return false;
-    if (!numMatch(e.payment, filters.payment)) return false;
-    if (!numMatch(e.debit, filters.debit)) return false;
-    if (!numMatch(e.credit, filters.credit)) return false;
-    if (!numMatch(e.balance, filters.balance)) return false;
-    if (!txtMatch(e.paymentMethod, filters.method)) return false;
-    if (!txtMatch(e.note, filters.note)) return false;
-    return true;
-  }), [allWithBalance, filters]);
-
   const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
   const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مدين عليه" : balance < 0 ? "دائن له" : "متوازن";
-  const statusClass = balance > 0 ? "red" : balance < 0 ? "green" : "gold";
+
+  const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
+    ...e,
+    methodLabel: e.paymentMethod + (e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""),
+  })), [allWithBalance, merchants]);
+
+  const serviceOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.service).filter(Boolean))).sort(), [rowsWithMethodLabel]);
+  const destOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.destination).filter(Boolean))).sort(), [rowsWithMethodLabel]);
+  const methodOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.methodLabel).filter((v) => v && v !== "—"))).sort(), [rowsWithMethodLabel]);
+
+  const initialFilters = (): Record<string, CF.ColumnFilterState> => ({
+    date: CF.emptyDateRange(),
+    description: CF.emptyText(),
+    service: CF.emptyMultiSelect(),
+    destination: CF.emptyMultiSelect(),
+    count: CF.emptyNumeric(),
+    price: CF.emptyNumeric(),
+    serviceValue: CF.emptyNumeric(),
+    payment: CF.emptyNumeric(),
+    debit: CF.emptyNumeric(),
+    credit: CF.emptyNumeric(),
+    balance: CF.emptyNumeric(),
+    method: CF.emptyMultiSelect(),
+    note: CF.emptyText(),
+  });
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(initialFilters);
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => ({ ...p, [k]: s }));
+  const resetAll = () => setFilters(initialFilters());
+  const anyActive = Object.values(filters).some(CF.isFilterActive);
+
+  const displayRows = useMemo(() => rowsWithMethodLabel.filter((e) => {
+    if (!CF.matchDateRange(e.date, filters.date)) return false;
+    if (!CF.matchText(e.description, filters.description)) return false;
+    if (!CF.matchMultiSelect(e.service, filters.service)) return false;
+    if (!CF.matchMultiSelect(e.destination, filters.destination)) return false;
+    if (!CF.matchNumeric(e.count, filters.count)) return false;
+    if (!CF.matchNumeric(e.price, filters.price)) return false;
+    if (!CF.matchNumeric(e.serviceValue, filters.serviceValue)) return false;
+    if (!CF.matchNumeric(e.payment, filters.payment)) return false;
+    if (!CF.matchNumeric(e.debit, filters.debit)) return false;
+    if (!CF.matchNumeric(e.credit, filters.credit)) return false;
+    if (!CF.matchNumeric(e.balance, filters.balance)) return false;
+    if (!CF.matchMultiSelect(e.methodLabel, filters.method)) return false;
+    if (!CF.matchText(e.note, filters.note)) return false;
+    return true;
+  }), [rowsWithMethodLabel, filters]);
 
   const buildData = () => ({
     title: "كشف حساب الشركة الصادرة",
-    subtitle: `${company ? company.company_name : "كل الشركات"}${filters.from || filters.to ? ` — من ${filters.from || "..."} إلى ${filters.to || "..."}` : ""}`,
+    subtitle: company ? company.company_name : "كل الشركات",
     fileName: `كشف-حساب-${company?.company_name || "الشركات"}`,
     summary: [
       { label: "إجمالي قيمة الخدمات", value: fmtDL(totalServices) },
@@ -331,7 +344,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       debit: e.debit > 0 ? fmtDL(e.debit) : "—", debit__excel: e.debit,
       credit: e.credit > 0 ? fmtDL(e.credit) : "—", credit__excel: e.credit,
       balance: fmtDL(e.balance), balance__excel: e.balance,
-      method: e.paymentMethod, note: e.note,
+      method: e.methodLabel, note: e.note,
     })),
   });
 
@@ -340,14 +353,21 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [company, displayRows, totalServices, totalPaid, balance, filters],
   );
 
-  const filterInputStyle: React.CSSProperties = { width: "100%", padding: "4px 6px", fontSize: 11, border: "1px solid var(--border)", borderRadius: 4, background: "var(--card)" };
+  const Th = ({ children, filterKey, options }: { children: React.ReactNode; filterKey?: string; options?: string[] }) => (
+    <th>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+        <span>{children}</span>
+        {filterKey && <CF.ColumnFilter label={String(children)} state={filters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />}
+      </span>
+    </th>
+  );
 
   return (
     <div className="card">
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <div className="card-title">📂 كشف حساب الشركة الصادرة</div>
+        <div className="card-title">كشف حساب الشركة الصادرة</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="action-btn" onClick={resetFilters}>إعادة تعيين الفلاتر</button>
+          {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
           {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} />}
         </div>
       </div>
@@ -361,41 +381,24 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
           </div>
         </div>
 
-        {company && (
-          <div className="account-summary" style={{ marginBottom: 12 }}>
-            <div className="sum-box gold"><div className="label">إجمالي قيمة الخدمات</div><div className="val">{fmtDL(totalServices)}</div></div>
-            <div className="sum-box green"><div className="label">إجمالي المدفوعات</div><div className="val">{fmtDL(totalPaid)}</div></div>
-            <div className={`sum-box ${statusClass}`}><div className="label">الصافي ({accountStatus})</div><div className="val">{fmtDL(Math.abs(balance))}</div></div>
-            <div className="sum-box"><div className="label">عدد الحركات</div><div className="val">{fmtNum(allEntries.length)}</div></div>
-          </div>
-        )}
-
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
             <thead>
               <tr>
-                <th>#</th><th>التاريخ</th><th>البيان</th><th>نوع الخدمة</th><th>وجهة السفر</th>
-                <th>العدد</th><th>السعر</th><th>قيمة الرحلة</th><th>المدفوعات</th>
-                <th>مدين</th><th>دائن</th><th>الرصيد الحالي</th><th>وسيلة الدفع</th><th>ملاحظات</th>
-              </tr>
-              <tr className="filter-row">
-                <th></th>
-                <th>
-                  <input type="date" value={filters.from} onChange={(e) => setF("from", e.target.value)} style={filterInputStyle} title="من تاريخ" />
-                  <input type="date" value={filters.to} onChange={(e) => setF("to", e.target.value)} style={{ ...filterInputStyle, marginTop: 2 }} title="إلى تاريخ" />
-                </th>
-                <th><input value={filters.description} onChange={(e) => setF("description", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
-                <th><input value={filters.service} onChange={(e) => setF("service", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
-                <th><input value={filters.destination} onChange={(e) => setF("destination", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
-                <th><input value={filters.count} onChange={(e) => setF("count", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.price} onChange={(e) => setF("price", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.serviceValue} onChange={(e) => setF("serviceValue", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.payment} onChange={(e) => setF("payment", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.debit} onChange={(e) => setF("debit", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.credit} onChange={(e) => setF("credit", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.balance} onChange={(e) => setF("balance", e.target.value)} placeholder="..." style={filterInputStyle} /></th>
-                <th><input value={filters.method} onChange={(e) => setF("method", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
-                <th><input value={filters.note} onChange={(e) => setF("note", e.target.value)} placeholder="بحث" style={filterInputStyle} /></th>
+                <th>#</th>
+                <Th filterKey="date">التاريخ</Th>
+                <Th filterKey="description">البيان</Th>
+                <Th filterKey="service" options={serviceOptions}>نوع الخدمة</Th>
+                <Th filterKey="destination" options={destOptions}>وجهة السفر</Th>
+                <Th filterKey="count">العدد</Th>
+                <Th filterKey="price">السعر</Th>
+                <Th filterKey="serviceValue">قيمة الرحلة</Th>
+                <Th filterKey="payment">المدفوعات</Th>
+                <Th filterKey="debit">مدين</Th>
+                <Th filterKey="credit">دائن</Th>
+                <Th filterKey="balance">الرصيد الحالي</Th>
+                <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>
+                <Th filterKey="note">ملاحظات</Th>
               </tr>
             </thead>
             <tbody>
@@ -415,7 +418,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>
                   <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>
                   <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>
-                  <td data-label="وسيلة الدفع">{e.paymentMethod}{e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""}</td>
+                  <td data-label="وسيلة الدفع">{e.methodLabel}</td>
                   <td data-label="ملاحظات">{e.note}</td>
                 </tr>
               ))}
