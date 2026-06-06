@@ -573,51 +573,8 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         </div>
       </div>
 
-      <div className="card-header" style={{ marginTop: 8 }}>
-        <div className="card-title">وسيلة الدفع</div>
-        <button type="button" className="btn btn-sm" onClick={addSplit}>+ إضافة سطر</button>
-      </div>
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
-        {splits.map((row) => {
-          const methods = methodsForSplit(row);
-          return (
-            <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
-              <div className="form-group"><label>جهة الدفع</label>
-                <select value={row.source} onChange={(e) => updateSplit(row.uid, { source: e.target.value as CTSource, merchant_id: "", method: e.target.value === "company" ? "company_cash" : "" })}>
-                  <option value="company">الشركة</option>
-                  <option value="merchant">تاجر</option>
-                </select>
-              </div>
-              <div className="form-group"><label>العملة</label>
-                <select value={row.currency} onChange={(e) => updateSplit(row.uid, { currency: e.target.value as CTCurrency })}>
-                  {CT_CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-              </div>
-              {row.source === "merchant" && (
-                <div className="form-group"><label>التاجر</label>
-                  <select value={row.merchant_id} onChange={(e) => updateSplit(row.uid, { merchant_id: e.target.value, method: "" })}>
-                    <option value="" disabled>اختر...</option>
-                    {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="form-group"><label>وسيلة الدفع</label>
-                <select value={row.method} onChange={(e) => updateSplit(row.uid, { method: e.target.value })}>
-                  <option value="" disabled>اختر...</option>
-                  {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                </select>
-              </div>
-              <div className="form-group"><label>المبلغ</label>
-                <input type="number" min={0} value={row.amount} onChange={(e) => updateSplit(row.uid, { amount: e.target.value })} />
-              </div>
-              <div className="form-group" style={{ alignSelf: "end" }}>
-                <button type="button" className="btn btn-sm btn-danger" onClick={() => removeSplit(row.uid)} disabled={splits.length === 1}>حذف</button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
       <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontWeight: 700 }}>
