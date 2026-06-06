@@ -125,7 +125,7 @@ export default function Layout() {
     { to: "/submissions", icon: ClipboardCheck, label: "التقديمات", permKey: "submissions" },
     { to: "/executions", icon: Plane, label: "التنفيذ", permKey: "executions" },
     { to: "/accounts", icon: Users, label: "حسابات", permKey: "accounts" },
-    { to: "/investors", icon: Briefcase, label: "مستثمرين", permKey: "investors" },
+    
   ];
 
   return (
