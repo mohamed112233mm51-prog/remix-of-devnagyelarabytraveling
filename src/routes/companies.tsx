@@ -411,34 +411,6 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
-type CTCurrency = "EGP" | "USD" | "LYD";
-type CTSource = "company" | "merchant";
-type CTSplit = {
-  uid: string;
-  source: CTSource;
-  currency: CTCurrency;
-  merchant_id: string;
-  method: string;
-  amount: string;
-};
-
-const CT_CURRENCY_OPTIONS: { value: CTCurrency; label: string }[] = [
-  { value: "EGP", label: "جنيه مصري" },
-  { value: "USD", label: "دولار" },
-  { value: "LYD", label: "دينار ليبي" },
-];
-const CT_COMPANY_METHODS = [
-  { key: "company_cash", label: "نقدي الشركة" },
-  { key: "company_instapay", label: "إنستا الشركة" },
-];
-const ctNewRow = (): CTSplit => ({
-  uid: Math.random().toString(36).slice(2),
-  source: "company",
-  currency: "EGP",
-  merchant_id: "",
-  method: "company_cash",
-  amount: "",
-});
 
 function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
@@ -454,28 +426,12 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     price: "",
     note: "",
   });
-  const [splits, setSplits] = useState<CTSplit[]>([ctNewRow()]);
+  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const tripValueNum = (Number(form.count) || 0) * (Number(form.price) || 0);
 
-  const updateSplit = (uid: string, patch: Partial<CTSplit>) =>
-    setSplits((rows) => rows.map((r) => (r.uid === uid ? { ...r, ...patch } : r)));
-  const removeSplit = (uid: string) =>
-    setSplits((rows) => (rows.length === 1 ? rows : rows.filter((r) => r.uid !== uid)));
-  const addSplit = () => setSplits((rows) => [...rows, ctNewRow()]);
-
-  const methodsForSplit = (row: CTSplit): { key: string; label: string }[] => {
-    if (row.source === "company") return CT_COMPANY_METHODS;
-    const m = merchants.find((x) => x.id === row.merchant_id);
-    if (!m) return [];
-    const opts: { key: string; label: string }[] = [];
-    if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${m.merchant_name}` });
-    if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: `فودافون كاش ${m.merchant_name}` });
-    if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${m.merchant_name}` });
-    return opts;
-  };
 
   const totalAmount = useMemo(
     () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
