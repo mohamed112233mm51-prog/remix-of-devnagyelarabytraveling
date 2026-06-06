@@ -13,6 +13,14 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
+import {
+  PaymentSplits,
+  newPaymentSplitRow,
+  validatePaymentSplits,
+  filterValidSplits,
+  methodsForSplit,
+  type PaymentSplitRow,
+} from "@/components/PaymentSplits";
 
 export const Route = createFileRoute("/merchants")({
   component: MerchantsPage,
@@ -248,33 +256,60 @@ function MerchantForm() {
 }
 
 function CollectForm({ merchants }: { merchants: Merchant[] }) {
-  const [form, setForm] = useState({ merchant_id: "", date: new Date().toISOString().slice(0, 10), amount: "", note: "" });
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
+    const r = newPaymentSplitRow();
+    r.source = "merchant";
+    r.method = "";
+    return [r];
+  });
+
+  const total = useMemo(
+    () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [splits],
+  );
+
   const save = async () => {
-    if (!form.merchant_id) return toast.error("اختر التاجر");
-    if (!Number(form.amount)) return toast.error("أدخل المبلغ");
-    const { error } = await supabase.from("merchant_cash_collections").insert({
-      merchant_id: form.merchant_id,
-      date: form.date,
-      amount: Number(form.amount || 0),
-      note: form.note || null,
+    const valid = filterValidSplits(splits);
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    for (const r of valid) {
+      if (r.source !== "merchant" || !r.merchant_id) {
+        return toast.error("كل سطر يجب أن يكون لتاجر محدد");
+      }
+    }
+    const rows = valid.map((r) => {
+      const m = merchants.find((x) => x.id === r.merchant_id);
+      const methodLabel = methodsForSplit(r, merchants).find((x) => x.key === r.method)?.label || r.method;
+      const parts = [methodLabel, note].filter(Boolean);
+      return {
+        merchant_id: r.merchant_id,
+        date,
+        amount: Number(r.amount || 0),
+        note: parts.join(" - ") || (m ? `تحصيل من ${m.merchant_name}` : null),
+      };
     });
+    const { error } = await supabase.from("merchant_cash_collections").insert(rows);
     if (error) return toast.error(error.message);
-    setForm({ merchant_id: "", date: new Date().toISOString().slice(0, 10), amount: "", note: "" });
+    toast.success("تم حفظ التحصيل");
+    const r = newPaymentSplitRow();
+    r.source = "merchant";
+    r.method = "";
+    setSplits([r]);
+    setNote("");
   };
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">💵 تحصيل نقدية من تاجر</div></div>
       <div className="form-grid">
-        <div className="form-group"><label>التاجر</label>
-          <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-          </select>
-        </div>
-        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-        <div className="form-group"><label>المبلغ</label><input type="number" placeholder="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></div>
-        <div className="form-group full"><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
+        <div className="form-group"><label>التاريخ</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="form-group full"><label>ملاحظات</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
+      </div>
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" />
+      <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
+        الإجمالي: {fmtDL(total)}
       </div>
       <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ التحصيل</button></div>
     </div>
