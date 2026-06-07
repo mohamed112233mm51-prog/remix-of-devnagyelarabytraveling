@@ -380,7 +380,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
           <div className="form-group"><label>الشركة الصادرة</label>
             <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
               <option value="">اختر...</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+              {safeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
             </select>
           </div>
         </div>
