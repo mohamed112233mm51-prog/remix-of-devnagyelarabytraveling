@@ -98,21 +98,74 @@ function ExecutionsPage() {
   }, [executions]);
 
 
+  const svcText = (e: Execution, side: "company" | "agent") => {
+    const svcs = Array.isArray(e.services) ? e.services : [];
+    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
+    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
+    const list = svcs.filter(side === "company" ? isCompanySvc : isAgentSvc);
+    return list.map((s: any) => s?.service_type).filter(Boolean).join(" + ");
+  };
+
+  // Column definitions
+  const EXECUTION_COLUMNS: (ColumnDef & {
+    filter?: "text" | "date" | "multi";
+    accessor: (e: Execution) => string;
+  })[] = [
+    { key: "name", label: "الاسم", filter: "text", accessor: (e) => e.passenger_name || "" },
+    { key: "nid", label: "الرقم القومي", filter: "text", accessor: (e) => e.national_id || "" },
+    { key: "dob", label: "تاريخ الميلاد", filter: "date", accessor: (e) => e.dob || "" },
+    { key: "passport", label: "رقم الجواز", filter: "text", accessor: (e) => e.passport || "" },
+    { key: "birth_place", label: "محل الميلاد", filter: "text", accessor: (e) => e.birth_place || "" },
+    { key: "agent", label: "الوكيل", filter: "multi", accessor: (e) => agentName(e.agent_id) },
+    { key: "status", label: "الحالة", filter: "multi", accessor: (e) => e.status || "" },
+    { key: "op_status", label: "حالة العملية", filter: "multi", accessor: (e) => e.operation_status || "" },
+    { key: "departure", label: "جهة المغادرة", filter: "multi", accessor: (e) => e.departure_from || "" },
+    { key: "destination", label: "الوجهة", filter: "multi", accessor: (e) => e.destination || "" },
+    { key: "airline", label: "الطيران", filter: "multi", accessor: (e) => e.airline || "" },
+    { key: "travel_date", label: "تاريخ المغادرة", filter: "date", accessor: (e) => e.travel_date || "" },
+    { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (e) => companyName((e as any).approval_company_id) },
+    { key: "company_services", label: "خدمات الشركة", filter: "multi", accessor: (e) => svcText(e, "company") },
+    { key: "agent_services", label: "خدمات الوكيل", filter: "multi", accessor: (e) => svcText(e, "agent") },
+    { key: "notes", label: "ملاحظات", filter: "text", accessor: (e) => e.notes || "" },
+  ];
+
+  const initialFilters = (): Record<string, CF.ColumnFilterState> => {
+    const o: Record<string, CF.ColumnFilterState> = {};
+    for (const c of EXECUTION_COLUMNS) {
+      o[c.key] = c.filter === "date" ? CF.emptyDateRange() : c.filter === "multi" ? CF.emptyMultiSelect() : CF.emptyText();
+    }
+    return o;
+  };
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
+  const resetAll = () => setFilters(initialFilters());
+  const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
+  const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
+
+  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, EXECUTION_COLUMNS));
+  const visibleColumns = EXECUTION_COLUMNS.filter((c) => visible[c.key] !== false);
+
   const filtered = useMemo(() => executions.filter((e) => {
-    if (approvalFilter && e.status !== approvalFilter) return false;
-    if (operationFilter && e.operation_status !== operationFilter) return false;
-    if (companyFilter && (e as any).approval_company_id !== companyFilter) return false;
-    if (debounced) {
-      const q = debounced.toLowerCase();
-      const aName = (agents.find((a) => a.id === e.agent_id)?.name || "").toLowerCase();
-      const hay = `${e.passenger_name} ${e.national_id || ""} ${e.passport || ""} ${aName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    for (const c of EXECUTION_COLUMNS) {
+      const fs = safeFilters[c.key];
+      if (!CF.isFilterActive(fs)) continue;
+      const v = c.accessor(e);
+      if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
+      if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
+      if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [executions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
+  }), [executions, agents, companies, safeFilters]);
+
+  const optionsFor = (key: string) => {
+    const col = EXECUTION_COLUMNS.find((c) => c.key === key);
+    if (!col) return [];
+    const set = new Set<string>();
+    executions.forEach((e) => { const v = col.accessor(e); if (v) set.add(v); });
+    return Array.from(set).sort();
+  };
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
-  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const onDelete = async (row: Execution) => {
@@ -140,53 +193,22 @@ function ExecutionsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
 
-  const buildExportData = () => ({
-    title: "كشف التنفيذ",
-    fileName: "كشف-التنفيذ",
-    columns: [
-      { header: "م", key: "n" },
-      { header: "الاسم", key: "name" },
-      { header: "الرقم القومي", key: "nid" },
-      { header: "تاريخ الميلاد", key: "dob" },
-      { header: "رقم الجواز", key: "passport" },
-      { header: "محل الميلاد", key: "birth_place" },
-      { header: "الوكيل", key: "agent" },
-      { header: "الحالة", key: "status" },
-      { header: "حالة العملية", key: "op_status" },
-      { header: "جهة المغادرة", key: "departure" },
-      { header: "الوجهة", key: "destination" },
-      { header: "الطيران", key: "airline" },
-      { header: "تاريخ المغادرة", key: "travel_date" },
-      { header: "جهة الموافقة", key: "company" },
-      { header: "خدمات الشركة", key: "company_services" },
-      { header: "خدمات الوكيل", key: "agent_services" },
-      { header: "ملاحظات", key: "notes" },
-    ],
-    rows: filtered.map((e, i) => {
-      const svcs = Array.isArray(e.services) ? e.services : [];
-      const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
-      const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
-      return {
-        n: i + 1,
-        name: e.passenger_name || "",
-        nid: e.national_id || "",
-        dob: toDisplayDate(e.dob) || "",
-        passport: e.passport || "",
-        birth_place: e.birth_place || "",
-        agent: agentName(e.agent_id),
-        status: e.status || "",
-        op_status: e.operation_status || "",
-        departure: e.departure_from || "",
-        destination: e.destination || "",
-        airline: e.airline || "",
-        travel_date: e.travel_date || "",
-        company: companyName((e as any).approval_company_id),
-        company_services: svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
-        agent_services: svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
-        notes: e.notes || "",
-      };
-    }),
-  });
+  const buildExportData = () => {
+    const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
+    return {
+      title: "كشف التنفيذ",
+      fileName: "كشف-التنفيذ",
+      columns: cols,
+      rows: filtered.map((e, i) => {
+        const row: Record<string, string | number> = { n: i + 1 };
+        for (const c of visibleColumns) {
+          if (c.key === "dob") row[c.key] = toDisplayDate(e.dob) || "";
+          else row[c.key] = c.accessor(e);
+        }
+        return row;
+      }),
+    };
+  };
 
 
   return (
