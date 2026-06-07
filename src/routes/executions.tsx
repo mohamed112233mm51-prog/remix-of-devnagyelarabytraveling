@@ -247,26 +247,11 @@ function ExecutionsPage() {
 
       {tab === "list" ? (
         <>
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
-            <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
-              {search && <button onClick={() => setSearch("")} style={clearBtnStyle}><X size={12} /></button>}
-            </div>
-            <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)} style={inputStyle} title="حالة الموافقة">
-              <option value="">حالة الموافقة (الكل)</option>
-              {APPROVAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
-              <option value="">حالة العملية (الكل)</option>
-              {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
-              <option value="">الشركة الصادرة (الكل)</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
-            </select>
-            <div style={{ alignSelf: "center", display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+          <div className="card" style={{ padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
+              <ColumnVisibility columns={EXECUTION_COLUMNS} visible={visible} onChange={setVisible} />
               <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
@@ -277,46 +262,45 @@ function ExecutionsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1300, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
-                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","حالة العملية","جهة المغادرة","الوجهة","الطيران","تاريخ المغادرة","جهة الموافقة","خدمات الشركة","خدمات الوكيل","ملاحظات","إجراءات"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    <th style={thStyle}>م</th>
+                    {visibleColumns.map((c) => (
+                      <th key={c.key} style={thStyle}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                          <span>{c.label}</span>
+                          {c.filter && (
+                            <CF.ColumnFilter
+                              label={c.label}
+                              state={safeFilters[c.key]}
+                              onChange={(s) => setF(c.key, s)}
+                              options={c.filter === "multi" ? optionsFor(c.key) : undefined}
+                            />
+                          )}
+                        </span>
+                      </th>
                     ))}
+                    <th style={thStyle}>إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={18} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
-                  ) : pageRows.map((e, i) => {
-                    const svcs = Array.isArray(e.services) ? e.services : [];
-                    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
-                    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
-                    const companySvcText = svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—";
-                    const agentSvcText = svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—";
-                    return (
+                    <tr><td colSpan={visibleColumns.length + 2} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
+                  ) : pageRows.map((e, i) => (
                     <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>
-                      <td style={tdStyle}>{e.national_id || "—"}</td>
-                      <td style={tdStyle}>{toDisplayDate(e.dob) || "—"}</td>
-                      <td style={tdStyle}>{e.passport || "—"}</td>
-                      <td style={tdStyle}>{e.birth_place || "—"}</td>
-                      <td style={tdStyle}>{agentName(e.agent_id)}</td>
-                      <td style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>
-                      <td style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>
-                      <td style={tdStyle}>{e.departure_from || "—"}</td>
-                      <td style={tdStyle}>{e.destination || "—"}</td>
-                      <td style={tdStyle}>{e.airline || "—"}</td>
-                      <td style={tdStyle}>{e.travel_date || "—"}</td>
-                      <td style={tdStyle}>{companyName((e as any).approval_company_id)}</td>
-                      <td style={tdStyle}>{companySvcText}</td>
-                      <td style={tdStyle}>{agentSvcText}</td>
-                      <td style={tdStyle}>{e.notes || "—"}</td>
-
+                      {visibleColumns.map((c) => {
+                        if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>;
+                        if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>;
+                        if (c.key === "op_status") return <td key={c.key} style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>;
+                        if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(e.dob) || "—"}</td>;
+                        const v = c.accessor(e);
+                        return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
+                      })}
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && <button title="تعديل" onClick={() => { setEditing(e); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>}
                         {perm.delete && <button title="حذف" onClick={() => onDelete(e)} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={14} /></button>}
                       </td>
                     </tr>
-                  );})}
+                  ))}
                 </tbody>
               </table>
             </div>
