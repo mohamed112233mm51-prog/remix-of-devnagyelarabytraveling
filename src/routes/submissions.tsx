@@ -35,30 +35,67 @@ function SubmissionsPage() {
     (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
 
   const [tab, setTab] = useState<"list" | "add">("list");
-  const [search, setSearch] = useState("");
-  const [approvalFilter, setApprovalFilter] = useState("");
-  const [operationFilter, setOperationFilter] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Submission | null>(null);
 
-  const debounced = useDebouncedValue(search, 250);
+  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
+
+  // Column definitions for filters + visibility + export
+  const SUBMISSION_COLUMNS: (ColumnDef & {
+    filter?: "text" | "date" | "multi";
+    accessor: (s: Submission) => string;
+  })[] = [
+    { key: "name", label: "الاسم", filter: "text", accessor: (s) => s.passenger_name || "" },
+    { key: "nid", label: "الرقم القومي", filter: "text", accessor: (s) => s.national_id || "" },
+    { key: "dob", label: "تاريخ الميلاد", filter: "date", accessor: (s) => s.dob || "" },
+    { key: "passport", label: "رقم الجواز", filter: "text", accessor: (s) => s.passport || "" },
+    { key: "birth_place", label: "محل الميلاد", filter: "text", accessor: (s) => s.birth_place || "" },
+    { key: "agent", label: "الوكيل", filter: "multi", accessor: (s) => agentName(s.agent_id) },
+    { key: "status", label: "الحالة", filter: "multi", accessor: (s) => s.status || "" },
+    { key: "departure", label: "الجهة", filter: "multi", accessor: (s) => s.departure_from || "" },
+    { key: "submit_date", label: "تاريخ التقديم", filter: "date", accessor: (s) => s.submit_date || "" },
+    { key: "issue_date", label: "تاريخ الصدور", filter: "date", accessor: (s) => s.issue_date || "" },
+    { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
+    { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
+    { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
+  ];
+
+  const initialFilters = (): Record<string, CF.ColumnFilterState> => {
+    const o: Record<string, CF.ColumnFilterState> = {};
+    for (const c of SUBMISSION_COLUMNS) {
+      o[c.key] = c.filter === "date" ? CF.emptyDateRange() : c.filter === "multi" ? CF.emptyMultiSelect() : CF.emptyText();
+    }
+    return o;
+  };
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
+  const resetAll = () => setFilters(initialFilters());
+  const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
+  const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
+
+  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, SUBMISSION_COLUMNS));
+  const visibleColumns = SUBMISSION_COLUMNS.filter((c) => visible[c.key] !== false);
 
   const filtered = useMemo(() => submissions.filter((s) => {
-    if (approvalFilter && s.status !== approvalFilter) return false;
-    if (operationFilter && (s as any).operation_status !== operationFilter) return false;
-    if (companyFilter && (s as any).approval_company_id !== companyFilter) return false;
-    if (debounced) {
-      const q = debounced.toLowerCase();
-      const aName = (agents.find((a) => a.id === s.agent_id)?.name || "").toLowerCase();
-      const hay = `${s.passenger_name} ${s.national_id || ""} ${s.passport || ""} ${aName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    for (const c of SUBMISSION_COLUMNS) {
+      const fs = safeFilters[c.key];
+      if (!CF.isFilterActive(fs)) continue;
+      const v = c.accessor(s);
+      if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
+      if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
+      if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [submissions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
+  }), [submissions, agents, companies, safeFilters]);
 
+  const optionsFor = (key: string) => {
+    const col = SUBMISSION_COLUMNS.find((c) => c.key === key);
+    if (!col) return [];
+    const set = new Set<string>();
+    submissions.forEach((s) => { const v = col.accessor(s); if (v) set.add(v); });
+    return Array.from(set).sort();
+  };
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
-  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   const onDelete = async (row: Submission) => {
     if (!perm.delete) return;
