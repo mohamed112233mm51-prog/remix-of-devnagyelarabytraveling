@@ -230,7 +230,8 @@ export function NotificationsBell() {
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("erp-notif-read");
-      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []);
     } catch { return new Set(); }
   });
   const [error, setError] = useState<string | null>(null);
@@ -251,7 +252,7 @@ export function NotificationsBell() {
           .from("company_transactions")
           .select("trip_value,total_paid,company_id");
         if (e) throw e;
-        const totalDue = (data || []).reduce((s: number, r: any) => {
+          const totalDue = (Array.isArray(data) ? data : []).reduce((s: number, r: any) => {
           const value = Number(r.trip_value || 0);
           const paid = Number(r.total_paid || 0);
           return s + Math.max(0, value - paid);
@@ -278,15 +279,16 @@ export function NotificationsBell() {
           .eq("auto_deduct_enabled", true)
           .eq("auto_deduct_day", day);
         if (e1) throw e1;
-        if (dueExp && dueExp.length > 0) {
-          const ids = dueExp.map((r: any) => r.id);
+        const safeDueExp = Array.isArray(dueExp) ? dueExp : [];
+        if (safeDueExp.length > 0) {
+          const ids = safeDueExp.map((r: any) => r.id);
           const { data: dedRows } = await supabase
             .from("expense_deductions")
             .select("expense_id,deduction_date")
             .in("expense_id", ids)
             .gte("deduction_date", monthStart);
-          const deducted = new Set((dedRows || []).map((r: any) => r.expense_id));
-          const pending = dueExp.filter((r: any) => !deducted.has(r.id));
+          const deducted = new Set((Array.isArray(dedRows) ? dedRows : []).map((r: any) => r.expense_id));
+          const pending = safeDueExp.filter((r: any) => !deducted.has(r.id));
           if (pending.length > 0) {
             next.push({
               id: `expenses-due-${day}-${pending.length}`,

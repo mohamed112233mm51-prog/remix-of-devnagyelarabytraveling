@@ -24,8 +24,9 @@ export interface UsePaginationResult<T> {
 export function usePagination<T>(rows: T[], initialPageSize = 50): UsePaginationResult<T> {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(initialPageSize);
+  const safeRows = Array.isArray(rows) ? rows : [];
 
-  const total = rows.length;
+  const total = safeRows.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   // Clamp page if rows shrink (e.g. after filtering).
@@ -34,8 +35,8 @@ export function usePagination<T>(rows: T[], initialPageSize = 50): UsePagination
   }, [pageCount, page]);
 
   const pageRows = useMemo(
-    () => rows.slice(page * pageSize, (page + 1) * pageSize),
-    [rows, page, pageSize],
+    () => safeRows.slice(page * pageSize, (page + 1) * pageSize),
+    [safeRows, page, pageSize],
   );
 
   const Controls: UsePaginationResult<T>["Controls"] = ({ className, style }) => {
