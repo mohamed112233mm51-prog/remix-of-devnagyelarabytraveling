@@ -3,10 +3,10 @@ import { runBackupWithRetry, applyRetention, type BackupType } from "@/lib/backu
 
 const ALLOWED: BackupType[] = ["daily", "weekly", "monthly", "manual"];
 
-export const Route = createFileRoute("/api/public/hooks/backup")({
+const routeOptions = {
   server: {
     handlers: {
-      POST: async ({ request }) => {
+      POST: async ({ request }: { request: Request }) => {
         // Authenticate via Supabase anon key in apikey header (canonical pg_cron pattern).
         const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
         const provided = request.headers.get("apikey") ?? request.headers.get("Apikey") ?? "";
@@ -39,4 +39,6 @@ export const Route = createFileRoute("/api/public/hooks/backup")({
       },
     },
   },
-});
+};
+
+export const Route = createFileRoute("/api/public/hooks/backup")(routeOptions as any);

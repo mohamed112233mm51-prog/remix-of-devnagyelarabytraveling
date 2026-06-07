@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
@@ -133,7 +133,7 @@ import { ConfirmSaveModalHost } from "../components/ConfirmSaveModal";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
-function SplashScreen() {
+function SplashScreen({ stage, warning }: { stage?: string; warning?: string }) {
   return (
     <div
       dir="rtl"
@@ -158,6 +158,8 @@ function SplashScreen() {
           }}
         />
         <div style={{ height: 3, width: 56, background: BRAND_GOLD, borderRadius: 2 }} />
+        {stage && <div style={{ fontSize: 13, fontWeight: 700, color: BRAND_NAVY }}>مرحلة التحميل: {stage}</div>}
+        {warning && <div style={{ maxWidth: 360, textAlign: "center", fontSize: 12, color: "#92400e" }}>{warning}</div>}
       </div>
       <style>{`@keyframes brand-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
@@ -167,10 +169,23 @@ function SplashScreen() {
 function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
+  const [startupWarning, setStartupWarning] = useState<string | null>(null);
   useGlobalKeyboardNav();
   useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
+  useEffect(() => {
+    if (brandingReady && !loading && (!session || profileLoaded || needsPassword || blocked)) {
+      setStartupWarning(null);
+      return;
+    }
+    const stage = !brandingReady ? "Branding" : loading ? "Auth" : session && !profileLoaded ? "Profile / Permissions" : "Router";
+    const timer = window.setTimeout(() => {
+      console.warn(`[startup] ${stage} exceeded 8000ms`);
+      setStartupWarning(`تأخر تحميل ${stage}. تم فتح التطبيق بالقيم المتاحة بدل استمرار شاشة التحميل.`);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [brandingReady, loading, session, profileLoaded, needsPassword, blocked]);
 
   // Public route: invite acceptance must work without admin login
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
@@ -191,13 +206,21 @@ function AuthGate() {
     return <Outlet />;
   }
 
-  if (!brandingReady) return <SplashScreen />;
-  if (loading) return <SplashScreen />;
+  if (!brandingReady && !startupWarning) return <SplashScreen stage="Branding" />;
+  if (loading && !startupWarning) return <SplashScreen stage="Auth" />;
   if (!session) return <Login />;
   if (needsPassword) return <SetPassword onDone={setPasswordDone} />;
   if (blocked) return <Login />;
-  if (!profileLoaded) return <SplashScreen />;
-  return (<><RouteGuard /><Layout /><ScreenshotTool /></>);
+  if (!profileLoaded && !startupWarning) return <SplashScreen stage="Profile / Permissions" />;
+  return (<>{startupWarning && <StartupWarningBanner message={startupWarning} />}<RouteGuard /><Layout /><ScreenshotTool /></>);
+}
+
+function StartupWarningBanner({ message }: { message: string }) {
+  return (
+    <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10000, padding: "8px 14px", borderRadius: 10, background: "#fffbeb", border: "1px solid #f59e0b", color: "#78350f", fontSize: 12, fontWeight: 800, boxShadow: "0 8px 24px rgba(0,0,0,.12)", direction: "rtl" }}>
+      {message}
+    </div>
+  );
 }
 
 function RootComponent() {
