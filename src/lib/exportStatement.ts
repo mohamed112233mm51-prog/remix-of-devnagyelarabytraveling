@@ -372,7 +372,6 @@ export async function exportStatementToPDF(data: StatementExportData) {
   }
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
-  const userLabel = await getCurrentUserLabel();
   const esc = (v: unknown) =>
     String(v ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
