@@ -74,7 +74,7 @@ function ExecutionsPage() {
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
           approval_company_id: sub.approval_company_id || null,
-          services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s) => s.service_type),
+          services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s: { service_type: string }) => s.service_type),
           created_at: "", updated_at: "",
         } as Execution);
         setTab("add");
