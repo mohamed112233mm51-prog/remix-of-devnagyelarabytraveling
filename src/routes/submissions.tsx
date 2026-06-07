@@ -128,40 +128,22 @@ function SubmissionsPage() {
   const pendingCount = submissions.filter((s) => ((s as any).operation_status || "").includes("متابعة")).length;
   const cancelledCount = submissions.filter((s) => ((s as any).operation_status || "").includes("ملغي")).length;
 
-  const buildExportData = () => ({
-    title: "كشف التقديمات",
-    fileName: "كشف-التقديمات",
-    columns: [
-      { header: "م", key: "n" },
-      { header: "الاسم", key: "name" },
-      { header: "الرقم القومي", key: "nid" },
-      { header: "تاريخ الميلاد", key: "dob" },
-      { header: "رقم الجواز", key: "passport" },
-      { header: "محل الميلاد", key: "birth_place" },
-      { header: "الوكيل", key: "agent" },
-      { header: "الحالة", key: "status" },
-      { header: "الجهة", key: "departure" },
-      { header: "تاريخ التقديم", key: "submit_date" },
-      { header: "تاريخ الصدور", key: "issue_date" },
-      { header: "جهة الموافقة", key: "company" },
-      { header: "الخدمات", key: "services" },
-    ],
-    rows: filtered.map((s, i) => ({
-      n: i + 1,
-      name: s.passenger_name || "",
-      nid: s.national_id || "",
-      dob: toDisplayDate(s.dob) || "",
-      passport: s.passport || "",
-      birth_place: s.birth_place || "",
-      agent: agentName(s.agent_id),
-      status: s.status || "",
-      departure: s.departure_from || "",
-      submit_date: s.submit_date || "",
-      issue_date: s.issue_date || "",
-      company: companyName((s as any).approval_company_id, s.approval_authority),
-      services: (Array.isArray(s.services) ? s.services : []).join(" + "),
-    })),
-  });
+  const buildExportData = () => {
+    const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
+    return {
+      title: "كشف التقديمات",
+      fileName: "كشف-التقديمات",
+      columns: cols,
+      rows: filtered.map((s, i) => {
+        const row: Record<string, string | number> = { n: i + 1 };
+        for (const c of visibleColumns) {
+          if (c.key === "dob") row[c.key] = toDisplayDate(s.dob) || "";
+          else row[c.key] = c.accessor(s);
+        }
+        return row;
+      }),
+    };
+  };
 
 
   return (
