@@ -84,7 +84,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("agents").select("id,name,phone,governorate").or(`name.ilike.${like},phone.ilike.${like},governorate.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "agents",
               sectionLabel: SECTION_LABELS.agents,
               title: r.name || "وكيل",
@@ -98,7 +98,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("issuing_companies").select("id,company_name,phone,service_type").or(`company_name.ilike.${like},phone.ilike.${like},service_type.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "companies",
               sectionLabel: SECTION_LABELS.companies,
               title: r.company_name || "شركة",
@@ -111,7 +111,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("merchants").select("id,merchant_name,phone").or(`merchant_name.ilike.${like},phone.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "merchants",
               sectionLabel: SECTION_LABELS.merchants,
               title: r.merchant_name || "تاجر",
@@ -124,7 +124,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("investors").select("id,investor_name,phone").or(`investor_name.ilike.${like},phone.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "investors",
               sectionLabel: SECTION_LABELS.investors,
               title: r.investor_name || "مستثمر",
@@ -137,7 +137,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("expenses").select("id,expense_name,expense_type,amount").or(`expense_name.ilike.${like},expense_type.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "expenses",
               sectionLabel: SECTION_LABELS.expenses,
               title: r.expense_name || "مصروف",
@@ -230,7 +230,8 @@ export function NotificationsBell() {
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("erp-notif-read");
-      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []);
     } catch { return new Set(); }
   });
   const [error, setError] = useState<string | null>(null);
@@ -251,7 +252,7 @@ export function NotificationsBell() {
           .from("company_transactions")
           .select("trip_value,total_paid,company_id");
         if (e) throw e;
-        const totalDue = (data || []).reduce((s: number, r: any) => {
+          const totalDue = (Array.isArray(data) ? data : []).reduce((s: number, r: any) => {
           const value = Number(r.trip_value || 0);
           const paid = Number(r.total_paid || 0);
           return s + Math.max(0, value - paid);
@@ -278,15 +279,16 @@ export function NotificationsBell() {
           .eq("auto_deduct_enabled", true)
           .eq("auto_deduct_day", day);
         if (e1) throw e1;
-        if (dueExp && dueExp.length > 0) {
-          const ids = dueExp.map((r: any) => r.id);
+        const safeDueExp = Array.isArray(dueExp) ? dueExp : [];
+        if (safeDueExp.length > 0) {
+          const ids = safeDueExp.map((r: any) => r.id);
           const { data: dedRows } = await supabase
             .from("expense_deductions")
             .select("expense_id,deduction_date")
             .in("expense_id", ids)
             .gte("deduction_date", monthStart);
-          const deducted = new Set((dedRows || []).map((r: any) => r.expense_id));
-          const pending = dueExp.filter((r: any) => !deducted.has(r.id));
+          const deducted = new Set((Array.isArray(dedRows) ? dedRows : []).map((r: any) => r.expense_id));
+          const pending = safeDueExp.filter((r: any) => !deducted.has(r.id));
           if (pending.length > 0) {
             next.push({
               id: `expenses-due-${day}-${pending.length}`,
@@ -307,7 +309,7 @@ export function NotificationsBell() {
           .order("created_at", { ascending: false })
           .limit(1);
         if (e) throw e;
-        const latest = data?.[0];
+        const latest = Array.isArray(data) ? data[0] : undefined;
         if (latest && latest.status !== "success") {
           next.push({
             id: `backup-${latest.id}`,
@@ -325,12 +327,13 @@ export function NotificationsBell() {
           .eq("invite_accepted", false)
           .limit(20);
         if (e2) throw e2;
-        const cnt = invs?.length ?? 0;
+        const safeInvs = Array.isArray(invs) ? invs : [];
+        const cnt = safeInvs.length;
         if (cnt > 0) {
           next.push({
             id: `invites-${cnt}`,
             title: `${cnt} دعوة مستخدم لم تُقبل`,
-            description: invs!.slice(0, 2).map((p: any) => p.email).join("، "),
+            description: safeInvs.slice(0, 2).map((p: any) => p.email).join("، "),
             icon: <UserPlus size={16} />,
             to: "/settings",
           });

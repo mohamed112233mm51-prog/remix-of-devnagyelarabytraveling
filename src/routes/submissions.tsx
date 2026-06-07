@@ -229,8 +229,9 @@ function SubmissionForm({
   activeCompanies: IssuingCompany[];
   onDone: () => void;
 }) {
+  const initialServices = Array.isArray(editing?.services) ? editing.services.filter((s): s is string => typeof s === "string") : [];
   const [form, setForm] = useState({
-    services: editing?.services || [] as string[],
+    services: initialServices,
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
     dob: toDisplayDate(editing?.dob) || "",
@@ -249,7 +250,7 @@ function SubmissionForm({
   const toggleService = (s: string) => {
     setForm((f) => ({
       ...f,
-      services: f.services.includes(s) ? f.services.filter((x) => x !== s) : [...f.services, s],
+      services: (Array.isArray(f.services) ? f.services : []).includes(s) ? (Array.isArray(f.services) ? f.services : []).filter((x) => x !== s) : [...(Array.isArray(f.services) ? f.services : []), s],
     }));
   };
 

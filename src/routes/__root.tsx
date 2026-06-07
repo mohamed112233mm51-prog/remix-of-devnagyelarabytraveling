@@ -123,6 +123,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 import Layout from "../components/Layout";
 import ScreenshotTool from "../components/ScreenshotTool";
 import RouteGuard from "../components/RouteGuard";
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import Login from "../components/Login";
 import SetPassword from "../components/SetPassword";
 import { Toaster } from "sonner";
@@ -203,12 +204,14 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthGate />
-        <ConfirmSaveModalHost />
-        <Toaster position="top-center" dir="rtl" richColors />
-      </AuthProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary name="RootApp">
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthGate />
+          <ConfirmSaveModalHost />
+          <Toaster position="top-center" dir="rtl" richColors />
+        </AuthProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
