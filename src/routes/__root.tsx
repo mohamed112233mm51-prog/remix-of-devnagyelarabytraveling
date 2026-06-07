@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
@@ -133,7 +133,7 @@ import { ConfirmSaveModalHost } from "../components/ConfirmSaveModal";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
-function SplashScreen() {
+function SplashScreen({ stage, warning }: { stage?: string; warning?: string }) {
   return (
     <div
       dir="rtl"
@@ -158,6 +158,8 @@ function SplashScreen() {
           }}
         />
         <div style={{ height: 3, width: 56, background: BRAND_GOLD, borderRadius: 2 }} />
+        {stage && <div style={{ fontSize: 13, fontWeight: 700, color: BRAND_NAVY }}>مرحلة التحميل: {stage}</div>}
+        {warning && <div style={{ maxWidth: 360, textAlign: "center", fontSize: 12, color: "#92400e" }}>{warning}</div>}
       </div>
       <style>{`@keyframes brand-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
