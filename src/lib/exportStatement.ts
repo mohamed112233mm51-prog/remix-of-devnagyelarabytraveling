@@ -415,7 +415,7 @@ tfoot td{font-weight:700;background:#f9fafb}
   <div class="meta">
     <div class="co-name">${esc(companyName)}</div>
     <div class="report-title">${esc(data.title)}</div>
-    <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())} • صادر بواسطة: ${esc(userLabel)}</div>
+    <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
 </div>
 ${summaryHtml}
