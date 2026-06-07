@@ -138,7 +138,7 @@ function MerchantsPage() {
           <div className="card-body">
             <div className="table-wrap enterprise-table">
               <table className="mobile-cards">
-                <thead><tr><th>#</th><th>اسم التاجر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي الوارد</th><th className="num-col">إجمالي الصادر</th><th className="num-col">الرصيد</th><th>إجراءات</th></tr></thead>
+                <thead><tr><th>#</th><th>اسم التاجر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي الوارد</th><th className="num-col">إجمالي الصادر</th><th className="num-col">إجمالي النقدية المحصلة</th><th className="num-col">الرصيد</th><th>إجراءات</th></tr></thead>
                 <tbody>
                   {merchants.length === 0 ? (
                     <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
