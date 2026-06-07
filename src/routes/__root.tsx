@@ -169,10 +169,23 @@ function SplashScreen({ stage, warning }: { stage?: string; warning?: string }) 
 function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
+  const [startupWarning, setStartupWarning] = useState<string | null>(null);
   useGlobalKeyboardNav();
   useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
+  useEffect(() => {
+    if (brandingReady && !loading && (!session || profileLoaded || needsPassword || blocked)) {
+      setStartupWarning(null);
+      return;
+    }
+    const stage = !brandingReady ? "Branding" : loading ? "Auth" : session && !profileLoaded ? "Profile / Permissions" : "Router";
+    const timer = window.setTimeout(() => {
+      console.warn(`[startup] ${stage} exceeded 8000ms`);
+      setStartupWarning(`تأخر تحميل ${stage}. تم فتح التطبيق بالقيم المتاحة بدل استمرار شاشة التحميل.`);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [brandingReady, loading, session, profileLoaded, needsPassword, blocked]);
 
   // Public route: invite acceptance must work without admin login
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
@@ -193,12 +206,12 @@ function AuthGate() {
     return <Outlet />;
   }
 
-  if (!brandingReady) return <SplashScreen />;
-  if (loading) return <SplashScreen />;
+  if (!brandingReady && !startupWarning) return <SplashScreen stage="Branding" />;
+  if (loading && !startupWarning) return <SplashScreen stage="Auth" />;
   if (!session) return <Login />;
   if (needsPassword) return <SetPassword onDone={setPasswordDone} />;
   if (blocked) return <Login />;
-  if (!profileLoaded) return <SplashScreen />;
+  if (!profileLoaded && !startupWarning) return <SplashScreen stage="Profile / Permissions" />;
   return (<><RouteGuard /><Layout /><ScreenshotTool /></>);
 }
 
