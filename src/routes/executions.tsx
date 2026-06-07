@@ -14,6 +14,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { confirmDialog } from "@/lib/confirm";
 import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
+import { ExportButton } from "@/components/ExportButton";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -141,6 +142,54 @@ function ExecutionsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
 
+  const buildExportData = () => ({
+    title: "كشف التنفيذ",
+    fileName: "كشف-التنفيذ",
+    columns: [
+      { header: "م", key: "n" },
+      { header: "الاسم", key: "name" },
+      { header: "الرقم القومي", key: "nid" },
+      { header: "تاريخ الميلاد", key: "dob" },
+      { header: "رقم الجواز", key: "passport" },
+      { header: "محل الميلاد", key: "birth_place" },
+      { header: "الوكيل", key: "agent" },
+      { header: "الحالة", key: "status" },
+      { header: "حالة العملية", key: "op_status" },
+      { header: "جهة المغادرة", key: "departure" },
+      { header: "الوجهة", key: "destination" },
+      { header: "الطيران", key: "airline" },
+      { header: "تاريخ المغادرة", key: "travel_date" },
+      { header: "جهة الموافقة", key: "company" },
+      { header: "خدمات الشركة", key: "company_services" },
+      { header: "خدمات الوكيل", key: "agent_services" },
+      { header: "ملاحظات", key: "notes" },
+    ],
+    rows: filtered.map((e, i) => {
+      const svcs = Array.isArray(e.services) ? e.services : [];
+      const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
+      const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
+      return {
+        n: i + 1,
+        name: e.passenger_name || "",
+        nid: e.national_id || "",
+        dob: toDisplayDate(e.dob) || "",
+        passport: e.passport || "",
+        birth_place: e.birth_place || "",
+        agent: agentName(e.agent_id),
+        status: e.status || "",
+        op_status: e.operation_status || "",
+        departure: e.departure_from || "",
+        destination: e.destination || "",
+        airline: e.airline || "",
+        travel_date: e.travel_date || "",
+        company: companyName((e as any).approval_company_id),
+        company_services: svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
+        agent_services: svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
+        notes: e.notes || "",
+      };
+    }),
+  });
+
 
   return (
     <div dir="rtl" style={{ display: "grid", gap: 14 }}>
@@ -196,26 +245,33 @@ function ExecutionsPage() {
               <option value="">الشركة الصادرة (الكل)</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
             </select>
-            <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
-              {filtered.length.toLocaleString("ar")} سجل
+            <div style={{ alignSelf: "center", display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+              <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
 
 
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1200, fontSize: 13 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1300, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
-                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","حالة العملية","جهة المغادرة","الوجهة","الطيران","تاريخ المغادرة","جهة الموافقة","الخدمات","ملاحظات","إجراءات"].map((h) => (
+                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","حالة العملية","جهة المغادرة","الوجهة","الطيران","تاريخ المغادرة","جهة الموافقة","خدمات الشركة","خدمات الوكيل","ملاحظات","إجراءات"].map((h) => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={17} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
-                  ) : pageRows.map((e, i) => (
+                    <tr><td colSpan={18} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
+                  ) : pageRows.map((e, i) => {
+                    const svcs = Array.isArray(e.services) ? e.services : [];
+                    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
+                    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
+                    const companySvcText = svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—";
+                    const agentSvcText = svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—";
+                    return (
                     <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
                       <td style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>
@@ -231,7 +287,8 @@ function ExecutionsPage() {
                       <td style={tdStyle}>{e.airline || "—"}</td>
                       <td style={tdStyle}>{e.travel_date || "—"}</td>
                       <td style={tdStyle}>{companyName((e as any).approval_company_id)}</td>
-                      <td style={tdStyle}>{(Array.isArray(e.services) ? e.services : []).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—"}</td>
+                      <td style={tdStyle}>{companySvcText}</td>
+                      <td style={tdStyle}>{agentSvcText}</td>
                       <td style={tdStyle}>{e.notes || "—"}</td>
 
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
@@ -239,7 +296,7 @@ function ExecutionsPage() {
                         {perm.delete && <button title="حذف" onClick={() => onDelete(e)} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={14} /></button>}
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

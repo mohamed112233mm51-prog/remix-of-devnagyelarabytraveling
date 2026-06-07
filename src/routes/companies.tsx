@@ -336,7 +336,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       { header: "#", key: "n" }, { header: "التاريخ", key: "date" }, { header: "البيان", key: "description" },
       { header: "نوع الخدمة", key: "service" }, { header: "وجهة السفر", key: "destination" },
       { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
-      { header: "قيمة الرحلة", key: "sv" }, { header: "المدفوعات", key: "payment" },
+      { header: "قيمة الرحلة", key: "sv" },
       { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
       { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" },
     ],
@@ -344,7 +344,6 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
       count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
       sv: fmtDL(e.serviceValue), sv__excel: e.serviceValue,
-      payment: e.payment > 0 ? fmtDL(e.payment) : "—", payment__excel: e.payment,
       debit: e.debit > 0 ? fmtDL(e.debit) : "—", debit__excel: e.debit,
       credit: e.credit > 0 ? fmtDL(e.credit) : "—", credit__excel: e.credit,
       balance: fmtDL(e.balance), balance__excel: e.balance,
@@ -397,7 +396,6 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                 <Th filterKey="count">العدد</Th>
                 <Th filterKey="price">السعر</Th>
                 <Th filterKey="serviceValue">قيمة الرحلة</Th>
-                <Th filterKey="payment">المدفوعات</Th>
                 <Th filterKey="debit">مدين</Th>
                 <Th filterKey="credit">دائن</Th>
                 <Th filterKey="balance">الرصيد الحالي</Th>
@@ -407,7 +405,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             </thead>
             <tbody>
               {displayRows.length === 0 ? (
-                <tr><td colSpan={14}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
+                <tr><td colSpan={13}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
               ) : displayRows.map((e, i) => (
                 <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                   <td data-label="#">{i + 1}</td>
@@ -418,7 +416,6 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   <td data-label="العدد">{e.count || "—"}</td>
                   <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>
                   <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>
-                  <td data-label="المدفوعات">{e.payment ? fmtDL(e.payment) : "—"}</td>
                   <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>
                   <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>
                   <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>
@@ -429,7 +426,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             </tbody>
             <tfoot className="totals-foot">
               <tr>
-                <td colSpan={9}>الإجمالي</td>
+                <td colSpan={8}>الإجمالي</td>
                 <td>{fmtDL(totalServices)}</td>
                 <td>{fmtDL(totalPaid)}</td>
                 <td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(balance))} — {accountStatus}</td>

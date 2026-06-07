@@ -11,6 +11,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { confirmDialog } from "@/lib/confirm";
 import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
+import { ExportButton } from "@/components/ExportButton";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -88,6 +89,41 @@ function SubmissionsPage() {
   const pendingCount = submissions.filter((s) => ((s as any).operation_status || "").includes("متابعة")).length;
   const cancelledCount = submissions.filter((s) => ((s as any).operation_status || "").includes("ملغي")).length;
 
+  const buildExportData = () => ({
+    title: "كشف التقديمات",
+    fileName: "كشف-التقديمات",
+    columns: [
+      { header: "م", key: "n" },
+      { header: "الاسم", key: "name" },
+      { header: "الرقم القومي", key: "nid" },
+      { header: "تاريخ الميلاد", key: "dob" },
+      { header: "رقم الجواز", key: "passport" },
+      { header: "محل الميلاد", key: "birth_place" },
+      { header: "الوكيل", key: "agent" },
+      { header: "الحالة", key: "status" },
+      { header: "الجهة", key: "departure" },
+      { header: "تاريخ التقديم", key: "submit_date" },
+      { header: "تاريخ الصدور", key: "issue_date" },
+      { header: "جهة الموافقة", key: "company" },
+      { header: "الخدمات", key: "services" },
+    ],
+    rows: filtered.map((s, i) => ({
+      n: i + 1,
+      name: s.passenger_name || "",
+      nid: s.national_id || "",
+      dob: toDisplayDate(s.dob) || "",
+      passport: s.passport || "",
+      birth_place: s.birth_place || "",
+      agent: agentName(s.agent_id),
+      status: s.status || "",
+      departure: s.departure_from || "",
+      submit_date: s.submit_date || "",
+      issue_date: s.issue_date || "",
+      company: companyName((s as any).approval_company_id, s.approval_authority),
+      services: (Array.isArray(s.services) ? s.services : []).join(" + "),
+    })),
+  });
+
 
   return (
     <div dir="rtl" style={{ display: "grid", gap: 14 }}>
@@ -149,8 +185,9 @@ function SubmissionsPage() {
               <option value="">الشركة الصادرة (الكل)</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
             </select>
-            <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
-              {filtered.length.toLocaleString("ar")} سجل
+            <div style={{ alignSelf: "center", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+              <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
 
