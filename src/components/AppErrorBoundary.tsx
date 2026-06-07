@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 type Props = {
   children: ReactNode;
+  name?: string;
 };
 
 type State = {
@@ -17,7 +18,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[AppErrorBoundary]", error, errorInfo);
+    console.error(`[AppErrorBoundary:${this.props.name || "App"}]`, error, errorInfo);
     this.setState({ info: errorInfo });
   }
 
@@ -28,6 +29,7 @@ export class AppErrorBoundary extends Component<Props, State> {
         <div className="card" style={{ padding: 20, margin: 12, direction: "rtl" }} role="alert">
           <h3 style={{ marginTop: 0, color: "#b91c1c" }}>تعذر تحميل هذا الجزء</h3>
           <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, color: "#7f1d1d" }}>المكون: {this.props.name || "App"}</div>
             <div style={{ fontWeight: 700, marginBottom: 6, color: "#7f1d1d" }}>{err.name}: {err.message}</div>
             {err.stack && (
               <pre style={{ fontSize: 11, color: "#475569", whiteSpace: "pre-wrap", maxHeight: 240, overflow: "auto", margin: 0, direction: "ltr", textAlign: "left" }}>{err.stack}</pre>
