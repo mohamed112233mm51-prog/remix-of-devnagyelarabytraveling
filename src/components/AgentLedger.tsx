@@ -266,7 +266,6 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                     <Th filterKey="count">العدد</Th>
                     <Th filterKey="price">السعر</Th>
                     <Th filterKey="serviceValue">قيمة الرحلة</Th>
-                    <Th filterKey="payment">المدفوعات</Th>
                     <Th filterKey="debit">مدين</Th>
                     <Th filterKey="credit">دائن</Th>
                     <Th filterKey="balance">الرصيد الحالي</Th>
