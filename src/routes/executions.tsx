@@ -142,6 +142,54 @@ function ExecutionsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
 
+  const buildExportData = () => ({
+    title: "كشف التنفيذ",
+    fileName: "كشف-التنفيذ",
+    columns: [
+      { header: "م", key: "n" },
+      { header: "الاسم", key: "name" },
+      { header: "الرقم القومي", key: "nid" },
+      { header: "تاريخ الميلاد", key: "dob" },
+      { header: "رقم الجواز", key: "passport" },
+      { header: "محل الميلاد", key: "birth_place" },
+      { header: "الوكيل", key: "agent" },
+      { header: "الحالة", key: "status" },
+      { header: "حالة العملية", key: "op_status" },
+      { header: "جهة المغادرة", key: "departure" },
+      { header: "الوجهة", key: "destination" },
+      { header: "الطيران", key: "airline" },
+      { header: "تاريخ المغادرة", key: "travel_date" },
+      { header: "جهة الموافقة", key: "company" },
+      { header: "خدمات الشركة", key: "company_services" },
+      { header: "خدمات الوكيل", key: "agent_services" },
+      { header: "ملاحظات", key: "notes" },
+    ],
+    rows: filtered.map((e, i) => {
+      const svcs = Array.isArray(e.services) ? e.services : [];
+      const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
+      const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
+      return {
+        n: i + 1,
+        name: e.passenger_name || "",
+        nid: e.national_id || "",
+        dob: toDisplayDate(e.dob) || "",
+        passport: e.passport || "",
+        birth_place: e.birth_place || "",
+        agent: agentName(e.agent_id),
+        status: e.status || "",
+        op_status: e.operation_status || "",
+        departure: e.departure_from || "",
+        destination: e.destination || "",
+        airline: e.airline || "",
+        travel_date: e.travel_date || "",
+        company: companyName((e as any).approval_company_id),
+        company_services: svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
+        agent_services: svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
+        notes: e.notes || "",
+      };
+    }),
+  });
+
 
   return (
     <div dir="rtl" style={{ display: "grid", gap: 14 }}>
