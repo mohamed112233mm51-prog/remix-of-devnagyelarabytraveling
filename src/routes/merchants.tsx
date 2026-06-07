@@ -49,6 +49,14 @@ function MerchantsPage() {
     return map;
   }, [collections]);
 
+  const collectedByMerchant = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of collections) {
+      m.set(c.merchant_id, (m.get(c.merchant_id) || 0) + Number(c.amount || 0));
+    }
+    return m;
+  }, [collections]);
+
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0), [txns]);
   const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0), [cTxns]);
 
