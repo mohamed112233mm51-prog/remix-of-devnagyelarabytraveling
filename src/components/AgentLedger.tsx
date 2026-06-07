@@ -45,7 +45,8 @@ function paymentMethodLabel(t: Transaction): string {
 }
 
 function buildLedger(txns: Transaction[]): LedgerEntry[] {
-  return [...txns]
+  const safeTxns = Array.isArray(txns) ? txns.filter(Boolean) : [];
+  return [...safeTxns]
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
     .map((t) => {
       const kind = classifyTxn(t);
@@ -63,8 +64,8 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         description += ` — تاجر الكاش: المستلم ${fmtDL(merchantGross)} − عمولة تاجر الكاش ${fmtDL(merchantCommission)} = صافي ${fmtDL(merchantNet)}`;
       }
       return {
-        id: t.id,
-        date: t.date,
+        id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
+        date: t.date || "",
         kind,
         description,
         destination: t.destination || "—",
@@ -85,10 +86,13 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
 
 export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfile = false, canExport = true }: AgentLedgerProps) {
   const router = useRouter();
-  const { rows: agents, loading: agentsLoading } = useLive<Agent>("agents");
+  const { rows: liveAgents, loading: agentsLoading } = useLive<Agent>("agents");
   const flights: any[] = [];
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: liveTxns } = useLive<Transaction>("transactions");
+  const { rows: liveMerchants } = useLive<Merchant>("merchants");
+  const agents = Array.isArray(liveAgents) ? liveAgents : [];
+  const txns = Array.isArray(liveTxns) ? liveTxns : [];
+  const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
@@ -109,10 +113,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     method: CF.emptyMultiSelect(),
     note: CF.emptyText(),
   });
-  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(initialFilters);
-  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => ({ ...p, [k]: s }));
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
   const resetAll = () => setFilters(initialFilters());
-  const anyActive = Object.values(filters).some(CF.isFilterActive);
+  const anyActive = Object.values(CF.sanitizeFilterMap(filters, initialFilters())).some(CF.isFilterActive);
 
   useEffect(() => { if (lockedAgentId) setSelectedAgentId(lockedAgentId); }, [lockedAgentId]);
   useEffect(() => { if (!lockedAgentId) setSelectedAgentId(initialAgentId || ""); }, [initialAgentId, lockedAgentId]);
