@@ -219,20 +219,23 @@ function companyPaymentMethodLabel(t: CompanyTransaction): string {
 }
 
 function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: { companies: IssuingCompany[]; txns: CompanyTransaction[]; initialCompanyId: string; canExport: boolean }) {
+  const safeCompanies = Array.isArray(companies) ? companies : [];
+  const safeTxns = Array.isArray(txns) ? txns : [];
   const [companyId, setCompanyId] = useState(initialCompanyId || "");
-  const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: liveMerchants } = useLive<Merchant>("merchants");
+  const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const merchantName = (mid: string | null | undefined) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
 
-  const company = companies.find((c) => c.id === companyId);
+  const company = safeCompanies.find((c) => c.id === companyId);
   const myTxnsAll = useMemo(
-    () => txns
+    () => safeTxns
       .filter((t) => !companyId || t.company_id === companyId)
       .slice()
       .sort((a, b) =>
         (a.created_at || "").localeCompare(b.created_at || "") ||
         (a.date || "").localeCompare(b.date || ""),
       ),
-    [txns, companyId],
+    [safeTxns, companyId],
   );
 
   const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
@@ -243,8 +246,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       ? "دفعة للشركة"
       : (t.service_type || "خدمة مستحقة");
     return {
-      id: t.id,
-      date: t.date,
+      id: t.id || `${t.created_at || "row"}-${t.company_id || "company"}`,
+      date: t.date || "",
       kind,
       description,
       destination: t.destination || "—",
@@ -296,27 +299,28 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     method: CF.emptyMultiSelect(),
     note: CF.emptyText(),
   });
-  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(initialFilters);
-  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => ({ ...p, [k]: s }));
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
   const resetAll = () => setFilters(initialFilters());
-  const anyActive = Object.values(filters).some(CF.isFilterActive);
+  const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
+  const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
   const displayRows = useMemo(() => rowsWithMethodLabel.filter((e) => {
-    if (!CF.matchDateRange(e.date, filters.date)) return false;
-    if (!CF.matchText(e.description, filters.description)) return false;
-    if (!CF.matchMultiSelect(e.service, filters.service)) return false;
-    if (!CF.matchMultiSelect(e.destination, filters.destination)) return false;
-    if (!CF.matchNumeric(e.count, filters.count)) return false;
-    if (!CF.matchNumeric(e.price, filters.price)) return false;
-    if (!CF.matchNumeric(e.serviceValue, filters.serviceValue)) return false;
-    if (!CF.matchNumeric(e.payment, filters.payment)) return false;
-    if (!CF.matchNumeric(e.debit, filters.debit)) return false;
-    if (!CF.matchNumeric(e.credit, filters.credit)) return false;
-    if (!CF.matchNumeric(e.balance, filters.balance)) return false;
-    if (!CF.matchMultiSelect(e.methodLabel, filters.method)) return false;
-    if (!CF.matchText(e.note, filters.note)) return false;
+    if (!CF.matchDateRange(e.date, safeFilters.date)) return false;
+    if (!CF.matchText(e.description, safeFilters.description)) return false;
+    if (!CF.matchMultiSelect(e.service, safeFilters.service)) return false;
+    if (!CF.matchMultiSelect(e.destination, safeFilters.destination)) return false;
+    if (!CF.matchNumeric(e.count, safeFilters.count)) return false;
+    if (!CF.matchNumeric(e.price, safeFilters.price)) return false;
+    if (!CF.matchNumeric(e.serviceValue, safeFilters.serviceValue)) return false;
+    if (!CF.matchNumeric(e.payment, safeFilters.payment)) return false;
+    if (!CF.matchNumeric(e.debit, safeFilters.debit)) return false;
+    if (!CF.matchNumeric(e.credit, safeFilters.credit)) return false;
+    if (!CF.matchNumeric(e.balance, safeFilters.balance)) return false;
+    if (!CF.matchMultiSelect(e.methodLabel, safeFilters.method)) return false;
+    if (!CF.matchText(e.note, safeFilters.note)) return false;
     return true;
-  }), [rowsWithMethodLabel, filters]);
+  }), [rowsWithMethodLabel, safeFilters]);
 
   const buildData = () => ({
     title: "كشف حساب الشركة الصادرة",
@@ -357,7 +361,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     <th>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
         <span>{children}</span>
-        {filterKey && <CF.ColumnFilter label={String(children)} state={filters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />}
+        {filterKey && <CF.ColumnFilter label={String(children)} state={safeFilters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />}
       </span>
     </th>
   );
