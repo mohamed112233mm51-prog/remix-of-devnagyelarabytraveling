@@ -212,7 +212,15 @@ function AuthGate() {
   if (needsPassword) return <SetPassword onDone={setPasswordDone} />;
   if (blocked) return <Login />;
   if (!profileLoaded && !startupWarning) return <SplashScreen stage="Profile / Permissions" />;
-  return (<><RouteGuard /><Layout /><ScreenshotTool /></>);
+  return (<>{startupWarning && <StartupWarningBanner message={startupWarning} />}<RouteGuard /><Layout /><ScreenshotTool /></>);
+}
+
+function StartupWarningBanner({ message }: { message: string }) {
+  return (
+    <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10000, padding: "8px 14px", borderRadius: 10, background: "#fffbeb", border: "1px solid #f59e0b", color: "#78350f", fontSize: 12, fontWeight: 800, boxShadow: "0 8px 24px rgba(0,0,0,.12)", direction: "rtl" }}>
+      {message}
+    </div>
+  );
 }
 
 function RootComponent() {
