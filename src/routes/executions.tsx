@@ -42,15 +42,11 @@ function ExecutionsPage() {
   const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
 
   const [tab, setTab] = useState<"list" | "add">("list");
-  const [search, setSearch] = useState("");
-  const [approvalFilter, setApprovalFilter] = useState("");
-  const [operationFilter, setOperationFilter] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Execution | null>(null);
-  const debounced = useDebouncedValue(search, 250);
   const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
   const companyName = (id: string | null | undefined) =>
     (id && companies.find((c) => c.id === id)?.company_name) || "—";
+  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
 
   // If arriving from a submission, prefill the form
