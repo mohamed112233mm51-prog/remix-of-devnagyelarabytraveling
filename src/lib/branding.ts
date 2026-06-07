@@ -51,9 +51,16 @@ if (typeof window !== "undefined") {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Branding;
-      if (parsed && parsed.logoDataUrl) {
-        cache = { ...fallback, ...parsed };
+      const parsed = JSON.parse(raw) as Partial<Branding>;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed.logoDataUrl === "string") {
+        cache = {
+          ...fallback,
+          ...parsed,
+          companyName: typeof parsed.companyName === "string" ? parsed.companyName : fallback.companyName,
+          primaryColor: typeof parsed.primaryColor === "string" ? parsed.primaryColor : fallback.primaryColor,
+          secondaryColor: typeof parsed.secondaryColor === "string" ? parsed.secondaryColor : fallback.secondaryColor,
+          accentColor: typeof parsed.accentColor === "string" ? parsed.accentColor : fallback.accentColor,
+        };
         ready = true;
       }
     }

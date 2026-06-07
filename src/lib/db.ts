@@ -504,14 +504,15 @@ async function loadStore(table: LiveTable, store: LiveStore) {
 
 function applyChange(store: LiveStore, payload: any) {
   const { eventType, new: newRow, old: oldRow } = payload;
+  const rows = Array.isArray(store.rows) ? store.rows : [];
   if (eventType === "INSERT" && newRow) {
-    if (!store.rows.some((r) => r.id === newRow.id)) {
-      store.rows = [newRow, ...store.rows];
+    if (!rows.some((r) => r?.id === newRow.id)) {
+      store.rows = [newRow, ...rows];
     }
   } else if (eventType === "UPDATE" && newRow) {
-    store.rows = store.rows.map((r) => (r.id === newRow.id ? { ...r, ...newRow } : r));
+    store.rows = rows.map((r) => (r?.id === newRow.id ? { ...r, ...newRow } : r));
   } else if (eventType === "DELETE" && oldRow) {
-    store.rows = store.rows.filter((r) => r.id !== oldRow.id);
+    store.rows = rows.filter((r) => r?.id !== oldRow.id);
   }
   notify(store);
 }
@@ -544,7 +545,7 @@ export function useLive<T>(table: LiveTable) {
   const [, force] = useState(0);
   useEffect(() => subscribe(table, () => force((n) => n + 1)), [table]);
   const store = getStore(table);
-  return { rows: store.rows as T[], loading: store.loading, error: store.error };
+  return { rows: (Array.isArray(store.rows) ? store.rows : []) as T[], loading: store.loading, error: store.error };
 }
 
 /** Optimistic helper: mutate the local cache for a table immediately. */
@@ -559,7 +560,8 @@ export function patchLive(table: LiveTable, change: { type: "insert" | "update" 
 /** Read a row snapshot from the live cache (for optimistic rollback). */
 export function getLiveRow(table: LiveTable, id: string): any | undefined {
   const store = liveStores.get(table);
-  return store?.rows.find((r) => r.id === id);
+  const rows = Array.isArray(store?.rows) ? store.rows : [];
+  return rows.find((r) => r?.id === id);
 }
 
 /**

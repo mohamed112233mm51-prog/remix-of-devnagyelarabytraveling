@@ -309,7 +309,7 @@ export function NotificationsBell() {
           .order("created_at", { ascending: false })
           .limit(1);
         if (e) throw e;
-        const latest = data?.[0];
+        const latest = Array.isArray(data) ? data[0] : undefined;
         if (latest && latest.status !== "success") {
           next.push({
             id: `backup-${latest.id}`,
@@ -327,12 +327,13 @@ export function NotificationsBell() {
           .eq("invite_accepted", false)
           .limit(20);
         if (e2) throw e2;
-        const cnt = invs?.length ?? 0;
+        const safeInvs = Array.isArray(invs) ? invs : [];
+        const cnt = safeInvs.length;
         if (cnt > 0) {
           next.push({
             id: `invites-${cnt}`,
             title: `${cnt} دعوة مستخدم لم تُقبل`,
-            description: invs!.slice(0, 2).map((p: any) => p.email).join("، "),
+            description: safeInvs.slice(0, 2).map((p: any) => p.email).join("، "),
             icon: <UserPlus size={16} />,
             to: "/settings",
           });
