@@ -141,10 +141,11 @@ function MerchantsPage() {
                 <thead><tr><th>#</th><th>اسم التاجر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي الوارد</th><th className="num-col">إجمالي الصادر</th><th className="num-col">إجمالي النقدية المحصلة</th><th className="num-col">الرصيد</th><th>إجراءات</th></tr></thead>
                 <tbody>
                   {merchants.length === 0 ? (
-                    <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
+                    <tr><td colSpan={9}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
                     const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0 };
                     const bal = t.incoming - t.outgoing;
+                    const collected = collectedByMerchant.get(m.id) || 0;
                     return (
                       <tr key={m.id}>
                         <td data-label="#">{i + 1}</td>
@@ -153,6 +154,7 @@ function MerchantsPage() {
                         <td data-label="الواتساب">{m.whatsapp || "—"}</td>
                         <td className="num-col" data-label="إجمالي الوارد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.incoming)}</td>
                         <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing)}</td>
+                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(collected)}</td>
                         <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
                         <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditMerchant(m)}>✏️ تعديل</button> : null}</td>
                       </tr>
