@@ -23,6 +23,17 @@ type AuthCtx = {
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
+const STARTUP_TIMEOUT_MS = 8000;
+
+function withStartupTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timed out after ${STARTUP_TIMEOUT_MS}ms`)), STARTUP_TIMEOUT_MS);
+    Promise.resolve(promise).then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -35,7 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
 
   useEffect(() => {
+    console.info("[startup] Auth bootstrap start");
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      console.info("[startup] Auth state change", event, !!s?.user);
       setSession(s);
       if (
         event === "PASSWORD_RECOVERY" ||
@@ -47,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (s?.user) {
         const u: any = s.user;
         if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
+        setProfileLoaded(false);
         setTimeout(() => loadProfile(s.user.id), 0);
       } else {
         setRoles([]);
@@ -57,15 +71,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfileLoaded(false);
       }
     });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session?.user) {
-        const u: any = data.session.user;
-        if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
-        loadProfile(data.session.user.id);
-      }
-      setLoading(false);
-    });
+    withStartupTimeout(supabase.auth.getSession(), "Auth")
+      .then(({ data }) => {
+        console.info("[startup] Auth bootstrap complete", !!data.session?.user);
+        setSession(data.session);
+        if (data.session?.user) {
+          const u: any = data.session.user;
+          if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
+          setProfileLoaded(false);
+          loadProfile(data.session.user.id);
+        }
+      })
+      .catch((error) => {
+        console.warn("[startup] Auth bootstrap failed or timed out", error);
+        setSession(null);
+      })
+      .finally(() => setLoading(false));
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -179,16 +200,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id]);
 
   async function loadProfile(uid: string) {
+    console.info("[startup] Profile/Permissions loading start");
     try {
       const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
-        await Promise.all([
+        await withStartupTimeout(Promise.all([
           supabase.from("user_roles").select("role").eq("user_id", uid),
           supabase
             .from("profiles")
             .select("is_active, invite_accepted, permissions, is_super_admin")
             .eq("id", uid)
             .maybeSingle(),
-        ]);
+        ]), "Profile/Permissions");
       if (roleError || profileError) {
         toast.error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
         setRoles([]);
@@ -204,7 +226,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       else if ((profile as any).is_active === false) setBlocked("disabled");
       else if ((profile as any).invite_accepted === false) setBlocked("disabled");
       else setBlocked(null);
+      console.info("[startup] Profile/Permissions loading complete");
     } catch (error: any) {
+      console.warn("[startup] Profile/Permissions failed or timed out", error);
       toast.error(error?.message || "تعذر تحميل صلاحيات المستخدم");
       setRoles([]);
       setPermissions({});
