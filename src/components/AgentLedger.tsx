@@ -275,7 +275,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 </thead>
                 <tbody>
                   {displayRows.length === 0 ? (
-                    <tr><td colSpan={14}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
+                    <tr><td colSpan={13}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
                   ) : displayRows.map((e, i) => (
                     <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                       <td data-label="#">{i + 1}</td>
@@ -286,7 +286,6 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       <td data-label="العدد">{e.count || "—"}</td>
                       <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>
                       <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>
-                      <td data-label="المدفوعات">{e.payment ? fmtDL(e.payment) : "—"}</td>
                       <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>
                       <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>
                       <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>
@@ -297,7 +296,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={9}>الإجمالي</td>
+                    <td colSpan={8}>الإجمالي</td>
                     <td>{fmtDL(totalServices)}</td>
                     <td>{fmtDL(totalPayments)}</td>
                     <td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(net))} — {accountStatus}</td>
