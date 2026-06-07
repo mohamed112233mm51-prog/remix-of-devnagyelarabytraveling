@@ -45,7 +45,8 @@ function paymentMethodLabel(t: Transaction): string {
 }
 
 function buildLedger(txns: Transaction[]): LedgerEntry[] {
-  return [...txns]
+  const safeTxns = Array.isArray(txns) ? txns.filter(Boolean) : [];
+  return [...safeTxns]
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
     .map((t) => {
       const kind = classifyTxn(t);
@@ -63,8 +64,8 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         description += ` — تاجر الكاش: المستلم ${fmtDL(merchantGross)} − عمولة تاجر الكاش ${fmtDL(merchantCommission)} = صافي ${fmtDL(merchantNet)}`;
       }
       return {
-        id: t.id,
-        date: t.date,
+        id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
+        date: t.date || "",
         kind,
         description,
         destination: t.destination || "—",
@@ -85,10 +86,13 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
 
 export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfile = false, canExport = true }: AgentLedgerProps) {
   const router = useRouter();
-  const { rows: agents, loading: agentsLoading } = useLive<Agent>("agents");
+  const { rows: liveAgents, loading: agentsLoading } = useLive<Agent>("agents");
   const flights: any[] = [];
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: liveTxns } = useLive<Transaction>("transactions");
+  const { rows: liveMerchants } = useLive<Merchant>("merchants");
+  const agents = Array.isArray(liveAgents) ? liveAgents : [];
+  const txns = Array.isArray(liveTxns) ? liveTxns : [];
+  const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
@@ -109,10 +113,11 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     method: CF.emptyMultiSelect(),
     note: CF.emptyText(),
   });
-  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(initialFilters);
-  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => ({ ...p, [k]: s }));
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
   const resetAll = () => setFilters(initialFilters());
-  const anyActive = Object.values(filters).some(CF.isFilterActive);
+  const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
+  const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
   useEffect(() => { if (lockedAgentId) setSelectedAgentId(lockedAgentId); }, [lockedAgentId]);
   useEffect(() => { if (!lockedAgentId) setSelectedAgentId(initialAgentId || ""); }, [initialAgentId, lockedAgentId]);
@@ -154,21 +159,21 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const methodOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.methodLabel).filter((v) => v && v !== "—"))).sort(), [rowsWithMethodLabel]);
 
   const displayRows = useMemo(() => rowsWithMethodLabel.filter((e) => {
-    if (!CF.matchDateRange(e.date, filters.date)) return false;
-    if (!CF.matchText(e.description, filters.description)) return false;
-    if (!CF.matchMultiSelect(e.service, filters.service)) return false;
-    if (!CF.matchMultiSelect(e.destination, filters.destination)) return false;
-    if (!CF.matchNumeric(e.count, filters.count)) return false;
-    if (!CF.matchNumeric(e.price, filters.price)) return false;
-    if (!CF.matchNumeric(e.serviceValue, filters.serviceValue)) return false;
-    if (!CF.matchNumeric(e.payment, filters.payment)) return false;
-    if (!CF.matchNumeric(e.debit, filters.debit)) return false;
-    if (!CF.matchNumeric(e.credit, filters.credit)) return false;
-    if (!CF.matchNumeric(e.balance, filters.balance)) return false;
-    if (!CF.matchMultiSelect(e.methodLabel, filters.method)) return false;
-    if (!CF.matchText(e.note, filters.note)) return false;
+    if (!CF.matchDateRange(e.date, safeFilters.date)) return false;
+    if (!CF.matchText(e.description, safeFilters.description)) return false;
+    if (!CF.matchMultiSelect(e.service, safeFilters.service)) return false;
+    if (!CF.matchMultiSelect(e.destination, safeFilters.destination)) return false;
+    if (!CF.matchNumeric(e.count, safeFilters.count)) return false;
+    if (!CF.matchNumeric(e.price, safeFilters.price)) return false;
+    if (!CF.matchNumeric(e.serviceValue, safeFilters.serviceValue)) return false;
+    if (!CF.matchNumeric(e.payment, safeFilters.payment)) return false;
+    if (!CF.matchNumeric(e.debit, safeFilters.debit)) return false;
+    if (!CF.matchNumeric(e.credit, safeFilters.credit)) return false;
+    if (!CF.matchNumeric(e.balance, safeFilters.balance)) return false;
+    if (!CF.matchMultiSelect(e.methodLabel, safeFilters.method)) return false;
+    if (!CF.matchText(e.note, safeFilters.note)) return false;
     return true;
-  }), [rowsWithMethodLabel, filters]);
+  }), [rowsWithMethodLabel, safeFilters]);
 
   const totalServices = ledger.reduce((s, e) => s + e.debit, 0);
   const totalPayments = ledger.reduce((s, e) => s + e.credit, 0);
@@ -217,7 +222,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     <th>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
         <span>{children}</span>
-        {filterKey && <CF.ColumnFilter label={String(children)} state={filters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />}
+        {filterKey && <CF.ColumnFilter label={String(children)} state={safeFilters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />}
       </span>
     </th>
   );

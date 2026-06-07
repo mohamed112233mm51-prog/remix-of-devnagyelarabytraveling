@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { installStartupSafety } from "@/lib/startupSafety";
 import {
   Outlet,
   Link,
@@ -11,7 +12,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { useEffect } from "react";
-import { FIXED_FAVICON_HREF, FIXED_MANIFEST_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
+import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
   return (
@@ -92,7 +93,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", type: "image/png", href: FIXED_FAVICON_HREF },
       { rel: "shortcut icon", href: FIXED_SHORTCUT_HREF },
       { rel: "apple-touch-icon", href: FIXED_FAVICON_HREF },
-      { rel: "manifest", href: FIXED_MANIFEST_HREF },
     ],
   }),
   shellComponent: RootShell,
@@ -167,7 +167,7 @@ function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
   useGlobalKeyboardNav();
-  useEffect(() => { installServerFnAuthFetch(); }, []);
+  useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
 
