@@ -187,31 +187,15 @@ function SubmissionsPage() {
 
       {tab === "list" ? (
         <>
-          {/* Filters */}
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
-            <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
-              {search && <button onClick={() => setSearch("")} style={clearBtnStyle}><X size={12} /></button>}
-            </div>
-            <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)} style={inputStyle} title="حالة الموافقة">
-              <option value="">حالة الموافقة (الكل)</option>
-              {APPROVAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
-              <option value="">حالة العملية (الكل)</option>
-              {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
-              <option value="">الشركة الصادرة (الكل)</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
-            </select>
-            <div style={{ alignSelf: "center", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+          {/* Toolbar */}
+          <div className="card" style={{ padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
+              <ColumnVisibility columns={SUBMISSION_COLUMNS} visible={visible} onChange={setVisible} />
               <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
-
 
           {/* Table */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -219,29 +203,38 @@ function SubmissionsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", position: "sticky", top: 0 }}>
-                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","الجهة","تاريخ التقديم","تاريخ الصدور","جهة الموافقة","الخدمات","إجراءات"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    <th style={thStyle}>م</th>
+                    {visibleColumns.map((c) => (
+                      <th key={c.key} style={thStyle}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                          <span>{c.label}</span>
+                          {c.filter && (
+                            <CF.ColumnFilter
+                              label={c.label}
+                              state={safeFilters[c.key]}
+                              onChange={(s) => setF(c.key, s)}
+                              options={c.filter === "multi" ? optionsFor(c.key) : undefined}
+                            />
+                          )}
+                        </span>
+                      </th>
                     ))}
+                    <th style={thStyle}>إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={14} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد تقديمات</td></tr>
+                    <tr><td colSpan={visibleColumns.length + 2} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد تقديمات</td></tr>
                   ) : pageRows.map((s, i) => (
                     <tr key={s.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>
-                      <td style={tdStyle}>{s.national_id || "—"}</td>
-                      <td style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>
-                      <td style={tdStyle}>{s.passport || "—"}</td>
-                      <td style={tdStyle}>{s.birth_place || "—"}</td>
-                      <td style={tdStyle}>{agentName(s.agent_id)}</td>
-                      <td style={tdStyle}><span style={badgeStyle(s.status)}>{s.status}</span></td>
-                      <td style={tdStyle}>{s.departure_from || "—"}</td>
-                      <td style={tdStyle}>{s.submit_date || "—"}</td>
-                      <td style={tdStyle}>{s.issue_date || "—"}</td>
-                      <td style={tdStyle}>{companyName((s as any).approval_company_id, s.approval_authority)}</td>
-                      <td style={tdStyle}>{(s.services || []).join(" + ") || "—"}</td>
+                      {visibleColumns.map((c) => {
+                        if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>;
+                        if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={badgeStyle(s.status)}>{s.status}</span></td>;
+                        if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>;
+                        const v = c.accessor(s);
+                        return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
+                      })}
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
                           <button title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
