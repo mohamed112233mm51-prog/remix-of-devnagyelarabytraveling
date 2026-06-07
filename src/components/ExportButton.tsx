@@ -55,6 +55,13 @@ export function ExportButton({ getData, disabled }: { getData: () => StatementEx
         className="btn btn-gold"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
+        style={{
+          background: "linear-gradient(180deg, #D4B25A 0%, #B8923A 100%)",
+          border: "1px solid #A8822E",
+          color: "#1F1A0A",
+          fontWeight: 700,
+          boxShadow: "0 1px 2px rgba(168,130,46,0.35), inset 0 1px 0 rgba(255,255,255,0.25)",
+        }}
       >
         ⬇️ تصدير
       </button>
