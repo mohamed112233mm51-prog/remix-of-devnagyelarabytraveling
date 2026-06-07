@@ -12,6 +12,8 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { confirmDialog } from "@/lib/confirm";
 import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
 import { ExportButton } from "@/components/ExportButton";
+import * as CF from "@/components/ColumnFilter";
+import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -33,30 +35,67 @@ function SubmissionsPage() {
     (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
 
   const [tab, setTab] = useState<"list" | "add">("list");
-  const [search, setSearch] = useState("");
-  const [approvalFilter, setApprovalFilter] = useState("");
-  const [operationFilter, setOperationFilter] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Submission | null>(null);
 
-  const debounced = useDebouncedValue(search, 250);
+  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
+
+  // Column definitions for filters + visibility + export
+  const SUBMISSION_COLUMNS: (ColumnDef & {
+    filter?: "text" | "date" | "multi";
+    accessor: (s: Submission) => string;
+  })[] = [
+    { key: "name", label: "الاسم", filter: "text", accessor: (s) => s.passenger_name || "" },
+    { key: "nid", label: "الرقم القومي", filter: "text", accessor: (s) => s.national_id || "" },
+    { key: "dob", label: "تاريخ الميلاد", filter: "date", accessor: (s) => s.dob || "" },
+    { key: "passport", label: "رقم الجواز", filter: "text", accessor: (s) => s.passport || "" },
+    { key: "birth_place", label: "محل الميلاد", filter: "text", accessor: (s) => s.birth_place || "" },
+    { key: "agent", label: "الوكيل", filter: "multi", accessor: (s) => agentName(s.agent_id) },
+    { key: "status", label: "الحالة", filter: "multi", accessor: (s) => s.status || "" },
+    { key: "departure", label: "الجهة", filter: "multi", accessor: (s) => s.departure_from || "" },
+    { key: "submit_date", label: "تاريخ التقديم", filter: "date", accessor: (s) => s.submit_date || "" },
+    { key: "issue_date", label: "تاريخ الصدور", filter: "date", accessor: (s) => s.issue_date || "" },
+    { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
+    { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
+    { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
+  ];
+
+  const initialFilters = (): Record<string, CF.ColumnFilterState> => {
+    const o: Record<string, CF.ColumnFilterState> = {};
+    for (const c of SUBMISSION_COLUMNS) {
+      o[c.key] = c.filter === "date" ? CF.emptyDateRange() : c.filter === "multi" ? CF.emptyMultiSelect() : CF.emptyText();
+    }
+    return o;
+  };
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
+  const resetAll = () => setFilters(initialFilters());
+  const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
+  const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
+
+  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, SUBMISSION_COLUMNS));
+  const visibleColumns = SUBMISSION_COLUMNS.filter((c) => visible[c.key] !== false);
 
   const filtered = useMemo(() => submissions.filter((s) => {
-    if (approvalFilter && s.status !== approvalFilter) return false;
-    if (operationFilter && (s as any).operation_status !== operationFilter) return false;
-    if (companyFilter && (s as any).approval_company_id !== companyFilter) return false;
-    if (debounced) {
-      const q = debounced.toLowerCase();
-      const aName = (agents.find((a) => a.id === s.agent_id)?.name || "").toLowerCase();
-      const hay = `${s.passenger_name} ${s.national_id || ""} ${s.passport || ""} ${aName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    for (const c of SUBMISSION_COLUMNS) {
+      const fs = safeFilters[c.key];
+      if (!CF.isFilterActive(fs)) continue;
+      const v = c.accessor(s);
+      if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
+      if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
+      if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [submissions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
+  }), [submissions, agents, companies, safeFilters]);
 
+  const optionsFor = (key: string) => {
+    const col = SUBMISSION_COLUMNS.find((c) => c.key === key);
+    if (!col) return [];
+    const set = new Set<string>();
+    submissions.forEach((s) => { const v = col.accessor(s); if (v) set.add(v); });
+    return Array.from(set).sort();
+  };
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
-  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   const onDelete = async (row: Submission) => {
     if (!perm.delete) return;
@@ -89,40 +128,22 @@ function SubmissionsPage() {
   const pendingCount = submissions.filter((s) => ((s as any).operation_status || "").includes("متابعة")).length;
   const cancelledCount = submissions.filter((s) => ((s as any).operation_status || "").includes("ملغي")).length;
 
-  const buildExportData = () => ({
-    title: "كشف التقديمات",
-    fileName: "كشف-التقديمات",
-    columns: [
-      { header: "م", key: "n" },
-      { header: "الاسم", key: "name" },
-      { header: "الرقم القومي", key: "nid" },
-      { header: "تاريخ الميلاد", key: "dob" },
-      { header: "رقم الجواز", key: "passport" },
-      { header: "محل الميلاد", key: "birth_place" },
-      { header: "الوكيل", key: "agent" },
-      { header: "الحالة", key: "status" },
-      { header: "الجهة", key: "departure" },
-      { header: "تاريخ التقديم", key: "submit_date" },
-      { header: "تاريخ الصدور", key: "issue_date" },
-      { header: "جهة الموافقة", key: "company" },
-      { header: "الخدمات", key: "services" },
-    ],
-    rows: filtered.map((s, i) => ({
-      n: i + 1,
-      name: s.passenger_name || "",
-      nid: s.national_id || "",
-      dob: toDisplayDate(s.dob) || "",
-      passport: s.passport || "",
-      birth_place: s.birth_place || "",
-      agent: agentName(s.agent_id),
-      status: s.status || "",
-      departure: s.departure_from || "",
-      submit_date: s.submit_date || "",
-      issue_date: s.issue_date || "",
-      company: companyName((s as any).approval_company_id, s.approval_authority),
-      services: (Array.isArray(s.services) ? s.services : []).join(" + "),
-    })),
-  });
+  const buildExportData = () => {
+    const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
+    return {
+      title: "كشف التقديمات",
+      fileName: "كشف-التقديمات",
+      columns: cols,
+      rows: filtered.map((s, i) => {
+        const row: Record<string, string | number> = { n: i + 1 };
+        for (const c of visibleColumns) {
+          if (c.key === "dob") row[c.key] = toDisplayDate(s.dob) || "";
+          else row[c.key] = c.accessor(s);
+        }
+        return row;
+      }),
+    };
+  };
 
 
   return (
@@ -166,31 +187,15 @@ function SubmissionsPage() {
 
       {tab === "list" ? (
         <>
-          {/* Filters */}
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
-            <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
-              {search && <button onClick={() => setSearch("")} style={clearBtnStyle}><X size={12} /></button>}
-            </div>
-            <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)} style={inputStyle} title="حالة الموافقة">
-              <option value="">حالة الموافقة (الكل)</option>
-              {APPROVAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
-              <option value="">حالة العملية (الكل)</option>
-              {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
-              <option value="">الشركة الصادرة (الكل)</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
-            </select>
-            <div style={{ alignSelf: "center", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+          {/* Toolbar */}
+          <div className="card" style={{ padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
+              <ColumnVisibility columns={SUBMISSION_COLUMNS} visible={visible} onChange={setVisible} />
               <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
-
 
           {/* Table */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -198,29 +203,38 @@ function SubmissionsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", position: "sticky", top: 0 }}>
-                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","الجهة","تاريخ التقديم","تاريخ الصدور","جهة الموافقة","الخدمات","إجراءات"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    <th style={thStyle}>م</th>
+                    {visibleColumns.map((c) => (
+                      <th key={c.key} style={thStyle}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                          <span>{c.label}</span>
+                          {c.filter && (
+                            <CF.ColumnFilter
+                              label={c.label}
+                              state={safeFilters[c.key]}
+                              onChange={(s) => setF(c.key, s)}
+                              options={c.filter === "multi" ? optionsFor(c.key) : undefined}
+                            />
+                          )}
+                        </span>
+                      </th>
                     ))}
+                    <th style={thStyle}>إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={14} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد تقديمات</td></tr>
+                    <tr><td colSpan={visibleColumns.length + 2} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد تقديمات</td></tr>
                   ) : pageRows.map((s, i) => (
                     <tr key={s.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>
-                      <td style={tdStyle}>{s.national_id || "—"}</td>
-                      <td style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>
-                      <td style={tdStyle}>{s.passport || "—"}</td>
-                      <td style={tdStyle}>{s.birth_place || "—"}</td>
-                      <td style={tdStyle}>{agentName(s.agent_id)}</td>
-                      <td style={tdStyle}><span style={badgeStyle(s.status)}>{s.status}</span></td>
-                      <td style={tdStyle}>{s.departure_from || "—"}</td>
-                      <td style={tdStyle}>{s.submit_date || "—"}</td>
-                      <td style={tdStyle}>{s.issue_date || "—"}</td>
-                      <td style={tdStyle}>{companyName((s as any).approval_company_id, s.approval_authority)}</td>
-                      <td style={tdStyle}>{(s.services || []).join(" + ") || "—"}</td>
+                      {visibleColumns.map((c) => {
+                        if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>;
+                        if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={badgeStyle(s.status)}>{s.status}</span></td>;
+                        if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>;
+                        const v = c.accessor(s);
+                        return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
+                      })}
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
                           <button title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>

@@ -15,6 +15,8 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { confirmDialog } from "@/lib/confirm";
 import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
 import { ExportButton } from "@/components/ExportButton";
+import * as CF from "@/components/ColumnFilter";
+import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -40,15 +42,11 @@ function ExecutionsPage() {
   const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
 
   const [tab, setTab] = useState<"list" | "add">("list");
-  const [search, setSearch] = useState("");
-  const [approvalFilter, setApprovalFilter] = useState("");
-  const [operationFilter, setOperationFilter] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
   const [editing, setEditing] = useState<Execution | null>(null);
-  const debounced = useDebouncedValue(search, 250);
   const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
   const companyName = (id: string | null | undefined) =>
     (id && companies.find((c) => c.id === id)?.company_name) || "—";
+  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
 
   // If arriving from a submission, prefill the form
@@ -100,21 +98,74 @@ function ExecutionsPage() {
   }, [executions]);
 
 
+  const svcText = (e: Execution, side: "company" | "agent") => {
+    const svcs = Array.isArray(e.services) ? e.services : [];
+    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
+    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
+    const list = svcs.filter(side === "company" ? isCompanySvc : isAgentSvc);
+    return list.map((s: any) => s?.service_type).filter(Boolean).join(" + ");
+  };
+
+  // Column definitions
+  const EXECUTION_COLUMNS: (ColumnDef & {
+    filter?: "text" | "date" | "multi";
+    accessor: (e: Execution) => string;
+  })[] = [
+    { key: "name", label: "الاسم", filter: "text", accessor: (e) => e.passenger_name || "" },
+    { key: "nid", label: "الرقم القومي", filter: "text", accessor: (e) => e.national_id || "" },
+    { key: "dob", label: "تاريخ الميلاد", filter: "date", accessor: (e) => e.dob || "" },
+    { key: "passport", label: "رقم الجواز", filter: "text", accessor: (e) => e.passport || "" },
+    { key: "birth_place", label: "محل الميلاد", filter: "text", accessor: (e) => e.birth_place || "" },
+    { key: "agent", label: "الوكيل", filter: "multi", accessor: (e) => agentName(e.agent_id) },
+    { key: "status", label: "الحالة", filter: "multi", accessor: (e) => e.status || "" },
+    { key: "op_status", label: "حالة العملية", filter: "multi", accessor: (e) => e.operation_status || "" },
+    { key: "departure", label: "جهة المغادرة", filter: "multi", accessor: (e) => e.departure_from || "" },
+    { key: "destination", label: "الوجهة", filter: "multi", accessor: (e) => e.destination || "" },
+    { key: "airline", label: "الطيران", filter: "multi", accessor: (e) => e.airline || "" },
+    { key: "travel_date", label: "تاريخ المغادرة", filter: "date", accessor: (e) => e.travel_date || "" },
+    { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (e) => companyName((e as any).approval_company_id) },
+    { key: "company_services", label: "خدمات الشركة", filter: "multi", accessor: (e) => svcText(e, "company") },
+    { key: "agent_services", label: "خدمات الوكيل", filter: "multi", accessor: (e) => svcText(e, "agent") },
+    { key: "notes", label: "ملاحظات", filter: "text", accessor: (e) => e.notes || "" },
+  ];
+
+  const initialFilters = (): Record<string, CF.ColumnFilterState> => {
+    const o: Record<string, CF.ColumnFilterState> = {};
+    for (const c of EXECUTION_COLUMNS) {
+      o[c.key] = c.filter === "date" ? CF.emptyDateRange() : c.filter === "multi" ? CF.emptyMultiSelect() : CF.emptyText();
+    }
+    return o;
+  };
+  const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
+  const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
+  const resetAll = () => setFilters(initialFilters());
+  const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
+  const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
+
+  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, EXECUTION_COLUMNS));
+  const visibleColumns = EXECUTION_COLUMNS.filter((c) => visible[c.key] !== false);
+
   const filtered = useMemo(() => executions.filter((e) => {
-    if (approvalFilter && e.status !== approvalFilter) return false;
-    if (operationFilter && e.operation_status !== operationFilter) return false;
-    if (companyFilter && (e as any).approval_company_id !== companyFilter) return false;
-    if (debounced) {
-      const q = debounced.toLowerCase();
-      const aName = (agents.find((a) => a.id === e.agent_id)?.name || "").toLowerCase();
-      const hay = `${e.passenger_name} ${e.national_id || ""} ${e.passport || ""} ${aName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    for (const c of EXECUTION_COLUMNS) {
+      const fs = safeFilters[c.key];
+      if (!CF.isFilterActive(fs)) continue;
+      const v = c.accessor(e);
+      if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
+      if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
+      if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [executions, agents, approvalFilter, operationFilter, companyFilter, debounced]);
+  }), [executions, agents, companies, safeFilters]);
+
+  const optionsFor = (key: string) => {
+    const col = EXECUTION_COLUMNS.find((c) => c.key === key);
+    if (!col) return [];
+    const set = new Set<string>();
+    executions.forEach((e) => { const v = col.accessor(e); if (v) set.add(v); });
+    return Array.from(set).sort();
+  };
 
   const { pageRows, Controls, page, pageSize } = usePagination(filtered, 50);
-  const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const onDelete = async (row: Execution) => {
@@ -142,53 +193,22 @@ function ExecutionsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
 
-  const buildExportData = () => ({
-    title: "كشف التنفيذ",
-    fileName: "كشف-التنفيذ",
-    columns: [
-      { header: "م", key: "n" },
-      { header: "الاسم", key: "name" },
-      { header: "الرقم القومي", key: "nid" },
-      { header: "تاريخ الميلاد", key: "dob" },
-      { header: "رقم الجواز", key: "passport" },
-      { header: "محل الميلاد", key: "birth_place" },
-      { header: "الوكيل", key: "agent" },
-      { header: "الحالة", key: "status" },
-      { header: "حالة العملية", key: "op_status" },
-      { header: "جهة المغادرة", key: "departure" },
-      { header: "الوجهة", key: "destination" },
-      { header: "الطيران", key: "airline" },
-      { header: "تاريخ المغادرة", key: "travel_date" },
-      { header: "جهة الموافقة", key: "company" },
-      { header: "خدمات الشركة", key: "company_services" },
-      { header: "خدمات الوكيل", key: "agent_services" },
-      { header: "ملاحظات", key: "notes" },
-    ],
-    rows: filtered.map((e, i) => {
-      const svcs = Array.isArray(e.services) ? e.services : [];
-      const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
-      const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
-      return {
-        n: i + 1,
-        name: e.passenger_name || "",
-        nid: e.national_id || "",
-        dob: toDisplayDate(e.dob) || "",
-        passport: e.passport || "",
-        birth_place: e.birth_place || "",
-        agent: agentName(e.agent_id),
-        status: e.status || "",
-        op_status: e.operation_status || "",
-        departure: e.departure_from || "",
-        destination: e.destination || "",
-        airline: e.airline || "",
-        travel_date: e.travel_date || "",
-        company: companyName((e as any).approval_company_id),
-        company_services: svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
-        agent_services: svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + "),
-        notes: e.notes || "",
-      };
-    }),
-  });
+  const buildExportData = () => {
+    const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
+    return {
+      title: "كشف التنفيذ",
+      fileName: "كشف-التنفيذ",
+      columns: cols,
+      rows: filtered.map((e, i) => {
+        const row: Record<string, string | number> = { n: i + 1 };
+        for (const c of visibleColumns) {
+          if (c.key === "dob") row[c.key] = toDisplayDate(e.dob) || "";
+          else row[c.key] = c.accessor(e);
+        }
+        return row;
+      }),
+    };
+  };
 
 
   return (
@@ -227,26 +247,11 @@ function ExecutionsPage() {
 
       {tab === "list" ? (
         <>
-          <div className="card" style={{ padding: 12, display: "grid", gap: 8, gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
-            <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم، الرقم القومي، الجواز، أو الوكيل..." style={{ ...inputStyle, paddingInlineStart: 30, width: "100%" }} />
-              {search && <button onClick={() => setSearch("")} style={clearBtnStyle}><X size={12} /></button>}
-            </div>
-            <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)} style={inputStyle} title="حالة الموافقة">
-              <option value="">حالة الموافقة (الكل)</option>
-              {APPROVAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={operationFilter} onChange={(e) => setOperationFilter(e.target.value)} style={inputStyle} title="حالة العملية">
-              <option value="">حالة العملية (الكل)</option>
-              {OPERATION_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={inputStyle} title="الشركة الصادرة">
-              <option value="">الشركة الصادرة (الكل)</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
-            </select>
-            <div style={{ alignSelf: "center", display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+          <div className="card" style={{ padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
+              <ColumnVisibility columns={EXECUTION_COLUMNS} visible={visible} onChange={setVisible} />
               <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
@@ -257,46 +262,45 @@ function ExecutionsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1300, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
-                    {["م","الاسم","الرقم القومي","تاريخ الميلاد","رقم الجواز","محل الميلاد","الوكيل","الحالة","حالة العملية","جهة المغادرة","الوجهة","الطيران","تاريخ المغادرة","جهة الموافقة","خدمات الشركة","خدمات الوكيل","ملاحظات","إجراءات"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    <th style={thStyle}>م</th>
+                    {visibleColumns.map((c) => (
+                      <th key={c.key} style={thStyle}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                          <span>{c.label}</span>
+                          {c.filter && (
+                            <CF.ColumnFilter
+                              label={c.label}
+                              state={safeFilters[c.key]}
+                              onChange={(s) => setF(c.key, s)}
+                              options={c.filter === "multi" ? optionsFor(c.key) : undefined}
+                            />
+                          )}
+                        </span>
+                      </th>
                     ))}
+                    <th style={thStyle}>إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={18} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
-                  ) : pageRows.map((e, i) => {
-                    const svcs = Array.isArray(e.services) ? e.services : [];
-                    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
-                    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
-                    const companySvcText = svcs.filter(isCompanySvc).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—";
-                    const agentSvcText = svcs.filter(isAgentSvc).map((s: any) => s?.service_type).filter(Boolean).join(" + ") || "—";
-                    return (
+                    <tr><td colSpan={visibleColumns.length + 2} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
+                  ) : pageRows.map((e, i) => (
                     <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>
-                      <td style={tdStyle}>{e.national_id || "—"}</td>
-                      <td style={tdStyle}>{toDisplayDate(e.dob) || "—"}</td>
-                      <td style={tdStyle}>{e.passport || "—"}</td>
-                      <td style={tdStyle}>{e.birth_place || "—"}</td>
-                      <td style={tdStyle}>{agentName(e.agent_id)}</td>
-                      <td style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>
-                      <td style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>
-                      <td style={tdStyle}>{e.departure_from || "—"}</td>
-                      <td style={tdStyle}>{e.destination || "—"}</td>
-                      <td style={tdStyle}>{e.airline || "—"}</td>
-                      <td style={tdStyle}>{e.travel_date || "—"}</td>
-                      <td style={tdStyle}>{companyName((e as any).approval_company_id)}</td>
-                      <td style={tdStyle}>{companySvcText}</td>
-                      <td style={tdStyle}>{agentSvcText}</td>
-                      <td style={tdStyle}>{e.notes || "—"}</td>
-
+                      {visibleColumns.map((c) => {
+                        if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>;
+                        if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>;
+                        if (c.key === "op_status") return <td key={c.key} style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>;
+                        if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(e.dob) || "—"}</td>;
+                        const v = c.accessor(e);
+                        return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
+                      })}
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && <button title="تعديل" onClick={() => { setEditing(e); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>}
                         {perm.delete && <button title="حذف" onClick={() => onDelete(e)} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={14} /></button>}
                       </td>
                     </tr>
-                  );})}
+                  ))}
                 </tbody>
               </table>
             </div>

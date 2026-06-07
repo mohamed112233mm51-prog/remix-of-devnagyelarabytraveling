@@ -138,7 +138,6 @@ export async function exportStatementToExcel(data: StatementExportData) {
 
   const colCount = data.columns.length;
   const lastColLetter = colLetter(colCount);
-  const userLabel = await getCurrentUserLabel();
   const hexToArgb = (hex: string) => {
     const m = /^#?([a-f\d]{6})$/i.exec((hex || "").trim());
     return m ? `FF${m[1].toUpperCase()}` : "FF0F1B3D";
@@ -183,7 +182,7 @@ export async function exportStatementToExcel(data: StatementExportData) {
   ws.mergeCells(`A${metaRow}:${lastColLetter}${metaRow}`);
   const r3 = ws.getCell(`A${metaRow}`);
   const subtitleBit = data.subtitle ? `${data.subtitle}  •  ` : "";
-  r3.value = `${subtitleBit}تاريخ التصدير: ${todayLabel()}    صادر بواسطة: ${userLabel}`;
+  r3.value = `${subtitleBit}تاريخ التصدير: ${todayLabel()}`;
   r3.font = { name: "Cairo", size: 10, color: { argb: "FF475569" } };
   r3.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl", wrapText: true };
   r3.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
@@ -373,7 +372,6 @@ export async function exportStatementToPDF(data: StatementExportData) {
   }
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
-  const userLabel = await getCurrentUserLabel();
   const esc = (v: unknown) =>
     String(v ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
@@ -417,7 +415,7 @@ tfoot td{font-weight:700;background:#f9fafb}
   <div class="meta">
     <div class="co-name">${esc(companyName)}</div>
     <div class="report-title">${esc(data.title)}</div>
-    <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())} • صادر بواسطة: ${esc(userLabel)}</div>
+    <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
 </div>
 ${summaryHtml}
