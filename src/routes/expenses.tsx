@@ -18,6 +18,14 @@ import {
 } from "@/lib/db";
 import { confirmDialog } from "@/lib/confirm";
 import { Wallet, Receipt, TrendingDown, Plus } from "lucide-react";
+import {
+  PaymentSplits,
+  type PaymentSplitRow,
+  newPaymentSplitRow,
+  validatePaymentSplits,
+  filterValidSplits,
+  methodsForSplit,
+} from "@/components/PaymentSplits";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
@@ -25,26 +33,16 @@ export const Route = createFileRoute("/expenses")({
 
 const EXPENSE_TYPES = ["ثابت", "متغير"] as const;
 
-type FundingSource =
-  | "insta_company"
-  | "cash_company"
-  | "usd_treasury"
-  | "merchant_wallet"
-  | "merchant_physical";
-
-const FUNDING_SOURCES: { value: FundingSource; label: string }[] = [
-  { value: "insta_company", label: "انستا الشركة" },
-  { value: "cash_company", label: "نقدي الشركة" },
-  { value: "usd_treasury", label: "الخزينة الدولارية" },
-  { value: "merchant_wallet", label: "تاجر الكاش" },
-  { value: "merchant_physical", label: "نقدي التاجر" },
-];
-
-const sourceLabel = (v?: string | null) =>
-  FUNDING_SOURCES.find((s) => s.value === v)?.label || v || "—";
-
-const isMerchantSource = (v: string) =>
-  v === "merchant_wallet" || v === "merchant_physical";
+// Legacy single-source labels (kept for backward-compat on old rows)
+const LEGACY_SOURCE_LABELS: Record<string, string> = {
+  insta_company: "انستا الشركة",
+  cash_company: "نقدي الشركة",
+  usd_treasury: "الخزينة الدولارية",
+  merchant_wallet: "تاجر الكاش",
+  merchant_physical: "نقدي التاجر",
+};
+const legacySourceLabel = (v?: string | null) =>
+  (v && LEGACY_SOURCE_LABELS[v]) || v || "—";
 
 type Tab = "add" | "history";
 
@@ -116,9 +114,8 @@ function ExpensesPage() {
 
   const totalExpenses = useMemo(
     () =>
-      expenses.reduce((s, e) => s + Number(e.amount || 0), 0) +
-      deductions.reduce((s, d) => s + Number(d.amount || 0), 0),
-    [expenses, deductions],
+      expenses.reduce((s, e) => s + Number(e.amount || 0), 0),
+    [expenses],
   );
   const fixedTotal = useMemo(
     () => expenses.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0),
@@ -128,6 +125,8 @@ function ExpensesPage() {
     () => expenses.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0),
     [expenses],
   );
+  // keep deductions referenced so live subscription stays mounted for balance calcs
+  void deductions;
 
   return (
     <div className="section active fin-page accounts-page">
@@ -179,135 +178,174 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     expense_type: initial?.expense_type || "متغير",
     amount: initial ? String(initial.amount) : "",
     date: initial?.date || new Date().toISOString().slice(0, 10),
-    funding_source: (initial?.funding_source as FundingSource | "") || "",
-    merchant_id: initial?.merchant_id || "",
-    usd_amount: initial?.usd_amount ? String(initial.usd_amount) : "",
-    exchange_rate: initial?.exchange_rate ? String(initial.exchange_rate) : "",
     notes: initial?.notes || "",
     auto_deduct_enabled: initial?.auto_deduct_enabled || false,
     auto_deduct_day: initial?.auto_deduct_day ? String(initial.auto_deduct_day) : "1",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
 
-  const isUsd = form.funding_source === "usd_treasury";
-  const isMerchant = isMerchantSource(form.funding_source);
+  // Multi-payment splits (new): only used on insert (edit keeps original record)
+  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
 
-  // EGP amount: for USD source it's computed = usd * rate; otherwise it's the typed amount
-  const egpAmount = useMemo(() => {
-    if (isUsd) {
-      return Math.round(Number(form.usd_amount || 0) * Number(form.exchange_rate || 0));
-    }
-    return Math.round(Number(form.amount || 0));
-  }, [form.amount, form.usd_amount, form.exchange_rate, isUsd]);
+  const totalAmount = Number(form.amount || 0);
+  const splitsTotal = useMemo(
+    () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [splits],
+  );
+  const splitsDiff = totalAmount - splitsTotal;
 
-  const selectedBalance = useMemo(() => {
-    if (!form.funding_source) return null;
-    if (form.funding_source === "insta_company") return { v: balances.insta_company, label: "رصيد انستا الشركة", egp: true };
-    if (form.funding_source === "cash_company") return { v: balances.cash_company, label: "رصيد نقدي الشركة", egp: true };
-    if (form.funding_source === "usd_treasury") return { v: balances.usd_treasury, label: "رصيد الخزينة الدولارية", egp: false };
-    if (isMerchant && form.merchant_id) {
-      return { v: balances.merchantBalance.get(form.merchant_id) || 0, label: "رصيد التاجر", egp: true };
+  // Per-source balance preview based on chosen splits
+  const balanceWarnings = useMemo(() => {
+    if (initial) return [] as string[]; // edit doesn't deduct again
+    const warns: string[] = [];
+    let usedInsta = 0, usedCash = 0;
+    const usedMerchant = new Map<string, number>();
+    for (const r of filterValidSplits(splits)) {
+      const a = Number(r.amount) || 0;
+      if (r.method === "company_instapay") usedInsta += a;
+      else if (r.method === "company_cash") usedCash += a;
+      else if (r.source === "merchant" && r.merchant_id) {
+        usedMerchant.set(r.merchant_id, (usedMerchant.get(r.merchant_id) || 0) + a);
+      }
     }
-    return null;
-  }, [form.funding_source, form.merchant_id, balances, isMerchant]);
+    if (usedInsta > balances.insta_company) warns.push(`رصيد إنستا الشركة غير كافٍ (المتاح: ${fmtDL(balances.insta_company)})`);
+    if (usedCash > balances.cash_company) warns.push(`رصيد نقدي الشركة غير كافٍ (المتاح: ${fmtDL(balances.cash_company)})`);
+    for (const [mid, amt] of usedMerchant) {
+      const bal = balances.merchantBalance.get(mid) || 0;
+      if (amt > bal) {
+        const name = merchants.find((m) => m.id === mid)?.merchant_name || "تاجر";
+        warns.push(`رصيد ${name} غير كافٍ (المتاح: ${fmtDL(bal)})`);
+      }
+    }
+    return warns;
+  }, [splits, balances, initial, merchants]);
 
   const save = async () => {
     if (!form.expense_name.trim()) return toast.error("اسم المصروف مطلوب");
-    if (!form.funding_source) return toast.error("اختر مصدر الدفع");
-    if (isMerchant && !form.merchant_id) return toast.error("اختر التاجر");
+    if (!totalAmount || totalAmount <= 0) return toast.error("أدخل إجمالي المصروف");
 
-    if (isUsd) {
-      const usd = Number(form.usd_amount || 0);
-      const rate = Number(form.exchange_rate || 0);
-      if (!usd || usd <= 0) return toast.error("أدخل المبلغ بالدولار");
-      if (!rate || rate <= 0) return toast.error("أدخل سعر الصرف");
-      if (!initial && usd > Number(balances.usd_treasury)) {
-        return toast.error("لا يوجد رصيد كافي في مصدر الدفع");
-      }
-    } else {
-      if (!egpAmount || egpAmount <= 0) return toast.error("أدخل المبلغ");
-      if (!initial && selectedBalance && egpAmount > Number(selectedBalance.v)) {
-        return toast.error("لا يوجد رصيد كافي في مصدر الدفع");
-      }
-    }
-
-    const payload: any = {
-      expense_name: form.expense_name,
-      expense_type: form.expense_type,
-      amount: egpAmount,
-      date: form.date,
-      payment_method: sourceLabel(form.funding_source), // back-compat
-      notes: form.notes || null,
-      auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
-      auto_deduct_day:
-        form.expense_type === "ثابت" && form.auto_deduct_enabled
-          ? Math.max(1, Math.min(28, Number(form.auto_deduct_day) || 1))
-          : null,
-      funding_source: form.funding_source,
-      merchant_id: isMerchant ? form.merchant_id : null,
-      currency: isUsd ? "USD" : "EGP",
-      usd_amount: isUsd ? Number(form.usd_amount || 0) : 0,
-      exchange_rate: isUsd ? Number(form.exchange_rate || 0) : null,
-    };
-
+    // Edit mode: only update basic fields; don't touch deductions/collections.
     if (initial) {
-      const { error } = await supabase.from("expenses").update(payload).eq("id", initial.id);
+      const { error } = await supabase
+        .from("expenses")
+        .update({
+          expense_name: form.expense_name,
+          expense_type: form.expense_type,
+          amount: totalAmount,
+          date: form.date,
+          notes: form.notes || null,
+          auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
+          auto_deduct_day:
+            form.expense_type === "ثابت" && form.auto_deduct_enabled
+              ? Math.max(1, Math.min(28, Number(form.auto_deduct_day) || 1))
+              : null,
+        })
+        .eq("id", initial.id);
       if (error) return toast.error(error.message);
       toast.success("تم حفظ التعديلات");
       onDone?.();
       return;
     }
 
-    // Insert expense, then deduct from chosen source
+    // Insert mode with multi-payment splits
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    const valid = filterValidSplits(splits);
+    for (const r of valid) {
+      const allowed = methodsForSplit(r, merchants).map((m) => m.key);
+      if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
+    }
+    if (Math.abs(splitsDiff) > 0.5) {
+      return toast.error(`إجمالي وسائل الدفع (${fmtDL(splitsTotal)}) لا يساوي إجمالي المصروف (${fmtDL(totalAmount)})`);
+    }
+    if (balanceWarnings.length) return toast.error(balanceWarnings[0]);
+
+    // Build a human-readable summary for back-compat columns
+    const summary = valid
+      .map((r) => {
+        const label = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || r.method;
+        return `${label}: ${fmtDL(Number(r.amount) || 0)}`;
+      })
+      .join(" | ");
+    const firstMethodKey = valid[0].method;
+    const firstMerchantId = valid.find((r) => r.source === "merchant")?.merchant_id || null;
+
+    const expensePayload: any = {
+      expense_name: form.expense_name,
+      expense_type: form.expense_type,
+      amount: totalAmount,
+      date: form.date,
+      payment_method: valid.length > 1 ? "متعدد" : (methodsForSplit(valid[0], merchants).find((m) => m.key === firstMethodKey)?.label || "نقدي"),
+      notes: form.notes ? `${form.notes}\n${summary}` : summary,
+      auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
+      auto_deduct_day:
+        form.expense_type === "ثابت" && form.auto_deduct_enabled
+          ? Math.max(1, Math.min(28, Number(form.auto_deduct_day) || 1))
+          : null,
+      funding_source: valid.length > 1
+        ? "متعدد"
+        : (firstMethodKey === "company_instapay" ? "insta_company"
+          : firstMethodKey === "company_cash" ? "cash_company"
+          : firstMethodKey === "merchant_wallet" ? "merchant_wallet"
+          : firstMethodKey === "merchant_physical" ? "merchant_physical"
+          : firstMethodKey === "merchant_instapay" ? "merchant_wallet"
+          : null),
+      merchant_id: valid.length === 1 ? firstMerchantId : null,
+      currency: "EGP",
+      usd_amount: 0,
+      exchange_rate: null,
+    };
+
     const { data: expenseRow, error } = await supabase
-      .from("expenses").insert(payload).select("id").single();
+      .from("expenses").insert(expensePayload).select("id").single();
     if (error || !expenseRow) return toast.error(error?.message || "تعذر حفظ المصروف");
 
-    if (form.funding_source === "insta_company" || form.funding_source === "cash_company") {
-      const { error: e2 } = await supabase.from("expense_deductions").insert({
-        expense_id: expenseRow.id,
-        deduction_date: form.date,
-        amount: egpAmount,
-        status: "مكتمل",
-        funding_source: form.funding_source,
-        currency: "EGP",
-      });
-      if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل الخصم: " + e2.message);
-    } else if (form.funding_source === "usd_treasury") {
-      const { error: e2 } = await supabase.from("usd_treasury_transactions").insert({
-        date: form.date,
-        type: "company_payment",
-        usd_amount: Number(form.usd_amount || 0),
-        egp_amount: egpAmount,
-        exchange_rate: Number(form.exchange_rate || 0),
-        source_type: "expense",
-        note: `مصروف: ${form.expense_name}`,
-      });
-      if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل الخصم الدولاري: " + e2.message);
-    } else if (isMerchant) {
-      const { error: e2 } = await supabase.from("merchant_cash_collections").insert({
-        merchant_id: form.merchant_id,
-        date: form.date,
-        amount: egpAmount,
-        note: `مصروف (${sourceLabel(form.funding_source)}): ${form.expense_name}`,
-      });
-      if (e2) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد التاجر: " + e2.message);
+    // Insert one record per split into the appropriate ledger
+    const deductionRows: any[] = [];
+    const collectionRows: any[] = [];
+    for (const r of valid) {
+      const a = Number(r.amount) || 0;
+      if (r.method === "company_instapay" || r.method === "company_cash") {
+        deductionRows.push({
+          expense_id: expenseRow.id,
+          deduction_date: form.date,
+          amount: a,
+          status: "مكتمل",
+          funding_source: r.method === "company_instapay" ? "insta_company" : "cash_company",
+          currency: r.currency || "EGP",
+        });
+      } else if (r.source === "merchant" && r.merchant_id) {
+        // No 1% commission on expenses: deduct full amount from merchant balance.
+        const methodLabel = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || "تاجر";
+        collectionRows.push({
+          expense_id: expenseRow.id,
+          merchant_id: r.merchant_id,
+          date: form.date,
+          amount: a,
+          note: `مصروف (${methodLabel}): ${form.expense_name}`,
+        });
+      }
+    }
+    if (deductionRows.length) {
+      const { error: e2 } = await supabase.from("expense_deductions").insert(deductionRows);
+      if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل بعض الخصومات: " + e2.message);
+    }
+    if (collectionRows.length) {
+      const { error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows);
+      if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
     }
 
-    toast.success("تم حفظ المصروف وخصمه من مصدر الدفع");
+    toast.success("تم حفظ المصروف وخصمه من مصادر الدفع");
     setForm({
       expense_name: "",
       expense_type: "متغير",
       amount: "",
       date: new Date().toISOString().slice(0, 10),
-      funding_source: "",
-      merchant_id: "",
-      usd_amount: "",
-      exchange_rate: "",
       notes: "",
       auto_deduct_enabled: false,
       auto_deduct_day: "1",
     });
+    setSplits([newPaymentSplitRow()]);
     onDone?.();
   };
 
@@ -321,60 +359,10 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
             {EXPENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-
-        {!isUsd && (
-          <div className="form-group"><label>المبلغ (ج.م)</label>
-            <input type="number" placeholder="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} />
-          </div>
-        )}
-
-        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-
-        <div className="form-group"><label>دفع من</label>
-          <select value={form.funding_source} onChange={(e) => set("funding_source", e.target.value)}>
-            <option value="">— اختر مصدر الدفع —</option>
-            {FUNDING_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
+        <div className="form-group"><label>إجمالي المصروف (ج.م)</label>
+          <input type="number" placeholder="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} />
         </div>
-
-        {isMerchant && (
-          <div className="form-group"><label>اختر التاجر</label>
-            <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-              <option value="">— اختر التاجر —</option>
-              {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-            </select>
-          </div>
-        )}
-
-        {isUsd && (
-          <>
-            <div className="form-group"><label>المبلغ بالدولار</label>
-              <input type="number" step="0.01" placeholder="0" value={form.usd_amount} onChange={(e) => set("usd_amount", e.target.value)} />
-            </div>
-            <div className="form-group"><label>سعر الصرف</label>
-              <input type="number" step="0.01" placeholder="0" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
-            </div>
-            <div className="form-group"><label>المعادل بالجنيه</label>
-              <input type="number" value={egpAmount || ""} readOnly />
-            </div>
-          </>
-        )}
-
-        {selectedBalance && (
-          <div className="form-group full">
-            <div style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              background: "var(--card, #f7f7f9)",
-              border: "1px solid var(--border, #e5e7eb)",
-              fontSize: 13,
-            }}>
-              {selectedBalance.label}:&nbsp;
-              <b>{selectedBalance.egp ? fmtDL(selectedBalance.v) : fmtUSD(selectedBalance.v)}</b>
-            </div>
-          </div>
-        )}
-
+        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
         <div className="form-group full"><label>البيان / ملاحظات</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
 
         {form.expense_type === "ثابت" && (
@@ -405,6 +393,34 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           </>
         )}
       </div>
+
+      {!initial && (
+        <>
+          <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل الدفع" />
+          <div style={{ padding: "0 8px 8px", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, fontSize: 13 }}>
+            <div>
+              إجمالي وسائل الدفع: <b>{fmtDL(splitsTotal)}</b>
+              {Math.abs(splitsDiff) > 0.5 && (
+                <span style={{ color: "var(--red, #dc2626)", marginInlineStart: 12, fontWeight: 700 }}>
+                  الفرق: {fmtDL(splitsDiff)}
+                </span>
+              )}
+            </div>
+            {balanceWarnings.length > 0 && (
+              <div style={{ color: "var(--red, #dc2626)", fontWeight: 700 }}>
+                {balanceWarnings.join(" • ")}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {initial && (
+        <div style={{ padding: "8px 12px", margin: "8px", borderRadius: 8, background: "var(--card, #f7f7f9)", border: "1px solid var(--border, #e5e7eb)", fontSize: 12, color: "var(--muted-foreground, #6b7280)" }}>
+          ملاحظة: لتغيير وسائل الدفع، احذف المصروف وأعد إضافته. التعديل هنا يقتصر على الحقول الأساسية فقط.
+        </div>
+      )}
+
       <div className="form-footer">
         <button className="btn btn-gold" onClick={save}>💾 {initial ? "حفظ التعديلات" : "حفظ المصروف"}</button>
         {initial && onDone && <button className="btn" onClick={onDone} style={{ marginInlineStart: 8 }}>إلغاء</button>}
@@ -415,12 +431,40 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 
 function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
   const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
+  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const [edit, setEdit] = useState<Expense | null>(null);
-  const merchantName = (id: string | null) =>
-    id ? merchants.find((m) => m.id === id)?.merchant_name || "—" : "—";
+
+  const merchantName = (id: string | null | undefined) =>
+    id ? merchants.find((m) => m.id === id)?.merchant_name || "تاجر" : "—";
+
+  // Group splits per expense_id
+  const splitsByExpense = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const d of deductions) {
+      if (!d.expense_id) continue;
+      const label =
+        d.funding_source === "insta_company" ? "إنستا الشركة"
+        : d.funding_source === "cash_company" ? "نقدي الشركة"
+        : d.funding_source || "—";
+      const arr = map.get(d.expense_id) || [];
+      arr.push(`${label}: ${fmtDL(Number(d.amount || 0))}`);
+      map.set(d.expense_id, arr);
+    }
+    for (const c of collections) {
+      if (!c.expense_id) continue;
+      const arr = map.get(c.expense_id) || [];
+      arr.push(`${merchantName(c.merchant_id)}: ${fmtDL(Number(c.amount || 0))}`);
+      map.set(c.expense_id, arr);
+    }
+    return map;
+  }, [deductions, collections, merchants]);
 
   const del = async (id: string) => {
-    if (!(await confirmDialog("حذف هذا المصروف؟"))) return;
+    if (!(await confirmDialog("حذف هذا المصروف؟ سيتم حذف كل وسائل الدفع المرتبطة به."))) return;
+    // Delete linked splits first (no FK cascade)
+    await supabase.from("expense_deductions").delete().eq("expense_id", id);
+    await supabase.from("merchant_cash_collections").delete().eq("expense_id", id);
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) toast.error(error.message);
     else toast.success("تم حذف المصروف");
@@ -428,16 +472,25 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
 
   if (edit) return <ExpenseForm initial={edit} onDone={() => setEdit(null)} />;
 
+  const paymentsCell = (e: Expense) => {
+    const list = splitsByExpense.get(e.id);
+    if (list && list.length) return list.join(" | ");
+    // Legacy single-source fallback
+    const src = legacySourceLabel(e.funding_source);
+    if (e.merchant_id) return `${src} (${merchantName(e.merchant_id)}): ${fmtDL(Number(e.amount || 0))}`;
+    return `${src}: ${fmtDL(Number(e.amount || 0))}`;
+  };
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">📜 سجل المصروفات</div></div>
       <div className="card-body">
         <div className="table-wrap">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>دفع من</th><th>التاجر</th><th>البيان</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>إجراءات</th></tr></thead>
             <tbody>
               {expenses.length === 0 ? (
-                <tr><td colSpan={9}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
+                <tr><td colSpan={8}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
               ) : expenses.map((e, i) => (
                 <tr key={e.id}>
                   <td data-label="#">{i + 1}</td>
@@ -452,8 +505,7 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
                     ) : null}
                   </td>
                   <td data-label="التاريخ">{e.date}</td>
-                  <td data-label="دفع من">{sourceLabel(e.funding_source)}</td>
-                  <td data-label="التاجر">{merchantName(e.merchant_id)}</td>
+                  <td data-label="وسائل الدفع" style={{ fontSize: 12, lineHeight: 1.6 }}>{paymentsCell(e)}</td>
                   <td data-label="البيان">{e.notes || "—"}</td>
                   <td data-label="إجراءات">
                     <button className="btn" onClick={() => setEdit(e)}>تعديل</button>

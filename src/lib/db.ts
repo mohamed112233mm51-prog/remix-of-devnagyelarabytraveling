@@ -305,6 +305,7 @@ export type MerchantCashCollection = {
   date: string;
   amount: number;
   note: string | null;
+  expense_id?: string | null;
   created_at: string;
 };
 

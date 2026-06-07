@@ -604,6 +604,7 @@ export type Database = {
           amount: number
           created_at: string
           date: string
+          expense_id: string | null
           id: string
           is_demo: boolean
           merchant_id: string
@@ -613,6 +614,7 @@ export type Database = {
           amount?: number
           created_at?: string
           date?: string
+          expense_id?: string | null
           id?: string
           is_demo?: boolean
           merchant_id: string
@@ -622,6 +624,7 @@ export type Database = {
           amount?: number
           created_at?: string
           date?: string
+          expense_id?: string | null
           id?: string
           is_demo?: boolean
           merchant_id?: string
@@ -968,6 +971,7 @@ export type Database = {
           date: string
           egp_amount: number
           exchange_rate: number | null
+          expense_id: string | null
           id: string
           is_demo: boolean
           merchant_id: string | null
@@ -982,6 +986,7 @@ export type Database = {
           date?: string
           egp_amount?: number
           exchange_rate?: number | null
+          expense_id?: string | null
           id?: string
           is_demo?: boolean
           merchant_id?: string | null
@@ -996,6 +1001,7 @@ export type Database = {
           date?: string
           egp_amount?: number
           exchange_rate?: number | null
+          expense_id?: string | null
           id?: string
           is_demo?: boolean
           merchant_id?: string | null
