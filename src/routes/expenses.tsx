@@ -451,7 +451,7 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
       arr.push(`${label}: ${fmtDL(Number(d.amount || 0))}`);
       map.set(d.expense_id, arr);
     }
-    for (const c of collections as any[]) {
+    for (const c of collections) {
       if (!c.expense_id) continue;
       const arr = map.get(c.expense_id) || [];
       arr.push(`${merchantName(c.merchant_id)}: ${fmtDL(Number(c.amount || 0))}`);
