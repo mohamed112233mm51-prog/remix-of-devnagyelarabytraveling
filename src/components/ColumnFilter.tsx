@@ -108,16 +108,34 @@ export function matchNumeric(val: number, s: ColumnFilterState | undefined): boo
 
 type Props = {
   label: string;
-  state: ColumnFilterState;
+  state?: ColumnFilterState;
   onChange: (s: ColumnFilterState) => void;
   options?: string[]; // for multiSelect
 };
 
-export function ColumnFilter({ label, state, onChange, options }: Props) {
+class ColumnFilterBoundary extends Component<{ label: string; children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error(`[ColumnFilter:${this.props.label}]`, error); }
+  render() {
+    if (this.state.error) {
+      return <span title={`خطأ فلتر ${this.props.label}: ${this.state.error.message}`} style={{ color: "var(--red)", fontSize: 11 }}>⚠</span>;
+    }
+    return this.props.children;
+  }
+}
+
+export function ColumnFilter(props: Props) {
+  return <ColumnFilterBoundary label={props.label}><ColumnFilterInner {...props} /></ColumnFilterBoundary>;
+}
+
+function ColumnFilterInner({ label, state, onChange, options }: Props) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const active = isFilterActive(state);
+  const safeState = sanitizeColumnFilterState(state);
+  const safeOptions = Array.isArray(options) ? options.map((v) => String(v ?? "")).filter(Boolean) : [];
+  const active = isFilterActive(safeState);
 
   useEffect(() => {
     if (!open) return;
@@ -173,11 +191,11 @@ export function ColumnFilter({ label, state, onChange, options }: Props) {
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 8, color: "var(--text, #111)" }}>{label}</div>
-          <FilterBody state={state} onChange={onChange} options={options} />
+          <FilterBody state={safeState} onChange={onChange} options={safeOptions} />
           <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 10 }}>
             <button
               type="button"
-              onClick={() => { onChange(resetFilter(state)); }}
+              onClick={() => { onChange(resetFilter(safeState)); }}
               style={{ flex: 1, padding: "4px 8px", fontSize: 11, border: "1px solid var(--border, #e5e7eb)", background: "transparent", borderRadius: 4, cursor: "pointer" }}
             >مسح</button>
             <button
