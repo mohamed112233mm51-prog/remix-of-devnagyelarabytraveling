@@ -182,7 +182,7 @@ export async function exportStatementToExcel(data: StatementExportData) {
   ws.mergeCells(`A${metaRow}:${lastColLetter}${metaRow}`);
   const r3 = ws.getCell(`A${metaRow}`);
   const subtitleBit = data.subtitle ? `${data.subtitle}  •  ` : "";
-  r3.value = `${subtitleBit}تاريخ التصدير: ${todayLabel()}    صادر بواسطة: ${userLabel}`;
+  r3.value = `${subtitleBit}تاريخ التصدير: ${todayLabel()}`;
   r3.font = { name: "Cairo", size: 10, color: { argb: "FF475569" } };
   r3.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl", wrapText: true };
   r3.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
