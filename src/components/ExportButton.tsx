@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   exportStatementToExcel,
@@ -8,15 +9,33 @@ import {
 
 export function ExportButton({ getData, disabled }: { getData: () => StatementExportData; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const popW = 180;
+      let left = rect.left + window.scrollX + rect.width - popW;
+      if (left < 8) left = 8;
+      if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+      setPos({ top: rect.bottom + window.scrollY + 6, left });
+    }
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t)) return;
+      const pop = document.getElementById("__export_pop");
+      if (pop && pop.contains(t)) return;
+      setOpen(false);
     };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
   }, [open]);
 
   const handle = async (kind: "pdf" | "excel") => {
@@ -29,8 +48,9 @@ export function ExportButton({ getData, disabled }: { getData: () => StatementEx
   };
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+    <>
       <button
+        ref={btnRef}
         type="button"
         className="btn btn-gold"
         disabled={disabled}
@@ -38,38 +58,29 @@ export function ExportButton({ getData, disabled }: { getData: () => StatementEx
       >
         ⬇️ تصدير
       </button>
-      {open && (
+      {open && pos && typeof document !== "undefined" && createPortal(
         <div
+          id="__export_pop"
           style={{
             position: "absolute",
-            top: "calc(100% + 6px)",
-            insetInlineEnd: 0,
+            top: pos.top,
+            left: pos.left,
+            minWidth: 180,
+            zIndex: 10050,
             background: "var(--card, #fff)",
             border: "1px solid var(--border, #e5e7eb)",
             borderRadius: 10,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-            minWidth: 160,
-            zIndex: 50,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
             overflow: "hidden",
+            direction: "rtl",
           }}
         >
-          <button
-            type="button"
-            onClick={() => handle("pdf")}
-            style={menuItemStyle}
-          >
-            🧾 PDF
-          </button>
-          <button
-            type="button"
-            onClick={() => handle("excel")}
-            style={menuItemStyle}
-          >
-            📊 Excel
-          </button>
-        </div>
+          <button type="button" onClick={() => handle("pdf")} style={menuItemStyle}>🧾 PDF</button>
+          <button type="button" onClick={() => handle("excel")} style={menuItemStyle}>📊 Excel</button>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 
