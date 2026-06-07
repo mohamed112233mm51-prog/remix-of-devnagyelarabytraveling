@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Filter } from "lucide-react";
 
@@ -15,8 +15,48 @@ export const emptyDateRange = (): ColumnFilterState => ({ type: "dateRange", fro
 export const emptyMultiSelect = (): ColumnFilterState => ({ type: "multiSelect", selected: [] });
 export const emptyNumeric = (): ColumnFilterState => ({ type: "numeric", op: "eq", a: "", b: "" });
 
+export function sanitizeColumnFilterState(value: unknown, fallback: ColumnFilterState = emptyText()): ColumnFilterState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
+  const state = value as Partial<ColumnFilterState> & Record<string, unknown>;
+  if (state.type === "text") return { type: "text", value: typeof state.value === "string" ? state.value : "" };
+  if (state.type === "dateRange") {
+    return {
+      type: "dateRange",
+      from: typeof state.from === "string" ? state.from : "",
+      to: typeof state.to === "string" ? state.to : "",
+    };
+  }
+  if (state.type === "multiSelect") {
+    const seen = new Set<string>();
+    const selected = (Array.isArray(state.selected) ? state.selected : [])
+      .map((v) => String(v ?? "").trim())
+      .filter((v) => v && !seen.has(v) && seen.add(v));
+    return { type: "multiSelect", selected };
+  }
+  if (state.type === "numeric") {
+    const op = state.op === "gt" || state.op === "lt" || state.op === "between" ? state.op : "eq";
+    return {
+      type: "numeric",
+      op,
+      a: typeof state.a === "string" || typeof state.a === "number" ? String(state.a) : "",
+      b: typeof state.b === "string" || typeof state.b === "number" ? String(state.b) : "",
+    };
+  }
+  return fallback;
+}
+
+export function sanitizeFilterMap<T extends Record<string, ColumnFilterState>>(value: unknown, defaults: T): T {
+  const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const next: Record<string, ColumnFilterState> = {};
+  for (const key of Object.keys(defaults)) {
+    next[key] = sanitizeColumnFilterState(input[key], defaults[key]);
+  }
+  return next as T;
+}
+
 export function isFilterActive(s: ColumnFilterState | undefined): boolean {
   if (!s) return false;
+  s = sanitizeColumnFilterState(s);
   if (s.type === "text") return s.value.trim() !== "";
   if (s.type === "dateRange") return !!(s.from || s.to);
   if (s.type === "multiSelect") return s.selected.length > 0;
@@ -25,24 +65,33 @@ export function isFilterActive(s: ColumnFilterState | undefined): boolean {
 }
 
 export function matchText(val: string, s: ColumnFilterState | undefined): boolean {
-  if (!s || s.type !== "text" || !s.value.trim()) return true;
-  return (val || "").toLowerCase().includes(s.value.trim().toLowerCase());
+  if (!s) return true;
+  s = sanitizeColumnFilterState(s);
+  if (s.type !== "text" || !s.value.trim()) return true;
+  return String(val || "").toLowerCase().includes(s.value.trim().toLowerCase());
 }
 
 export function matchDateRange(val: string, s: ColumnFilterState | undefined): boolean {
-  if (!s || s.type !== "dateRange") return true;
-  if (s.from && (val || "") < s.from) return false;
-  if (s.to && (val || "") > s.to) return false;
+  if (!s) return true;
+  s = sanitizeColumnFilterState(s);
+  if (s.type !== "dateRange") return true;
+  const current = String(val || "");
+  if (s.from && current < s.from) return false;
+  if (s.to && current > s.to) return false;
   return true;
 }
 
 export function matchMultiSelect(val: string, s: ColumnFilterState | undefined): boolean {
-  if (!s || s.type !== "multiSelect" || s.selected.length === 0) return true;
-  return s.selected.includes(val || "");
+  if (!s) return true;
+  s = sanitizeColumnFilterState(s);
+  if (s.type !== "multiSelect" || s.selected.length === 0) return true;
+  return s.selected.includes(String(val || ""));
 }
 
 export function matchNumeric(val: number, s: ColumnFilterState | undefined): boolean {
-  if (!s || s.type !== "numeric") return true;
+  if (!s) return true;
+  s = sanitizeColumnFilterState(s);
+  if (s.type !== "numeric") return true;
   const a = s.a.trim() === "" ? null : Number(s.a);
   const b = s.b.trim() === "" ? null : Number(s.b);
   const n = Number(val || 0);
