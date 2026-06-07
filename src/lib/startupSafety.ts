@@ -1,5 +1,6 @@
 const APP_SESSION_KEYS = ["execution:fromSubmission", "executions:openId"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let installed = false;
 
 function isPreviewHost(hostname: string) {
   return hostname.startsWith("id-preview--") || hostname.startsWith("preview--") || hostname.includes("lovableproject");
@@ -59,7 +60,11 @@ async function unregisterPreviewServiceWorkers() {
 
 export function installStartupSafety() {
   if (typeof window === "undefined") return;
+  if (installed) return;
+  installed = true;
   cleanSessionState();
   cleanHistoryState();
   void unregisterPreviewServiceWorkers();
 }
+
+installStartupSafety();
