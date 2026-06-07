@@ -84,7 +84,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("agents").select("id,name,phone,governorate").or(`name.ilike.${like},phone.ilike.${like},governorate.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "agents",
               sectionLabel: SECTION_LABELS.agents,
               title: r.name || "وكيل",
@@ -98,7 +98,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("issuing_companies").select("id,company_name,phone,service_type").or(`company_name.ilike.${like},phone.ilike.${like},service_type.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "companies",
               sectionLabel: SECTION_LABELS.companies,
               title: r.company_name || "شركة",
@@ -111,7 +111,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("merchants").select("id,merchant_name,phone").or(`merchant_name.ilike.${like},phone.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "merchants",
               sectionLabel: SECTION_LABELS.merchants,
               title: r.merchant_name || "تاجر",
@@ -124,7 +124,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("investors").select("id,investor_name,phone").or(`investor_name.ilike.${like},phone.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "investors",
               sectionLabel: SECTION_LABELS.investors,
               title: r.investor_name || "مستثمر",

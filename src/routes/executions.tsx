@@ -57,6 +57,8 @@ function ExecutionsPage() {
       if (raw) {
         const sub = JSON.parse(raw);
         sessionStorage.removeItem("execution:fromSubmission");
+        if (!sub || typeof sub !== "object" || Array.isArray(sub)) return;
+        const submissionServices = Array.isArray(sub.services) ? sub.services : [];
         setEditing({
           id: "",
           submission_id: sub.id,
@@ -72,7 +74,7 @@ function ExecutionsPage() {
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
           approval_company_id: sub.approval_company_id || null,
-          services: (sub.services || []).map((s: string) => ({ service_type: s, count: 1, agent_price: 0, company_price: 0, company_value: 0 })),
+          services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s) => s.service_type),
           created_at: "", updated_at: "",
         } as Execution);
         setTab("add");
@@ -84,8 +86,9 @@ function ExecutionsPage() {
   useEffect(() => {
     try {
       const openId = sessionStorage.getItem("executions:openId");
-      if (openId && executions.length) {
-        const found = executions.find((e) => e.id === openId);
+      const safeExecutions = Array.isArray(executions) ? executions : [];
+      if (openId && safeExecutions.length) {
+        const found = safeExecutions.find((e) => e.id === openId);
         if (found) {
           sessionStorage.removeItem("executions:openId");
           setEditing(found);
