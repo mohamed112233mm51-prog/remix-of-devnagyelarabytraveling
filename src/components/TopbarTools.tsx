@@ -137,7 +137,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase.from("expenses").select("id,expense_name,expense_type,amount").or(`expense_name.ilike.${like},expense_type.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (data || []).map((r: any) => ({
+        return (Array.isArray(data) ? data : []).map((r: any) => ({
               section: "expenses",
               sectionLabel: SECTION_LABELS.expenses,
               title: r.expense_name || "مصروف",
