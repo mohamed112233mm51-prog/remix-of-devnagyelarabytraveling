@@ -92,8 +92,10 @@ export function matchNumeric(val: number, s: ColumnFilterState | undefined): boo
   if (!s) return true;
   s = sanitizeColumnFilterState(s);
   if (s.type !== "numeric") return true;
-  const a = s.a.trim() === "" ? null : Number(s.a);
-  const b = s.b.trim() === "" ? null : Number(s.b);
+  const parsedA = s.a.trim() === "" ? null : Number(s.a);
+  const parsedB = s.b.trim() === "" ? null : Number(s.b);
+  const a = parsedA === null || !Number.isFinite(parsedA) ? null : parsedA;
+  const b = parsedB === null || !Number.isFinite(parsedB) ? null : parsedB;
   const n = Number(val || 0);
   if (s.op === "eq") return a === null || Math.round(n) === Math.round(a);
   if (s.op === "gt") return a === null || n > a;
