@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { installStartupSafety } from "@/lib/startupSafety";
 import {
   Outlet,
   Link,
@@ -167,7 +168,7 @@ function AuthGate() {
   const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
   const brandingReady = useBrandingReady();
   useGlobalKeyboardNav();
-  useEffect(() => { installServerFnAuthFetch(); }, []);
+  useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
 
