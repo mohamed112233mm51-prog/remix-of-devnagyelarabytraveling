@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AgentLedger } from "@/components/AgentLedger";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 export const Route = createFileRoute("/agent-statement/$agentId")({
   component: AgentStatementRoute,
@@ -7,5 +8,5 @@ export const Route = createFileRoute("/agent-statement/$agentId")({
 
 function AgentStatementRoute() {
   const { agentId } = Route.useParams();
-  return <AgentLedger lockedAgentId={agentId} showAgentProfile canExport />;
+  return <AppErrorBoundary name="AgentLedger"><AgentLedger lockedAgentId={agentId} showAgentProfile canExport /></AppErrorBoundary>;
 }
