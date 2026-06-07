@@ -185,8 +185,9 @@ function SubmissionsPage() {
               <option value="">الشركة الصادرة (الكل)</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}{(c.status || "نشط") !== "نشط" ? " (غير نشطة)" : ""}</option>)}
             </select>
-            <div style={{ alignSelf: "center", fontSize: 12, color: "#64748b", textAlign: "end" }}>
-              {filtered.length.toLocaleString("ar")} سجل
+            <div style={{ alignSelf: "center", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+              <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+              <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
             </div>
           </div>
 
