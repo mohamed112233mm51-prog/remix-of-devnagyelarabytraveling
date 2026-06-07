@@ -138,7 +138,6 @@ export async function exportStatementToExcel(data: StatementExportData) {
 
   const colCount = data.columns.length;
   const lastColLetter = colLetter(colCount);
-  const userLabel = await getCurrentUserLabel();
   const hexToArgb = (hex: string) => {
     const m = /^#?([a-f\d]{6})$/i.exec((hex || "").trim());
     return m ? `FF${m[1].toUpperCase()}` : "FF0F1B3D";
