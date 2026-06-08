@@ -33,7 +33,7 @@ function CurrencySuppliersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editRow, setEditRow] = useState<Supplier | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     let cancel = false;
     (async () => {
       setLoading(true);
@@ -43,11 +43,10 @@ function CurrencySuppliersPage() {
         .order("created_at", { ascending: false });
       if (cancel) return;
       if (error) toast.error(error.message);
-      setRows((data as any) || []);
+      setRows(((data as any) || []) as Supplier[]);
       setLoading(false);
     })();
     return () => { cancel = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadTick]);
 
   const refresh = () => setReloadTick((n) => n + 1);
