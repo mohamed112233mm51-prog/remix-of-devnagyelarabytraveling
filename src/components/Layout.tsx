@@ -19,6 +19,7 @@ import {
   UserCircle,
   PlusCircle,
   Upload,
+  Coins,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
@@ -48,6 +49,7 @@ const NAV: { label: string; items: Item[] }[] = [
       { to: "/accounts", icon: Users, label: "حسابات الوكلاء", section: "الحسابات المالية", permKey: "accounts" },
       { to: "/companies", icon: Building2, label: "حسابات الشركات الصادرة", section: "الحسابات المالية", permKey: "companies" },
       { to: "/merchants", icon: HandCoins, label: "حسابات تاجر الكاش", section: "الحسابات المالية", permKey: "merchants" },
+      { to: "/currency-suppliers", icon: Coins, label: "حسابات موردي العملة", section: "الحسابات المالية", permKey: "currency_suppliers" },
     ],
   },
   {
@@ -76,6 +78,7 @@ const TITLES: Record<string, ReactNode> = {
   "/accounts": (<>حسابات <span>الوكلاء</span></>),
   "/companies": (<>حسابات <span>الشركات الصادرة</span></>),
   "/merchants": (<>حسابات <span>تاجر الكاش</span></>),
+  "/currency-suppliers": (<>حسابات <span>موردي العملة</span></>),
   "/investors": (<>حسابات <span>المستثمرين</span></>),
   "/expenses": (<>إدارة <span>المصروفات</span></>),
   "/reports": (<>التقارير <span>والإحصائيات</span></>),

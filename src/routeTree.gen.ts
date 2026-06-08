@@ -18,10 +18,12 @@ import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as ExecutionsRouteImport } from './routes/executions'
 import { Route as DataImportRouteImport } from './routes/data-import'
+import { Route as CurrencySuppliersRouteImport } from './routes/currency-suppliers'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CurrencySupplierStatementSupplierIdRouteImport } from './routes/currency-supplier-statement.$supplierId'
 import { Route as AgentStatementAgentIdRouteImport } from './routes/agent-statement.$agentId'
 import { Route as ApiPublicHooksBackupRouteImport } from './routes/api/public/hooks/backup'
 
@@ -70,6 +72,11 @@ const DataImportRoute = DataImportRouteImport.update({
   path: '/data-import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CurrencySuppliersRoute = CurrencySuppliersRouteImport.update({
+  id: '/currency-suppliers',
+  path: '/currency-suppliers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompaniesRoute = CompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
@@ -90,6 +97,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CurrencySupplierStatementSupplierIdRoute =
+  CurrencySupplierStatementSupplierIdRouteImport.update({
+    id: '/currency-supplier-statement/$supplierId',
+    path: '/currency-supplier-statement/$supplierId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AgentStatementAgentIdRoute = AgentStatementAgentIdRouteImport.update({
   id: '/agent-statement/$agentId',
   path: '/agent-statement/$agentId',
@@ -106,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
   '/companies': typeof CompaniesRoute
+  '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
@@ -116,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
+  '/currency-supplier-statement/$supplierId': typeof CurrencySupplierStatementSupplierIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
 export interface FileRoutesByTo {
@@ -123,6 +138,7 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
   '/companies': typeof CompaniesRoute
+  '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
@@ -133,6 +149,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
+  '/currency-supplier-statement/$supplierId': typeof CurrencySupplierStatementSupplierIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
 export interface FileRoutesById {
@@ -141,6 +158,7 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
   '/companies': typeof CompaniesRoute
+  '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
@@ -151,6 +169,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
+  '/currency-supplier-statement/$supplierId': typeof CurrencySupplierStatementSupplierIdRoute
   '/api/public/hooks/backup': typeof ApiPublicHooksBackupRoute
 }
 export interface FileRouteTypes {
@@ -160,6 +179,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/accounts'
     | '/companies'
+    | '/currency-suppliers'
     | '/data-import'
     | '/executions'
     | '/expenses'
@@ -170,6 +190,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submissions'
     | '/agent-statement/$agentId'
+    | '/currency-supplier-statement/$supplierId'
     | '/api/public/hooks/backup'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -177,6 +198,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/accounts'
     | '/companies'
+    | '/currency-suppliers'
     | '/data-import'
     | '/executions'
     | '/expenses'
@@ -187,6 +209,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submissions'
     | '/agent-statement/$agentId'
+    | '/currency-supplier-statement/$supplierId'
     | '/api/public/hooks/backup'
   id:
     | '__root__'
@@ -194,6 +217,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/accounts'
     | '/companies'
+    | '/currency-suppliers'
     | '/data-import'
     | '/executions'
     | '/expenses'
@@ -204,6 +228,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submissions'
     | '/agent-statement/$agentId'
+    | '/currency-supplier-statement/$supplierId'
     | '/api/public/hooks/backup'
   fileRoutesById: FileRoutesById
 }
@@ -212,6 +237,7 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   AccountsRoute: typeof AccountsRoute
   CompaniesRoute: typeof CompaniesRoute
+  CurrencySuppliersRoute: typeof CurrencySuppliersRoute
   DataImportRoute: typeof DataImportRoute
   ExecutionsRoute: typeof ExecutionsRoute
   ExpensesRoute: typeof ExpensesRoute
@@ -222,6 +248,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SubmissionsRoute: typeof SubmissionsRoute
   AgentStatementAgentIdRoute: typeof AgentStatementAgentIdRoute
+  CurrencySupplierStatementSupplierIdRoute: typeof CurrencySupplierStatementSupplierIdRoute
   ApiPublicHooksBackupRoute: typeof ApiPublicHooksBackupRoute
 }
 
@@ -290,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DataImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/currency-suppliers': {
+      id: '/currency-suppliers'
+      path: '/currency-suppliers'
+      fullPath: '/currency-suppliers'
+      preLoaderRoute: typeof CurrencySuppliersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/companies': {
       id: '/companies'
       path: '/companies'
@@ -318,6 +352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/currency-supplier-statement/$supplierId': {
+      id: '/currency-supplier-statement/$supplierId'
+      path: '/currency-supplier-statement/$supplierId'
+      fullPath: '/currency-supplier-statement/$supplierId'
+      preLoaderRoute: typeof CurrencySupplierStatementSupplierIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent-statement/$agentId': {
       id: '/agent-statement/$agentId'
       path: '/agent-statement/$agentId'
@@ -340,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   AccountsRoute: AccountsRoute,
   CompaniesRoute: CompaniesRoute,
+  CurrencySuppliersRoute: CurrencySuppliersRoute,
   DataImportRoute: DataImportRoute,
   ExecutionsRoute: ExecutionsRoute,
   ExpensesRoute: ExpensesRoute,
@@ -350,18 +392,10 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SubmissionsRoute: SubmissionsRoute,
   AgentStatementAgentIdRoute: AgentStatementAgentIdRoute,
+  CurrencySupplierStatementSupplierIdRoute:
+    CurrencySupplierStatementSupplierIdRoute,
   ApiPublicHooksBackupRoute: ApiPublicHooksBackupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
