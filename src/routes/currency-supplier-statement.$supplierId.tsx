@@ -15,7 +15,6 @@ import {
   newPaymentSplitRow,
   validatePaymentSplits,
   filterValidSplits,
-  methodsForSplit,
 } from "@/components/PaymentSplits";
 
 export const Route = createFileRoute("/currency-supplier-statement/$supplierId")({
@@ -586,5 +585,3 @@ function TxModal({
   );
 }
 
-// Re-export helper to avoid TS unused warning (the import is used inside the modal indirectly).
-void methodsForSplit;
