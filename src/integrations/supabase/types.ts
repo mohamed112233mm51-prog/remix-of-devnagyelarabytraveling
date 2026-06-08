@@ -296,6 +296,89 @@ export type Database = {
         }
         Relationships: []
       }
+      currency_supplier_transactions: {
+        Row: {
+          bought_amount: number
+          bought_currency: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          sold_amount: number
+          sold_currency: string
+          supplier_id: string
+          tx_date: string
+          tx_type: string
+          updated_at: string
+        }
+        Insert: {
+          bought_amount?: number
+          bought_currency: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          sold_amount?: number
+          sold_currency: string
+          supplier_id: string
+          tx_date?: string
+          tx_type: string
+          updated_at?: string
+        }
+        Update: {
+          bought_amount?: number
+          bought_currency?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          sold_amount?: number
+          sold_currency?: string
+          supplier_id?: string
+          tx_date?: string
+          tx_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "currency_supplier_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "currency_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      currency_suppliers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       executions: {
         Row: {
           agent_id: string | null
