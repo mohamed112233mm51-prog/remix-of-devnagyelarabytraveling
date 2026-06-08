@@ -212,7 +212,7 @@ function AuthGate() {
   if (needsPassword) return <SetPassword onDone={setPasswordDone} />;
   if (blocked) return <Login />;
   if (!profileLoaded && !startupWarning) return <SplashScreen stage="Profile / Permissions" />;
-  return (<>{startupWarning && <StartupWarningBanner message={startupWarning} />}<RouteGuard /><Layout /><ScreenshotTool /></>);
+  return (<>{startupWarning && <StartupWarningBanner message={startupWarning} />}<RouteGuard /><Layout /></>);
 }
 
 function StartupWarningBanner({ message }: { message: string }) {
