@@ -24,6 +24,7 @@ export type Branding = {
 };
 
 const STORAGE_KEY = "app.branding.v1";
+const STARTUP_TIMEOUT_MS = 8000;
 
 let cache: Branding | null = null;
 let ready = false;
@@ -45,6 +46,27 @@ const fallback: Branding = {
   updatedAt: "0",
   faviconUpdatedAt: "0",
 };
+
+function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = STARTUP_TIMEOUT_MS): Promise<T> {
+  if (typeof window === "undefined") return Promise.resolve(promise);
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    Promise.resolve(promise).then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+function markBrandingReady(b: Branding = cache || fallback) {
+  cache = b;
+  ready = true;
+  persist(b);
+  applyBrandingCssVars(b);
+  listeners.forEach((l) => l(b));
+  readyListeners.forEach((l) => l());
+  readyListeners.clear();
+}
 
 // Hydrate synchronously from localStorage on module load to avoid logo flash.
 if (typeof window !== "undefined") {
@@ -158,7 +180,7 @@ export async function loadBranding(force = false): Promise<Branding> {
     return cache;
   }
   try {
-    const { data } = await supabase
+    const { data } = await withTimeout(supabase
       .from("app_settings")
       .select("key,value,updated_at")
       .in("key", [
@@ -170,7 +192,7 @@ export async function loadBranding(force = false): Promise<Branding> {
         "brand_primary",
         "brand_secondary",
         "brand_accent",
-      ]);
+      ]), "Branding settings");
     const map: Record<string, any> = {};
     const updatedMap: Record<string, string> = {};
     (data || []).forEach((r: any) => {
@@ -192,17 +214,17 @@ export async function loadBranding(force = false): Promise<Branding> {
       logoUrl = logo;
     } else if (logo) {
       logoUrl = logo;
-      logoData = await fetchAsDataUrl(logo);
+      logoData = await withTimeout(fetchAsDataUrl(logo), "Branding logo");
     } else {
       logoUrl = cache?.logoUrl || fallback.logoUrl;
-      logoData = cache?.logoDataUrl || await fetchAsDataUrl(fallback.logoUrl);
+      logoData = cache?.logoDataUrl || await withTimeout(fetchAsDataUrl(fallback.logoUrl), "Fallback logo");
     }
 
     // Resolve icon: dedicated upload > square-cropped logo > logo as-is
     let iconData = "";
     if (icon && icon.startsWith("data:")) iconData = icon;
-    else if (icon) iconData = await fetchAsDataUrl(icon);
-    else iconData = await deriveSquareIcon(logoData) || logoData;
+    else if (icon) iconData = await withTimeout(fetchAsDataUrl(icon), "Branding icon");
+    else iconData = await withTimeout(deriveSquareIcon(logoData), "Branding icon crop") || logoData;
 
     cache = {
       logoUrl,
@@ -219,20 +241,15 @@ export async function loadBranding(force = false): Promise<Branding> {
       updatedAt: faviconUpdatedAt,
       faviconUpdatedAt,
     };
-  } catch {
+  } catch (error) {
+    console.warn("[startup] Branding failed or timed out", error);
     if (!cache) {
-      const data = await fetchAsDataUrl(fallback.logoUrl);
+      const data = await withTimeout(fetchAsDataUrl(fallback.logoUrl), "Fallback logo").catch(() => fallback.logoUrl);
       cache = { ...fallback, logoDataUrl: data };
     }
   }
-  ready = true;
-  const c = cache!;
-  persist(c);
-  applyBrandingCssVars(c);
-  listeners.forEach((l) => l(c));
-  readyListeners.forEach((l) => l());
-  readyListeners.clear();
-  return c;
+  markBrandingReady(cache!);
+  return cache!;
 }
 
 export function getBrandingSync(): Branding {
@@ -292,8 +309,15 @@ export function useBrandingReady(): boolean {
   useEffect(() => {
     if (ready) { setR(true); return; }
     const off = onBrandingReady(() => setR(true));
-    loadBranding().catch(() => setR(true));
-    return off;
+    const timer = window.setTimeout(() => {
+      console.warn("[startup] Branding exceeded 8000ms");
+      markBrandingReady(cache || fallback);
+      setR(true);
+    }, STARTUP_TIMEOUT_MS);
+    loadBranding()
+      .catch(() => markBrandingReady(cache || fallback))
+      .finally(() => window.clearTimeout(timer));
+    return () => { window.clearTimeout(timer); off(); };
   }, []);
   return r;
 }

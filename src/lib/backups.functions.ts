@@ -1,19 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  downloadBackupPayload,
-  restoreFromPayload,
-  applyRetention,
-  listAllUnder,
-  runBackupWithRetry,
-  buildBackupPayload,
-  uploadBackup,
-  logBackupRow,
-  type BackupType,
-} from "./backups.server";
+
+type BackupType = "daily" | "weekly" | "monthly" | "manual" | "emergency" | "restore";
 
 async function ensureAdmin(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin
     .from("user_roles")
     .select("role")
@@ -30,6 +21,7 @@ export const createBackup = createServerFn({ method: "POST" })
   .inputValidator((d: { type?: BackupType }) => ({ type: (d?.type ?? "manual") as BackupType }))
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
+    const { runBackupWithRetry } = await import("./backups.server");
     const res = await runBackupWithRetry(data.type, context.userId, 1);
     return res;
   });
@@ -38,6 +30,8 @@ export const listBackups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await ensureAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { listAllUnder } = await import("./backups.server");
     const types: BackupType[] = ["manual", "daily", "weekly", "monthly", "emergency"];
     const all: Array<{ type: string; path: string; name: string; size: number; created_at?: string }> = [];
     for (const t of types) {
@@ -60,6 +54,7 @@ export const downloadBackup = createServerFn({ method: "POST" })
   .inputValidator((d: { path: string }) => d)
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: signed, error } = await supabaseAdmin.storage
       .from("system-backups")
       .createSignedUrl(data.path, 60 * 5);
@@ -72,6 +67,7 @@ export const deleteBackup = createServerFn({ method: "POST" })
   .inputValidator((d: { path: string }) => d)
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.storage.from("system-backups").remove([data.path]);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -82,6 +78,7 @@ export const previewBackup = createServerFn({ method: "POST" })
   .inputValidator((d: { path: string }) => d)
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
+    const { downloadBackupPayload } = await import("./backups.server");
     const payload = await downloadBackupPayload(data.path);
     return { meta: payload.meta };
   });
@@ -92,6 +89,7 @@ export const restoreBackup = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
     if (!data.confirm) throw new Error("confirmation required");
+    const { buildBackupPayload, uploadBackup, logBackupRow, downloadBackupPayload, restoreFromPayload } = await import("./backups.server");
 
     // 1) Emergency backup first
     const emergency = await buildBackupPayload("emergency");
@@ -126,6 +124,7 @@ export const runRetentionNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await ensureAdmin(context.userId);
+    const { applyRetention } = await import("./backups.server");
     return await applyRetention();
   });
 
