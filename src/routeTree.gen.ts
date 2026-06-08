@@ -18,6 +18,7 @@ import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as ExecutionsRouteImport } from './routes/executions'
 import { Route as DataImportRouteImport } from './routes/data-import'
+import { Route as CurrencySuppliersRouteImport } from './routes/currency-suppliers'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
@@ -70,6 +71,11 @@ const DataImportRoute = DataImportRouteImport.update({
   path: '/data-import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CurrencySuppliersRoute = CurrencySuppliersRouteImport.update({
+  id: '/currency-suppliers',
+  path: '/currency-suppliers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompaniesRoute = CompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
   '/companies': typeof CompaniesRoute
+  '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
   '/companies': typeof CompaniesRoute
+  '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
   '/companies': typeof CompaniesRoute
+  '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/accounts'
     | '/companies'
+    | '/currency-suppliers'
     | '/data-import'
     | '/executions'
     | '/expenses'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/accounts'
     | '/companies'
+    | '/currency-suppliers'
     | '/data-import'
     | '/executions'
     | '/expenses'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/accounts'
     | '/companies'
+    | '/currency-suppliers'
     | '/data-import'
     | '/executions'
     | '/expenses'
@@ -212,6 +224,7 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   AccountsRoute: typeof AccountsRoute
   CompaniesRoute: typeof CompaniesRoute
+  CurrencySuppliersRoute: typeof CurrencySuppliersRoute
   DataImportRoute: typeof DataImportRoute
   ExecutionsRoute: typeof ExecutionsRoute
   ExpensesRoute: typeof ExpensesRoute
@@ -290,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DataImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/currency-suppliers': {
+      id: '/currency-suppliers'
+      path: '/currency-suppliers'
+      fullPath: '/currency-suppliers'
+      preLoaderRoute: typeof CurrencySuppliersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/companies': {
       id: '/companies'
       path: '/companies'
@@ -340,6 +360,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   AccountsRoute: AccountsRoute,
   CompaniesRoute: CompaniesRoute,
+  CurrencySuppliersRoute: CurrencySuppliersRoute,
   DataImportRoute: DataImportRoute,
   ExecutionsRoute: ExecutionsRoute,
   ExpensesRoute: ExpensesRoute,
@@ -355,3 +376,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
