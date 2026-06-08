@@ -303,7 +303,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          exchange_rate: number | null
           id: string
+          payment_splits: Json
           sold_amount: number
           sold_currency: string
           supplier_id: string
@@ -317,7 +319,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          exchange_rate?: number | null
           id?: string
+          payment_splits?: Json
           sold_amount?: number
           sold_currency: string
           supplier_id: string
@@ -331,7 +335,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          exchange_rate?: number | null
           id?: string
+          payment_splits?: Json
           sold_amount?: number
           sold_currency?: string
           supplier_id?: string
