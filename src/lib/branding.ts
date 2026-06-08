@@ -48,6 +48,7 @@ const fallback: Branding = {
 };
 
 function withTimeout<T>(promise: PromiseLike<T>, label: string, ms = STARTUP_TIMEOUT_MS): Promise<T> {
+  if (typeof window === "undefined") return Promise.resolve(promise);
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
     Promise.resolve(promise).then(
