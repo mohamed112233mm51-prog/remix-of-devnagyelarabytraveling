@@ -78,6 +78,7 @@ const TITLES: Record<string, ReactNode> = {
   "/accounts": (<>حسابات <span>الوكلاء</span></>),
   "/companies": (<>حسابات <span>الشركات الصادرة</span></>),
   "/merchants": (<>حسابات <span>تاجر الكاش</span></>),
+  "/currency-suppliers": (<>حسابات <span>موردي العملة</span></>),
   "/investors": (<>حسابات <span>المستثمرين</span></>),
   "/expenses": (<>إدارة <span>المصروفات</span></>),
   "/reports": (<>التقارير <span>والإحصائيات</span></>),
