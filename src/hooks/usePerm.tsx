@@ -15,6 +15,7 @@ export const SECTION_KEYS = [
   "companies",
   "merchants",
   "investors",
+  "currency_suppliers",
   "data_import",
 ] as const;
 
