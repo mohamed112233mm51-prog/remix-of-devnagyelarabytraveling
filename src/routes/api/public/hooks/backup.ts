@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { runBackupWithRetry, applyRetention, type BackupType } from "@/lib/backups.server";
+
+type BackupType = "daily" | "weekly" | "monthly" | "manual" | "emergency" | "restore";
 
 const ALLOWED: BackupType[] = ["daily", "weekly", "monthly", "manual"];
 
@@ -23,6 +24,7 @@ const routeOptions = {
         const action = (body?.action ?? "backup") as "backup" | "retention";
 
         try {
+          const { runBackupWithRetry, applyRetention } = await import("@/lib/backups.server");
           if (action === "retention") {
             const r = await applyRetention();
             return Response.json({ ok: true, ...r });
