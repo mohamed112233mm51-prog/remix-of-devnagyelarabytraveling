@@ -562,7 +562,7 @@ function Dashboard() {
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
-        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
         <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
       </div>
 
