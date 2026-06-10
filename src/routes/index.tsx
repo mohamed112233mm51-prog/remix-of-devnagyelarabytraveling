@@ -102,6 +102,44 @@ function pctDelta(curr: number, prev: number) {
   return Math.round(((curr - prev) / Math.abs(prev)) * 100);
 }
 
+// ===== Execution-based profit components (services actually executed) =====
+// Profit must depend ONLY on the buy/sell difference of execution services,
+// plus expenses — NOT on agent/company payments, collections, balances, or
+// treasury movements.
+function computeExecutionAgg(
+  executions: Execution[],
+  predicate: (ex: Execution) => boolean,
+) {
+  let sales = 0;        // إجمالي سعر بيع خدمات التنفيذ (للوكلاء)
+  let companyCost = 0;  // إجمالي تكلفة خدمات الشركات الصادرة
+  let agentCost = 0;    // إجمالي تكلفة خدمات الوكلاء (لا يوجد مفهوم تكلفة من وكيل في النظام الحالي)
+  for (const ex of executions) {
+    if ((ex.operation_status || "") !== "منفذ") continue;
+    if (!predicate(ex)) continue;
+    const services = Array.isArray(ex.services) ? ex.services : [];
+    for (const s of services) {
+      if (!s || typeof s !== "object") continue;
+      const count = Math.max(1, Math.round(Number(s.count) || 1));
+      const agentPrice = Math.max(0, Number(s.agent_price) || 0);
+      const companyPrice = Math.max(0, Number(s.company_price) || 0);
+      const explicitCompanyValue = Math.max(0, Number(s.company_value) || 0);
+      const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
+      const kind = (s as { kind?: string }).kind;
+      if (kind === "company") {
+        companyCost += companyValue;
+      } else if (kind === "agent") {
+        sales += agentPrice * count;
+      } else {
+        // legacy: single line carrying both sides
+        sales += agentPrice * count;
+        if (s.company_id) companyCost += companyValue;
+      }
+    }
+  }
+  return { sales, companyCost, agentCost };
+}
+
+
 function Dashboard() {
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
