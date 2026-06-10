@@ -30,6 +30,7 @@ function SubmissionsPage() {
   const APPROVAL_STATUSES = useDropdownOptions("submission_status" as any);
   const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
+  const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
   const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
   const companyName = (id: string | null | undefined, fallback?: string | null) =>
     (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
