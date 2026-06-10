@@ -206,7 +206,7 @@ function Dashboard() {
     // ===== Execution-based profit (lifetime) =====
     const execAll = computeExecutionAgg(executions, () => true);
     const companyProfit =
-      execAll.sales - execAll.companyCost - execAll.agentCost - expensesAll;
+      execAll.sales - execAll.companyCost - expensesAll;
 
     return {
       agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
