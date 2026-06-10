@@ -263,8 +263,22 @@ function Dashboard() {
     }
     for (const f of flights) if (inR(f.created_at)) flightsCount += 1;
     for (const a of approvals) if (inR(a.created_at)) approvalsCount += 1;
-    return { collected, expenses: expSum, profit: collected - compOut - expBase, flightsCount, approvalsCount };
+    // Execution-based profit for the period (no payments/balances involved)
+    const execAgg = computeExecutionAgg(executions, (ex) => inR(ex.created_at));
+    const profit =
+      execAgg.sales - execAgg.companyCost - execAgg.agentCost - expBase;
+    return {
+      collected,
+      expenses: expSum,
+      profit,
+      flightsCount,
+      approvalsCount,
+      execSales: execAgg.sales,
+      execCompanyCost: execAgg.companyCost,
+      execAgentCost: execAgg.agentCost,
+    };
   };
+
 
   const periodRange = useMemo(() => getPeriodRange(period), [period]);
   const prevRange = useMemo(() => getPreviousRange(period), [period]);
