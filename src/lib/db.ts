@@ -612,8 +612,14 @@ export async function applyOptimistic<T = any>(opts: {
   }
 }
 
+// Use en-US locale with Western digits and explicit grouping to guarantee
+// full numbers everywhere (no compact/abbreviated K/M, no locale-specific digits).
 export const fmtNum = (n: number) =>
-  new Intl.NumberFormat("ar-LY", { maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat("en-US", {
+    notation: "standard",
+    useGrouping: true,
+    maximumFractionDigits: 0,
+  }).format(Number(n) || 0);
 
 export const CURRENCY = "EGP";
 export const CURRENCY_LABEL = "ج.م";
@@ -621,7 +627,12 @@ export const CURRENCY_NAME = "جنيه مصري";
 export const fmtDL = (n: number) => `${fmtNum(n)} ${CURRENCY_LABEL}`;
 export const fmtMoney = fmtDL;
 export const fmtUSD = (n: number) =>
-  `${new Intl.NumberFormat("ar-LY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)} $`;
+  `${new Intl.NumberFormat("en-US", {
+    notation: "standard",
+    useGrouping: true,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(n) || 0)} $`;
 
 export const tripValue = (t: Pick<Transaction, "count" | "price">) =>
   Number(t.count || 0) * Number(t.price || 0);
