@@ -742,8 +742,8 @@ function Dashboard() {
         </SectionCard>
 
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
-          <Stat label="التحصيلات الصافية" value={fmtDL(agentCollectionsNet)} tone="green" />
-          <Stat label="مدفوعات الشركات" value={fmtDL(companyOutgoingNet)} tone="red" />
+          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(execSales)} tone="green" />
+          <Stat label="إجمالي تكلفة الشركات" value={fmtDL(execCompanyCost)} tone="red" />
           <Stat label="إجمالي المصروفات" value={fmtDL(expensesAll)} tone="red" />
           <Stat label="صافي الأرباح" value={fmtDL(companyProfit)} highlight />
         </SectionCard>
