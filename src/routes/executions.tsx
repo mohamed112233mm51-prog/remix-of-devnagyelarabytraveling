@@ -652,7 +652,7 @@ function ExecutionForm({
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
         <button className="btn" onClick={onDone} disabled={saving}>إلغاء</button>
-        <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "جارٍ الحفظ..." : "حفظ"}</button>
+        <button onClick={save} disabled={saving} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : "حفظ"}</button>
       </div>
     </div>
   );
