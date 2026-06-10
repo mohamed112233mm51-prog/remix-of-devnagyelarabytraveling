@@ -154,6 +154,7 @@ function Dashboard() {
   const { rows: executions } = useLive<Execution>("executions");
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
+  const { rows: currencyTxns } = useLive<{ id: string; bought_currency: string; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
 
   const [period, setPeriod] = useState<Period>("month");
   // Heavy analytics use deferred period so KPI clicks feel instant
@@ -230,15 +231,24 @@ function Dashboard() {
   } = lifetime;
 
 
-  // Treasury balances (per currency from cash_boxes)
+  // Treasury balances (per currency from cash_boxes) + latest exchange rates
   const treasury = useMemo(() => {
     const sumBy = (code: string) =>
       cashBoxes.filter((b) => b.currency === code && b.is_active !== false).reduce((s, b) => s + Number(b.balance || 0), 0);
     const egp = sumBy("EGP");
     const usd = sumBy("USD");
     const lyd = sumBy("LYD");
-    return { egp, usd, lyd };
-  }, [cashBoxes]);
+    const latestRate = (code: string) => {
+      const rows = (currencyTxns || [])
+        .filter((t) => t.bought_currency === code && Number(t.exchange_rate || 0) > 0)
+        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
+      return rows.length ? Number(rows[0].exchange_rate || 0) : 0;
+    };
+    const usdRate = latestRate("USD");
+    const lydRate = latestRate("LYD");
+    const totalEgp = egp + usd * usdRate + lyd * lydRate;
+    return { egp, usd, lyd, usdRate, lydRate, totalEgp };
+  }, [cashBoxes, currencyTxns]);
 
   // ===== Period-based aggregates — single pass per range =====
   const computeAgg = (range: { start: Date; end: Date }) => {
@@ -527,7 +537,20 @@ function Dashboard() {
         <HeroKpi label="خزينة الجنيه المصري" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Landmark size={18} />} tone="primary" sub="إجمالي رصيد EGP" />
         <HeroKpi label="خزينة الدولار الأمريكي" value={treasury.usd} format={(n) => `${fmtNum(n)} $`} icon={<DollarSign size={18} />} tone="success" sub="إجمالي رصيد USD" />
         <HeroKpi label="خزينة الدينار الليبي" value={treasury.lyd} format={(n) => `${fmtNum(n)} د.ل`} icon={<Coins size={18} />} tone="warning" sub="إجمالي رصيد LYD" />
-        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub="مجموع الخزائن بالجنيه" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub={`EGP + USD×${fmtNum(treasury.usdRate)} + LYD×${fmtNum(treasury.lydRate)}`} />
+      </div>
+
+      {/* === Treasuries audit panel === */}
+      <div className="erp-panel" style={{ padding: 16, marginTop: 8 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>فحص إجمالي أرصدة الخزائن</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+          <AuditRow label="رصيد الخزينة المصرية" value={`${fmtNum(treasury.egp)} ج.م`} tone="success" />
+          <AuditRow label="رصيد الخزينة الدولارية" value={`${fmtNum(treasury.usd)} $`} tone="success" />
+          <AuditRow label="سعر صرف الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="رصيد الخزينة الدينار الليبي" value={`${fmtNum(treasury.lyd)} د.ل`} tone="success" />
+          <AuditRow label="سعر صرف الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="إجمالي أرصدة الخزائن (ج.م)" value={`${fmtNum(treasury.totalEgp)} ج.م`} tone="success" />
+        </div>
       </div>
 
       {/* === System-wide KPIs === */}
@@ -539,7 +562,7 @@ function Dashboard() {
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
-        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
         <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
       </div>
 

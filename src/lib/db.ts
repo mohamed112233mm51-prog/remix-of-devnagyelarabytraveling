@@ -449,7 +449,8 @@ type LiveTable =
   | "company_transactions" | "merchants" | "merchant_cash_collections"
   | "investors" | "investor_transactions" | "expenses" | "expense_deductions"
   | "usd_treasury_transactions" | "submissions" | "executions"
-  | "cash_boxes" | "payment_splits";
+  | "cash_boxes" | "payment_splits"
+  | "currency_supplier_transactions" | "currency_suppliers";
 
 
 type LiveStore = {

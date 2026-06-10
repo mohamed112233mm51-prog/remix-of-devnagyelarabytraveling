@@ -1257,12 +1257,27 @@ const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: 
 
 function TreasuriesReport() {
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
+  const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
   const active = useMemo(() => boxes.filter((b) => b.is_active !== false), [boxes]);
   const totals = useMemo(() => {
     const map = new Map<string, number>();
     for (const b of active) map.set(b.currency, (map.get(b.currency) || 0) + Number(b.balance || 0));
     return Array.from(map.entries()).map(([currency, total]) => ({ currency, total }));
   }, [active]);
+
+  const latestRate = (code: string) => {
+    const rows = (cTxns || [])
+      .filter((t) => t.bought_currency === code && Number(t.exchange_rate || 0) > 0)
+      .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
+    return rows.length ? Number(rows[0].exchange_rate || 0) : 0;
+  };
+  const sumBy = (code: string) => active.filter((b) => b.currency === code).reduce((s, b) => s + Number(b.balance || 0), 0);
+  const egp = sumBy("EGP");
+  const usd = sumBy("USD");
+  const lyd = sumBy("LYD");
+  const usdRate = latestRate("USD");
+  const lydRate = latestRate("LYD");
+  const totalEgp = egp + usd * usdRate + lyd * lydRate;
 
   const cols = [
     { header: "اسم الخزينة", key: "name" },
@@ -1280,11 +1295,16 @@ function TreasuriesReport() {
     <div className="card">
       <div className="card-header"><div className="card-title">🏦 تقرير الخزائن</div></div>
       <div className="card-body">
-        <KpiRow items={totals.map((t) => ({
-          label: `إجمالي ${CURRENCY_LABEL[t.currency] || t.currency}`,
-          value: `${fmtNum(t.total)}`,
-          tone: t.currency === "EGP" ? "gold" : t.currency === "USD" ? "green" : "",
-        }))} />
+        <KpiRow items={[
+          ...totals.map((t) => ({
+            label: `إجمالي ${CURRENCY_LABEL[t.currency] || t.currency}`,
+            value: `${fmtNum(t.total)}`,
+            tone: (t.currency === "EGP" ? "gold" : t.currency === "USD" ? "green" : "") as any,
+          })),
+          { label: "سعر صرف الدولار", value: `${fmtNum(usdRate)} ج.م/$`, tone: "" as any },
+          { label: "سعر صرف الدينار", value: `${fmtNum(lydRate)} ج.م/د.ل`, tone: "" as any },
+          { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
+        ]} />
         <ExportBar
           onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols, rows, fileName: "treasuries-report" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الخزائن", columns: cols, rows })}
