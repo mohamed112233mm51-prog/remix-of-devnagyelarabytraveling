@@ -552,7 +552,13 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     approvals: fmtNum(r.approvals), approvals__excel: r.approvals,
   }));
 
-  const svcRows: SvcRow[] = fTxns.map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
+  // Agent SERVICES only — exclude payment rows and require an agent + real value
+  const svcRows: SvcRow[] = fTxns
+    .filter((t) => !!t.agent_id
+      && (t as any).source_service_type !== "payment"
+      && t.service_type !== "دفعة من الوكيل"
+      && tripValue(t) > 0)
+    .map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
