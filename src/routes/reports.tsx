@@ -222,9 +222,9 @@ function ReportsPage() {
     { id: "agents", label: "الوكلاء", icon: <Users size={15} strokeWidth={2} /> },
     { id: "companies", label: "الشركات الصادرة", icon: <Building2 size={15} strokeWidth={2} /> },
     { id: "merchants", label: "تاجر الكاش", icon: <Handshake size={15} strokeWidth={2} /> },
-    { id: "investors", label: "المستثمرين", icon: <Briefcase size={15} strokeWidth={2} /> },
     { id: "expenses", label: "المصروفات", icon: <Receipt size={15} strokeWidth={2} /> },
-    { id: "usd_treasury", label: "الخزينة الدولارية", icon: <DollarSign size={15} strokeWidth={2} /> },
+    { id: "treasuries", label: "الخزائن", icon: <Wallet size={15} strokeWidth={2} /> },
+    { id: "currency_suppliers", label: "شراء وبيع العملات", icon: <DollarSign size={15} strokeWidth={2} /> },
   ];
 
   return (
