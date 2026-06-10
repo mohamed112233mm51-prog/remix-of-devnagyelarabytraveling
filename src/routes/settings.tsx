@@ -31,7 +31,7 @@ function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الإعدادات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
 
-type Tab = "users" | "add" | "perms" | "general" | "system_lists" | "backups" | "production" | "devtools";
+type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "devtools";
 
 const PERMISSION_KEYS: { key: string; label: string }[] = [
   { key: "dashboard", label: "لوحة التحكم" },
@@ -70,7 +70,7 @@ function SettingsPage() {
     { id: "add", label: "دعوة مستخدم", icon: <UserPlus size={15} strokeWidth={2} />, perm: "users_manage" },
     { id: "perms", label: "صلاحيات المستخدمين", icon: <ShieldCheck size={15} strokeWidth={2} />, perm: "roles_manage" },
     { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} />, perm: "company_manage" },
-    { id: "system_lists", label: "قوائم النظام", icon: <ListChecks size={15} strokeWidth={2} />, perm: "system_lists" },
+    // قائمة "قوائم النظام" تم دمجها في تبويب "إعدادات عامة → القوائم المنسدلة" — مصدر واحد لجميع القوائم.
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
     ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "diagnostics" as SettingsSubKey }] : []),
@@ -128,7 +128,7 @@ function SettingsPage() {
       {tab === "add" && can("users_manage") && <InviteUserTab />}
       {tab === "perms" && can("roles_manage") && <PermsTab />}
       {tab === "general" && can("company_manage") && <GeneralTab />}
-      {tab === "system_lists" && can("system_lists") && <SystemListsTab />}
+      {/* تبويب "قوائم النظام" تم حذفه — القوائم تُدار حصراً من "إعدادات عامة". */}
       {tab === "backups" && can("backups_manage") && <BackupsTab />}
       {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
       {tab === "devtools" && can("diagnostics") && !isProdEnv() && <DevToolsTab />}
@@ -1140,8 +1140,10 @@ function GeneralTab() {
           <DropdownListManager category="departure_from" title="جهات المغادرة" icon={<MapPin size={16} />} />
           <DropdownListManager category="destination" title="الوجهات" icon={<MapPin size={16} />} />
           <DropdownListManager category="airline" title="شركات الطيران" icon={<Plane size={16} />} />
+          <DropdownListManager category="airport" title="المطار" icon={<MapPin size={16} />} />
           <DropdownListManager category="service_type" title="نوع الخدمة" icon={<Wrench size={16} />} />
           <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="submission_notes" title="الملاحظات" icon={<Inbox size={16} />} />
         </div>
       </div>
 
@@ -1164,31 +1166,9 @@ function GeneralTab() {
   );
 }
 
-function SystemListsTab() {
-  const cardSt: React.CSSProperties = { padding: 20, borderRadius: 14, border: "1px solid #eef2f7", background: "#fff", boxShadow: "0 1px 2px rgba(15,23,42,.04), 0 4px 14px rgba(15,23,42,.04)" };
-  return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div style={cardSt}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eef2f7" }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: `${BRAND_NAVY}10`, color: BRAND_NAVY, display: "grid", placeItems: "center" }}><ListChecks size={20} /></div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 900, color: "#0f172a" }}>قوائم النظام</div>
-            <div style={{ fontSize: 12, color: "#64748b" }}>إدارة القيم المنسدلة المستخدمة في نماذج التقديمات والتنفيذ. أي تعديل ينعكس فورًا للجميع.</div>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 12 }}>
-          <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
-          <DropdownListManager category="submission_notes" title="الملاحظات" icon={<Inbox size={16} />} />
-          <DropdownListManager category="destination" title="الوجهة" icon={<MapPin size={16} />} />
-          <DropdownListManager category="airline" title="الطيران" icon={<Plane size={16} />} />
-          <DropdownListManager category="airport" title="المطار" icon={<MapPin size={16} />} />
-          <DropdownListManager category="service_type" title="نوع الخدمة" icon={<Wrench size={16} />} />
-          <DropdownListManager category="departure_from" title="جهات المغادرة" icon={<MapPin size={16} />} />
-        </div>
-      </div>
-    </div>
-  );
-}
+// SystemListsTab تم حذفه — جميع القوائم تُدار من تبويب "إعدادات عامة → القوائم المنسدلة"
+// وتقرأ من نفس الجدول system_dropdown_options، لذا أي تعديل ينعكس فوراً على كل النظام.
+
 
 /** Returns usage count for a dropdown value across known referencing tables. */
 async function countDropdownUsage(category: DropdownCategory, value: string): Promise<number> {
