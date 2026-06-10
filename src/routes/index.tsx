@@ -231,15 +231,24 @@ function Dashboard() {
   } = lifetime;
 
 
-  // Treasury balances (per currency from cash_boxes)
+  // Treasury balances (per currency from cash_boxes) + latest exchange rates
   const treasury = useMemo(() => {
     const sumBy = (code: string) =>
       cashBoxes.filter((b) => b.currency === code && b.is_active !== false).reduce((s, b) => s + Number(b.balance || 0), 0);
     const egp = sumBy("EGP");
     const usd = sumBy("USD");
     const lyd = sumBy("LYD");
-    return { egp, usd, lyd };
-  }, [cashBoxes]);
+    const latestRate = (code: string) => {
+      const rows = (currencyTxns || [])
+        .filter((t) => t.bought_currency === code && Number(t.exchange_rate || 0) > 0)
+        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
+      return rows.length ? Number(rows[0].exchange_rate || 0) : 0;
+    };
+    const usdRate = latestRate("USD");
+    const lydRate = latestRate("LYD");
+    const totalEgp = egp + usd * usdRate + lyd * lydRate;
+    return { egp, usd, lyd, usdRate, lydRate, totalEgp };
+  }, [cashBoxes, currencyTxns]);
 
   // ===== Period-based aggregates — single pass per range =====
   const computeAgg = (range: { start: Date; end: Date }) => {
