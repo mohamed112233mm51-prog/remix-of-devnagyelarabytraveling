@@ -272,19 +272,20 @@ function SubmissionsPage() {
 }
 
 function SubmissionForm({
-  editing, agents, statuses, departures, companies, activeCompanies, onDone,
+  editing, agents, statuses, departures, serviceKinds, companies, activeCompanies, onDone,
 }: {
   editing: Submission | null;
   agents: Agent[];
   statuses: readonly string[];
   departures: readonly string[];
+  serviceKinds: readonly string[];
   companies: IssuingCompany[];
   activeCompanies: IssuingCompany[];
   onDone: () => void;
 }) {
   const initialServices = Array.isArray(editing?.services) ? editing.services.filter((s): s is string => typeof s === "string") : [];
   const [form, setForm] = useState({
-    services: initialServices,
+    service_type: initialServices[0] || "",
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
     dob: toDisplayDate(editing?.dob) || "",
