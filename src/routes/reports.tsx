@@ -464,7 +464,7 @@ function ServiceTypeChartView({
           <thead><tr><th>نوع الخدمة</th><th>عدد العمليات</th><th>{valueLabel}</th><th>النسبة %</th></tr></thead>
           <tbody>
             {agg.length === 0 ? (
-              <tr><td colSpan={4}><div className="empty"><div className="empty-text">لا توجد خدمات في الفترة المحددة</div></div></td></tr>
+              <tr><td colSpan={4}><div className="empty"><div className="empty-text">لا توجد بيانات لعرضها</div></div></td></tr>
             ) : agg.map((r) => {
               const pct = totalAll > 0 ? (r.total / totalAll) * 100 : 0;
               const active = selected === r.name;
