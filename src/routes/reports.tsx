@@ -513,7 +513,6 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
   const fFlights = flights.filter((f) => inRange(f.travel_date));
   const approvalDate = (a: typeof approvals[number]) =>
     (a.submit_date && String(a.submit_date)) ||
-    (a.travel_date && String(a.travel_date)) ||
     (a.issue_date && String(a.issue_date)) ||
     (a.created_at ? String(a.created_at).slice(0, 10) : null);
   const fApp = approvals.filter((a) => inRange(approvalDate(a)));
@@ -568,7 +567,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
         <SubTabsBar
           tabs={[
             { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
-            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+            { id: "chart", label: "تحليل خدمات الوكلاء", icon: <Activity size={15} strokeWidth={2} /> },
           ]}
           current={view}
           onChange={(v) => setView(v as "summary" | "chart")}
@@ -678,7 +677,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 
   const data = useMemo(() => companies.map((c) => {
     const ts = cTxns.filter((t) => t.company_id === c.id && inRange(t.date));
-    const ap = approvals.filter((a) => a.issuing_company_id === c.id && inRange(a.submit_date));
+    const ap = approvals.filter((a) => a.approval_company_id === c.id && inRange(a.submit_date));
     const total = ts.reduce((s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)), 0);
     const paid = ts.reduce((s, t) => s + paidOf(t), 0);
     return { name: c.company_name, total, paid, due: total - paid, count: ts.length + ap.length };
@@ -724,13 +723,13 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
         <SubTabsBar
           tabs={[
             { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
-            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+            { id: "chart", label: "تحليل خدمات الشركات", icon: <Activity size={15} strokeWidth={2} /> },
           ]}
           current={view}
           onChange={(v) => setView(v as "summary" | "chart")}
         />
         {view === "chart" ? (
-          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
+          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي تكلفة الخدمات" valueLabel="إجمالي التكلفة" />
         ) : (<>
 
         <KpiRow items={[
@@ -1124,12 +1123,12 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
   const rows = filtered.map((a) => ({
     passenger: a.passenger_name,
     agent: agentName(a.agent_id),
-    company: a.issuing_company || companyName(a.issuing_company_id),
-    destination: a.destination || "—",
-    authority: a.authority || "—",
+    company: companyName(a.approval_company_id),
+    destination: "—",
+    authority: a.approval_authority || "—",
     submit: a.submit_date || "—",
     issue: a.issue_date || "—",
-    amount: fmtDL(Number((a as any).agent_price || a.price || 0)),
+    amount: fmtDL(Number((a as any).agent_price || 0)),
     status: a.status,
   }));
 

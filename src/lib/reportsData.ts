@@ -11,6 +11,7 @@ import {
   type IssuingCompany,
   type Merchant,
   type MerchantCashCollection,
+  type Submission,
   type Transaction,
   type UsdTreasuryTransaction,
 } from "./db";
@@ -20,8 +21,9 @@ export type ReportsData = {
   agents: Agent[];
   /** @deprecated flights table removed — always [] */
   flights: any[];
-  /** @deprecated approvals table removed — always [] */
-  approvals: any[];
+  /** Security approvals — now sourced from `submissions` table (live). */
+  approvals: Submission[];
+  submissions: Submission[];
   transactions: Transaction[];
   companies: IssuingCompany[];
   companyTransactions: CompanyTransaction[];
@@ -50,11 +52,12 @@ export function useReportsData(): ReportsData {
   const e = useLive<Expense>("expenses");
   const ed = useLive<ExpenseDeduction>("expense_deductions");
   const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const sub = useLive<Submission>("submissions");
 
   const loading =
     a.loading || t.loading || c.loading || ct.loading ||
     m.loading || mc.loading || inv.loading || it.loading ||
-    e.loading || ed.loading || u.loading;
+    e.loading || ed.loading || u.loading || sub.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);
@@ -65,7 +68,8 @@ export function useReportsData(): ReportsData {
     loading,
     agents: a.rows,
     flights: [] as any[],
-    approvals: [] as any[],
+    approvals: sub.rows,
+    submissions: sub.rows,
     transactions: t.rows,
     companies: c.rows,
     companyTransactions: ct.rows,
