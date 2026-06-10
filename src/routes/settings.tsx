@@ -31,7 +31,7 @@ function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الإعدادات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
 
-type Tab = "users" | "add" | "perms" | "general" | "system_lists" | "backups" | "production" | "devtools";
+type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "devtools";
 
 const PERMISSION_KEYS: { key: string; label: string }[] = [
   { key: "dashboard", label: "لوحة التحكم" },
