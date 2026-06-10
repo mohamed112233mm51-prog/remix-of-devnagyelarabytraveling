@@ -261,6 +261,7 @@ function SubmissionsPage() {
           agents={agents}
           statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
+          serviceKinds={SERVICE_KIND_OPTS}
           companies={companies}
           activeCompanies={activeCompanies}
           onDone={() => { setTab("list"); setEditing(null); }}
