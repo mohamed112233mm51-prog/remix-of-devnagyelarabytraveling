@@ -729,8 +729,8 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
           onChange={(v) => setView(v as "summary" | "chart")}
         />
         {view === "chart" ? (
-          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
-        ) : (<>
+          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي تكلفة الخدمات" valueLabel="إجمالي التكلفة" />)
+: (<>
 
         <KpiRow items={[
           { label: "إجمالي المدفوعات", value: fmtDL(totalPaid), tone: "red" },
