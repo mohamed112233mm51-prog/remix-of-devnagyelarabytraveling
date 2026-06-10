@@ -19,7 +19,7 @@ export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
 });
 
-const SERVICE_OPTIONS = ["موافقة أمنية", "تذكرة طيران", "استثمار ليبي"] as const;
+
 
 function SubmissionsPage() {
   const perm = usePerm("submissions");
@@ -30,6 +30,7 @@ function SubmissionsPage() {
   const APPROVAL_STATUSES = useDropdownOptions("submission_status" as any);
   const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
+  const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
   const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
   const companyName = (id: string | null | undefined, fallback?: string | null) =>
     (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
@@ -260,6 +261,7 @@ function SubmissionsPage() {
           agents={agents}
           statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
+          serviceKinds={SERVICE_KIND_OPTS}
           companies={companies}
           activeCompanies={activeCompanies}
           onDone={() => { setTab("list"); setEditing(null); }}
@@ -270,19 +272,20 @@ function SubmissionsPage() {
 }
 
 function SubmissionForm({
-  editing, agents, statuses, departures, companies, activeCompanies, onDone,
+  editing, agents, statuses, departures, serviceKinds, companies, activeCompanies, onDone,
 }: {
   editing: Submission | null;
   agents: Agent[];
   statuses: readonly string[];
   departures: readonly string[];
+  serviceKinds: readonly string[];
   companies: IssuingCompany[];
   activeCompanies: IssuingCompany[];
   onDone: () => void;
 }) {
   const initialServices = Array.isArray(editing?.services) ? editing.services.filter((s): s is string => typeof s === "string") : [];
   const [form, setForm] = useState({
-    services: initialServices,
+    service_type: initialServices[0] || "",
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
     dob: toDisplayDate(editing?.dob) || "",
@@ -298,23 +301,16 @@ function SubmissionForm({
   });
   const [saving, setSaving] = useState(false);
 
-  const toggleService = (s: string) => {
-    setForm((f) => ({
-      ...f,
-      services: (Array.isArray(f.services) ? f.services : []).includes(s) ? (Array.isArray(f.services) ? f.services : []).filter((x) => x !== s) : [...(Array.isArray(f.services) ? f.services : []), s],
-    }));
-  };
-
   const save = async () => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
-    if (form.services.length === 0) { toast.error("يجب اختيار نوع خدمة واحد على الأقل"); return; }
+    if (!form.service_type) { toast.error("يجب اختيار نوع الخدمة"); return; }
     if (form.dob && !isValidDisplayDate(form.dob)) {
       toast.error("تاريخ الميلاد غير صحيح. الصيغة المطلوبة: DD/MM/YYYY");
       return;
     }
     setSaving(true);
     const payload = {
-      services: form.services,
+      services: [form.service_type],
       passenger_name: form.passenger_name.trim(),
       national_id: form.national_id || null,
       dob: parseDisplayDate(form.dob),
@@ -353,25 +349,13 @@ function SubmissionForm({
     <div className="card" style={{ padding: 20 }}>
       <h3 style={{ marginTop: 0 }}>{editing ? "تعديل التقديم" : "تقديم جديد"}</h3>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>نوع الخدمة (يمكن اختيار أكثر من خدمة)</label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {SERVICE_OPTIONS.map((s) => {
-            const active = form.services.includes(s);
-            return (
-              <button key={s} type="button" onClick={() => toggleService(s)} style={{
-                padding: "8px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700,
-                border: active ? "1.5px solid var(--primary)" : "1px solid #e2e8f0",
-                background: active ? "var(--primary)" : "#fff",
-                color: active ? "#fff" : "#0f172a",
-                cursor: "pointer",
-              }}>{active ? "✓ " : "＋ "}{s}</button>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+        <Field label="نوع الخدمة">
+          <select value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {withSelected(serviceKinds, form.service_type).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
         <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} style={inputStyle} /></Field>
         <Field label="تاريخ الميلاد"><input type="text" inputMode="numeric" placeholder="DD/MM/YYYY" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} maxLength={10} /></Field>
