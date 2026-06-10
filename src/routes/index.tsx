@@ -266,7 +266,7 @@ function Dashboard() {
     // Execution-based profit for the period (no payments/balances involved)
     const execAgg = computeExecutionAgg(executions, (ex) => inR(ex.created_at));
     const profit =
-      execAgg.sales - execAgg.companyCost - execAgg.agentCost - expBase;
+      execAgg.sales - execAgg.companyCost - expBase;
     return {
       collected,
       expenses: expSum,
