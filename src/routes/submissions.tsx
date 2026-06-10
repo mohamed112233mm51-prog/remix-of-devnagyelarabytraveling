@@ -124,10 +124,10 @@ function SubmissionsPage() {
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const totalCount = submissions.length;
-  const readyCount = submissions.filter((s) => ((s as any).operation_status || "").includes("جاهز")).length;
-
-  const pendingCount = submissions.filter((s) => ((s as any).operation_status || "").includes("متابعة")).length;
-  const cancelledCount = submissions.filter((s) => ((s as any).operation_status || "").includes("ملغي")).length;
+  const fastCount = submissions.filter((s) => (s.status || "") === "سريع").length;
+  const slowCount = submissions.filter((s) => (s.status || "") === "بطيء").length;
+  const rejectedCount = submissions.filter((s) => (s.status || "") === "رفض أمني").length;
+  const expiredCount = 0;
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
