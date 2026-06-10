@@ -543,6 +543,26 @@ function Dashboard() {
         <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
       </div>
 
+      {/* === Profit audit panel === */}
+      <div className="erp-section-title">فحص صافي الربح (إجمالي النظام)</div>
+      <div className="erp-panel" style={{ padding: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 12 }}>
+          <AuditRow label="إجمالي المبيعات (بيع خدمات التنفيذ)" value={fmtDL(execSales)} tone="success" />
+          <AuditRow label="إجمالي تكلفة الشركات الصادرة" value={fmtDL(execCompanyCost)} tone="warning" />
+          <AuditRow label="إجمالي تكلفة خدمات الوكلاء" value={fmtDL(execAgentCost)} tone="warning" />
+          <AuditRow label="إجمالي المصروفات" value={fmtDL(expensesAll)} tone="warning" />
+          <AuditRow label="صافي الربح النهائي" value={fmtDL(companyProfit)} tone={companyProfit >= 0 ? "success" : "danger"} />
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)", lineHeight: 1.8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <div><strong>المعادلة الجديدة:</strong> صافي الربح = إجمالي المبيعات − تكلفة الشركات − تكلفة الوكلاء − المصروفات</div>
+          <div><strong>المعادلة السابقة:</strong> صافي الربح = تحصيلات الوكلاء − مدفوعات الشركات − المصروفات (كانت تعتمد على المدفوعات والتحصيلات)</div>
+          <div>المصدر: خدمات التنفيذات التي حالتها «منفذ» فقط. لا تستخدم أي مدفوعات/تحصيلات/أرصدة/خزائن/تحويلات.</div>
+          <div>ملاحظة: «تكلفة خدمات الوكلاء» = 0 حاليًا لعدم وجود تكلفة شراء من وكيل في النظام؛ الحقل مدرج للوضوح.</div>
+        </div>
+      </div>
+
+
+
       {/* === Quick Actions + Today Summary === */}
       <div className="erp-row-2">
         <div className="erp-panel">
