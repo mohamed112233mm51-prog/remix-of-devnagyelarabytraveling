@@ -901,6 +901,20 @@ const TodayStat = memo(function TodayStat({ label, value, tone }: { label: strin
   );
 });
 
+const AuditRow = memo(function AuditRow({ label, value, tone }: { label: string; value: string; tone?: "success" | "warning" | "danger" }) {
+  const color =
+    tone === "success" ? "var(--green, #059669)" :
+    tone === "danger" ? "var(--red, #dc2626)" :
+    tone === "warning" ? "var(--gold, #b8923a)" :
+    "var(--text)";
+  return (
+    <div style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 10, background: "var(--card)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+});
+
 const SectionCard = memo(function SectionCard({
   title, icon, accent, children,
 }: { title: string; icon: ReactNode; accent: "navy" | "gold"; children: ReactNode }) {
