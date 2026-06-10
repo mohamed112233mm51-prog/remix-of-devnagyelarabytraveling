@@ -154,7 +154,7 @@ function Dashboard() {
   const { rows: executions } = useLive<Execution>("executions");
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: currencyTxns } = useLive<{ id: string; bought_currency: string; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
+  const { rows: currencyTxns } = useLive<{ id: string; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
 
   const [period, setPeriod] = useState<Period>("month");
   // Heavy analytics use deferred period so KPI clicks feel instant
@@ -238,16 +238,36 @@ function Dashboard() {
     const egp = sumBy("EGP");
     const usd = sumBy("USD");
     const lyd = sumBy("LYD");
-    const latestRate = (code: string) => {
-      const rows = (currencyTxns || [])
-        .filter((t) => t.bought_currency === code && Number(t.exchange_rate || 0) > 0)
-        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
-      return rows.length ? Number(rows[0].exchange_rate || 0) : 0;
+    // Map cash-box currency code -> Arabic name used in currency_supplier_transactions
+    const nameAliases: Record<string, string[]> = {
+      USD: ["دولار", "دولار أمريكي", "USD", "$"],
+      LYD: ["دينار ليبي", "دينار", "LYD"],
     };
-    const usdRate = latestRate("USD");
-    const lydRate = latestRate("LYD");
+    // Read latest purchase rate per currency (tx_type = 'شراء عملة', bought_currency matches alias)
+    const latestRateInfo = (code: string) => {
+      const aliases = nameAliases[code] || [code];
+      const rows = (currencyTxns || [])
+        .filter((t) => {
+          const bc = (t.bought_currency || "").trim();
+          const isPurchase = (t.tx_type || "").trim() === "شراء عملة";
+          const matches = aliases.some((a) => bc === a);
+          return isPurchase && matches && Number(t.exchange_rate || 0) > 0;
+        })
+        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
+      const row = rows[0];
+      return {
+        rate: row ? Number(row.exchange_rate || 0) : 0,
+        date: row?.tx_date || null,
+        id: row?.id || null,
+        field: "exchange_rate",
+      };
+    };
+    const usdInfo = latestRateInfo("USD");
+    const lydInfo = latestRateInfo("LYD");
+    const usdRate = usdInfo.rate;
+    const lydRate = lydInfo.rate;
     const totalEgp = egp + usd * usdRate + lyd * lydRate;
-    return { egp, usd, lyd, usdRate, lydRate, totalEgp };
+    return { egp, usd, lyd, usdRate, lydRate, totalEgp, usdInfo, lydInfo };
   }, [cashBoxes, currencyTxns]);
 
   // ===== Period-based aggregates — single pass per range =====
@@ -546,9 +566,11 @@ function Dashboard() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
           <AuditRow label="رصيد الخزينة المصرية" value={`${fmtNum(treasury.egp)} ج.م`} tone="success" />
           <AuditRow label="رصيد الخزينة الدولارية" value={`${fmtNum(treasury.usd)} $`} tone="success" />
-          <AuditRow label="سعر صرف الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="سعر شراء الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="مصدر سعر الدولار" value={`الحقل: ${treasury.usdInfo.field} • التاريخ: ${treasury.usdInfo.date ?? "—"} • رقم الحركة: ${treasury.usdInfo.id ? treasury.usdInfo.id.slice(0, 8) : "—"}`} tone="warning" />
           <AuditRow label="رصيد الخزينة الدينار الليبي" value={`${fmtNum(treasury.lyd)} د.ل`} tone="success" />
-          <AuditRow label="سعر صرف الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="سعر شراء الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="مصدر سعر الدينار" value={`الحقل: ${treasury.lydInfo.field} • التاريخ: ${treasury.lydInfo.date ?? "—"} • رقم الحركة: ${treasury.lydInfo.id ? treasury.lydInfo.id.slice(0, 8) : "—"}`} tone="warning" />
           <AuditRow label="إجمالي أرصدة الخزائن (ج.م)" value={`${fmtNum(treasury.totalEgp)} ج.م`} tone="success" />
         </div>
       </div>

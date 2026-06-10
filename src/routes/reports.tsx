@@ -1265,18 +1265,30 @@ function TreasuriesReport() {
     return Array.from(map.entries()).map(([currency, total]) => ({ currency, total }));
   }, [active]);
 
-  const latestRate = (code: string) => {
+  const nameAliases: Record<string, string[]> = {
+    USD: ["دولار", "دولار أمريكي", "USD", "$"],
+    LYD: ["دينار ليبي", "دينار", "LYD"],
+  };
+  const latestRateInfo = (code: string) => {
+    const aliases = nameAliases[code] || [code];
     const rows = (cTxns || [])
-      .filter((t) => t.bought_currency === code && Number(t.exchange_rate || 0) > 0)
+      .filter((t) => {
+        const bc = (t.bought_currency || "").trim();
+        const isPurchase = (t.tx_type || "").trim() === "شراء عملة";
+        return isPurchase && aliases.some((a) => bc === a) && Number(t.exchange_rate || 0) > 0;
+      })
       .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
-    return rows.length ? Number(rows[0].exchange_rate || 0) : 0;
+    const row = rows[0];
+    return { rate: row ? Number(row.exchange_rate || 0) : 0, date: row?.tx_date || null, id: row?.id || null };
   };
   const sumBy = (code: string) => active.filter((b) => b.currency === code).reduce((s, b) => s + Number(b.balance || 0), 0);
   const egp = sumBy("EGP");
   const usd = sumBy("USD");
   const lyd = sumBy("LYD");
-  const usdRate = latestRate("USD");
-  const lydRate = latestRate("LYD");
+  const usdInfo = latestRateInfo("USD");
+  const lydInfo = latestRateInfo("LYD");
+  const usdRate = usdInfo.rate;
+  const lydRate = lydInfo.rate;
   const totalEgp = egp + usd * usdRate + lyd * lydRate;
 
   const cols = [
@@ -1301,8 +1313,10 @@ function TreasuriesReport() {
             value: `${fmtNum(t.total)}`,
             tone: (t.currency === "EGP" ? "gold" : t.currency === "USD" ? "green" : "") as any,
           })),
-          { label: "سعر صرف الدولار", value: `${fmtNum(usdRate)} ج.م/$`, tone: "" as any },
-          { label: "سعر صرف الدينار", value: `${fmtNum(lydRate)} ج.م/د.ل`, tone: "" as any },
+          { label: "سعر شراء الدولار", value: `${fmtNum(usdRate)} ج.م/$`, tone: "" as any },
+          { label: "سعر شراء الدينار", value: `${fmtNum(lydRate)} ج.م/د.ل`, tone: "" as any },
+          { label: "مصدر سعر الدولار", value: `exchange_rate • ${usdInfo.date ?? "—"}`, tone: "" as any },
+          { label: "مصدر سعر الدينار", value: `exchange_rate • ${lydInfo.date ?? "—"}`, tone: "" as any },
           { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
