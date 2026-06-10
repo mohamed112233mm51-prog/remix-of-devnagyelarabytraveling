@@ -282,10 +282,9 @@ function ReportsPage() {
       {tab === "agents" && <AgentsReport inRange={inRange} data={data} />}
       {tab === "companies" && <CompaniesReport inRange={inRange} data={data} />}
       {tab === "merchants" && <MerchantsReport inRange={inRange} data={data} />}
-      {tab === "investors" && <InvestorsReport inRange={inRange} data={data} />}
-      {/* flights/approvals tabs removed — section unified into submissions/executions */}
       {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
-      {tab === "usd_treasury" && <UsdTreasuryReport inRange={inRange} data={data} />}
+      {tab === "treasuries" && <TreasuriesReport />}
+      {tab === "currency_suppliers" && <CurrencySuppliersReport inRange={inRange} />}
       <style>{chartsCss}</style>
     </div>
   );
