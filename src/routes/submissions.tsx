@@ -124,10 +124,10 @@ function SubmissionsPage() {
 
   const NAVY = "#0f1b3d", GOLD = "#d4af37";
   const totalCount = submissions.length;
-  const readyCount = submissions.filter((s) => ((s as any).operation_status || "").includes("جاهز")).length;
-
-  const pendingCount = submissions.filter((s) => ((s as any).operation_status || "").includes("متابعة")).length;
-  const cancelledCount = submissions.filter((s) => ((s as any).operation_status || "").includes("ملغي")).length;
+  const fastCount = submissions.filter((s) => (s.status || "") === "سريع").length;
+  const slowCount = submissions.filter((s) => (s.status || "") === "بطيء").length;
+  const rejectedCount = submissions.filter((s) => (s.status || "") === "رفض أمني").length;
+  const expiredCount = 0;
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
@@ -171,9 +171,10 @@ function SubmissionsPage() {
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
         {[
           { icon: "📋", label: "إجمالي التقديمات", value: totalCount, bg: "#eef2ff", fg: NAVY, bd: "#dbe3ee" },
-          { icon: "✅", label: "جاهز للتنفيذ", value: readyCount, bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
-          { icon: "⏳", label: "قيد المتابعة", value: pendingCount, bg: "#f0f9ff", fg: "#0369a1", bd: "#bae6fd" },
-          { icon: "⛔", label: "ملغي", value: cancelledCount, bg: "#fef2f2", fg: "#b91c1c", bd: "#fecaca" },
+          { icon: "⚡", label: "سريع", value: fastCount, bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
+          { icon: "🐢", label: "بطيء", value: slowCount, bg: "#f0f9ff", fg: "#0369a1", bd: "#bae6fd" },
+          { icon: "⛔", label: "رفض أمني", value: rejectedCount, bg: "#fef2f2", fg: "#b91c1c", bd: "#fecaca" },
+          { icon: "⌛", label: "منتهية", value: expiredCount, bg: "#fffbeb", fg: "#b45309", bd: "#fde68a" },
         ].map((k) => (
           <div key={k.label} style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
             <div style={{ width: 42, height: 42, borderRadius: 10, background: k.bg, color: k.fg, border: `1px solid ${k.bd}`, display: "grid", placeItems: "center", fontSize: 20 }}>{k.icon}</div>
