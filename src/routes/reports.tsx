@@ -552,10 +552,25 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     approvals: fmtNum(r.approvals), approvals__excel: r.approvals,
   }));
 
+  const svcRows: SvcRow[] = fTxns.map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
+  const [view, setView] = useState<"summary" | "chart">("summary");
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">👥 تقرير الوكلاء</div></div>
       <div className="card-body">
+        <SubTabsBar
+          tabs={[
+            { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
+            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+          ]}
+          current={view}
+          onChange={(v) => setView(v as "summary" | "chart")}
+        />
+        {view === "chart" ? (
+          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
+        ) : (<>
+
         <KpiRow items={[
           { label: "إجمالي التحصيلات", value: fmtDL(totalCollections), tone: "green" },
           { label: "إجمالي قيمة الخدمات", value: fmtDL(totalValue), tone: "gold" },
