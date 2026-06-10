@@ -349,25 +349,13 @@ function SubmissionForm({
     <div className="card" style={{ padding: 20 }}>
       <h3 style={{ marginTop: 0 }}>{editing ? "تعديل التقديم" : "تقديم جديد"}</h3>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>نوع الخدمة (يمكن اختيار أكثر من خدمة)</label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {SERVICE_OPTIONS.map((s) => {
-            const active = form.services.includes(s);
-            return (
-              <button key={s} type="button" onClick={() => toggleService(s)} style={{
-                padding: "8px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700,
-                border: active ? "1.5px solid var(--primary)" : "1px solid #e2e8f0",
-                background: active ? "var(--primary)" : "#fff",
-                color: active ? "#fff" : "#0f172a",
-                cursor: "pointer",
-              }}>{active ? "✓ " : "＋ "}{s}</button>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+        <Field label="نوع الخدمة">
+          <select value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {withSelected(serviceKinds, form.service_type).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
         <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} style={inputStyle} /></Field>
         <Field label="تاريخ الميلاد"><input type="text" inputMode="numeric" placeholder="DD/MM/YYYY" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} maxLength={10} /></Field>
