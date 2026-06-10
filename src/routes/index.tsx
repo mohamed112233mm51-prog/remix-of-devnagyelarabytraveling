@@ -238,16 +238,36 @@ function Dashboard() {
     const egp = sumBy("EGP");
     const usd = sumBy("USD");
     const lyd = sumBy("LYD");
-    const latestRate = (code: string) => {
-      const rows = (currencyTxns || [])
-        .filter((t) => t.bought_currency === code && Number(t.exchange_rate || 0) > 0)
-        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
-      return rows.length ? Number(rows[0].exchange_rate || 0) : 0;
+    // Map cash-box currency code -> Arabic name used in currency_supplier_transactions
+    const nameAliases: Record<string, string[]> = {
+      USD: ["دولار", "دولار أمريكي", "USD", "$"],
+      LYD: ["دينار ليبي", "دينار", "LYD"],
     };
-    const usdRate = latestRate("USD");
-    const lydRate = latestRate("LYD");
+    // Read latest purchase rate per currency (tx_type = 'شراء عملة', bought_currency matches alias)
+    const latestRateInfo = (code: string) => {
+      const aliases = nameAliases[code] || [code];
+      const rows = (currencyTxns || [])
+        .filter((t) => {
+          const bc = (t.bought_currency || "").trim();
+          const isPurchase = (t.tx_type || "").trim() === "شراء عملة";
+          const matches = aliases.some((a) => bc === a);
+          return isPurchase && matches && Number(t.exchange_rate || 0) > 0;
+        })
+        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
+      const row = rows[0];
+      return {
+        rate: row ? Number(row.exchange_rate || 0) : 0,
+        date: row?.tx_date || null,
+        id: row?.id || null,
+        field: "exchange_rate",
+      };
+    };
+    const usdInfo = latestRateInfo("USD");
+    const lydInfo = latestRateInfo("LYD");
+    const usdRate = usdInfo.rate;
+    const lydRate = lydInfo.rate;
     const totalEgp = egp + usd * usdRate + lyd * lydRate;
-    return { egp, usd, lyd, usdRate, lydRate, totalEgp };
+    return { egp, usd, lyd, usdRate, lydRate, totalEgp, usdInfo, lydInfo };
   }, [cashBoxes, currencyTxns]);
 
   // ===== Period-based aggregates — single pass per range =====
