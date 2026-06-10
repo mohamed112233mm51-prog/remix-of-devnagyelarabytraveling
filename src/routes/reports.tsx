@@ -567,7 +567,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
         <SubTabsBar
           tabs={[
             { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
-            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+            { id: "chart", label: "تحليل خدمات الوكلاء", icon: <Activity size={15} strokeWidth={2} /> },
           ]}
           current={view}
           onChange={(v) => setView(v as "summary" | "chart")}
