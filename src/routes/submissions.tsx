@@ -301,23 +301,16 @@ function SubmissionForm({
   });
   const [saving, setSaving] = useState(false);
 
-  const toggleService = (s: string) => {
-    setForm((f) => ({
-      ...f,
-      services: (Array.isArray(f.services) ? f.services : []).includes(s) ? (Array.isArray(f.services) ? f.services : []).filter((x) => x !== s) : [...(Array.isArray(f.services) ? f.services : []), s],
-    }));
-  };
-
   const save = async () => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
-    if (form.services.length === 0) { toast.error("يجب اختيار نوع خدمة واحد على الأقل"); return; }
+    if (!form.service_type) { toast.error("يجب اختيار نوع الخدمة"); return; }
     if (form.dob && !isValidDisplayDate(form.dob)) {
       toast.error("تاريخ الميلاد غير صحيح. الصيغة المطلوبة: DD/MM/YYYY");
       return;
     }
     setSaving(true);
     const payload = {
-      services: form.services,
+      services: [form.service_type],
       passenger_name: form.passenger_name.trim(),
       national_id: form.national_id || null,
       dob: parseDisplayDate(form.dob),
