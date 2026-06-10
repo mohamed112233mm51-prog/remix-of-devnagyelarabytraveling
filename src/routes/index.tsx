@@ -154,7 +154,7 @@ function Dashboard() {
   const { rows: executions } = useLive<Execution>("executions");
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: currencyTxns } = useLive<{ id: string; bought_currency: string; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
+  const { rows: currencyTxns } = useLive<{ id: string; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
 
   const [period, setPeriod] = useState<Period>("month");
   // Heavy analytics use deferred period so KPI clicks feel instant
