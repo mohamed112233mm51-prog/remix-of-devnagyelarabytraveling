@@ -11,6 +11,7 @@ import {
   type IssuingCompany,
   type Merchant,
   type MerchantCashCollection,
+  type Submission,
   type Transaction,
   type UsdTreasuryTransaction,
 } from "./db";
