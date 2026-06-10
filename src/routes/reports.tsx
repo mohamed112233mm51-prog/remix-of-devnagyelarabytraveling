@@ -1123,12 +1123,12 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
   const rows = filtered.map((a) => ({
     passenger: a.passenger_name,
     agent: agentName(a.agent_id),
-    company: a.issuing_company || companyName(a.issuing_company_id),
-    destination: a.destination || "—",
-    authority: a.authority || "—",
+    company: companyName(a.approval_company_id),
+    destination: "—",
+    authority: a.approval_authority || "—",
     submit: a.submit_date || "—",
     issue: a.issue_date || "—",
-    amount: fmtDL(Number((a as any).agent_price || a.price || 0)),
+    amount: fmtDL(Number((a as any).agent_price || 0)),
     status: a.status,
   }));
 
