@@ -706,10 +706,15 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     count: fmtNum(r.count), count__excel: r.count,
   }));
 
-  const svcRows: SvcRow[] = fCT.map((t) => ({
-    service_type: t.service_type,
-    value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
-  }));
+  // Company SERVICES only — require company link + real value
+  const svcRows: SvcRow[] = fCT
+    .filter((t) => !!t.company_id
+      && (t as any).source_service_type !== "payment"
+      && (Number(t.trip_value || 0) > 0 || Number(t.count || 0) * Number(t.price || 0) > 0))
+    .map((t) => ({
+      service_type: t.service_type,
+      value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
+    }));
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
