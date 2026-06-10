@@ -203,7 +203,10 @@ function Dashboard() {
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
 
-    const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
+    // ===== Execution-based profit (lifetime) =====
+    const execAll = computeExecutionAgg(executions, () => true);
+    const companyProfit =
+      execAll.sales - execAll.companyCost - execAll.agentCost - expensesAll;
 
     return {
       agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
@@ -211,8 +214,11 @@ function Dashboard() {
       merchantCollected,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
       companyOutgoingNet, companyProfit,
+      execSales: execAll.sales,
+      execCompanyCost: execAll.companyCost,
+      execAgentCost: execAll.agentCost,
     };
-  }, [txns, cTxns, collections, expenses, expenseDeductions]);
+  }, [txns, cTxns, collections, expenses, expenseDeductions, executions]);
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
@@ -220,7 +226,9 @@ function Dashboard() {
     merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
     companyOutgoingNet, companyProfit,
+    execSales, execCompanyCost, execAgentCost,
   } = lifetime;
+
 
   // Treasury balances (per currency from cash_boxes)
   const treasury = useMemo(() => {
