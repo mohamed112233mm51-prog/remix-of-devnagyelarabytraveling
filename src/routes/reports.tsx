@@ -700,10 +700,28 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     count: fmtNum(r.count), count__excel: r.count,
   }));
 
+  const svcRows: SvcRow[] = fCT.map((t) => ({
+    service_type: t.service_type,
+    value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
+  }));
+  const [view, setView] = useState<"summary" | "chart">("summary");
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">🏢 تقرير الشركات الصادرة</div></div>
       <div className="card-body">
+        <SubTabsBar
+          tabs={[
+            { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
+            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+          ]}
+          current={view}
+          onChange={(v) => setView(v as "summary" | "chart")}
+        />
+        {view === "chart" ? (
+          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
+        ) : (<>
+
         <KpiRow items={[
           { label: "إجمالي المدفوعات", value: fmtDL(totalPaid), tone: "red" },
           { label: "عدد الشركات", value: fmtNum(companies.length) },
