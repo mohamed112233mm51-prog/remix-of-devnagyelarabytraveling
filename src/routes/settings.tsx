@@ -1140,8 +1140,10 @@ function GeneralTab() {
           <DropdownListManager category="departure_from" title="جهات المغادرة" icon={<MapPin size={16} />} />
           <DropdownListManager category="destination" title="الوجهات" icon={<MapPin size={16} />} />
           <DropdownListManager category="airline" title="شركات الطيران" icon={<Plane size={16} />} />
+          <DropdownListManager category="airport" title="المطار" icon={<MapPin size={16} />} />
           <DropdownListManager category="service_type" title="نوع الخدمة" icon={<Wrench size={16} />} />
           <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="submission_notes" title="الملاحظات" icon={<Inbox size={16} />} />
         </div>
       </div>
 
