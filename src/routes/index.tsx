@@ -154,13 +154,6 @@ function Dashboard() {
     const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
     const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
-    let investorDeposits = 0, investorWithdrawals = 0;
-    for (const t of invTxns) {
-      if (t.transaction_type === "توريد نقدية") investorDeposits += Number(t.amount || 0);
-      else if (t.transaction_type === "صرف نقدية") investorWithdrawals += Number(t.amount || 0);
-    }
-    const investorBalance = investorDeposits - investorWithdrawals;
-
     let expensesFixed = 0, expensesVariable = 0, expensesAll = 0;
     for (const e of expenses) {
       const a = Number(e.amount || 0);
@@ -173,24 +166,33 @@ function Dashboard() {
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
 
     const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
-    const treasuryNet = agentCollectionsNet - companyOutgoingNet - expensesAll - expensesDeducted + investorBalance;
 
     return {
       agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
       companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
-      investorDeposits, investorWithdrawals, investorBalance,
+      merchantCollected,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-      companyOutgoingNet, companyProfit, treasuryNet,
+      companyOutgoingNet, companyProfit,
     };
-  }, [txns, cTxns, collections, invTxns, expenses, expenseDeductions]);
+  }, [txns, cTxns, collections, expenses, expenseDeductions]);
 
   const {
-    agentsFlightsValue, agentsApprovalsValue, agentsPaid, agentsDue, agentCollectionsNet,
+    agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
     companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
-    investorDeposits, investorWithdrawals, investorBalance,
+    merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-    companyOutgoingNet, companyProfit, treasuryNet,
+    companyOutgoingNet, companyProfit,
   } = lifetime;
+
+  // Treasury balances (per currency from cash_boxes)
+  const treasury = useMemo(() => {
+    const sumBy = (code: string) =>
+      cashBoxes.filter((b) => b.currency === code && b.is_active !== false).reduce((s, b) => s + Number(b.balance || 0), 0);
+    const egp = sumBy("EGP");
+    const usd = sumBy("USD");
+    const lyd = sumBy("LYD");
+    return { egp, usd, lyd };
+  }, [cashBoxes]);
 
   // ===== Period-based aggregates — single pass per range =====
   const computeAgg = (range: { start: Date; end: Date }) => {
