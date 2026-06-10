@@ -464,7 +464,7 @@ function ServiceTypeChartView({
           <thead><tr><th>نوع الخدمة</th><th>عدد العمليات</th><th>{valueLabel}</th><th>النسبة %</th></tr></thead>
           <tbody>
             {agg.length === 0 ? (
-              <tr><td colSpan={4}><div className="empty"><div className="empty-text">لا توجد خدمات في الفترة المحددة</div></div></td></tr>
+              <tr><td colSpan={4}><div className="empty"><div className="empty-text">لا توجد بيانات لعرضها</div></div></td></tr>
             ) : agg.map((r) => {
               const pct = totalAll > 0 ? (r.total / totalAll) * 100 : 0;
               const active = selected === r.name;
@@ -552,7 +552,13 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     approvals: fmtNum(r.approvals), approvals__excel: r.approvals,
   }));
 
-  const svcRows: SvcRow[] = fTxns.map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
+  // Agent SERVICES only — exclude payment rows and require an agent + real value
+  const svcRows: SvcRow[] = fTxns
+    .filter((t) => !!t.agent_id
+      && (t as any).source_service_type !== "payment"
+      && t.service_type !== "دفعة من الوكيل"
+      && tripValue(t) > 0)
+    .map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
@@ -700,10 +706,15 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     count: fmtNum(r.count), count__excel: r.count,
   }));
 
-  const svcRows: SvcRow[] = fCT.map((t) => ({
-    service_type: t.service_type,
-    value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
-  }));
+  // Company SERVICES only — require company link + real value
+  const svcRows: SvcRow[] = fCT
+    .filter((t) => !!t.company_id
+      && (t as any).source_service_type !== "payment"
+      && (Number(t.trip_value || 0) > 0 || Number(t.count || 0) * Number(t.price || 0) > 0))
+    .map((t) => ({
+      service_type: t.service_type,
+      value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
+    }));
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
