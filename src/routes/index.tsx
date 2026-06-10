@@ -451,15 +451,35 @@ function Dashboard() {
           sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
         <HeroKpi
-          label={`الرحلات — ${periodLabel}`}
-          value={periodAgg.flightsCount}
+          label={`التقديمات — ${periodLabel}`}
+          value={submissions.filter((s) => inRange(s.created_at, periodRange)).length}
           format={fmtNum}
-          icon={<Plane size={18} />}
+          icon={<ClipboardCheck size={18} />}
           tone="navy"
-          delta={prevAgg ? `${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 ? "+" : ""}${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount)}%` : undefined}
-          deltaPositive={prevAgg ? pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 : undefined}
-          sub={`الموافقات: ${fmtNum(periodAgg.approvalsCount)}`}
+          sub={`التنفيذات: ${fmtNum(executions.filter((e) => inRange(e.created_at, periodRange)).length)}`}
         />
+      </div>
+
+      {/* === Treasury balances (cash boxes) === */}
+      <div className="erp-section-title">أرصدة الخزائن</div>
+      <div className="erp-hero-grid">
+        <HeroKpi label="خزينة الجنيه المصري" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Landmark size={18} />} tone="primary" sub="إجمالي رصيد EGP" />
+        <HeroKpi label="خزينة الدولار الأمريكي" value={treasury.usd} format={(n) => `${fmtNum(n)} $`} icon={<DollarSign size={18} />} tone="success" sub="إجمالي رصيد USD" />
+        <HeroKpi label="خزينة الدينار الليبي" value={treasury.lyd} format={(n) => `${fmtNum(n)} د.ل`} icon={<Coins size={18} />} tone="warning" sub="إجمالي رصيد LYD" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub="مجموع الخزائن بالجنيه" />
+      </div>
+
+      {/* === System-wide KPIs === */}
+      <div className="erp-section-title">المؤشرات الرئيسية</div>
+      <div className="erp-hero-grid">
+        <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
+        <HeroKpi label="عدد التنفيذات" value={executions.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
+        <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
+        <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
+        <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
+        <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
+        <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
       </div>
 
       {/* === Quick Actions + Today Summary === */}
