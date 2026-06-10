@@ -282,8 +282,9 @@ function Dashboard() {
 
   const periodRange = useMemo(() => getPeriodRange(period), [period]);
   const prevRange = useMemo(() => getPreviousRange(period), [period]);
-  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
-  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals, executions]);
+  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals, executions]);
+
 
   const periodLabel = PERIOD_LABELS[period];
 
