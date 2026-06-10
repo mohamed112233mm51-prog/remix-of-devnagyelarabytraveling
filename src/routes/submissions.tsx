@@ -19,7 +19,7 @@ export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
 });
 
-const SERVICE_OPTIONS = ["موافقة أمنية", "تذكرة طيران", "استثمار ليبي"] as const;
+
 
 function SubmissionsPage() {
   const perm = usePerm("submissions");
