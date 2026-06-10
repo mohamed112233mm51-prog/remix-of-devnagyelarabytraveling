@@ -328,6 +328,174 @@ function groupBy<T>(items: T[], keyFn: (t: T) => string, valFn: (t: T) => number
   return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
 }
 
+// ---------- Service-type chart (shared by Agents + Companies) ----------
+type SvcRow = { service_type: string | null; value: number };
+function ServiceTypeChartView({
+  rows,
+  totalLabel,
+  valueLabel,
+}: {
+  rows: SvcRow[];
+  totalLabel: string;
+  valueLabel: string;
+}) {
+  const agg = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; total: number }>();
+    for (const r of rows) {
+      const k = (r.service_type && String(r.service_type).trim()) || "غير محدد";
+      const cur = map.get(k) || { name: k, count: 0, total: 0 };
+      cur.count += 1;
+      cur.total += Number(r.value || 0);
+      map.set(k, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [rows]);
+
+  const totalAll = agg.reduce((s, x) => s + x.total, 0);
+  const countAll = agg.reduce((s, x) => s + x.count, 0);
+  const top = agg[0];
+  const topPct = top && totalAll > 0 ? (top.total / totalAll) * 100 : 0;
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const sel = agg.find((x) => x.name === selected) || null;
+  const selPct = sel && totalAll > 0 ? (sel.total / totalAll) * 100 : 0;
+
+  const pieData = agg.map((x) => ({ name: x.name, value: x.total }));
+  const barData = agg.map((x) => ({
+    name: x.name,
+    "إجمالي المبيعات": x.total,
+    "عدد العمليات": x.count,
+  }));
+
+  return (
+    <div>
+      <KpiRow items={[
+        { label: "إجمالي عدد الخدمات", value: fmtNum(countAll) },
+        { label: "أكثر خدمة مبيعاً", value: top ? top.name : "—", tone: "gold" },
+        { label: "نسبة أكثر خدمة", value: top ? `${topPct.toFixed(1)}%` : "—", tone: "green" },
+        { label: totalLabel, value: fmtDL(totalAll), tone: "green" },
+      ]} />
+
+      {sel && (
+        <div className="card" style={{ marginBottom: 14, background: "linear-gradient(180deg,#F8FAFC,#F1F5F9)", border: "1px solid #E2E8F0" }}>
+          <div className="card-body" style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>الخدمة: {sel.name}</div>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13, color: "#334155" }}>
+              <div><b>عدد العمليات:</b> {fmtNum(sel.count)}</div>
+              <div><b>{valueLabel}:</b> {fmtDL(sel.total)}</div>
+              <div><b>النسبة:</b> {selPct.toFixed(1)}%</div>
+            </div>
+            <button className="export-btn" onClick={() => setSelected(null)}>إلغاء التحديد</button>
+          </div>
+        </div>
+      )}
+
+      <ChartsGrid>
+        <ChartCard title="توزيع الخدمات حسب النوع" subtitle="النسبة المئوية لكل نوع من إجمالي القيمة" isEmpty={pieData.length === 0}>
+          <PieChart>
+            <Tooltip
+              contentStyle={tooltipStyle}
+              formatter={(v: number, n: string) => {
+                const pct = totalAll > 0 ? ((v / totalAll) * 100).toFixed(1) : "0";
+                return [`${fmtTip(v)} (${pct}%)`, n];
+              }}
+            />
+            <Legend verticalAlign="bottom" height={30} iconType="circle" />
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="45%"
+              innerRadius={60}
+              outerRadius={100}
+              paddingAngle={3}
+              stroke="var(--card,#fff)"
+              strokeWidth={2}
+              onClick={(e: any) => setSelected(e?.name ?? null)}
+              label={(e: any) => {
+                const pct = totalAll > 0 ? ((e.value / totalAll) * 100).toFixed(0) : "0";
+                return `${pct}%`;
+              }}
+            >
+              {pieData.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={CHART_COLORS[i % CHART_COLORS.length]}
+                  style={{ cursor: "pointer", opacity: selected && selected !== entry.name ? 0.45 : 1 }}
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ChartCard>
+
+        <ChartCard title="إجمالي مبيعات كل خدمة" subtitle="اضغط على العمود لعرض التفاصيل" isEmpty={barData.length === 0}>
+          <BarChart data={barData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+            <XAxis dataKey="name" tick={axisTick} interval={0} angle={-15} textAnchor="end" height={70} />
+            <YAxis tick={axisTick} tickFormatter={fmtCount} width={70} />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              labelStyle={tooltipLabelStyle}
+              formatter={(v: number, n: string) => (n === "عدد العمليات" ? [fmtCount(v), n] : [fmtTip(v), n])}
+            />
+            <Legend verticalAlign="top" height={28} iconType="circle" />
+            <Bar
+              dataKey="إجمالي المبيعات"
+              radius={[8, 8, 0, 0]}
+              maxBarSize={48}
+              onClick={(d: any) => setSelected(d?.name ?? null)}
+              style={{ cursor: "pointer" }}
+            >
+              {barData.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={CHART_COLORS[i % CHART_COLORS.length]}
+                  style={{ opacity: selected && selected !== entry.name ? 0.45 : 1 }}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ChartCard>
+      </ChartsGrid>
+
+      <div className="table-wrap">
+        <table className="mobile-cards">
+          <thead><tr><th>نوع الخدمة</th><th>عدد العمليات</th><th>{valueLabel}</th><th>النسبة %</th></tr></thead>
+          <tbody>
+            {agg.length === 0 ? (
+              <tr><td colSpan={4}><div className="empty"><div className="empty-text">لا توجد خدمات في الفترة المحددة</div></div></td></tr>
+            ) : agg.map((r) => {
+              const pct = totalAll > 0 ? (r.total / totalAll) * 100 : 0;
+              const active = selected === r.name;
+              return (
+                <tr key={r.name} onClick={() => setSelected(active ? null : r.name)} style={{ cursor: "pointer", background: active ? "#F1F5F9" : undefined }}>
+                  <td className="bold" data-label="الخدمة">{r.name}</td>
+                  <td data-label="العمليات">{fmtNum(r.count)}</td>
+                  <td data-label="القيمة">{fmtDL(r.total)}</td>
+                  <td data-label="النسبة">{pct.toFixed(1)}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SubTabsBar({ tabs, current, onChange }: { tabs: { id: string; label: string; icon?: React.ReactNode }[]; current: string; onChange: (id: string) => void }) {
+  return (
+    <div className="action-toolbar" style={{ marginBottom: 14 }}>
+      {tabs.map((t) => (
+        <div key={t.id} className={`tool-tab ${current === t.id ? "active" : ""}`} onClick={() => onChange(t.id)}>
+          {t.icon} <span>{t.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------- AGENTS ----------
 function AgentsReport({ inRange, data: rd }: SectionProps) {
   const { agents, transactions: txns, flights, approvals, loading } = rd;
@@ -384,10 +552,25 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     approvals: fmtNum(r.approvals), approvals__excel: r.approvals,
   }));
 
+  const svcRows: SvcRow[] = fTxns.map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
+  const [view, setView] = useState<"summary" | "chart">("summary");
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">👥 تقرير الوكلاء</div></div>
       <div className="card-body">
+        <SubTabsBar
+          tabs={[
+            { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
+            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+          ]}
+          current={view}
+          onChange={(v) => setView(v as "summary" | "chart")}
+        />
+        {view === "chart" ? (
+          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
+        ) : (<>
+
         <KpiRow items={[
           { label: "إجمالي التحصيلات", value: fmtDL(totalCollections), tone: "green" },
           { label: "إجمالي قيمة الخدمات", value: fmtDL(totalValue), tone: "gold" },
@@ -474,6 +657,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
             </tbody>
           </table>
         </div>
+        </>)}
       </div>
     </div>
   );
@@ -516,10 +700,28 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     count: fmtNum(r.count), count__excel: r.count,
   }));
 
+  const svcRows: SvcRow[] = fCT.map((t) => ({
+    service_type: t.service_type,
+    value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
+  }));
+  const [view, setView] = useState<"summary" | "chart">("summary");
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">🏢 تقرير الشركات الصادرة</div></div>
       <div className="card-body">
+        <SubTabsBar
+          tabs={[
+            { id: "summary", label: "الملخص", icon: <BarChart3 size={15} strokeWidth={2} /> },
+            { id: "chart", label: "الرسم البياني", icon: <Activity size={15} strokeWidth={2} /> },
+          ]}
+          current={view}
+          onChange={(v) => setView(v as "summary" | "chart")}
+        />
+        {view === "chart" ? (
+          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
+        ) : (<>
+
         <KpiRow items={[
           { label: "إجمالي المدفوعات", value: fmtDL(totalPaid), tone: "red" },
           { label: "عدد الشركات", value: fmtNum(companies.length) },
@@ -586,6 +788,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
             </tbody>
           </table>
         </div>
+        </>)}
       </div>
     </div>
   );
