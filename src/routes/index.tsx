@@ -566,9 +566,11 @@ function Dashboard() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
           <AuditRow label="رصيد الخزينة المصرية" value={`${fmtNum(treasury.egp)} ج.م`} tone="success" />
           <AuditRow label="رصيد الخزينة الدولارية" value={`${fmtNum(treasury.usd)} $`} tone="success" />
-          <AuditRow label="سعر صرف الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="سعر شراء الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="مصدر سعر الدولار" value={`الحقل: ${treasury.usdInfo.field} • التاريخ: ${treasury.usdInfo.date ?? "—"} • رقم الحركة: ${treasury.usdInfo.id ? treasury.usdInfo.id.slice(0, 8) : "—"}`} tone="warning" />
           <AuditRow label="رصيد الخزينة الدينار الليبي" value={`${fmtNum(treasury.lyd)} د.ل`} tone="success" />
-          <AuditRow label="سعر صرف الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="سعر شراء الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="مصدر سعر الدينار" value={`الحقل: ${treasury.lydInfo.field} • التاريخ: ${treasury.lydInfo.date ?? "—"} • رقم الحركة: ${treasury.lydInfo.id ? treasury.lydInfo.id.slice(0, 8) : "—"}`} tone="warning" />
           <AuditRow label="إجمالي أرصدة الخزائن (ج.م)" value={`${fmtNum(treasury.totalEgp)} ج.م`} tone="success" />
         </div>
       </div>
