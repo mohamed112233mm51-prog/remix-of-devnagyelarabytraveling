@@ -11,11 +11,11 @@ import {
   type CompanyTransaction,
   type Expense,
   type ExpenseDeduction,
-  type Investor,
-  type InvestorTransaction,
   type IssuingCompany,
   type Merchant,
   type MerchantCashCollection,
+  type Submission,
+  type Execution,
   type Transaction,
 } from "@/lib/db";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
@@ -33,8 +33,13 @@ import {
   Activity,
   Plus,
   ChevronLeft,
+  Coins,
+  Landmark,
+  DollarSign,
 } from "lucide-react";
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
