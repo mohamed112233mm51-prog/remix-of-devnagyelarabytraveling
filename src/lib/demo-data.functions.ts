@@ -600,3 +600,77 @@ export const productionWipe = createServerFn({ method: "POST" })
       status: remainingTotal === 0 ? "clean" : "partial",
     };
   });
+
+// ============================================================
+// Prepare System for Launch (Super Admin only)
+// Wipes operational/transactional data while preserving:
+// users, roles, settings, dropdowns, entities (agents/companies/
+// merchants/investors/currency suppliers), cash boxes, branding,
+// pricing config and backup history.
+// ============================================================
+async function ensureSuperAdmin(supabase: any, userId: string) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("is_super_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!data?.is_super_admin) throw new Response("Forbidden: Super Admin only", { status: 403 });
+}
+
+// Tables wiped fully (children before parents to avoid FK issues).
+const LAUNCH_WIPE_ORDER: readonly string[] = [
+  "payment_splits",
+  "expense_deductions",
+  "expenses",
+  "transactions",
+  "company_transactions",
+  "merchant_cash_collections",
+  "investor_transactions",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
+  "submissions",
+  "executions",
+  "activity_logs",
+  "import_batches",
+];
+
+export const prepareForLaunch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { confirm?: string } | undefined) => ({ confirm: d?.confirm ?? "" }))
+  .handler(async ({ data, context }) => {
+    await ensureSuperAdmin(context.supabase, context.userId);
+    if (data.confirm !== "PREPARE") {
+      throw new Error("Confirmation phrase required");
+    }
+    const sb = admin();
+
+    const summary: Record<string, number> = {};
+    let totalDeleted = 0;
+
+    for (const t of LAUNCH_WIPE_ORDER) {
+      const { count, error } = await sb
+        .from(t as any)
+        .delete({ count: "exact" })
+        .not("id", "is", null);
+      if (error) {
+        summary[t] = 0;
+        continue;
+      }
+      summary[t] = count ?? 0;
+      totalDeleted += count ?? 0;
+    }
+
+    // Reset cash box balances to zero (entities preserved).
+    const { count: boxesReset } = await sb
+      .from("cash_boxes")
+      .update({ balance: 0 } as any, { count: "exact" })
+      .not("id", "is", null);
+    summary["cash_boxes_reset"] = boxesReset ?? 0;
+
+    return {
+      summary,
+      totalDeleted,
+      cashBoxesReset: boxesReset ?? 0,
+      status: "clean" as const,
+    };
+  });

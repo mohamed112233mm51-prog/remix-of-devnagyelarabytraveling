@@ -18,7 +18,7 @@ import {
 import {
   createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow,
 } from "@/lib/backups.functions";
-import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, type WipeCategory } from "@/lib/demo-data.functions";
+import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, prepareForLaunch, type WipeCategory } from "@/lib/demo-data.functions";
 import { getBackendDiagnostics, isProdEnv } from "@/lib/env";
 import { Settings as SettingsIcon, Users, UserPlus, ShieldCheck, SlidersHorizontal, DatabaseBackup, Search, Power, Trash2, KeyRound, Mail, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserCheck, UserCog, Clock, Building2, Palette, Image as ImageIcon, ListChecks, Plus, Pencil, Check, X as XIcon, Upload, Save, Inbox, MapPin, Plane, Wrench, Phone, DollarSign, Sparkles, AlertCircle, Trash, Database, HardDrive, Download, RotateCcw, Eye, RefreshCw, Calendar, Activity, FileArchive, XCircle, AlertTriangle, Cloud } from "lucide-react";
 
@@ -2788,9 +2788,11 @@ function RestoreConfirmModal({ target, busy, onConfirm, onCancel }: {
 // ============================================================
 function ProductionCleanupTab() {
   const prod = isProdEnv();
+  const { isSuperAdmin } = useAuth();
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <EnvironmentDiagnosticsCard />
+      {isSuperAdmin && <PrepareForLaunchCard />}
       {prod ? (
         <div className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "flex-start", background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
           <ShieldCheck size={20} color="#166534" style={{ marginTop: 2 }} />
@@ -2807,6 +2809,132 @@ function ProductionCleanupTab() {
     </div>
   );
 }
+
+const LAUNCH_LABELS: Record<string, string> = {
+  payment_splits: "تقسيمات المدفوعات",
+  expense_deductions: "خصومات المصروفات",
+  expenses: "المصروفات",
+  transactions: "حركات الوكلاء والمدفوعات",
+  company_transactions: "حركات الشركات الصادرة",
+  merchant_cash_collections: "حركات التجار",
+  investor_transactions: "حركات المستثمرين",
+  currency_supplier_transactions: "حركات موردي العملات",
+  usd_treasury_transactions: "حركات الخزينة الدولارية",
+  submissions: "التقديمات",
+  executions: "التنفيذات",
+  activity_logs: "السجلات والإشعارات",
+  import_batches: "دفعات الاستيراد المؤقتة",
+  cash_boxes_reset: "تصفير أرصدة الخزائن",
+};
+
+function PrepareForLaunchCard() {
+  const prepareFn = useServerFn(prepareForLaunch);
+  const qc = useQueryClient();
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<null | Awaited<ReturnType<typeof prepareForLaunch>>>(null);
+
+  async function run() {
+    setBusy(true);
+    try {
+      const res = await prepareFn({ data: { confirm: "PREPARE" } });
+      setResult(res);
+      toast.success("تم تجهيز النظام للنشر بنجاح");
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل تجهيز النظام");
+    } finally {
+      setBusy(false);
+      setStep(0);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden", border: "1px solid #FDE68A" }}>
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid #FDE68A", display: "flex", alignItems: "center", gap: 10, background: "#FFFBEB" }}>
+        <Sparkles size={18} color="#92400E" />
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#78350F" }}>تجهيز النظام للنشر</div>
+        <span style={{ marginInlineStart: "auto", fontSize: 11, fontWeight: 800, color: "#78350F", background: "#FEF3C7", border: "1px solid #FDE68A", padding: "3px 10px", borderRadius: 999 }}>
+          SUPER ADMIN
+        </span>
+      </div>
+
+      <div style={{ padding: 20, display: "grid", gap: 16 }}>
+        <div style={{ display: "flex", gap: 12, padding: 14, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, alignItems: "flex-start" }}>
+          <AlertTriangle size={18} color="#B91C1C" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: "#7F1D1D", lineHeight: 1.7 }}>
+            يحذف جميع البيانات التشغيلية (التقديمات، التنفيذات، المدفوعات، المصروفات، حركات الخزائن، الوكلاء، الشركات، التجار، موردي العملات، الإشعارات، البيانات التجريبية) ويعيد تصفير أرصدة الخزائن.
+            <br />
+            <b>يبقى:</b> المستخدمون، الصلاحيات، الإعدادات، القوائم المنسدلة، الوكلاء، الشركات، التجار، موردو العملات، الخزائن، الشعار وبيانات المؤسسة.
+          </div>
+        </div>
+
+        <button
+          onClick={() => setStep(1)}
+          disabled={busy}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", borderRadius: 10,
+            background: "#92400E", color: "#fff", border: 0, fontWeight: 800, fontSize: 14,
+            cursor: busy ? "not-allowed" : "pointer", justifySelf: "start",
+          }}
+        >
+          <Sparkles size={16} />
+          <span>{busy ? "جارٍ التنفيذ..." : "تجهيز النظام للنشر"}</span>
+        </button>
+      </div>
+
+      {step === 1 && (
+        <ConfirmModal
+          title="تأكيد أول — تجهيز النظام للنشر"
+          message="سيتم حذف كل البيانات التشغيلية مع الاحتفاظ بالإعدادات والكيانات الأساسية. هل تريد المتابعة؟"
+          confirmLabel="نعم، تابع"
+          danger
+          onCancel={() => setStep(0)}
+          onConfirm={() => setStep(2)}
+        />
+      )}
+      {step === 2 && (
+        <ConfirmModal
+          title="تأكيد نهائي"
+          message="هذه العملية لا يمكن التراجع عنها. هل أنت متأكد تمامًا من تجهيز النظام للنشر؟"
+          confirmLabel="نعم، نفّذ الآن"
+          danger
+          onCancel={() => setStep(0)}
+          onConfirm={run}
+        />
+      )}
+
+      {result && typeof document !== "undefined" && createPortal(
+        <div dir="rtl" onClick={() => setResult(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 560, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0F1F44", display: "flex", alignItems: "center", gap: 8 }}>
+              <Check size={20} color="#16A34A" /> تم تجهيز النظام للنشر بنجاح
+            </h3>
+            <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, fontSize: 13 }}>
+                <span style={{ color: "#065F46", fontWeight: 700 }}>إجمالي السجلات المحذوفة</span>
+                <span style={{ fontWeight: 800, color: "#065F46" }}>{result.totalDeleted}</span>
+              </div>
+              <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
+                {Object.entries(result.summary).map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13 }}>
+                    <span style={{ color: "#475569" }}>{LAUNCH_LABELS[k] || k}</span>
+                    <span style={{ fontWeight: 800, color: "#0F1F44" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => { setResult(null); window.location.reload(); }} style={{ marginTop: 16, padding: "10px 18px", borderRadius: 8, border: 0, background: "#0F1F44", color: "#F5D27A", fontWeight: 700, cursor: "pointer" }}>
+              تم — إعادة تحميل
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 
 function EnvironmentDiagnosticsCard() {
   const d = getBackendDiagnostics();
