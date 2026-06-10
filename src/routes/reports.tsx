@@ -8,6 +8,7 @@ import {
   merchantCashNet,
   tripValue,
   txnTotalPaid,
+  useLive,
   type CompanyTransaction,
   type UsdTreasuryTransaction,
 } from "@/lib/db";
@@ -41,7 +42,7 @@ export const Route = createFileRoute("/reports")({
   errorComponent: () => <div className="card" style={{ padding: 24 }}>تعذر تحميل التقارير مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>,
 });
 
-type Tab = "agents" | "companies" | "merchants" | "investors" | "expenses" | "usd_treasury";
+type Tab = "agents" | "companies" | "merchants" | "expenses" | "treasuries" | "currency_suppliers";
 type Period = "30d" | "1y" | "custom";
 
 // Professional, soft palette
@@ -222,9 +223,9 @@ function ReportsPage() {
     { id: "agents", label: "الوكلاء", icon: <Users size={15} strokeWidth={2} /> },
     { id: "companies", label: "الشركات الصادرة", icon: <Building2 size={15} strokeWidth={2} /> },
     { id: "merchants", label: "تاجر الكاش", icon: <Handshake size={15} strokeWidth={2} /> },
-    { id: "investors", label: "المستثمرين", icon: <Briefcase size={15} strokeWidth={2} /> },
     { id: "expenses", label: "المصروفات", icon: <Receipt size={15} strokeWidth={2} /> },
-    { id: "usd_treasury", label: "الخزينة الدولارية", icon: <DollarSign size={15} strokeWidth={2} /> },
+    { id: "treasuries", label: "الخزائن", icon: <Wallet size={15} strokeWidth={2} /> },
+    { id: "currency_suppliers", label: "شراء وبيع العملات", icon: <DollarSign size={15} strokeWidth={2} /> },
   ];
 
   return (
@@ -282,10 +283,9 @@ function ReportsPage() {
       {tab === "agents" && <AgentsReport inRange={inRange} data={data} />}
       {tab === "companies" && <CompaniesReport inRange={inRange} data={data} />}
       {tab === "merchants" && <MerchantsReport inRange={inRange} data={data} />}
-      {tab === "investors" && <InvestorsReport inRange={inRange} data={data} />}
-      {/* flights/approvals tabs removed — section unified into submissions/executions */}
       {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
-      {tab === "usd_treasury" && <UsdTreasuryReport inRange={inRange} data={data} />}
+      {tab === "treasuries" && <TreasuriesReport />}
+      {tab === "currency_suppliers" && <CurrencySuppliersReport inRange={inRange} />}
       <style>{chartsCss}</style>
     </div>
   );
@@ -1240,6 +1240,169 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
                   <td data-label="الخدمة">{r.service}</td>
                   <td data-label="بيان">{r.note}</td>
                   <td data-label="الرصيد">{r.balance}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- TREASURIES (cash boxes) ----------
+type CashBoxRow = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+
+const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: "دولار أمريكي", LYD: "دينار ليبي" };
+
+function TreasuriesReport() {
+  const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
+  const active = useMemo(() => boxes.filter((b) => b.is_active !== false), [boxes]);
+  const totals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of active) map.set(b.currency, (map.get(b.currency) || 0) + Number(b.balance || 0));
+    return Array.from(map.entries()).map(([currency, total]) => ({ currency, total }));
+  }, [active]);
+
+  const cols = [
+    { header: "اسم الخزينة", key: "name" },
+    { header: "العملة", key: "currency" },
+    { header: "الرصيد", key: "balance" },
+  ];
+  const rows = active.map((b) => ({
+    name: b.name,
+    currency: CURRENCY_LABEL[b.currency] || b.currency,
+    balance: fmtNum(Number(b.balance || 0)),
+    balance__excel: Number(b.balance || 0),
+  }));
+
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">🏦 تقرير الخزائن</div></div>
+      <div className="card-body">
+        <KpiRow items={totals.map((t) => ({
+          label: `إجمالي ${CURRENCY_LABEL[t.currency] || t.currency}`,
+          value: `${fmtNum(t.total)}`,
+          tone: t.currency === "EGP" ? "gold" : t.currency === "USD" ? "green" : "",
+        }))} />
+        <ExportBar
+          onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols, rows, fileName: "treasuries-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير الخزائن", columns: cols, rows })}
+        />
+        <div className="table-wrap">
+          <table className="mobile-cards">
+            <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
+            <tbody>
+              {active.length === 0 ? (
+                <EmptyOrLoading loading={loading} label="لا توجد خزائن" colSpan={cols.length} />
+              ) : active.map((b) => (
+                <tr key={b.id}>
+                  <td className="bold" data-label="الخزينة">{b.name}</td>
+                  <td data-label="العملة">{CURRENCY_LABEL[b.currency] || b.currency}</td>
+                  <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(b.balance || 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- CURRENCY SUPPLIERS (buy / sell currency) ----------
+type CurrencySupplierTx = {
+  id: string;
+  supplier_id: string;
+  tx_date: string;
+  tx_type: "شراء عملة" | "بيع عملة";
+  bought_currency: string;
+  bought_amount: number;
+  sold_currency: string;
+  sold_amount: number;
+  exchange_rate: number | null;
+  description: string | null;
+  created_at: string;
+};
+type CurrencySupplier = { id: string; name: string };
+
+function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
+  const { rows: txns, loading } = useLive<CurrencySupplierTx>("currency_supplier_transactions" as any);
+  const { rows: suppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
+  const nameOf = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
+
+  const filtered = useMemo(() => txns.filter((t) => inRange(t.tx_date)), [txns, inRange]);
+
+  const totals = useMemo(() => {
+    let buyCount = 0, sellCount = 0;
+    const boughtByCur = new Map<string, number>();
+    const soldByCur = new Map<string, number>();
+    for (const t of filtered) {
+      if (t.tx_type === "شراء عملة") buyCount += 1; else if (t.tx_type === "بيع عملة") sellCount += 1;
+      boughtByCur.set(t.bought_currency, (boughtByCur.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
+      soldByCur.set(t.sold_currency, (soldByCur.get(t.sold_currency) || 0) + Number(t.sold_amount || 0));
+    }
+    return { buyCount, sellCount, boughtByCur, soldByCur };
+  }, [filtered]);
+
+  const cols = [
+    { header: "التاريخ", key: "tx_date" },
+    { header: "المورد", key: "supplier" },
+    { header: "نوع الحركة", key: "tx_type" },
+    { header: "العملة المشتراة", key: "bought_currency" },
+    { header: "قيمة العملة المشتراة", key: "bought_amount" },
+    { header: "العملة المباعة", key: "sold_currency" },
+    { header: "قيمة العملة المباعة", key: "sold_amount" },
+    { header: "سعر الصرف", key: "rate" },
+    { header: "البيان", key: "description" },
+  ];
+  const rows = filtered.map((t) => ({
+    tx_date: t.tx_date,
+    supplier: nameOf.get(t.supplier_id) || "—",
+    tx_type: t.tx_type,
+    bought_currency: t.bought_currency,
+    bought_amount: fmtNum(Number(t.bought_amount || 0)),
+    bought_amount__excel: Number(t.bought_amount || 0),
+    sold_currency: t.sold_currency,
+    sold_amount: fmtNum(Number(t.sold_amount || 0)),
+    sold_amount__excel: Number(t.sold_amount || 0),
+    rate: t.exchange_rate ? fmtNum(Number(t.exchange_rate)) : "—",
+    description: t.description || "—",
+  }));
+
+  const kpiItems: { label: string; value: string; tone?: "green" | "red" | "gold" | "" }[] = [
+    { label: "عدد حركات الشراء", value: fmtNum(totals.buyCount), tone: "green" },
+    { label: "عدد حركات البيع", value: fmtNum(totals.sellCount), tone: "red" },
+  ];
+  totals.boughtByCur.forEach((v, k) => kpiItems.push({ label: `إجمالي ${k} (شراء)`, value: fmtNum(v), tone: "gold" }));
+  totals.soldByCur.forEach((v, k) => kpiItems.push({ label: `إجمالي ${k} (بيع)`, value: fmtNum(v) }));
+
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">💱 تقرير شراء وبيع العملات</div></div>
+      <div className="card-body">
+        <KpiRow items={kpiItems} />
+        <ExportBar
+          onExcel={() => exportStatementToExcel({ title: "تقرير شراء وبيع العملات", columns: cols, rows, fileName: "currency-suppliers-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير شراء وبيع العملات", columns: cols, rows })}
+        />
+        <div className="table-wrap">
+          <table className="mobile-cards">
+            <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <EmptyOrLoading loading={loading} label="لا توجد حركات" colSpan={cols.length} />
+              ) : rows.map((r, i) => (
+                <tr key={i}>
+                  <td data-label="التاريخ">{r.tx_date}</td>
+                  <td className="bold" data-label="المورد">{r.supplier}</td>
+                  <td data-label="النوع">{r.tx_type}</td>
+                  <td data-label="مشتراة">{r.bought_currency}</td>
+                  <td data-label="قيمة الشراء">{r.bought_amount}</td>
+                  <td data-label="مباعة">{r.sold_currency}</td>
+                  <td data-label="قيمة البيع">{r.sold_amount}</td>
+                  <td data-label="سعر الصرف">{r.rate}</td>
+                  <td data-label="البيان">{r.description}</td>
                 </tr>
               ))}
             </tbody>

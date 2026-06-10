@@ -11,11 +11,11 @@ import {
   type CompanyTransaction,
   type Expense,
   type ExpenseDeduction,
-  type Investor,
-  type InvestorTransaction,
   type IssuingCompany,
   type Merchant,
   type MerchantCashCollection,
+  type Submission,
+  type Execution,
   type Transaction,
 } from "@/lib/db";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
@@ -33,8 +33,13 @@ import {
   Activity,
   Plus,
   ChevronLeft,
+  Coins,
+  Landmark,
+  DollarSign,
 } from "lucide-react";
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -106,8 +111,9 @@ function Dashboard() {
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: investors } = useLive<Investor>("investors");
-  const { rows: invTxns } = useLive<InvestorTransaction>("investor_transactions");
+  const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
+  const { rows: submissions } = useLive<Submission>("submissions");
+  const { rows: executions } = useLive<Execution>("executions");
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
 
@@ -148,13 +154,6 @@ function Dashboard() {
     const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
     const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
-    let investorDeposits = 0, investorWithdrawals = 0;
-    for (const t of invTxns) {
-      if (t.transaction_type === "توريد نقدية") investorDeposits += Number(t.amount || 0);
-      else if (t.transaction_type === "صرف نقدية") investorWithdrawals += Number(t.amount || 0);
-    }
-    const investorBalance = investorDeposits - investorWithdrawals;
-
     let expensesFixed = 0, expensesVariable = 0, expensesAll = 0;
     for (const e of expenses) {
       const a = Number(e.amount || 0);
@@ -167,24 +166,33 @@ function Dashboard() {
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
 
     const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
-    const treasuryNet = agentCollectionsNet - companyOutgoingNet - expensesAll - expensesDeducted + investorBalance;
 
     return {
       agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
       companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
-      investorDeposits, investorWithdrawals, investorBalance,
+      merchantCollected,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-      companyOutgoingNet, companyProfit, treasuryNet,
+      companyOutgoingNet, companyProfit,
     };
-  }, [txns, cTxns, collections, invTxns, expenses, expenseDeductions]);
+  }, [txns, cTxns, collections, expenses, expenseDeductions]);
 
   const {
-    agentsFlightsValue, agentsApprovalsValue, agentsPaid, agentsDue, agentCollectionsNet,
+    agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
     companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
-    investorDeposits, investorWithdrawals, investorBalance,
+    merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-    companyOutgoingNet, companyProfit, treasuryNet,
+    companyOutgoingNet, companyProfit,
   } = lifetime;
+
+  // Treasury balances (per currency from cash_boxes)
+  const treasury = useMemo(() => {
+    const sumBy = (code: string) =>
+      cashBoxes.filter((b) => b.currency === code && b.is_active !== false).reduce((s, b) => s + Number(b.balance || 0), 0);
+    const egp = sumBy("EGP");
+    const usd = sumBy("USD");
+    const lyd = sumBy("LYD");
+    return { egp, usd, lyd };
+  }, [cashBoxes]);
 
   // ===== Period-based aggregates — single pass per range =====
   const computeAgg = (range: { start: Date; end: Date }) => {
@@ -348,8 +356,8 @@ function Dashboard() {
 
   // 3. Service type distribution
   const serviceDist = useMemo(() => {
-    const targets = ["تذاكر طيران", "موافقة أمنية", "استثمار ليبي"];
-    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0, "استثمار ليبي": 0 };
+    const targets = ["تذاكر طيران", "موافقة أمنية"];
+    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0 };
     for (const t of txns) {
       const s = t.service_type || "";
       if (targets.includes(s)) counts[s] += 1;
@@ -358,14 +366,12 @@ function Dashboard() {
       const s = ct.service_type || "";
       if (targets.includes(s)) counts[s] += 1;
     }
-    // flights count as تذاكر طيران if not already represented
     counts["تذاكر طيران"] += flights.length;
     counts["موافقة أمنية"] += approvals.length;
     const total = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
     const palette: Record<string, string> = {
       "تذاكر طيران": NAVY,
       "موافقة أمنية": GOLD,
-      "استثمار ليبي": "#16A34A",
     };
     return targets.map((k) => ({ label: k, value: counts[k], pct: Math.round((counts[k] / total) * 100), color: palette[k] }));
   }, [txns, cTxns, flights, approvals]);
@@ -445,15 +451,35 @@ function Dashboard() {
           sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
         <HeroKpi
-          label={`الرحلات — ${periodLabel}`}
-          value={periodAgg.flightsCount}
+          label={`التقديمات — ${periodLabel}`}
+          value={submissions.filter((s) => inRange(s.created_at, periodRange)).length}
           format={fmtNum}
-          icon={<Plane size={18} />}
+          icon={<ClipboardCheck size={18} />}
           tone="navy"
-          delta={prevAgg ? `${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 ? "+" : ""}${pctDelta(periodAgg.flightsCount, prevAgg.flightsCount)}%` : undefined}
-          deltaPositive={prevAgg ? pctDelta(periodAgg.flightsCount, prevAgg.flightsCount) >= 0 : undefined}
-          sub={`الموافقات: ${fmtNum(periodAgg.approvalsCount)}`}
+          sub={`التنفيذات: ${fmtNum(executions.filter((e) => inRange(e.created_at, periodRange)).length)}`}
         />
+      </div>
+
+      {/* === Treasury balances (cash boxes) === */}
+      <div className="erp-section-title">أرصدة الخزائن</div>
+      <div className="erp-hero-grid">
+        <HeroKpi label="خزينة الجنيه المصري" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Landmark size={18} />} tone="primary" sub="إجمالي رصيد EGP" />
+        <HeroKpi label="خزينة الدولار الأمريكي" value={treasury.usd} format={(n) => `${fmtNum(n)} $`} icon={<DollarSign size={18} />} tone="success" sub="إجمالي رصيد USD" />
+        <HeroKpi label="خزينة الدينار الليبي" value={treasury.lyd} format={(n) => `${fmtNum(n)} د.ل`} icon={<Coins size={18} />} tone="warning" sub="إجمالي رصيد LYD" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub="مجموع الخزائن بالجنيه" />
+      </div>
+
+      {/* === System-wide KPIs === */}
+      <div className="erp-section-title">المؤشرات الرئيسية</div>
+      <div className="erp-hero-grid">
+        <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
+        <HeroKpi label="عدد التنفيذات" value={executions.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
+        <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
+        <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
+        <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
+        <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
+        <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
       </div>
 
       {/* === Quick Actions + Today Summary === */}
