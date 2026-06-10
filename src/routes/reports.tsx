@@ -677,7 +677,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 
   const data = useMemo(() => companies.map((c) => {
     const ts = cTxns.filter((t) => t.company_id === c.id && inRange(t.date));
-    const ap = approvals.filter((a) => a.issuing_company_id === c.id && inRange(a.submit_date));
+    const ap = approvals.filter((a) => a.approval_company_id === c.id && inRange(a.submit_date));
     const total = ts.reduce((s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)), 0);
     const paid = ts.reduce((s, t) => s + paidOf(t), 0);
     return { name: c.company_name, total, paid, due: total - paid, count: ts.length + ap.length };
