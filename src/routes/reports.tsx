@@ -513,7 +513,6 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
   const fFlights = flights.filter((f) => inRange(f.travel_date));
   const approvalDate = (a: typeof approvals[number]) =>
     (a.submit_date && String(a.submit_date)) ||
-    (a.travel_date && String(a.travel_date)) ||
     (a.issue_date && String(a.issue_date)) ||
     (a.created_at ? String(a.created_at).slice(0, 10) : null);
   const fApp = approvals.filter((a) => inRange(approvalDate(a)));
