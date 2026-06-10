@@ -356,8 +356,8 @@ function Dashboard() {
 
   // 3. Service type distribution
   const serviceDist = useMemo(() => {
-    const targets = ["تذاكر طيران", "موافقة أمنية", "استثمار ليبي"];
-    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0, "استثمار ليبي": 0 };
+    const targets = ["تذاكر طيران", "موافقة أمنية"];
+    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0 };
     for (const t of txns) {
       const s = t.service_type || "";
       if (targets.includes(s)) counts[s] += 1;
@@ -366,14 +366,12 @@ function Dashboard() {
       const s = ct.service_type || "";
       if (targets.includes(s)) counts[s] += 1;
     }
-    // flights count as تذاكر طيران if not already represented
     counts["تذاكر طيران"] += flights.length;
     counts["موافقة أمنية"] += approvals.length;
     const total = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
     const palette: Record<string, string> = {
       "تذاكر طيران": NAVY,
       "موافقة أمنية": GOLD,
-      "استثمار ليبي": "#16A34A",
     };
     return targets.map((k) => ({ label: k, value: counts[k], pct: Math.round((counts[k] / total) * 100), color: palette[k] }));
   }, [txns, cTxns, flights, approvals]);
