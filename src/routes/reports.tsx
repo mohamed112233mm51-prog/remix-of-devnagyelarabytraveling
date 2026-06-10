@@ -657,6 +657,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
             </tbody>
           </table>
         </div>
+        </>)}
       </div>
     </div>
   );
