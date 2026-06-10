@@ -128,7 +128,7 @@ function SettingsPage() {
       {tab === "add" && can("users_manage") && <InviteUserTab />}
       {tab === "perms" && can("roles_manage") && <PermsTab />}
       {tab === "general" && can("company_manage") && <GeneralTab />}
-      {tab === "system_lists" && can("system_lists") && <SystemListsTab />}
+      {/* تبويب "قوائم النظام" تم حذفه — القوائم تُدار حصراً من "إعدادات عامة". */}
       {tab === "backups" && can("backups_manage") && <BackupsTab />}
       {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
       {tab === "devtools" && can("diagnostics") && !isProdEnv() && <DevToolsTab />}
