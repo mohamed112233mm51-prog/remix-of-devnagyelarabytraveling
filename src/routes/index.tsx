@@ -102,6 +102,44 @@ function pctDelta(curr: number, prev: number) {
   return Math.round(((curr - prev) / Math.abs(prev)) * 100);
 }
 
+// ===== Execution-based profit components (services actually executed) =====
+// Profit must depend ONLY on the buy/sell difference of execution services,
+// plus expenses — NOT on agent/company payments, collections, balances, or
+// treasury movements.
+function computeExecutionAgg(
+  executions: Execution[],
+  predicate: (ex: Execution) => boolean,
+) {
+  let sales = 0;        // إجمالي سعر بيع خدمات التنفيذ (للوكلاء)
+  let companyCost = 0;  // إجمالي تكلفة خدمات الشركات الصادرة
+  let agentCost = 0;    // إجمالي تكلفة خدمات الوكلاء (لا يوجد مفهوم تكلفة من وكيل في النظام الحالي)
+  for (const ex of executions) {
+    if ((ex.operation_status || "") !== "منفذ") continue;
+    if (!predicate(ex)) continue;
+    const services = Array.isArray(ex.services) ? ex.services : [];
+    for (const s of services) {
+      if (!s || typeof s !== "object") continue;
+      const count = Math.max(1, Math.round(Number(s.count) || 1));
+      const agentPrice = Math.max(0, Number(s.agent_price) || 0);
+      const companyPrice = Math.max(0, Number(s.company_price) || 0);
+      const explicitCompanyValue = Math.max(0, Number(s.company_value) || 0);
+      const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
+      const kind = (s as { kind?: string }).kind;
+      if (kind === "company") {
+        companyCost += companyValue;
+      } else if (kind === "agent") {
+        sales += agentPrice * count;
+      } else {
+        // legacy: single line carrying both sides
+        sales += agentPrice * count;
+        if (s.company_id) companyCost += companyValue;
+      }
+    }
+  }
+  return { sales, companyCost, agentCost };
+}
+
+
 function Dashboard() {
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
@@ -165,7 +203,10 @@ function Dashboard() {
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
 
-    const companyProfit = agentCollectionsNet - companyOutgoingNet - expensesAll;
+    // ===== Execution-based profit (lifetime) =====
+    const execAll = computeExecutionAgg(executions, () => true);
+    const companyProfit =
+      execAll.sales - execAll.companyCost - execAll.agentCost - expensesAll;
 
     return {
       agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
@@ -173,8 +214,11 @@ function Dashboard() {
       merchantCollected,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
       companyOutgoingNet, companyProfit,
+      execSales: execAll.sales,
+      execCompanyCost: execAll.companyCost,
+      execAgentCost: execAll.agentCost,
     };
-  }, [txns, cTxns, collections, expenses, expenseDeductions]);
+  }, [txns, cTxns, collections, expenses, expenseDeductions, executions]);
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
@@ -182,7 +226,9 @@ function Dashboard() {
     merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
     companyOutgoingNet, companyProfit,
+    execSales, execCompanyCost, execAgentCost,
   } = lifetime;
+
 
   // Treasury balances (per currency from cash_boxes)
   const treasury = useMemo(() => {
@@ -217,13 +263,28 @@ function Dashboard() {
     }
     for (const f of flights) if (inR(f.created_at)) flightsCount += 1;
     for (const a of approvals) if (inR(a.created_at)) approvalsCount += 1;
-    return { collected, expenses: expSum, profit: collected - compOut - expBase, flightsCount, approvalsCount };
+    // Execution-based profit for the period (no payments/balances involved)
+    const execAgg = computeExecutionAgg(executions, (ex) => inR(ex.created_at));
+    const profit =
+      execAgg.sales - execAgg.companyCost - execAgg.agentCost - expBase;
+    return {
+      collected,
+      expenses: expSum,
+      profit,
+      flightsCount,
+      approvalsCount,
+      execSales: execAgg.sales,
+      execCompanyCost: execAgg.companyCost,
+      execAgentCost: execAgg.agentCost,
+    };
   };
+
 
   const periodRange = useMemo(() => getPeriodRange(period), [period]);
   const prevRange = useMemo(() => getPreviousRange(period), [period]);
-  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
-  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals, executions]);
+  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals, executions]);
+
 
   const periodLabel = PERIOD_LABELS[period];
 
@@ -481,6 +542,26 @@ function Dashboard() {
         <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
         <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
       </div>
+
+      {/* === Profit audit panel === */}
+      <div className="erp-section-title">فحص صافي الربح (إجمالي النظام)</div>
+      <div className="erp-panel" style={{ padding: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 12 }}>
+          <AuditRow label="إجمالي المبيعات (بيع خدمات التنفيذ)" value={fmtDL(execSales)} tone="success" />
+          <AuditRow label="إجمالي تكلفة الشركات الصادرة" value={fmtDL(execCompanyCost)} tone="warning" />
+          <AuditRow label="إجمالي تكلفة خدمات الوكلاء" value={fmtDL(execAgentCost)} tone="warning" />
+          <AuditRow label="إجمالي المصروفات" value={fmtDL(expensesAll)} tone="warning" />
+          <AuditRow label="صافي الربح النهائي" value={fmtDL(companyProfit)} tone={companyProfit >= 0 ? "success" : "danger"} />
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)", lineHeight: 1.8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <div><strong>المعادلة الجديدة:</strong> صافي الربح = إجمالي المبيعات − تكلفة الشركات − تكلفة الوكلاء − المصروفات</div>
+          <div><strong>المعادلة السابقة:</strong> صافي الربح = تحصيلات الوكلاء − مدفوعات الشركات − المصروفات (كانت تعتمد على المدفوعات والتحصيلات)</div>
+          <div>المصدر: خدمات التنفيذات التي حالتها «منفذ» فقط. لا تستخدم أي مدفوعات/تحصيلات/أرصدة/خزائن/تحويلات.</div>
+          <div>ملاحظة: «تكلفة خدمات الوكلاء» = 0 حاليًا لعدم وجود تكلفة شراء من وكيل في النظام؛ الحقل مدرج للوضوح.</div>
+        </div>
+      </div>
+
+
 
       {/* === Quick Actions + Today Summary === */}
       <div className="erp-row-2">
@@ -816,6 +897,20 @@ const TodayStat = memo(function TodayStat({ label, value, tone }: { label: strin
     <div className="erp-today">
       <div className="erp-today-label">{label}</div>
       <div className={`erp-today-value ${tone === "green" ? "tone-green" : ""}`}>{value}</div>
+    </div>
+  );
+});
+
+const AuditRow = memo(function AuditRow({ label, value, tone }: { label: string; value: string; tone?: "success" | "warning" | "danger" }) {
+  const color =
+    tone === "success" ? "var(--green, #059669)" :
+    tone === "danger" ? "var(--red, #dc2626)" :
+    tone === "warning" ? "var(--gold, #b8923a)" :
+    "var(--text)";
+  return (
+    <div style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 10, background: "var(--card)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-muted, #6b7280)", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
     </div>
   );
 });
