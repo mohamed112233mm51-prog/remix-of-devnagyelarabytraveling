@@ -41,7 +41,7 @@ export const Route = createFileRoute("/reports")({
   errorComponent: () => <div className="card" style={{ padding: 24 }}>تعذر تحميل التقارير مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>,
 });
 
-type Tab = "agents" | "companies" | "merchants" | "investors" | "expenses" | "usd_treasury";
+type Tab = "agents" | "companies" | "merchants" | "expenses" | "treasuries" | "currency_suppliers";
 type Period = "30d" | "1y" | "custom";
 
 // Professional, soft palette
