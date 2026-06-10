@@ -537,7 +537,20 @@ function Dashboard() {
         <HeroKpi label="خزينة الجنيه المصري" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Landmark size={18} />} tone="primary" sub="إجمالي رصيد EGP" />
         <HeroKpi label="خزينة الدولار الأمريكي" value={treasury.usd} format={(n) => `${fmtNum(n)} $`} icon={<DollarSign size={18} />} tone="success" sub="إجمالي رصيد USD" />
         <HeroKpi label="خزينة الدينار الليبي" value={treasury.lyd} format={(n) => `${fmtNum(n)} د.ل`} icon={<Coins size={18} />} tone="warning" sub="إجمالي رصيد LYD" />
-        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub="مجموع الخزائن بالجنيه" />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub={`EGP + USD×${fmtNum(treasury.usdRate)} + LYD×${fmtNum(treasury.lydRate)}`} />
+      </div>
+
+      {/* === Treasuries audit panel === */}
+      <div className="erp-panel" style={{ padding: 16, marginTop: 8 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>فحص إجمالي أرصدة الخزائن</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+          <AuditRow label="رصيد الخزينة المصرية" value={`${fmtNum(treasury.egp)} ج.م`} tone="success" />
+          <AuditRow label="رصيد الخزينة الدولارية" value={`${fmtNum(treasury.usd)} $`} tone="success" />
+          <AuditRow label="سعر صرف الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="رصيد الخزينة الدينار الليبي" value={`${fmtNum(treasury.lyd)} د.ل`} tone="success" />
+          <AuditRow label="سعر صرف الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="إجمالي أرصدة الخزائن (ج.م)" value={`${fmtNum(treasury.totalEgp)} ج.م`} tone="success" />
+        </div>
       </div>
 
       {/* === System-wide KPIs === */}
