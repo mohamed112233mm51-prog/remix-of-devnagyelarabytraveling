@@ -1544,8 +1544,8 @@ function TreasuriesReport() {
           })),
           { label: "سعر شراء الدولار", value: `${fmtNum(usdRate)} ج.م/$`, tone: "" as any },
           { label: "سعر شراء الدينار", value: `${fmtNum(lydRate)} ج.م/د.ل`, tone: "" as any },
-          { label: "مصدر سعر الدولار", value: `exchange_rate • ${usdInfo.date ?? "—"}`, tone: "" as any },
-          { label: "مصدر سعر الدينار", value: `exchange_rate • ${lydInfo.date ?? "—"}`, tone: "" as any },
+          { label: "مصدر سعر الدولار", value: formatRateSource(usdInfo), tone: "" as any },
+          { label: "مصدر سعر الدينار", value: formatRateSource(lydInfo), tone: "" as any },
           { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
