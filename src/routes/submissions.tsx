@@ -128,10 +128,16 @@ function SubmissionsPage() {
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
     { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
       { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
-      { key: "validity", label: "صلاحية الموافقة", accessor: (s) => {
+      { key: "validity", label: "صلاحية الموافقة", filter: "multi", accessor: (s) => {
         const r = computeValidity(s); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
       } },
     ];
+
+  // Special-case filter accessor for validity column (returns just the status word).
+  const validityStatusOf = (s: Submission): string => {
+    const r = computeValidity(s);
+    return r ? (r.expired ? "منتهية" : "جارية") : "";
+  };
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => {
     const o: Record<string, CF.ColumnFilterState> = {};
