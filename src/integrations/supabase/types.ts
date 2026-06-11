@@ -867,6 +867,7 @@ export type Database = {
           agent_id: string | null
           approval_authority: string | null
           approval_company_id: string | null
+          approval_validity_enabled: boolean
           birth_place: string | null
           created_at: string
           departure_from: string | null
@@ -890,6 +891,7 @@ export type Database = {
           agent_id?: string | null
           approval_authority?: string | null
           approval_company_id?: string | null
+          approval_validity_enabled?: boolean
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
@@ -913,6 +915,7 @@ export type Database = {
           agent_id?: string | null
           approval_authority?: string | null
           approval_company_id?: string | null
+          approval_validity_enabled?: boolean
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
