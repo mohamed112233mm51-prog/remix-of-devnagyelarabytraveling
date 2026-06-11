@@ -90,13 +90,13 @@ export function ConfirmSaveModalHost() {
               if (e.key === "Enter") { e.preventDefault(); confirm(); }
             }}
           >
-            حفظ
+            تأكيد حفظ
           </button>
         </>
       }
     >
       <div style={{ fontSize: 14, color: "#334155", lineHeight: 1.8 }} data-no-kbd-nav>
-        هل تريد حفظ هذا النموذج؟
+        هل تريد المتابعة؟
       </div>
     </Modal>
   );
