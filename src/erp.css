@@ -2137,39 +2137,66 @@
 }
 
 /* ===== Reports tables — unified enterprise styling (UI only) ===== */
+/* ===== Reports tables — unified, column-aligned on all viewports ===== */
 .reports-page .table-wrap {
   border-radius: 12px;
   overflow: auto;
   border: 1px solid var(--border, #E5E9F0);
   background: #fff;
 }
-.reports-page .table-wrap table {
+.reports-page .table-wrap table,
+.reports-page .table-wrap table.mobile-cards {
   width: 100%;
+  min-width: 560px;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
   direction: rtl;
+}
+.reports-page .table-wrap table thead,
+.reports-page .table-wrap table.mobile-cards thead { display: table-header-group; }
+.reports-page .table-wrap table tbody,
+.reports-page .table-wrap table.mobile-cards tbody { display: table-row-group; }
+.reports-page .table-wrap table tfoot,
+.reports-page .table-wrap table.mobile-cards tfoot { display: table-footer-group; }
+.reports-page .table-wrap table tr,
+.reports-page .table-wrap table.mobile-cards tbody tr,
+.reports-page .table-wrap table.mobile-cards tfoot tr {
+  display: table-row;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
 }
 .reports-page .table-wrap table thead th {
   background: #F8FAFC;
   color: #334155;
   font-weight: 800;
   font-size: 12.5px;
-  padding: 12px 14px;
-  text-align: right;
+  padding: 12px 10px;
+  text-align: center;
   border-bottom: 1px solid #E5E9F0;
   white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 1;
 }
-.reports-page .table-wrap table tbody td {
-  padding: 11px 14px;
+.reports-page .table-wrap table tbody td,
+.reports-page .table-wrap table.mobile-cards tbody td,
+.reports-page .table-wrap table.mobile-cards tfoot td {
+  display: table-cell;
+  padding: 10px;
   font-size: 13px;
   color: #0F172A;
   border-bottom: 1px solid #F1F5F9;
-  text-align: right;
+  text-align: center;
   vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.reports-page .table-wrap table.mobile-cards tbody td::before,
+.reports-page .table-wrap table.mobile-cards tfoot td::before { content: none !important; display: none !important; }
 .reports-page .table-wrap table tbody tr { transition: background .12s ease; }
 .reports-page .table-wrap table tbody tr:nth-child(even) { background: #FAFBFD; }
 .reports-page .table-wrap table tbody tr:hover { background: #EFF6FF; }
@@ -2179,4 +2206,5 @@
 .reports-page .table-wrap table tbody td[data-label="التاجر"],
 .reports-page .table-wrap table tbody td[data-label="المستثمر"],
 .reports-page .table-wrap table tbody td[data-label="المسافر"],
-.reports-page .table-wrap table tbody td[data-label="الخدمة"] { font-weight: 700; }
+.reports-page .table-wrap table tbody td[data-label="الخدمة"],
+.reports-page .table-wrap table tbody td[data-label="نوع الخدمة"] { font-weight: 700; }
