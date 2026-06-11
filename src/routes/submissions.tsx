@@ -38,6 +38,30 @@ function SubmissionsPage() {
   const [tab, setTab] = useState<"list" | "add">("list");
   const [editing, setEditing] = useState<Submission | null>(null);
 
+  // Approval validity duration in days, loaded from app_settings.
+  const [validityDays, setValidityDays] = useState<number>(30);
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle()
+      .then(({ data }) => {
+        const v = (data as any)?.value?.v;
+        if (typeof v === "number" && v > 0) setValidityDays(v);
+      });
+  }, []);
+
+  // Compute approval validity status for a submission row.
+  // Returns null when disabled / no issue date.
+  const computeValidity = (s: Submission): { expiry: string; expired: boolean } | null => {
+    if (!(s as any).approval_validity_enabled) return null;
+    const iso = s.issue_date;
+    if (!iso) return null;
+    const base = new Date(iso + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return null;
+    const exp = new Date(base.getTime());
+    exp.setDate(exp.getDate() + validityDays);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
+  };
+
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   // Column definitions for filters + visibility + export
@@ -57,8 +81,11 @@ function SubmissionsPage() {
     { key: "issue_date", label: "تاريخ الصدور", filter: "date", accessor: (s) => s.issue_date || "" },
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
     { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
-    { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
-  ];
+      { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
+      { key: "validity", label: "صلاحية الموافقة", accessor: (s) => {
+        const r = computeValidity(s); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
+      } },
+    ];
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => {
     const o: Record<string, CF.ColumnFilterState> = {};
@@ -234,6 +261,14 @@ function SubmissionsPage() {
                         if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>;
                         if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={badgeStyle(s.status)}>{s.status}</span></td>;
                         if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>;
+                        if (c.key === "validity") {
+                          const r = computeValidity(s);
+                          if (!r) return <td key={c.key} style={tdStyle}>-</td>;
+                          const color = r.expired ? "#b91c1c" : "#15803d";
+                          const bg = r.expired ? "#fef2f2" : "#dcfce7";
+                          const bd = r.expired ? "#fecaca" : "#bbf7d0";
+                          return <td key={c.key} style={tdStyle}><span style={{ padding: "3px 9px", borderRadius: 999, background: bg, color, border: `1px solid ${bd}`, fontWeight: 700, fontSize: 11 }}>{r.expiry} • {r.expired ? "منتهية" : "جارية"}</span></td>;
+                        }
                         const v = c.accessor(s);
                         return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
                       })}
@@ -298,6 +333,7 @@ function SubmissionForm({
     submit_date: editing?.submit_date || new Date().toISOString().slice(0, 10),
     issue_date: editing?.issue_date || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
+    approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     notes: editing?.notes || "",
   });
   const [saving, setSaving] = useState(false);
@@ -326,6 +362,7 @@ function SubmissionForm({
       approval_authority: form.approval_company_id
         ? (companies.find((c) => c.id === form.approval_company_id)?.company_name || null)
         : null,
+      approval_validity_enabled: !!form.approval_validity_enabled,
       notes: form.notes || null,
     };
     try {
@@ -391,6 +428,16 @@ function SubmissionForm({
           </select>
         </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
+        <Field label="تفعيل صلاحية الموافقة" full>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff" }}>
+            <span style={{ position: "relative", display: "inline-block", width: 40, height: 22 }}>
+              <input type="checkbox" checked={!!form.approval_validity_enabled} onChange={(e) => setForm({ ...form, approval_validity_enabled: e.target.checked })} style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{ position: "absolute", inset: 0, borderRadius: 999, background: form.approval_validity_enabled ? "#15803d" : "#cbd5e1", transition: "background .15s" }} />
+              <span style={{ position: "absolute", top: 2, [form.approval_validity_enabled ? "right" : "left"]: 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.2)", transition: "all .15s" } as any} />
+            </span>
+            <span style={{ fontSize: 12.5, color: "#334155", fontWeight: 700 }}>{form.approval_validity_enabled ? "مفعلة — تُحسب من تاريخ الصدور" : "غير مفعلة"}</span>
+          </label>
+        </Field>
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>

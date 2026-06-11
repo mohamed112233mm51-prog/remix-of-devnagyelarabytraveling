@@ -1111,6 +1111,11 @@ function GeneralTab() {
             <input style={inpEnt} value={settings.currency} onChange={(e) => setSettings({ ...settings, currency: e.target.value })} placeholder="EGP" />
             <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>عملة العرض الافتراضية في كل المعاملات.</div>
           </div>
+          <div>
+            <label style={fieldLabel}>مدة صلاحية الموافقة (أيام)</label>
+            <input type="number" min={1} style={inpEnt} value={settings.approval_validity_days ?? 30} onChange={(e) => setSettings({ ...settings, approval_validity_days: Number(e.target.value) || 0 })} placeholder="30" />
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>تُحسب من تاريخ صدور الموافقة عند تفعيل صلاحية الموافقة في التقديم.</div>
+          </div>
         </div>
       </div>
 
