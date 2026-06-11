@@ -159,15 +159,16 @@ function SubmissionsPage() {
     for (const c of SUBMISSION_COLUMNS) {
       const fs = safeFilters[c.key];
       if (!CF.isFilterActive(fs)) continue;
-      const v = c.accessor(s);
+      const v = c.key === "validity" ? validityStatusOf(s) : c.accessor(s);
       if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
       if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
       if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [submissions, agents, companies, safeFilters]);
+  }), [submissions, agents, companies, safeFilters, validityDays]);
 
   const optionsFor = (key: string) => {
+    if (key === "validity") return ["جارية", "منتهية"];
     const col = SUBMISSION_COLUMNS.find((c) => c.key === key);
     if (!col) return [];
     const set = new Set<string>();
