@@ -362,6 +362,7 @@ function SubmissionForm({
       approval_authority: form.approval_company_id
         ? (companies.find((c) => c.id === form.approval_company_id)?.company_name || null)
         : null,
+      approval_validity_enabled: !!form.approval_validity_enabled,
       notes: form.notes || null,
     };
     try {
