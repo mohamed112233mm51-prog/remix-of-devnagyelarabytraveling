@@ -261,6 +261,14 @@ function SubmissionsPage() {
                         if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{s.passenger_name}</td>;
                         if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={badgeStyle(s.status)}>{s.status}</span></td>;
                         if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(s.dob) || "—"}</td>;
+                        if (c.key === "validity") {
+                          const r = computeValidity(s);
+                          if (!r) return <td key={c.key} style={tdStyle}>-</td>;
+                          const color = r.expired ? "#b91c1c" : "#15803d";
+                          const bg = r.expired ? "#fef2f2" : "#dcfce7";
+                          const bd = r.expired ? "#fecaca" : "#bbf7d0";
+                          return <td key={c.key} style={tdStyle}><span style={{ padding: "3px 9px", borderRadius: 999, background: bg, color, border: `1px solid ${bd}`, fontWeight: 700, fontSize: 11 }}>{r.expiry} • {r.expired ? "منتهية" : "جارية"}</span></td>;
+                        }
                         const v = c.accessor(s);
                         return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
                       })}
