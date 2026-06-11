@@ -38,6 +38,30 @@ function SubmissionsPage() {
   const [tab, setTab] = useState<"list" | "add">("list");
   const [editing, setEditing] = useState<Submission | null>(null);
 
+  // Approval validity duration in days, loaded from app_settings.
+  const [validityDays, setValidityDays] = useState<number>(30);
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle()
+      .then(({ data }) => {
+        const v = (data as any)?.value?.v;
+        if (typeof v === "number" && v > 0) setValidityDays(v);
+      });
+  }, []);
+
+  // Compute approval validity status for a submission row.
+  // Returns null when disabled / no issue date.
+  const computeValidity = (s: Submission): { expiry: string; expired: boolean } | null => {
+    if (!(s as any).approval_validity_enabled) return null;
+    const iso = s.issue_date;
+    if (!iso) return null;
+    const base = new Date(iso + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return null;
+    const exp = new Date(base.getTime());
+    exp.setDate(exp.getDate() + validityDays);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
+  };
+
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
   // Column definitions for filters + visibility + export
