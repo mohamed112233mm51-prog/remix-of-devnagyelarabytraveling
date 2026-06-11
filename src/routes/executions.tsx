@@ -236,10 +236,9 @@ function ExecutionsPage() {
 
       {/* KPI strip */}
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-        <KpiCard icon="📋" label="إجمالي عمليات التنفيذ" value={totalCount} tone="navy" />
+        <KpiCard icon="📋" label="إجمالي التنفيذ" value={totalCount} tone="navy" />
         <KpiCard icon="✅" label="منفذ" value={doneCount} tone="emerald" />
         <KpiCard icon="⏳" label="قيد التنفيذ" value={pendingCount} tone="sky" />
-        <KpiCard icon="⛔" label="ملغي" value={cancelledCount} tone="rose" />
         <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" />
       </div>
 
