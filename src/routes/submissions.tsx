@@ -239,7 +239,7 @@ function SubmissionsPage() {
                       })}
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
-                          <button title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
+                          <button data-confirm-save={(s as any).execution_id ? undefined : "تأكيد تحويل التقديم إلى تنفيذ"} title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
                         )}
                         {perm.edit && (
                           <button title="تعديل" onClick={() => { setEditing(s); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>
