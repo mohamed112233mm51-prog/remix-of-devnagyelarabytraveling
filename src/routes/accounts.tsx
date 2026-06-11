@@ -231,7 +231,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
         <AgentPricingSection agentId={agent.id} />
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
-          <button className="btn btn-gold" onClick={save}>💾 حفظ التعديلات</button>
+          <button data-confirm-save="تأكيد حفظ التعديلات" className="btn btn-gold" onClick={save}>💾 حفظ التعديلات</button>
         </div>
       </div>
     </div>,
@@ -359,7 +359,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                       <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        <button type="button" className="btn btn-gold" onClick={() => confirmRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
+                        <button data-confirm-save="تأكيد حفظ الصلاحية" type="button" className="btn btn-gold" onClick={() => confirmRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
                         <button type="button" className="action-btn" onClick={() => clearRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حذف</button>
                       </td>
                     </tr>
@@ -371,7 +371,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button></div>
     </div>
   );
 }

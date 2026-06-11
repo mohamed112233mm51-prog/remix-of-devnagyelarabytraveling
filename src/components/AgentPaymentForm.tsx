@@ -330,7 +330,7 @@ export function AgentPaymentForm({
             </span>
           )}
         </div>
-        <button className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الدفعة</button>
+        <button data-confirm-save="تأكيد حفظ الدفعة" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الدفعة</button>
       </div>
     </div>
   );

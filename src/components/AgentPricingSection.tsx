@@ -112,7 +112,7 @@ export function AgentPricingSection({ agentId }: { agentId: string }) {
                     <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                     <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                     <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      <button className="btn btn-gold" disabled={saving === st} onClick={() => saveRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
+                      <button data-confirm-save="تأكيد حفظ السعر" className="btn btn-gold" disabled={saving === st} onClick={() => saveRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
                       <button className="action-btn" onClick={() => deleteRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حذف</button>
                     </td>
                   </tr>
