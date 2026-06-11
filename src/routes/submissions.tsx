@@ -200,7 +200,7 @@ function SubmissionsPage() {
   const fastCount = submissions.filter((s) => (s.status || "") === "سريع").length;
   const slowCount = submissions.filter((s) => (s.status || "") === "بطيء").length;
   const rejectedCount = submissions.filter((s) => (s.status || "") === "رفض أمني").length;
-  const expiredCount = 0;
+  const expiredCount = submissions.filter((s) => { const r = computeValidity(s); return r && r.expired; }).length;
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
