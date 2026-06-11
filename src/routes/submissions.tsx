@@ -333,6 +333,7 @@ function SubmissionForm({
     submit_date: editing?.submit_date || new Date().toISOString().slice(0, 10),
     issue_date: editing?.issue_date || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
+    approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     notes: editing?.notes || "",
   });
   const [saving, setSaving] = useState(false);
