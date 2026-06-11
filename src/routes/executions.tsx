@@ -189,9 +189,8 @@ function ExecutionsPage() {
   const totalCount = executions.length;
   const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;
   const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;
-  const cancelledCount = executions.filter((e) => e.operation_status === "ملغي").length;
   const today = new Date().toISOString().slice(0, 10);
-  const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
+  const todayCount = executions.filter((e) => e.operation_status === "منفذ" && (e.created_at || "").slice(0, 10) === today).length;
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
