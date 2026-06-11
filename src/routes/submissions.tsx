@@ -128,10 +128,16 @@ function SubmissionsPage() {
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
     { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
       { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
-      { key: "validity", label: "صلاحية الموافقة", accessor: (s) => {
+      { key: "validity", label: "صلاحية الموافقة", filter: "multi", accessor: (s) => {
         const r = computeValidity(s); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
       } },
     ];
+
+  // Special-case filter accessor for validity column (returns just the status word).
+  const validityStatusOf = (s: Submission): string => {
+    const r = computeValidity(s);
+    return r ? (r.expired ? "منتهية" : "جارية") : "";
+  };
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => {
     const o: Record<string, CF.ColumnFilterState> = {};
@@ -153,15 +159,16 @@ function SubmissionsPage() {
     for (const c of SUBMISSION_COLUMNS) {
       const fs = safeFilters[c.key];
       if (!CF.isFilterActive(fs)) continue;
-      const v = c.accessor(s);
+      const v = c.key === "validity" ? validityStatusOf(s) : c.accessor(s);
       if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
       if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
       if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [submissions, agents, companies, safeFilters]);
+  }), [submissions, agents, companies, safeFilters, validityDays]);
 
   const optionsFor = (key: string) => {
+    if (key === "validity") return ["جارية", "منتهية"];
     const col = SUBMISSION_COLUMNS.find((c) => c.key === key);
     if (!col) return [];
     const set = new Set<string>();

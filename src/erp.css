@@ -2135,3 +2135,48 @@
   .section.active { padding: 0 !important; }
   body { background: #fff !important; }
 }
+
+/* ===== Reports tables — unified enterprise styling (UI only) ===== */
+.reports-page .table-wrap {
+  border-radius: 12px;
+  overflow: auto;
+  border: 1px solid var(--border, #E5E9F0);
+  background: #fff;
+}
+.reports-page .table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  direction: rtl;
+}
+.reports-page .table-wrap table thead th {
+  background: #F8FAFC;
+  color: #334155;
+  font-weight: 800;
+  font-size: 12.5px;
+  padding: 12px 14px;
+  text-align: right;
+  border-bottom: 1px solid #E5E9F0;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.reports-page .table-wrap table tbody td {
+  padding: 11px 14px;
+  font-size: 13px;
+  color: #0F172A;
+  border-bottom: 1px solid #F1F5F9;
+  text-align: right;
+  vertical-align: middle;
+}
+.reports-page .table-wrap table tbody tr { transition: background .12s ease; }
+.reports-page .table-wrap table tbody tr:nth-child(even) { background: #FAFBFD; }
+.reports-page .table-wrap table tbody tr:hover { background: #EFF6FF; }
+.reports-page .table-wrap table tbody td.bold,
+.reports-page .table-wrap table tbody td[data-label="الوكيل"],
+.reports-page .table-wrap table tbody td[data-label="الشركة"],
+.reports-page .table-wrap table tbody td[data-label="التاجر"],
+.reports-page .table-wrap table tbody td[data-label="المستثمر"],
+.reports-page .table-wrap table tbody td[data-label="المسافر"],
+.reports-page .table-wrap table tbody td[data-label="الخدمة"] { font-weight: 700; }
