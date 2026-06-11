@@ -14,6 +14,7 @@ import {
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
+import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import {
   ResponsiveContainer,
@@ -1471,6 +1472,8 @@ const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: 
 function TreasuriesReport() {
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
+  const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
+  const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => boxes.filter((b) => b.is_active !== false), [boxes]);
   const totals = useMemo(() => {
     const map = new Map<string, number>();
@@ -1492,7 +1495,21 @@ function TreasuriesReport() {
       })
       .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
     const row = rows[0];
-    return { rate: row ? Number(row.exchange_rate || 0) : 0, date: row?.tx_date || null, id: row?.id || null };
+    return {
+      rate: row ? Number(row.exchange_rate || 0) : 0,
+      date: row?.tx_date || null,
+      id: row?.id || null,
+      txType: row?.tx_type || null,
+      supplierId: row?.supplier_id || null,
+    };
+  };
+  const formatRateSource = (info: { date: string | null; txType: string | null; supplierId: string | null }) => {
+    const dateStr = info.date ? toDisplayDate(info.date) : "—";
+    if (!info.txType && !info.supplierId) return `آخر سعر صرف مسجل - ${dateStr}`;
+    const action = info.txType === "بيع عملة" ? "بيع من مورد العملة" : "شراء من مورد العملة";
+    const supplierName = info.supplierId ? supplierNameOf.get(info.supplierId) : null;
+    if (!supplierName) return `آخر سعر صرف مسجل - ${dateStr}`;
+    return `${action} ${supplierName} - ${dateStr}`;
   };
   const sumBy = (code: string) => active.filter((b) => b.currency === code).reduce((s, b) => s + Number(b.balance || 0), 0);
   const egp = sumBy("EGP");
@@ -1528,8 +1545,8 @@ function TreasuriesReport() {
           })),
           { label: "سعر شراء الدولار", value: `${fmtNum(usdRate)} ج.م/$`, tone: "" as any },
           { label: "سعر شراء الدينار", value: `${fmtNum(lydRate)} ج.م/د.ل`, tone: "" as any },
-          { label: "مصدر سعر الدولار", value: `exchange_rate • ${usdInfo.date ?? "—"}`, tone: "" as any },
-          { label: "مصدر سعر الدينار", value: `exchange_rate • ${lydInfo.date ?? "—"}`, tone: "" as any },
+          { label: "مصدر سعر الدولار", value: formatRateSource(usdInfo), tone: "" as any },
+          { label: "مصدر سعر الدينار", value: formatRateSource(lydInfo), tone: "" as any },
           { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
