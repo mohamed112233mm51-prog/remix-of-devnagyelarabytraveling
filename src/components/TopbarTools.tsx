@@ -64,6 +64,8 @@ export function SearchBox() {
       merchants: checkPerm(permissions, isAdmin, "merchants", "view"),
       investors: checkPerm(permissions, isAdmin, "investors", "view"),
       expenses: checkPerm(permissions, isAdmin, "expenses", "view"),
+      submissions: checkPerm(permissions, isAdmin, "submissions", "view"),
+      executions: checkPerm(permissions, isAdmin, "executions", "view"),
     }),
     [permissions, isAdmin],
   );
