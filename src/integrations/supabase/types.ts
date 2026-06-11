@@ -1138,6 +1138,8 @@ export type Database = {
         Returns: boolean
       }
       run_auto_expense_deductions: { Args: never; Returns: undefined }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "manager" | "user"

@@ -20,6 +20,8 @@ const SECTION_LABELS: Record<string, string> = {
   merchants: "تاجر الكاش",
   investors: "مستثمرين",
   expenses: "مصروفات",
+  submissions: "تقديمات",
+  executions: "تنفيذات",
 };
 
 function useDebounced<T>(value: T, delay: number): T {
@@ -62,6 +64,8 @@ export function SearchBox() {
       merchants: checkPerm(permissions, isAdmin, "merchants", "view"),
       investors: checkPerm(permissions, isAdmin, "investors", "view"),
       expenses: checkPerm(permissions, isAdmin, "expenses", "view"),
+      submissions: checkPerm(permissions, isAdmin, "submissions", "view"),
+      executions: checkPerm(permissions, isAdmin, "executions", "view"),
     }),
     [permissions, isAdmin],
   );
@@ -144,6 +148,62 @@ export function SearchBox() {
               description: `${r.expense_type || ""} • ${fmtDL(Number(r.amount || 0))}`,
               to: `/expenses`,
             }));
+      })());
+    }
+
+    // Traveler search across submissions
+    if (allowed.submissions) {
+      queries.push((async (): Promise<SearchResult[]> => {
+        const { data, error } = await supabase
+          .from("submissions")
+          .select("id,passenger_name,passport,national_id,travel_date,destination,agent_id,approval_company_id")
+          .or(`passenger_name.ilike.${like},passport.ilike.${like},national_id.ilike.${like}`)
+          .limit(8);
+        if (error) throw error;
+        const rows = Array.isArray(data) ? data : [];
+        const agentIds = Array.from(new Set(rows.map((r: any) => r.agent_id).filter(Boolean)));
+        const compIds = Array.from(new Set(rows.map((r: any) => r.approval_company_id).filter(Boolean)));
+        const [agentsRes, compsRes] = await Promise.all([
+          agentIds.length ? supabase.from("agents").select("id,name").in("id", agentIds) : Promise.resolve({ data: [] as any[] }),
+          compIds.length ? supabase.from("issuing_companies").select("id,company_name").in("id", compIds) : Promise.resolve({ data: [] as any[] }),
+        ]);
+        const agentMap = new Map((agentsRes.data || []).map((a: any) => [a.id, a.name]));
+        const compMap = new Map((compsRes.data || []).map((c: any) => [c.id, c.company_name]));
+        return rows.map((r: any) => ({
+          section: "submissions",
+          sectionLabel: SECTION_LABELS.submissions,
+          title: r.passenger_name || "مسافر",
+          description: [agentMap.get(r.agent_id), compMap.get(r.approval_company_id), r.destination, r.travel_date].filter(Boolean).join(" • "),
+          to: `/submissions`,
+        }));
+      })());
+    }
+
+    // Traveler search across executions
+    if (allowed.executions) {
+      queries.push((async (): Promise<SearchResult[]> => {
+        const { data, error } = await supabase
+          .from("executions")
+          .select("id,passenger_name,passport,national_id,issue_date,agent_id,approval_company_id")
+          .or(`passenger_name.ilike.${like},passport.ilike.${like},national_id.ilike.${like}`)
+          .limit(8);
+        if (error) throw error;
+        const rows = Array.isArray(data) ? data : [];
+        const agentIds = Array.from(new Set(rows.map((r: any) => r.agent_id).filter(Boolean)));
+        const compIds = Array.from(new Set(rows.map((r: any) => r.approval_company_id).filter(Boolean)));
+        const [agentsRes, compsRes] = await Promise.all([
+          agentIds.length ? supabase.from("agents").select("id,name").in("id", agentIds) : Promise.resolve({ data: [] as any[] }),
+          compIds.length ? supabase.from("issuing_companies").select("id,company_name").in("id", compIds) : Promise.resolve({ data: [] as any[] }),
+        ]);
+        const agentMap = new Map((agentsRes.data || []).map((a: any) => [a.id, a.name]));
+        const compMap = new Map((compsRes.data || []).map((c: any) => [c.id, c.company_name]));
+        return rows.map((r: any) => ({
+          section: "executions",
+          sectionLabel: SECTION_LABELS.executions,
+          title: r.passenger_name || "مسافر",
+          description: [agentMap.get(r.agent_id), compMap.get(r.approval_company_id), r.issue_date].filter(Boolean).join(" • "),
+          to: `/executions`,
+        }));
       })());
     }
 
