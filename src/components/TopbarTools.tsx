@@ -20,6 +20,8 @@ const SECTION_LABELS: Record<string, string> = {
   merchants: "تاجر الكاش",
   investors: "مستثمرين",
   expenses: "مصروفات",
+  submissions: "تقديمات",
+  executions: "تنفيذات",
 };
 
 function useDebounced<T>(value: T, delay: number): T {
