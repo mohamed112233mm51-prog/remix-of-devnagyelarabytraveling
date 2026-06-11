@@ -40,11 +40,17 @@ function SubmissionsPage() {
 
   // Approval validity duration in days, loaded from app_settings.
   const [validityDays, setValidityDays] = useState<number>(30);
+  const [fineAmount, setFineAmount] = useState<number>(0);
   useEffect(() => {
     supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle()
       .then(({ data }) => {
         const v = (data as any)?.value?.v;
         if (typeof v === "number" && v > 0) setValidityDays(v);
+      });
+    supabase.from("app_settings").select("value").eq("key", "approval_expiry_fine").maybeSingle()
+      .then(({ data }) => {
+        const v = (data as any)?.value?.v;
+        if (typeof v === "number" && v >= 0) setFineAmount(v);
       });
   }, []);
 
@@ -61,6 +67,46 @@ function SubmissionsPage() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
   };
+
+  // Auto-create a fine transaction for expired submissions (once per submission).
+  useEffect(() => {
+    if (!Array.isArray(submissions) || submissions.length === 0) return;
+    if (!(fineAmount > 0)) return;
+    const expiredOnes = submissions
+      .map((s) => ({ s, r: computeValidity(s) }))
+      .filter((x) => x.r && x.r.expired && x.s.agent_id);
+    if (expiredOnes.length === 0) return;
+    const ids = expiredOnes.map((x) => String(x.s.id));
+    let cancelled = false;
+    (async () => {
+      const { data: existing } = await supabase
+        .from("transactions")
+        .select("source_service_id")
+        .eq("source_service_type", "submission_fine")
+        .in("source_service_id", ids);
+      if (cancelled) return;
+      const have = new Set((existing || []).map((r: any) => String(r.source_service_id)));
+      const toInsert = expiredOnes
+        .filter((x) => !have.has(String(x.s.id)))
+        .map((x) => ({
+          agent_id: x.s.agent_id,
+          date: x.r!.expiry,
+          destination: "—",
+          count: 1,
+          price: fineAmount,
+          paid: 0,
+          total_paid: 0,
+          service_type: "غرامة مالية",
+          travel_statement: "غرامة مالية",
+          note: "غرامة مالية — انتهاء صلاحية الموافقة",
+          source_service_type: "submission_fine",
+          source_service_id: String(x.s.id),
+        }));
+      if (toInsert.length === 0) return;
+      await supabase.from("transactions").insert(toInsert as any);
+    })();
+    return () => { cancelled = true; };
+  }, [submissions, fineAmount, validityDays]);
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
@@ -154,7 +200,7 @@ function SubmissionsPage() {
   const fastCount = submissions.filter((s) => (s.status || "") === "سريع").length;
   const slowCount = submissions.filter((s) => (s.status || "") === "بطيء").length;
   const rejectedCount = submissions.filter((s) => (s.status || "") === "رفض أمني").length;
-  const expiredCount = 0;
+  const expiredCount = submissions.filter((s) => { const r = computeValidity(s); return r && r.expired; }).length;
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
