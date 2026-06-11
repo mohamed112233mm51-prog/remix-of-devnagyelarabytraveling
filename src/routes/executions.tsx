@@ -189,9 +189,8 @@ function ExecutionsPage() {
   const totalCount = executions.length;
   const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;
   const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;
-  const cancelledCount = executions.filter((e) => e.operation_status === "ملغي").length;
   const today = new Date().toISOString().slice(0, 10);
-  const todayCount = executions.filter((e) => (e.travel_date || "").slice(0, 10) === today).length;
+  const todayCount = executions.filter((e) => e.operation_status === "منفذ" && (e.created_at || "").slice(0, 10) === today).length;
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
@@ -237,10 +236,9 @@ function ExecutionsPage() {
 
       {/* KPI strip */}
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-        <KpiCard icon="📋" label="إجمالي عمليات التنفيذ" value={totalCount} tone="navy" />
+        <KpiCard icon="📋" label="إجمالي التنفيذ" value={totalCount} tone="navy" />
         <KpiCard icon="✅" label="منفذ" value={doneCount} tone="emerald" />
         <KpiCard icon="⏳" label="قيد التنفيذ" value={pendingCount} tone="sky" />
-        <KpiCard icon="⛔" label="ملغي" value={cancelledCount} tone="rose" />
         <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" />
       </div>
 
