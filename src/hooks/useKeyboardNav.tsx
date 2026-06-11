@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { openConfirmSave } from "@/components/ConfirmSaveModal";
+// (confirm modal is triggered by global click interceptor on [data-confirm-save])
 
 /**
  * Global ERP-style keyboard navigation.
