@@ -197,7 +197,7 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
-          <button className="btn btn-gold" onClick={save}>💾 حفظ</button>
+          <button data-confirm-save="تأكيد حفظ المورّد" className="btn btn-gold" onClick={save}>💾 حفظ</button>
         </div>
       </div>
     </div>,

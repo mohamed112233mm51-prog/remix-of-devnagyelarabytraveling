@@ -422,7 +422,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       )}
 
       <div className="form-footer">
-        <button className="btn btn-gold" onClick={save}>💾 {initial ? "حفظ التعديلات" : "حفظ المصروف"}</button>
+        <button data-confirm-save={initial ? "تأكيد حفظ تعديلات المصروف" : "تأكيد حفظ المصروف"} className="btn btn-gold" onClick={save}>💾 {initial ? "حفظ التعديلات" : "حفظ المصروف"}</button>
         {initial && onDone && <button className="btn" onClick={onDone} style={{ marginInlineStart: 8 }}>إلغاء</button>}
       </div>
     </div>

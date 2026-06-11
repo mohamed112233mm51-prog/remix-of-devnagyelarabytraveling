@@ -475,7 +475,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
-          <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
+          <button data-confirm-save="تأكيد حفظ التعديلات" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
         </div>
       </div>
     </div>,
@@ -506,7 +506,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
       </div>
-      <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الشركة" className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button></div>
     </div>
   );
 }
@@ -683,7 +683,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         <div style={{ fontWeight: 700 }}>
           إجمالي المدفوع للشركة: {totalAmount.toLocaleString()}
         </div>
-        <button className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الحركة</button>
+        <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الحركة</button>
       </div>
     </div>
   );
@@ -833,7 +833,7 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
-          <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التحويل</button>
+          <button data-confirm-save="تأكيد حفظ التحويل" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التحويل</button>
         </div>
       </div>
     </div>,

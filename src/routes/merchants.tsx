@@ -260,7 +260,7 @@ function MerchantForm() {
           </div>
         </div>
       </div>
-      <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ التاجر</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ التاجر" className="btn btn-gold" onClick={save}>💾 حفظ التاجر</button></div>
     </div>
   );
 }
@@ -321,7 +321,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
         الإجمالي: {fmtDL(total)}
       </div>
-      <div className="form-footer"><button className="btn btn-gold" onClick={save}>💾 حفظ التحصيل</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ التحصيل" className="btn btn-gold" onClick={save}>💾 حفظ التحصيل</button></div>
     </div>
   );
 }
@@ -512,7 +512,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
-          <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
+          <button data-confirm-save="تأكيد حفظ التعديلات" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
         </div>
       </div>
     </div>,

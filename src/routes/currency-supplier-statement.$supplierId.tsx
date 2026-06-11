@@ -577,7 +577,7 @@ function TxModal({
 
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
-          <button className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
+          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
         </div>
       </div>
     </div>,

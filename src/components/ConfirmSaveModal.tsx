@@ -31,6 +31,30 @@ export function ConfirmSaveModalHost() {
     return () => { listener = null; };
   }, []);
 
+  // Global click interceptor: any button/element marked with [data-confirm-save="<title>"]
+  // is intercepted; the actual click is re-dispatched after user confirmation.
+  useEffect(() => {
+    const onClickCapture = (ev: MouseEvent) => {
+      if ((ev as any).__confirmedSave) return;
+      const target = ev.target as HTMLElement | null;
+      if (!target) return;
+      const btn = target.closest("[data-confirm-save]") as HTMLElement | null;
+      if (!btn) return;
+      if ((btn as HTMLButtonElement).disabled) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const title = btn.getAttribute("data-confirm-save") || "تأكيد الحفظ";
+      openConfirmSave(() => {
+        const evt = new MouseEvent("click", { bubbles: true, cancelable: true });
+        (evt as any).__confirmedSave = true;
+        btn.dispatchEvent(evt);
+      }, title);
+    };
+    document.addEventListener("click", onClickCapture, true);
+    return () => document.removeEventListener("click", onClickCapture, true);
+  }, []);
+
+
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => saveBtnRef.current?.focus(), 30);
@@ -66,13 +90,13 @@ export function ConfirmSaveModalHost() {
               if (e.key === "Enter") { e.preventDefault(); confirm(); }
             }}
           >
-            حفظ
+            تأكيد حفظ
           </button>
         </>
       }
     >
       <div style={{ fontSize: 14, color: "#334155", lineHeight: 1.8 }} data-no-kbd-nav>
-        هل تريد حفظ هذا النموذج؟
+        هل تريد المتابعة؟
       </div>
     </Modal>
   );

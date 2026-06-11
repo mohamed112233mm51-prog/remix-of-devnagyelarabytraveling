@@ -239,7 +239,7 @@ function SubmissionsPage() {
                       })}
                       <td style={{ ...tdStyle, textAlign: "end", whiteSpace: "nowrap" }}>
                         {perm.edit && (
-                          <button title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
+                          <button data-confirm-save={(s as any).execution_id ? undefined : "تأكيد تحويل التقديم إلى تنفيذ"} title={(s as any).execution_id ? "فتح التنفيذ" : "تحويل إلى تنفيذ"} onClick={() => convertToExecution(s)} style={{ ...iconBtn, color: (s as any).execution_id ? "#047857" : "#475569" }}><ArrowLeftRight size={14} /></button>
                         )}
                         {perm.edit && (
                           <button title="تعديل" onClick={() => { setEditing(s); setTab("add"); }} style={iconBtn}><Pencil size={14} /></button>
@@ -395,7 +395,7 @@ function SubmissionForm({
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
         <button className="btn" onClick={onDone} disabled={saving}>إلغاء</button>
-        <button onClick={save} disabled={saving} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : (editing ? "حفظ التعديل" : "حفظ التقديم")}</button>
+        <button data-confirm-save={editing ? "تأكيد حفظ تعديل التقديم" : "تأكيد حفظ التقديم"} onClick={save} disabled={saving} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : (editing ? "حفظ التعديل" : "حفظ التقديم")}</button>
       </div>
     </div>
   );
