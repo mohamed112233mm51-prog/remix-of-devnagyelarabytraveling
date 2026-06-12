@@ -444,10 +444,15 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
 
 function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClose: () => void }) {
+  const c = company as any;
   const [form, setForm] = useState({
     company_name: company.company_name || "",
     phone: company.phone || "",
     whatsapp: company.whatsapp || "",
+    opening_debit: c.opening_debit ? String(c.opening_debit) : "",
+    opening_credit: c.opening_credit ? String(c.opening_credit) : "",
+    opening_date: c.opening_date || "",
+    opening_note: c.opening_note || "",
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -455,13 +460,24 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
   const save = async () => {
     if (!form.company_name.trim()) return toast.error("اسم الشركة مطلوب");
     setSaving(true);
+    const debit = Number(form.opening_debit) || 0;
+    const credit = Number(form.opening_credit) || 0;
     const { error } = await supabase.from("issuing_companies").update({
       company_name: form.company_name.trim(),
       phone: form.phone.trim() || null,
       whatsapp: form.whatsapp.trim() || null,
-    }).eq("id", company.id);
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_date: form.opening_date || null,
+      opening_note: form.opening_note.trim() || null,
+    } as any).eq("id", company.id);
+    if (error) { setSaving(false); return toast.error(error.message); }
+    await syncCompanyOpeningBalance(company.id, {
+      debit, credit,
+      date: form.opening_date || null,
+      note: form.opening_note.trim() || null,
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
     toast.success("تم تحديث بيانات الشركة بنجاح");
     onClose();
   };
@@ -476,6 +492,27 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
         </div>
+
+        <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+          <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
+          <div className="card-body">
+            <div className="form-grid">
+              <div className="form-group"><label>رصيد سابق مدين</label>
+                <input type="number" min="0" value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} placeholder="0" />
+              </div>
+              <div className="form-group"><label>رصيد سابق دائن</label>
+                <input type="number" min="0" value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} placeholder="0" />
+              </div>
+              <div className="form-group"><label>تاريخ الرصيد السابق</label>
+                <input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} />
+              </div>
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
+                <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
           <button data-confirm-save="تأكيد حفظ التعديلات" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
@@ -488,15 +525,30 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
 
 function CompanyForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ company_name: "", phone: "", whatsapp: "" });
+  const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء إدخال اسم الشركة");
-    const { error } = await supabase.from("issuing_companies").insert({
+    const debit = Number(opening.debit) || 0;
+    const credit = Number(opening.credit) || 0;
+    const { data, error } = await supabase.from("issuing_companies").insert({
       company_name: form.company_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
-    });
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_date: opening.date || null,
+      opening_note: opening.note.trim() || null,
+    } as any).select("id").single();
     if (error) return toast.error(error.message);
+    if (data?.id && (debit > 0 || credit > 0)) {
+      await syncCompanyOpeningBalance(data.id, {
+        debit, credit,
+        date: opening.date || null,
+        note: opening.note.trim() || null,
+      });
+    }
     onDone();
   };
   return (
@@ -509,6 +561,27 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
       </div>
+
+      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+        <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
+        <div className="card-body">
+          <div className="form-grid">
+            <div className="form-group"><label>رصيد سابق مدين</label>
+              <input type="number" min="0" value={opening.debit} onChange={(e) => setOp("debit", e.target.value)} placeholder="0" />
+            </div>
+            <div className="form-group"><label>رصيد سابق دائن</label>
+              <input type="number" min="0" value={opening.credit} onChange={(e) => setOp("credit", e.target.value)} placeholder="0" />
+            </div>
+            <div className="form-group"><label>تاريخ الرصيد السابق</label>
+              <input type="date" value={opening.date} onChange={(e) => setOp("date", e.target.value)} />
+            </div>
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
+              <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="form-footer"><button data-confirm-save="تأكيد حفظ الشركة" className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button></div>
     </div>
   );
