@@ -48,23 +48,50 @@ function normalizeArabic(s: string): string {
     .toLowerCase();
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Escape PostgREST .or() reserved chars in ilike values
+function escapeIlike(s: string): string {
+  return s.replace(/[,()]/g, "");
 }
 
-// POSIX regex (for PostgREST imatch) matching Arabic variants
-function buildArabicRegex(term: string): string {
+// Build ilike patterns covering common Arabic letter variants
+function buildIlikePatterns(term: string): string[] {
   const n = normalizeArabic(term);
-  let out = "";
-  for (const ch of n) {
-    if (ch === "ا") out += "[اأإآٱ]";
-    else if (ch === "ي") out += "[يى]";
-    else if (ch === "ه") out += "[هة]";
-    else if (ch === "و") out += "[وؤ]";
-    else if (ch === " ") out += "\\s+";
-    else out += escapeRegex(ch);
+  const variants = new Set<string>([n]);
+  const swaps: Array<[RegExp, string[]]> = [
+    [/ا/g, ["ا", "أ", "إ", "آ"]],
+    [/ي/g, ["ي", "ى"]],
+    [/ه/g, ["ه", "ة"]],
+    [/و/g, ["و", "ؤ"]],
+  ];
+  // Generate up to ~16 variants by swapping per-letter alternatives
+  let current = [n];
+  for (const [re, opts] of swaps) {
+    const next: string[] = [];
+    for (const s of current) {
+      const positions: number[] = [];
+      s.replace(re, (_m, off: number) => { positions.push(off); return _m; });
+      if (positions.length === 0) { next.push(s); continue; }
+      // Limit combinatorial blow-up: only swap up to first 2 positions
+      const limited = positions.slice(0, 2);
+      const total = Math.pow(opts.length, limited.length);
+      for (let i = 0; i < total && next.length < 32; i++) {
+        const chars = s.split("");
+        let idx = i;
+        for (const p of limited) {
+          chars[p] = opts[idx % opts.length];
+          idx = Math.floor(idx / opts.length);
+        }
+        next.push(chars.join(""));
+      }
+    }
+    current = Array.from(new Set(next));
   }
-  return out;
+  current.forEach((v) => variants.add(v));
+  variants.add(term.trim().toLowerCase());
+  return Array.from(variants)
+    .map((v) => escapeIlike(v))
+    .filter((v) => v.length > 0)
+    .map((v) => `%${v}%`);
 }
 
 function useOutsideClick(ref: React.RefObject<HTMLElement | null>, onOutside: () => void, active: boolean) {
@@ -112,8 +139,9 @@ export function SearchBox() {
       return;
     }
     let cancelled = false;
-    const like = `%${term}%`;
-    const rx = buildArabicRegex(term);
+    const like = `%${escapeIlike(term)}%`;
+    const patterns = buildIlikePatterns(term);
+    const nameOr = (field: string) => patterns.map((p) => `${field}.ilike.${p}`).join(",");
     const debug: Record<string, number> = {};
     setLoading(true);
     setError(null);
@@ -125,7 +153,7 @@ export function SearchBox() {
         const { data, error } = await supabase
           .from("agents")
           .select("id,name,phone,governorate")
-          .or(`name.imatch.${rx},phone.ilike.${like},governorate.ilike.${like}`)
+          .or(`${nameOr("name")},phone.ilike.${like},governorate.ilike.${like}`)
           .limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
@@ -144,7 +172,7 @@ export function SearchBox() {
         const { data, error } = await supabase
           .from("issuing_companies")
           .select("id,company_name,phone,service_type")
-          .or(`company_name.imatch.${rx},phone.ilike.${like},service_type.ilike.${like}`)
+          .or(`${nameOr("company_name")},phone.ilike.${like},service_type.ilike.${like}`)
           .limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
@@ -162,7 +190,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("merchants").select("id,merchant_name,phone")
-          .or(`merchant_name.imatch.${rx},phone.ilike.${like}`).limit(5);
+          .or(`${nameOr("merchant_name")},phone.ilike.${like}`).limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
         debug.merchants = rows.length;
@@ -177,7 +205,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("investors").select("id,investor_name,phone")
-          .or(`investor_name.imatch.${rx},phone.ilike.${like}`).limit(5);
+          .or(`${nameOr("investor_name")},phone.ilike.${like}`).limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
         debug.investors = rows.length;
@@ -192,7 +220,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("expenses").select("id,expense_name,expense_type,amount")
-          .or(`expense_name.imatch.${rx},expense_type.ilike.${like}`).limit(5);
+          .or(`${nameOr("expense_name")},expense_type.ilike.${like}`).limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
         debug.expenses = rows.length;
@@ -208,12 +236,12 @@ export function SearchBox() {
     // Pre-resolve agent IDs whose name matches the search (so traveler search
     // also surfaces records via "agent_name")
     const matchingAgentIdsPromise = (async (): Promise<string[]> => {
-      const { data } = await supabase.from("agents").select("id").or(`name.imatch.${rx}`).limit(50);
+      const { data } = await supabase.from("agents").select("id").or(nameOr("name")).limit(50);
       return (Array.isArray(data) ? data : []).map((a: any) => a.id);
     })();
     // Same for companies (for executions company_name search)
     const matchingCompanyIdsPromise = (async (): Promise<string[]> => {
-      const { data } = await supabase.from("issuing_companies").select("id").or(`company_name.imatch.${rx}`).limit(50);
+      const { data } = await supabase.from("issuing_companies").select("id").or(nameOr("company_name")).limit(50);
       return (Array.isArray(data) ? data : []).map((c: any) => c.id);
     })();
 
@@ -221,7 +249,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const agentIdsMatch = await matchingAgentIdsPromise;
         const orParts = [
-          `passenger_name.imatch.${rx}`,
+          ...patterns.map((p) => `passenger_name.ilike.${p}`),
           `passport.ilike.${like}`,
           `national_id.ilike.${like}`,
         ];
@@ -256,7 +284,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const [agentIdsMatch, compIdsMatch] = await Promise.all([matchingAgentIdsPromise, matchingCompanyIdsPromise]);
         const orParts = [
-          `passenger_name.imatch.${rx}`,
+          ...patterns.map((p) => `passenger_name.ilike.${p}`),
           `passport.ilike.${like}`,
           `national_id.ilike.${like}`,
         ];
@@ -292,7 +320,7 @@ export function SearchBox() {
       .then((arrs) => {
         if (cancelled) return;
         const all = arrs.flat();
-        console.log("[QuickSearch]", { term, normalized: normalizeArabic(term), regex: rx, counts: debug, total: all.length });
+        console.log("[QuickSearch]", { term, normalized: normalizeArabic(term), patterns, counts: debug, total: all.length });
         setResults(all.slice(0, 25));
       })
       .catch((err) => {
