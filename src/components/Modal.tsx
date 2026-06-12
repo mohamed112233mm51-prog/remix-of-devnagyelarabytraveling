@@ -17,6 +17,8 @@ export function Modal({
   footer,
   maxWidth = 640,
   closeOnBackdrop = true,
+  zIndex,
+  overlayClassName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +27,8 @@ export function Modal({
   footer?: ReactNode;
   maxWidth?: number;
   closeOnBackdrop?: boolean;
+  zIndex?: number;
+  overlayClassName?: string;
 }) {
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -48,7 +52,8 @@ export function Modal({
 
   return createPortal(
     <div
-      className="modal-overlay open"
+      className={`modal-overlay open${overlayClassName ? ` ${overlayClassName}` : ""}`}
+      style={zIndex ? { zIndex } : undefined}
       onClick={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();
       }}

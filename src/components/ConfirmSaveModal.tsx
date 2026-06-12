@@ -77,7 +77,9 @@ export function ConfirmSaveModalHost() {
       open={open}
       onClose={close}
       title={title}
-      maxWidth={460}
+      maxWidth={420}
+      zIndex={100000}
+      overlayClassName="confirm-save-overlay"
       footer={
         <>
           <button className="btn" onClick={close} data-no-kbd-nav>إلغاء</button>
