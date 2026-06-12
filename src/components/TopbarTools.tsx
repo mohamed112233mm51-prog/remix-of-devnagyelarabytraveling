@@ -33,6 +33,40 @@ function useDebounced<T>(value: T, delay: number): T {
   return v;
 }
 
+// Normalize Arabic: unify alef/yaa/taa-marbuta, strip diacritics & tatweel
+function normalizeArabic(s: string): string {
+  if (!s) return "";
+  return s
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// POSIX regex (for PostgREST imatch) matching Arabic variants
+function buildArabicRegex(term: string): string {
+  const n = normalizeArabic(term);
+  let out = "";
+  for (const ch of n) {
+    if (ch === "ا") out += "[اأإآٱ]";
+    else if (ch === "ي") out += "[يى]";
+    else if (ch === "ه") out += "[هة]";
+    else if (ch === "و") out += "[وؤ]";
+    else if (ch === " ") out += "\\s+";
+    else out += escapeRegex(ch);
+  }
+  return out;
+}
+
 function useOutsideClick(ref: React.RefObject<HTMLElement | null>, onOutside: () => void, active: boolean) {
   useEffect(() => {
     if (!active) return;
