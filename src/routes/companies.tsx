@@ -241,10 +241,12 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
     const serviceValue = Math.round(Number(t.trip_value || 0));
     const payment = Math.round(Number(t.total_paid || 0));
+    const sst = (t as any).source_service_type as string | undefined;
+    const isOpening = sst === "opening_debit" || sst === "opening_credit";
     const kind: CompanyLedgerKind = serviceValue > 0 ? "service" : "payment";
-    const description = kind === "payment"
-      ? "دفعة للشركة"
-      : (t.service_type || "خدمة مستحقة");
+    const description = isOpening
+      ? "رصيد سابق"
+      : (kind === "payment" ? "دفعة للشركة" : (t.service_type || "خدمة مستحقة"));
     return {
       id: t.id || `${t.created_at || "row"}-${t.company_id || "company"}`,
       date: t.date || "",
