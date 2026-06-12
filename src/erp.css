@@ -2208,3 +2208,78 @@
 .reports-page .table-wrap table tbody td[data-label="المسافر"],
 .reports-page .table-wrap table tbody td[data-label="الخدمة"],
 .reports-page .table-wrap table tbody td[data-label="نوع الخدمة"] { font-weight: 700; }
+
+/* ============================================================
+   Universal modal viewport-fit safety net
+   Applies to ANY full-screen overlay (Modal wrapper, custom
+   createPortal modals, settings/import modals, etc.) without
+   touching their internal logic.
+   ------------------------------------------------------------ */
+
+/* 1. Built-in Modal wrapper (.modal-overlay / .modal-box) */
+.modal-overlay {
+  padding: 16px !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+.modal-box {
+  max-width: calc(100vw - 32px) !important;
+  max-height: calc(100vh - 32px) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  margin: auto !important;
+}
+.modal-header { position: sticky; top: 0; z-index: 3; }
+.modal-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg2, #ffffff);
+  z-index: 3;
+}
+
+/* 2. Custom inline-style portals: <div style="position:fixed;inset:0;...">
+      Apply to any direct child element acting as the dialog box. */
+div[style*="position: fixed"][style*="inset: 0"],
+div[style*="position:fixed"][style*="inset:0"] {
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding: 16px !important;
+  box-sizing: border-box;
+}
+div[style*="position: fixed"][style*="inset: 0"] > .card,
+div[style*="position:fixed"][style*="inset:0"] > .card,
+div[style*="position: fixed"][style*="inset: 0"] > div:not([style*="position"]),
+div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
+  max-width: calc(100vw - 32px) !important;
+  max-height: calc(100vh - 32px) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  margin: auto !important;
+  box-sizing: border-box;
+}
+
+/* 3. Radix dialog/sheet content already has max-h-[90vh] via Tailwind;
+      enforce here too for safety on small screens. */
+[role="dialog"][data-state="open"],
+[role="alertdialog"][data-state="open"] {
+  max-height: calc(100vh - 32px) !important;
+  max-width: calc(100vw - 32px) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+/* 4. Mobile tightening */
+@media (max-width: 640px) {
+  .modal-overlay { padding: 8px !important; }
+  .modal-box { max-width: calc(100vw - 16px) !important; max-height: calc(100vh - 16px) !important; border-radius: 12px; }
+  div[style*="position: fixed"][style*="inset: 0"],
+  div[style*="position:fixed"][style*="inset:0"] { padding: 8px !important; }
+  div[style*="position: fixed"][style*="inset: 0"] > .card,
+  div[style*="position:fixed"][style*="inset:0"] > .card,
+  div[style*="position: fixed"][style*="inset: 0"] > div:not([style*="position"]),
+  div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100vh - 16px) !important;
+    border-radius: 12px;
+  }
+}
