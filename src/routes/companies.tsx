@@ -13,6 +13,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
 import { SafeSelectOptions } from "@/components/SafeSelectOptions";
 import {
   PaymentSplits,
