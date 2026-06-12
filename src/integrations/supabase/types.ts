@@ -91,6 +91,10 @@ export type Database = {
           is_demo: boolean
           name: string
           national_id: string | null
+          opening_credit: number
+          opening_date: string | null
+          opening_debit: number
+          opening_note: string | null
           phone: string | null
           status: string
           whatsapp: string | null
@@ -102,6 +106,10 @@ export type Database = {
           is_demo?: boolean
           name: string
           national_id?: string | null
+          opening_credit?: number
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           status?: string
           whatsapp?: string | null
@@ -113,6 +121,10 @@ export type Database = {
           is_demo?: boolean
           name?: string
           national_id?: string | null
+          opening_credit?: number
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           status?: string
           whatsapp?: string | null
@@ -661,6 +673,10 @@ export type Database = {
           created_at: string
           id: string
           is_demo: boolean
+          opening_credit: number
+          opening_date: string | null
+          opening_debit: number
+          opening_note: string | null
           phone: string | null
           service_type: string | null
           status: string
@@ -671,6 +687,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_demo?: boolean
+          opening_credit?: number
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           service_type?: string | null
           status?: string
@@ -681,6 +701,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_demo?: boolean
+          opening_credit?: number
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           service_type?: string | null
           status?: string

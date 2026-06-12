@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, tripValue, txnTotalPaid, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { AgentPricingSection } from "@/components/AgentPricingSection";
+import { syncAgentOpeningBalance } from "@/lib/openingBalance";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -185,29 +186,45 @@ function AccountsPage() {
 }
 
 function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+  const a = agent as any;
   const [form, setForm] = useState({
     name: agent.name || "",
     national_id: agent.national_id || "",
     phone: agent.phone || "",
     whatsapp: agent.whatsapp || "",
     governorate: agent.governorate || "",
+    opening_debit: a.opening_debit ? String(a.opening_debit) : "",
+    opening_credit: a.opening_credit ? String(a.opening_credit) : "",
+    opening_date: a.opening_date || "",
+    opening_note: a.opening_note || "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("برجاء إدخال اسم الوكيل");
     if (!form.phone.trim()) return toast.error("برجاء إدخال رقم الهاتف");
+    const debit = Number(form.opening_debit) || 0;
+    const credit = Number(form.opening_credit) || 0;
     const patch = {
       name: form.name.trim(),
       national_id: form.national_id.trim() || null,
       phone: form.phone.trim(),
       whatsapp: form.whatsapp.trim() || null,
       governorate: form.governorate || null,
-    };
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_date: form.opening_date || null,
+      opening_note: form.opening_note.trim() || null,
+    } as any;
     const { ok } = await applyOptimistic({
       table: "agents", type: "update", id: agent.id, patch,
       run: async () => await supabase.from("agents").update(patch).eq("id", agent.id),
     });
     if (!ok) return;
+    await syncAgentOpeningBalance(agent.id, {
+      debit, credit,
+      date: form.opening_date || null,
+      note: form.opening_note.trim() || null,
+    });
     toast.success("تم تحديث بيانات الوكيل بنجاح");
     onClose();
   };
@@ -228,6 +245,27 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
             </select>
           </div>
         </div>
+
+        <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+          <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
+          <div className="card-body">
+            <div className="form-grid">
+              <div className="form-group"><label>رصيد سابق مدين</label>
+                <input type="number" min="0" value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} placeholder="0" />
+              </div>
+              <div className="form-group"><label>رصيد سابق دائن</label>
+                <input type="number" min="0" value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} placeholder="0" />
+              </div>
+              <div className="form-group"><label>تاريخ الرصيد السابق</label>
+                <input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} />
+              </div>
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
+                <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <AgentPricingSection agentId={agent.id} />
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
@@ -248,8 +286,10 @@ function r2(n: number) { return Math.round(n * 100) / 100; }
 function AgentForm({ onDone }: { onDone: () => void }) {
   const serviceTypes = useDropdownOptions("service_type");
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
+  const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
   const [rows, setRows] = useState<Record<string, PricingRow>>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
 
   const updateRow = (st: string, patch: Partial<PricingRow>) => {
     setRows((prev) => {
@@ -282,13 +322,19 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
     if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
+    const opDebit = Number(opening.debit) || 0;
+    const opCredit = Number(opening.credit) || 0;
     const { data, error } = await supabase.from("agents").insert({
       name: form.name,
       national_id: form.national_id || null,
       phone: form.phone,
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
-    }).select("id").single();
+      opening_debit: opDebit,
+      opening_credit: opCredit,
+      opening_date: opening.date || null,
+      opening_note: opening.note.trim() || null,
+    } as any).select("id").single();
     if (error) return toast.error(error.message);
     const agentId = data?.id;
     if (agentId) {
@@ -312,6 +358,13 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         const { error: pErr } = await supabase.from("agent_service_pricing").insert(pricingRows);
         if (pErr) toast.error("تم حفظ الوكيل لكن فشل حفظ التسعير: " + pErr.message);
       }
+      if (opDebit > 0 || opCredit > 0) {
+        await syncAgentOpeningBalance(agentId, {
+          debit: opDebit, credit: opCredit,
+          date: opening.date || null,
+          note: opening.note.trim() || null,
+        });
+      }
     }
     onDone();
   };
@@ -328,6 +381,26 @@ function AgentForm({ onDone }: { onDone: () => void }) {
             <option value="" disabled>اختر...</option>
             {GOVERNORATES.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+        <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
+        <div className="card-body">
+          <div className="form-grid">
+            <div className="form-group"><label>رصيد سابق مدين</label>
+              <input type="number" min="0" value={opening.debit} onChange={(e) => setOp("debit", e.target.value)} placeholder="0" />
+            </div>
+            <div className="form-group"><label>رصيد سابق دائن</label>
+              <input type="number" min="0" value={opening.credit} onChange={(e) => setOp("credit", e.target.value)} placeholder="0" />
+            </div>
+            <div className="form-group"><label>تاريخ الرصيد السابق</label>
+              <input type="date" value={opening.date} onChange={(e) => setOp("date", e.target.value)} />
+            </div>
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
+              <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
+            </div>
+          </div>
         </div>
       </div>
 
