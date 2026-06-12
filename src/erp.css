@@ -2283,3 +2283,11 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
     border-radius: 12px;
   }
 }
+
+/* Confirm-save / confirmation modal must always sit ABOVE any other modal
+   (including custom inline-style fixed-inset portals that use zIndex 9999-10002). */
+.modal-overlay.confirm-save-overlay { z-index: 100000 !important; }
+.modal-overlay.confirm-save-overlay .modal-box {
+  max-width: min(420px, calc(100vw - 32px)) !important;
+  width: calc(100vw - 32px);
+}
