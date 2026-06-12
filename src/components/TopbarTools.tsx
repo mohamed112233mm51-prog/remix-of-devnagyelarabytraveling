@@ -94,6 +94,17 @@ function buildIlikePatterns(term: string): string[] {
     .map((v) => `%${v}%`);
 }
 
+function errorDetails(err: unknown) {
+  if (err instanceof Error) return { message: err.message, stack: err.stack, name: err.name };
+  return { message: String(err), stack: undefined, name: typeof err };
+}
+
+function throwSearchError(source: string, error: { message?: string; code?: string; details?: string; hint?: string }) {
+  const err = new Error(`[QuickSearch:${source}] ${error.message || "Unknown search error"}`);
+  Object.assign(err, { code: error.code, details: error.details, hint: error.hint });
+  throw err;
+}
+
 function useOutsideClick(ref: React.RefObject<HTMLElement | null>, onOutside: () => void, active: boolean) {
   useEffect(() => {
     if (!active) return;
@@ -146,16 +157,36 @@ export function SearchBox() {
     setLoading(true);
     setError(null);
 
+    try {
     const queries: Promise<SearchResult[]>[] = [];
+    const countRows = async (source: "agents" | "issuing_companies" | "merchants" | "investors" | "expenses" | "submissions" | "executions") => {
+      const { count, error } = await supabase.from(source).select("id", { count: "exact", head: true });
+      if (error) throwSearchError(`${source}:count`, error);
+      return count ?? 0;
+    };
+    const runSourceSearch = (source: string, fields: string[], fn: () => Promise<SearchResult[]>) => (async () => {
+      const logBase = { term, normalized: normalizeArabic(term), source, fields };
+      try {
+        const before = await countRows(source as any);
+        const rows = await fn();
+        debug[source] = rows.length;
+        console.log("[QuickSearch:source]", { ...logBase, before, after: rows.length });
+        return rows;
+      } catch (err) {
+        debug[source] = 0;
+        console.error("[QuickSearch:source-error]", { ...logBase, error: errorDetails(err) });
+        return [];
+      }
+    })();
 
     if (allowed.agents) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("agents", ["name", "phone", "governorate"], async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("agents")
           .select("id,name,phone,governorate")
           .or(`${nameOr("name")},phone.ilike.${like},governorate.ilike.${like}`)
           .limit(5);
-        if (error) throw error;
+        if (error) throwSearchError("agents", error);
         const rows = Array.isArray(data) ? data : [];
         debug.agents = rows.length;
         return rows.map((r: any) => ({
@@ -165,16 +196,16 @@ export function SearchBox() {
           description: [r.phone, r.governorate].filter(Boolean).join(" • "),
           to: `/agent-statement/${r.id}`,
         }));
-      })());
+      }));
     }
     if (allowed.companies) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("issuing_companies", ["company_name", "phone", "service_type"], async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("issuing_companies")
           .select("id,company_name,phone,service_type")
           .or(`${nameOr("company_name")},phone.ilike.${like},service_type.ilike.${like}`)
           .limit(5);
-        if (error) throw error;
+        if (error) throwSearchError("issuing_companies", error);
         const rows = Array.isArray(data) ? data : [];
         debug.companies = rows.length;
         return rows.map((r: any) => ({
@@ -184,14 +215,14 @@ export function SearchBox() {
           description: [r.service_type, r.phone].filter(Boolean).join(" • "),
           to: `/companies`,
         }));
-      })());
+      }));
     }
     if (allowed.merchants) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("merchants", ["merchant_name", "phone"], async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("merchants").select("id,merchant_name,phone")
           .or(`${nameOr("merchant_name")},phone.ilike.${like}`).limit(5);
-        if (error) throw error;
+        if (error) throwSearchError("merchants", error);
         const rows = Array.isArray(data) ? data : [];
         debug.merchants = rows.length;
         return rows.map((r: any) => ({
@@ -199,14 +230,14 @@ export function SearchBox() {
           title: r.merchant_name || "تاجر",
           description: r.phone || "", to: `/merchants`,
         }));
-      })());
+      }));
     }
     if (allowed.investors) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("investors", ["investor_name", "phone"], async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("investors").select("id,investor_name,phone")
           .or(`${nameOr("investor_name")},phone.ilike.${like}`).limit(5);
-        if (error) throw error;
+        if (error) throwSearchError("investors", error);
         const rows = Array.isArray(data) ? data : [];
         debug.investors = rows.length;
         return rows.map((r: any) => ({
@@ -214,14 +245,14 @@ export function SearchBox() {
           title: r.investor_name || "مستثمر",
           description: r.phone || "", to: `/investors`,
         }));
-      })());
+      }));
     }
     if (allowed.expenses) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("expenses", ["expense_name", "expense_type"], async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("expenses").select("id,expense_name,expense_type,amount")
           .or(`${nameOr("expense_name")},expense_type.ilike.${like}`).limit(5);
-        if (error) throw error;
+        if (error) throwSearchError("expenses", error);
         const rows = Array.isArray(data) ? data : [];
         debug.expenses = rows.length;
         return rows.map((r: any) => ({
@@ -230,23 +261,35 @@ export function SearchBox() {
           description: `${r.expense_type || ""} • ${fmtDL(Number(r.amount || 0))}`,
           to: `/expenses`,
         }));
-      })());
+      }));
     }
 
     // Pre-resolve agent IDs whose name matches the search (so traveler search
     // also surfaces records via "agent_name")
     const matchingAgentIdsPromise = (async (): Promise<string[]> => {
-      const { data } = await supabase.from("agents").select("id").or(nameOr("name")).limit(50);
+      const { data, error } = await supabase.from("agents").select("id").or(nameOr("name")).limit(50);
+      if (error) {
+        try { throwSearchError("agents:lookup", error); } catch (lookupErr) {
+          console.error("[QuickSearch:lookup-error]", { term, source: "agents", fields: ["name"], error: errorDetails(lookupErr) });
+        }
+        return [];
+      }
       return (Array.isArray(data) ? data : []).map((a: any) => a.id);
     })();
     // Same for companies (for executions company_name search)
     const matchingCompanyIdsPromise = (async (): Promise<string[]> => {
-      const { data } = await supabase.from("issuing_companies").select("id").or(nameOr("company_name")).limit(50);
+      const { data, error } = await supabase.from("issuing_companies").select("id").or(nameOr("company_name")).limit(50);
+      if (error) {
+        try { throwSearchError("issuing_companies:lookup", error); } catch (lookupErr) {
+          console.error("[QuickSearch:lookup-error]", { term, source: "issuing_companies", fields: ["company_name"], error: errorDetails(lookupErr) });
+        }
+        return [];
+      }
       return (Array.isArray(data) ? data : []).map((c: any) => c.id);
     })();
 
     if (allowed.submissions) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("submissions", ["passenger_name", "national_id", "passport", "agent_id"], async (): Promise<SearchResult[]> => {
         const agentIdsMatch = await matchingAgentIdsPromise;
         const orParts = [
           ...patterns.map((p) => `passenger_name.ilike.${p}`),
@@ -256,12 +299,11 @@ export function SearchBox() {
         if (agentIdsMatch.length) orParts.push(`agent_id.in.(${agentIdsMatch.join(",")})`);
         const { data, error } = await supabase
           .from("submissions")
-          .select("id,passenger_name,passport,national_id,travel_date,destination,agent_id,approval_company_id")
+          .select("id,passenger_name,passport,national_id,submit_date,issue_date,agent_id,approval_company_id")
           .or(orParts.join(","))
           .limit(10);
-        if (error) throw error;
+        if (error) throwSearchError("submissions", error);
         const rows = Array.isArray(data) ? data : [];
-        debug.submissions = rows.length;
         const agentIds = Array.from(new Set(rows.map((r: any) => r.agent_id).filter(Boolean)));
         const compIds = Array.from(new Set(rows.map((r: any) => r.approval_company_id).filter(Boolean)));
         const [agentsRes, compsRes] = await Promise.all([
@@ -274,14 +316,14 @@ export function SearchBox() {
           section: "submissions",
           sectionLabel: SECTION_LABELS.submissions,
           title: r.passenger_name || "مسافر",
-          description: [agentMap.get(r.agent_id), compMap.get(r.approval_company_id), r.destination, r.travel_date].filter(Boolean).join(" • "),
+          description: [agentMap.get(r.agent_id), compMap.get(r.approval_company_id), r.issue_date || r.submit_date].filter(Boolean).join(" • "),
           to: `/submissions`,
         }));
-      })());
+      }));
     }
 
     if (allowed.executions) {
-      queries.push((async (): Promise<SearchResult[]> => {
+      queries.push(runSourceSearch("executions", ["passenger_name", "national_id", "passport", "agent_id", "approval_company_id"], async (): Promise<SearchResult[]> => {
         const [agentIdsMatch, compIdsMatch] = await Promise.all([matchingAgentIdsPromise, matchingCompanyIdsPromise]);
         const orParts = [
           ...patterns.map((p) => `passenger_name.ilike.${p}`),
@@ -292,12 +334,11 @@ export function SearchBox() {
         if (compIdsMatch.length) orParts.push(`approval_company_id.in.(${compIdsMatch.join(",")})`);
         const { data, error } = await supabase
           .from("executions")
-          .select("id,passenger_name,passport,national_id,issue_date,agent_id,approval_company_id")
+          .select("id,passenger_name,passport,national_id,travel_date,agent_id,approval_company_id")
           .or(orParts.join(","))
           .limit(10);
-        if (error) throw error;
+        if (error) throwSearchError("executions", error);
         const rows = Array.isArray(data) ? data : [];
-        debug.executions = rows.length;
         const agentIds = Array.from(new Set(rows.map((r: any) => r.agent_id).filter(Boolean)));
         const compIds = Array.from(new Set(rows.map((r: any) => r.approval_company_id).filter(Boolean)));
         const [agentsRes, compsRes] = await Promise.all([
@@ -310,10 +351,10 @@ export function SearchBox() {
           section: "executions",
           sectionLabel: SECTION_LABELS.executions,
           title: r.passenger_name || "مسافر",
-          description: [agentMap.get(r.agent_id), compMap.get(r.approval_company_id), r.issue_date].filter(Boolean).join(" • "),
+          description: [agentMap.get(r.agent_id), compMap.get(r.approval_company_id), r.travel_date].filter(Boolean).join(" • "),
           to: `/executions`,
         }));
-      })());
+      }));
     }
 
     Promise.all(queries)
@@ -325,13 +366,21 @@ export function SearchBox() {
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("Global search error:", err);
+        console.error("[QuickSearch:fatal-error]", { term, normalized: normalizeArabic(term), error: errorDetails(err) });
         setError("تعذر تنفيذ البحث");
         setResults([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    } catch (err) {
+      if (!cancelled) {
+        console.error("[QuickSearch:fatal-error]", { term, normalized: normalizeArabic(term), error: errorDetails(err) });
+        setError("تعذر تنفيذ البحث");
+        setResults([]);
+        setLoading(false);
+      }
+    }
 
     return () => {
       cancelled = true;
