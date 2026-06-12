@@ -286,8 +286,10 @@ function r2(n: number) { return Math.round(n * 100) / 100; }
 function AgentForm({ onDone }: { onDone: () => void }) {
   const serviceTypes = useDropdownOptions("service_type");
   const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
+  const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
   const [rows, setRows] = useState<Record<string, PricingRow>>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
 
   const updateRow = (st: string, patch: Partial<PricingRow>) => {
     setRows((prev) => {
