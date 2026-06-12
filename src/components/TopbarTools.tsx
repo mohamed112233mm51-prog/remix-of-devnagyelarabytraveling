@@ -113,6 +113,8 @@ export function SearchBox() {
     }
     let cancelled = false;
     const like = `%${term}%`;
+    const rx = buildArabicRegex(term);
+    const debug: Record<string, number> = {};
     setLoading(true);
     setError(null);
 
@@ -120,81 +122,118 @@ export function SearchBox() {
 
     if (allowed.agents) {
       queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("agents").select("id,name,phone,governorate").or(`name.ilike.${like},phone.ilike.${like},governorate.ilike.${like}`).limit(5);
+        const { data, error } = await supabase
+          .from("agents")
+          .select("id,name,phone,governorate")
+          .or(`name.imatch.${rx},phone.ilike.${like},governorate.ilike.${like}`)
+          .limit(5);
         if (error) throw error;
-        return (Array.isArray(data) ? data : []).map((r: any) => ({
-              section: "agents",
-              sectionLabel: SECTION_LABELS.agents,
-              title: r.name || "وكيل",
-              description: [r.phone, r.governorate].filter(Boolean).join(" • "),
-              to: `/agent-statement/${r.id}`,
-            }));
+        const rows = Array.isArray(data) ? data : [];
+        debug.agents = rows.length;
+        return rows.map((r: any) => ({
+          section: "agents",
+          sectionLabel: SECTION_LABELS.agents,
+          title: r.name || "وكيل",
+          description: [r.phone, r.governorate].filter(Boolean).join(" • "),
+          to: `/agent-statement/${r.id}`,
+        }));
       })());
     }
-    // (flights/approvals search removed — those tables no longer exist)
     if (allowed.companies) {
       queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("issuing_companies").select("id,company_name,phone,service_type").or(`company_name.ilike.${like},phone.ilike.${like},service_type.ilike.${like}`).limit(5);
+        const { data, error } = await supabase
+          .from("issuing_companies")
+          .select("id,company_name,phone,service_type")
+          .or(`company_name.imatch.${rx},phone.ilike.${like},service_type.ilike.${like}`)
+          .limit(5);
         if (error) throw error;
-        return (Array.isArray(data) ? data : []).map((r: any) => ({
-              section: "companies",
-              sectionLabel: SECTION_LABELS.companies,
-              title: r.company_name || "شركة",
-              description: [r.service_type, r.phone].filter(Boolean).join(" • "),
-              to: `/companies`,
-            }));
+        const rows = Array.isArray(data) ? data : [];
+        debug.companies = rows.length;
+        return rows.map((r: any) => ({
+          section: "companies",
+          sectionLabel: SECTION_LABELS.companies,
+          title: r.company_name || "شركة",
+          description: [r.service_type, r.phone].filter(Boolean).join(" • "),
+          to: `/companies`,
+        }));
       })());
     }
     if (allowed.merchants) {
       queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("merchants").select("id,merchant_name,phone").or(`merchant_name.ilike.${like},phone.ilike.${like}`).limit(5);
+        const { data, error } = await supabase
+          .from("merchants").select("id,merchant_name,phone")
+          .or(`merchant_name.imatch.${rx},phone.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (Array.isArray(data) ? data : []).map((r: any) => ({
-              section: "merchants",
-              sectionLabel: SECTION_LABELS.merchants,
-              title: r.merchant_name || "تاجر",
-              description: r.phone || "",
-              to: `/merchants`,
-            }));
+        const rows = Array.isArray(data) ? data : [];
+        debug.merchants = rows.length;
+        return rows.map((r: any) => ({
+          section: "merchants", sectionLabel: SECTION_LABELS.merchants,
+          title: r.merchant_name || "تاجر",
+          description: r.phone || "", to: `/merchants`,
+        }));
       })());
     }
     if (allowed.investors) {
       queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("investors").select("id,investor_name,phone").or(`investor_name.ilike.${like},phone.ilike.${like}`).limit(5);
+        const { data, error } = await supabase
+          .from("investors").select("id,investor_name,phone")
+          .or(`investor_name.imatch.${rx},phone.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (Array.isArray(data) ? data : []).map((r: any) => ({
-              section: "investors",
-              sectionLabel: SECTION_LABELS.investors,
-              title: r.investor_name || "مستثمر",
-              description: r.phone || "",
-              to: `/investors`,
-            }));
+        const rows = Array.isArray(data) ? data : [];
+        debug.investors = rows.length;
+        return rows.map((r: any) => ({
+          section: "investors", sectionLabel: SECTION_LABELS.investors,
+          title: r.investor_name || "مستثمر",
+          description: r.phone || "", to: `/investors`,
+        }));
       })());
     }
     if (allowed.expenses) {
       queries.push((async (): Promise<SearchResult[]> => {
-        const { data, error } = await supabase.from("expenses").select("id,expense_name,expense_type,amount").or(`expense_name.ilike.${like},expense_type.ilike.${like}`).limit(5);
+        const { data, error } = await supabase
+          .from("expenses").select("id,expense_name,expense_type,amount")
+          .or(`expense_name.imatch.${rx},expense_type.ilike.${like}`).limit(5);
         if (error) throw error;
-        return (Array.isArray(data) ? data : []).map((r: any) => ({
-              section: "expenses",
-              sectionLabel: SECTION_LABELS.expenses,
-              title: r.expense_name || "مصروف",
-              description: `${r.expense_type || ""} • ${fmtDL(Number(r.amount || 0))}`,
-              to: `/expenses`,
-            }));
+        const rows = Array.isArray(data) ? data : [];
+        debug.expenses = rows.length;
+        return rows.map((r: any) => ({
+          section: "expenses", sectionLabel: SECTION_LABELS.expenses,
+          title: r.expense_name || "مصروف",
+          description: `${r.expense_type || ""} • ${fmtDL(Number(r.amount || 0))}`,
+          to: `/expenses`,
+        }));
       })());
     }
 
-    // Traveler search across submissions
+    // Pre-resolve agent IDs whose name matches the search (so traveler search
+    // also surfaces records via "agent_name")
+    const matchingAgentIdsPromise = (async (): Promise<string[]> => {
+      const { data } = await supabase.from("agents").select("id").or(`name.imatch.${rx}`).limit(50);
+      return (Array.isArray(data) ? data : []).map((a: any) => a.id);
+    })();
+    // Same for companies (for executions company_name search)
+    const matchingCompanyIdsPromise = (async (): Promise<string[]> => {
+      const { data } = await supabase.from("issuing_companies").select("id").or(`company_name.imatch.${rx}`).limit(50);
+      return (Array.isArray(data) ? data : []).map((c: any) => c.id);
+    })();
+
     if (allowed.submissions) {
       queries.push((async (): Promise<SearchResult[]> => {
+        const agentIdsMatch = await matchingAgentIdsPromise;
+        const orParts = [
+          `passenger_name.imatch.${rx}`,
+          `passport.ilike.${like}`,
+          `national_id.ilike.${like}`,
+        ];
+        if (agentIdsMatch.length) orParts.push(`agent_id.in.(${agentIdsMatch.join(",")})`);
         const { data, error } = await supabase
           .from("submissions")
           .select("id,passenger_name,passport,national_id,travel_date,destination,agent_id,approval_company_id")
-          .or(`passenger_name.ilike.${like},passport.ilike.${like},national_id.ilike.${like}`)
-          .limit(8);
+          .or(orParts.join(","))
+          .limit(10);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
+        debug.submissions = rows.length;
         const agentIds = Array.from(new Set(rows.map((r: any) => r.agent_id).filter(Boolean)));
         const compIds = Array.from(new Set(rows.map((r: any) => r.approval_company_id).filter(Boolean)));
         const [agentsRes, compsRes] = await Promise.all([
@@ -213,16 +252,24 @@ export function SearchBox() {
       })());
     }
 
-    // Traveler search across executions
     if (allowed.executions) {
       queries.push((async (): Promise<SearchResult[]> => {
+        const [agentIdsMatch, compIdsMatch] = await Promise.all([matchingAgentIdsPromise, matchingCompanyIdsPromise]);
+        const orParts = [
+          `passenger_name.imatch.${rx}`,
+          `passport.ilike.${like}`,
+          `national_id.ilike.${like}`,
+        ];
+        if (agentIdsMatch.length) orParts.push(`agent_id.in.(${agentIdsMatch.join(",")})`);
+        if (compIdsMatch.length) orParts.push(`approval_company_id.in.(${compIdsMatch.join(",")})`);
         const { data, error } = await supabase
           .from("executions")
           .select("id,passenger_name,passport,national_id,issue_date,agent_id,approval_company_id")
-          .or(`passenger_name.ilike.${like},passport.ilike.${like},national_id.ilike.${like}`)
-          .limit(8);
+          .or(orParts.join(","))
+          .limit(10);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
+        debug.executions = rows.length;
         const agentIds = Array.from(new Set(rows.map((r: any) => r.agent_id).filter(Boolean)));
         const compIds = Array.from(new Set(rows.map((r: any) => r.approval_company_id).filter(Boolean)));
         const [agentsRes, compsRes] = await Promise.all([
@@ -244,7 +291,9 @@ export function SearchBox() {
     Promise.all(queries)
       .then((arrs) => {
         if (cancelled) return;
-        setResults(arrs.flat().slice(0, 25));
+        const all = arrs.flat();
+        console.log("[QuickSearch]", { term, normalized: normalizeArabic(term), regex: rx, counts: debug, total: all.length });
+        setResults(all.slice(0, 25));
       })
       .catch((err) => {
         if (cancelled) return;
