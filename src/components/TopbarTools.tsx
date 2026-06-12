@@ -320,7 +320,7 @@ export function SearchBox() {
       .then((arrs) => {
         if (cancelled) return;
         const all = arrs.flat();
-        console.log("[QuickSearch]", { term, normalized: normalizeArabic(term), regex: rx, counts: debug, total: all.length });
+        console.log("[QuickSearch]", { term, normalized: normalizeArabic(term), patterns, counts: debug, total: all.length });
         setResults(all.slice(0, 25));
       })
       .catch((err) => {
