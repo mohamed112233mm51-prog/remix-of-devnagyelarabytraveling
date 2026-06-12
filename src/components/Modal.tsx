@@ -52,7 +52,8 @@ export function Modal({
 
   return createPortal(
     <div
-      className="modal-overlay open"
+      className={`modal-overlay open${overlayClassName ? ` ${overlayClassName}` : ""}`}
+      style={zIndex ? { zIndex } : undefined}
       onClick={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();
       }}
