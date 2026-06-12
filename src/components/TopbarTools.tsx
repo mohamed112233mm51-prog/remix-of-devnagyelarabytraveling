@@ -139,8 +139,9 @@ export function SearchBox() {
       return;
     }
     let cancelled = false;
-    const like = `%${term}%`;
-    const rx = buildArabicRegex(term);
+    const like = `%${escapeIlike(term)}%`;
+    const patterns = buildIlikePatterns(term);
+    const nameOr = (field: string) => patterns.map((p) => `${field}.ilike.${p}`).join(",");
     const debug: Record<string, number> = {};
     setLoading(true);
     setError(null);
@@ -152,7 +153,7 @@ export function SearchBox() {
         const { data, error } = await supabase
           .from("agents")
           .select("id,name,phone,governorate")
-          .or(`name.imatch.${rx},phone.ilike.${like},governorate.ilike.${like}`)
+          .or(`${nameOr("name")},phone.ilike.${like},governorate.ilike.${like}`)
           .limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
@@ -171,7 +172,7 @@ export function SearchBox() {
         const { data, error } = await supabase
           .from("issuing_companies")
           .select("id,company_name,phone,service_type")
-          .or(`company_name.imatch.${rx},phone.ilike.${like},service_type.ilike.${like}`)
+          .or(`${nameOr("company_name")},phone.ilike.${like},service_type.ilike.${like}`)
           .limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
@@ -189,7 +190,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("merchants").select("id,merchant_name,phone")
-          .or(`merchant_name.imatch.${rx},phone.ilike.${like}`).limit(5);
+          .or(`${nameOr("merchant_name")},phone.ilike.${like}`).limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
         debug.merchants = rows.length;
@@ -204,7 +205,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("investors").select("id,investor_name,phone")
-          .or(`investor_name.imatch.${rx},phone.ilike.${like}`).limit(5);
+          .or(`${nameOr("investor_name")},phone.ilike.${like}`).limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
         debug.investors = rows.length;
@@ -219,7 +220,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const { data, error } = await supabase
           .from("expenses").select("id,expense_name,expense_type,amount")
-          .or(`expense_name.imatch.${rx},expense_type.ilike.${like}`).limit(5);
+          .or(`${nameOr("expense_name")},expense_type.ilike.${like}`).limit(5);
         if (error) throw error;
         const rows = Array.isArray(data) ? data : [];
         debug.expenses = rows.length;
@@ -235,12 +236,12 @@ export function SearchBox() {
     // Pre-resolve agent IDs whose name matches the search (so traveler search
     // also surfaces records via "agent_name")
     const matchingAgentIdsPromise = (async (): Promise<string[]> => {
-      const { data } = await supabase.from("agents").select("id").or(`name.imatch.${rx}`).limit(50);
+      const { data } = await supabase.from("agents").select("id").or(nameOr("name")).limit(50);
       return (Array.isArray(data) ? data : []).map((a: any) => a.id);
     })();
     // Same for companies (for executions company_name search)
     const matchingCompanyIdsPromise = (async (): Promise<string[]> => {
-      const { data } = await supabase.from("issuing_companies").select("id").or(`company_name.imatch.${rx}`).limit(50);
+      const { data } = await supabase.from("issuing_companies").select("id").or(nameOr("company_name")).limit(50);
       return (Array.isArray(data) ? data : []).map((c: any) => c.id);
     })();
 
