@@ -249,7 +249,7 @@ export function SearchBox() {
       queries.push((async (): Promise<SearchResult[]> => {
         const agentIdsMatch = await matchingAgentIdsPromise;
         const orParts = [
-          `passenger_name.imatch.${rx}`,
+          ...patterns.map((p) => `passenger_name.ilike.${p}`),
           `passport.ilike.${like}`,
           `national_id.ilike.${like}`,
         ];
