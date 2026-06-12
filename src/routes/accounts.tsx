@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, tripValue, txnTotalPaid, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { AgentPricingSection } from "@/components/AgentPricingSection";
+import { syncAgentOpeningBalance } from "@/lib/openingBalance";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
