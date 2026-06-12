@@ -322,13 +322,19 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
     if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
+    const opDebit = Number(opening.debit) || 0;
+    const opCredit = Number(opening.credit) || 0;
     const { data, error } = await supabase.from("agents").insert({
       name: form.name,
       national_id: form.national_id || null,
       phone: form.phone,
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
-    }).select("id").single();
+      opening_debit: opDebit,
+      opening_credit: opCredit,
+      opening_date: opening.date || null,
+      opening_note: opening.note.trim() || null,
+    } as any).select("id").single();
     if (error) return toast.error(error.message);
     const agentId = data?.id;
     if (agentId) {
@@ -351,6 +357,13 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       if (pricingRows.length) {
         const { error: pErr } = await supabase.from("agent_service_pricing").insert(pricingRows);
         if (pErr) toast.error("تم حفظ الوكيل لكن فشل حفظ التسعير: " + pErr.message);
+      }
+      if (opDebit > 0 || opCredit > 0) {
+        await syncAgentOpeningBalance(agentId, {
+          debit: opDebit, credit: opCredit,
+          date: opening.date || null,
+          note: opening.note.trim() || null,
+        });
       }
     }
     onDone();
