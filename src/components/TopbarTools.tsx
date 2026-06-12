@@ -48,23 +48,50 @@ function normalizeArabic(s: string): string {
     .toLowerCase();
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Escape PostgREST .or() reserved chars in ilike values
+function escapeIlike(s: string): string {
+  return s.replace(/[,()]/g, "");
 }
 
-// POSIX regex (for PostgREST imatch) matching Arabic variants
-function buildArabicRegex(term: string): string {
+// Build ilike patterns covering common Arabic letter variants
+function buildIlikePatterns(term: string): string[] {
   const n = normalizeArabic(term);
-  let out = "";
-  for (const ch of n) {
-    if (ch === "ا") out += "[اأإآٱ]";
-    else if (ch === "ي") out += "[يى]";
-    else if (ch === "ه") out += "[هة]";
-    else if (ch === "و") out += "[وؤ]";
-    else if (ch === " ") out += "\\s+";
-    else out += escapeRegex(ch);
+  const variants = new Set<string>([n]);
+  const swaps: Array<[RegExp, string[]]> = [
+    [/ا/g, ["ا", "أ", "إ", "آ"]],
+    [/ي/g, ["ي", "ى"]],
+    [/ه/g, ["ه", "ة"]],
+    [/و/g, ["و", "ؤ"]],
+  ];
+  // Generate up to ~16 variants by swapping per-letter alternatives
+  let current = [n];
+  for (const [re, opts] of swaps) {
+    const next: string[] = [];
+    for (const s of current) {
+      const positions: number[] = [];
+      s.replace(re, (_m, off: number) => { positions.push(off); return _m; });
+      if (positions.length === 0) { next.push(s); continue; }
+      // Limit combinatorial blow-up: only swap up to first 2 positions
+      const limited = positions.slice(0, 2);
+      const total = Math.pow(opts.length, limited.length);
+      for (let i = 0; i < total && next.length < 32; i++) {
+        const chars = s.split("");
+        let idx = i;
+        for (const p of limited) {
+          chars[p] = opts[idx % opts.length];
+          idx = Math.floor(idx / opts.length);
+        }
+        next.push(chars.join(""));
+      }
+    }
+    current = Array.from(new Set(next));
   }
-  return out;
+  current.forEach((v) => variants.add(v));
+  variants.add(term.trim().toLowerCase());
+  return Array.from(variants)
+    .map((v) => escapeIlike(v))
+    .filter((v) => v.length > 0)
+    .map((v) => `%${v}%`);
 }
 
 function useOutsideClick(ref: React.RefObject<HTMLElement | null>, onOutside: () => void, active: boolean) {
