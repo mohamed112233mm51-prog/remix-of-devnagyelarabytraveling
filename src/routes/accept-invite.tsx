@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { acceptInvite as acceptInviteFn } from "@/lib/admin.functions";
-import { getBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
+import { getBrandingSync, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 
 export const Route = createFileRoute("/accept-invite")({
   component: AcceptInvitePage,
