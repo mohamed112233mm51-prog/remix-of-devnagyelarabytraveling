@@ -187,10 +187,7 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
           <div className="form-group"><label>اسم المورد</label><input value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div className="form-group"><label>الحالة</label>
-            <select value={form.status} onChange={(e) => set("status", e.target.value)}>
-              <option value="نشط">نشط</option>
-              <option value="غير نشط">غير نشط</option>
-            </select>
+            <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
           </div>
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
             <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} />
