@@ -424,8 +424,8 @@ function AgentForm({ onDone }: { onDone: () => void }) {
                   return (
                     <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value })} /></td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value })} /></td>
+                      <td style={{ padding: 6 }}><NumberInput value={Number(r.company_price) || 0} onChange={(n) => updateRow(st, { company_price: n === 0 ? "" : String(n) })} min={0} /></td>
+                      <td style={{ padding: 6 }}><NumberInput value={Number(r.agent_price) || 0} onChange={(n) => updateRow(st, { agent_price: n === 0 ? "" : String(n) })} min={0} /></td>
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                       <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
