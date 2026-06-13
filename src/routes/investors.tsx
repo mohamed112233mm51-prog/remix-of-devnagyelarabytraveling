@@ -304,13 +304,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
           <div className="form-group"><label>المستثمر</label>
-            <select value={investorId} onChange={(e) => setInvestorId(e.target.value)}>
-              <option value="">اختر...</option>
-              {investors.map((i) => <option key={i.id} value={i.id}>{i.investor_name}</option>)}
-            </select>
+            <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="اختر..." />
           </div>
-          <div className="form-group"><label>التاريخ من</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label>التاريخ إلى</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="form-group"><label>التاريخ من</label><DateInput value={from} onChange={setFrom} /></div>
+          <div className="form-group"><label>التاريخ إلى</label><DateInput value={to} onChange={setTo} /></div>
         </div>
 
         {investor && (
