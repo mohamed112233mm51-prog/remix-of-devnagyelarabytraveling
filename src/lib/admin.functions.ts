@@ -180,10 +180,14 @@ export const resendInvite = createServerFn({ method: "POST" })
     const sb = admin();
     const origin = data.origin || process.env.SITE_URL || "";
     const redirectTo = origin ? `${origin}/accept-invite` : undefined;
-    await sb.auth.admin.inviteUserByEmail(
+    const { error } = await sb.auth.admin.inviteUserByEmail(
       data.email,
       redirectTo ? { redirectTo } : undefined,
     );
+    if (error) {
+      console.error("[resendInvite] provider error:", error);
+      throw new Error(error.message || "فشل إرسال الدعوة من مزود البريد");
+    }
     return { ok: true };
   });
 
