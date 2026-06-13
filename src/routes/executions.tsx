@@ -157,7 +157,11 @@ function ExecutionsPage() {
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (e) => companyName((e as any).approval_company_id) },
     { key: "company_services", label: "خدمات الشركة", filter: "multi", accessor: (e) => svcText(e, "company") },
     { key: "agent_services", label: "خدمات الوكيل", filter: "multi", accessor: (e) => svcText(e, "agent") },
+    { key: "passenger_type", label: "نوع المسافر", filter: "multi", accessor: (e) => (e as any).passenger_type || "" },
     { key: "notes", label: "ملاحظات", filter: "text", accessor: (e) => e.notes || "" },
+    { key: "validity", label: "صلاحية الموافقة", filter: "multi", accessor: (e) => {
+      const r = computeValidity(e); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
+    } },
   ];
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => {
