@@ -21,6 +21,8 @@ import {
   methodsForSplit,
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/merchants")({
   component: MerchantsPage,
