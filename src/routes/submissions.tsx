@@ -391,6 +391,7 @@ function SubmissionForm({
     issue_date: editing?.issue_date || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
     approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
+    passenger_type: (editing as any)?.passenger_type || "",
     notes: editing?.notes || "",
   });
   const [saving, setSaving] = useState(false);
