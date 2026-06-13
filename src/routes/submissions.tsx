@@ -421,6 +421,7 @@ function SubmissionForm({
         ? (companies.find((c) => c.id === form.approval_company_id)?.company_name || null)
         : null,
       approval_validity_enabled: !!form.approval_validity_enabled,
+      passenger_type: form.passenger_type || null,
       notes: form.notes || null,
     };
     try {
