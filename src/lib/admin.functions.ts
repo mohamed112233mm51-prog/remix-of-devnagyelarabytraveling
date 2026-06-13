@@ -258,6 +258,20 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Activates the invited user's profile (bypasses privilege-escalation trigger
+// via admin client). Caller must be authenticated as the invited user.
+export const acceptInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const sb = admin();
+    const { error } = await sb
+      .from("profiles")
+      .update({ is_active: true, invite_accepted: true })
+      .eq("id", context.userId);
+    if (error) throw new Error(error.message || "تعذر تفعيل الحساب");
+    return { ok: true };
+  });
+
 // Verifies a Google-signed-in user is allowed (must have an active profile).
 // If not, returns { allowed: false } and the client signs out.
 export const checkAccessAllowed = createServerFn({ method: "GET" })
