@@ -232,31 +232,28 @@ export function AgentPaymentForm({
       <div className="card-header"><div className="card-title">💳 إضافة دفعة من الوكيل</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الوكيل *</label>
-          <select value={form.agent_id} onChange={(e) => set("agent_id", e.target.value)} disabled={!!lockedAgentId}>
-            <option value="" disabled>اختر...</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.agent_id}
+            onChange={(v) => set("agent_id", v)}
+            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            disabled={!!lockedAgentId}
+            placeholder="اختر..."
+          />
         </div>
         <div className="form-group"><label>التاريخ *</label>
-          <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+          <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
         </div>
         <div className="form-group"><label>نوع الخدمة (اختياري)</label>
-          <select value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
-            <option value="">— بدون خدمة —</option>
-            <SafeSelectOptions options={SERVICE_TYPES} />
-          </select>
+          <SearchableSelect value={form.service_type} onChange={(v) => set("service_type", v)} options={SERVICE_TYPES as unknown as string[]} placeholder="— بدون خدمة —" />
         </div>
         <div className="form-group"><label>وجهة السفر (اختياري)</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
-            <option value="">—</option>
-            <SafeSelectOptions options={DESTINATIONS} />
-          </select>
+          <SearchableSelect value={form.destination} onChange={(v) => set("destination", v)} options={DESTINATIONS as unknown as string[]} />
         </div>
         <div className="form-group"><label>العدد (اختياري)</label>
-          <input type="number" min={0} value={form.count} onChange={(e) => set("count", e.target.value)} />
+          <NumberInput value={Number(form.count) || 0} onChange={(n) => set("count", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>السعر (اختياري)</label>
-          <input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} />
+          <NumberInput value={Number(form.price) || 0} onChange={(n) => set("price", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
           <input type="number" value={tripValueNum || ""} disabled readOnly />
@@ -278,32 +275,41 @@ export function AgentPaymentForm({
           return (
             <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
               <div className="form-group"><label>جهة التحصيل</label>
-                <select value={row.source} onChange={(e) => updateSplit(row.uid, { source: e.target.value as Source, merchant_id: "", method: e.target.value === "company" ? "company_cash" : "" })}>
-                  <option value="company">الشركة</option>
-                  <option value="merchant">تاجر</option>
-                </select>
+                <SearchableSelect
+                  value={row.source}
+                  onChange={(v) => updateSplit(row.uid, { source: v as Source, merchant_id: "", method: v === "company" ? "company_cash" : "" })}
+                  options={[{ value: "company", label: "الشركة" }, { value: "merchant", label: "تاجر" }]}
+                  allowClear={false}
+                />
               </div>
               <div className="form-group"><label>العملة</label>
-                <select value={row.currency} onChange={(e) => updateSplit(row.uid, { currency: e.target.value as Currency })}>
-                  {CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
+                <SearchableSelect
+                  value={row.currency}
+                  onChange={(v) => updateSplit(row.uid, { currency: v as Currency })}
+                  options={CURRENCY_OPTIONS.map((c) => ({ value: c.value, label: c.label }))}
+                  allowClear={false}
+                />
               </div>
               {row.source === "merchant" && (
                 <div className="form-group"><label>التاجر</label>
-                  <select value={row.merchant_id} onChange={(e) => updateSplit(row.uid, { merchant_id: e.target.value, method: "" })}>
-                    <option value="" disabled>اختر...</option>
-                    {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={row.merchant_id}
+                    onChange={(v) => updateSplit(row.uid, { merchant_id: v, method: "" })}
+                    options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))}
+                    placeholder="اختر..."
+                  />
                 </div>
               )}
               <div className="form-group"><label>وسيلة الدفع</label>
-                <select value={row.method} onChange={(e) => updateSplit(row.uid, { method: e.target.value })}>
-                  <option value="" disabled>اختر...</option>
-                  {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                </select>
+                <SearchableSelect
+                  value={row.method}
+                  onChange={(v) => updateSplit(row.uid, { method: v })}
+                  options={methods.map((m) => ({ value: m.key, label: m.label }))}
+                  placeholder="اختر..."
+                />
               </div>
               <div className="form-group"><label>{b.hasCommission ? "المبلغ المستلم من الوكيل" : "المبلغ"}</label>
-                <input type="number" min={0} value={row.amount} onChange={(e) => updateSplit(row.uid, { amount: e.target.value })} />
+                <NumberInput value={Number(row.amount) || 0} onChange={(n) => updateSplit(row.uid, { amount: n === 0 ? "" : String(n) })} min={0} />
               </div>
               {b.hasCommission && (
                 <>
