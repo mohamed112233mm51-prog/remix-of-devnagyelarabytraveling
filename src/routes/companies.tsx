@@ -14,7 +14,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
-import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -25,6 +25,9 @@ import {
 } from "@/components/PaymentSplits";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 import * as CF from "@/components/ColumnFilter";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
@@ -380,10 +383,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       <div className="card-body">
         <div className="form-grid" style={{ marginBottom: 12 }}>
           <div className="form-group"><label>الشركة الصادرة</label>
-            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-              <option value="">اختر...</option>
-              {safeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-            </select>
+            <SearchableSelect value={companyId} onChange={setCompanyId} options={safeCompanies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
           </div>
         </div>
 
@@ -498,13 +498,13 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <div className="card-body">
             <div className="form-grid">
               <div className="form-group"><label>رصيد سابق مدين</label>
-                <input type="number" min="0" value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} placeholder="0" />
+                <NumberInput value={Number(form.opening_debit) || 0} onChange={(n) => set("opening_debit", n === 0 ? "" : String(n))} min={0} />
               </div>
               <div className="form-group"><label>رصيد سابق دائن</label>
-                <input type="number" min="0" value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} placeholder="0" />
+                <NumberInput value={Number(form.opening_credit) || 0} onChange={(n) => set("opening_credit", n === 0 ? "" : String(n))} min={0} />
               </div>
               <div className="form-group"><label>تاريخ الرصيد السابق</label>
-                <input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} />
+                <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
               </div>
               <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
                 <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
@@ -567,13 +567,13 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         <div className="card-body">
           <div className="form-grid">
             <div className="form-group"><label>رصيد سابق مدين</label>
-              <input type="number" min="0" value={opening.debit} onChange={(e) => setOp("debit", e.target.value)} placeholder="0" />
+              <NumberInput value={Number(opening.debit) || 0} onChange={(n) => setOp("debit", n === 0 ? "" : String(n))} min={0} />
             </div>
             <div className="form-group"><label>رصيد سابق دائن</label>
-              <input type="number" min="0" value={opening.credit} onChange={(e) => setOp("credit", e.target.value)} placeholder="0" />
+              <NumberInput value={Number(opening.credit) || 0} onChange={(n) => setOp("credit", n === 0 ? "" : String(n))} min={0} />
             </div>
             <div className="form-group"><label>تاريخ الرصيد السابق</label>
-              <input type="date" value={opening.date} onChange={(e) => setOp("date", e.target.value)} />
+              <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
@@ -718,31 +718,22 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       <div className="card-header"><div className="card-title">💳 صرف حركة مالية للشركة</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <select value={form.company_id} onChange={(e) => set("company_id", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-          </select>
+          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
         </div>
         <div className="form-group"><label>التاريخ *</label>
-          <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+          <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
         </div>
         <div className="form-group"><label>نوع الخدمة (اختياري)</label>
-          <select value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
-            <option value="">— بدون خدمة —</option>
-            <SafeSelectOptions options={SERVICE_TYPES} />
-          </select>
+          <SearchableSelect value={form.service_type} onChange={(v) => set("service_type", v)} options={SERVICE_TYPES as unknown as string[]} placeholder="— بدون خدمة —" />
         </div>
         <div className="form-group"><label>وجهة السفر (اختياري)</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
-            <option value="">—</option>
-            <SafeSelectOptions options={DESTINATIONS} />
-          </select>
+          <SearchableSelect value={form.destination} onChange={(v) => set("destination", v)} options={DESTINATIONS as unknown as string[]} />
         </div>
         <div className="form-group"><label>العدد (اختياري)</label>
-          <input type="number" min={0} value={form.count} onChange={(e) => set("count", e.target.value)} />
+          <NumberInput value={Number(form.count) || 0} onChange={(n) => set("count", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>السعر (اختياري)</label>
-          <input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} />
+          <NumberInput value={Number(form.price) || 0} onChange={(n) => set("price", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
           <input type="number" value={tripValueNum || ""} disabled readOnly />
@@ -870,19 +861,16 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
         <div className="card-header"><div className="card-title">💱 تحويل إلى الخزينة الدولارية</div></div>
         <div className="form-grid">
           <div className="form-group"><label>مصدر التحويل</label>
-            <select value={form.source_type} onChange={(e) => set("source_type", e.target.value)}>
-              <option value="" disabled>اختر...</option>
-              {(Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>).map((k) => (
-                <option key={k} value={k}>{SOURCE_LABELS[k]}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.source_type}
+              onChange={(v) => set("source_type", v)}
+              options={(Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>).map((k) => ({ value: k, label: SOURCE_LABELS[k] }))}
+              placeholder="اختر..."
+            />
           </div>
           {needsMerchant && (
             <div className="form-group"><label>التاجر</label>
-              <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="" disabled>اختر...</option>
-                {activeMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
+              <SearchableSelect value={form.merchant_id} onChange={(v) => set("merchant_id", v)} options={activeMerchants.map((m) => ({ value: m.id, label: m.merchant_name }))} placeholder="اختر..." />
             </div>
           )}
           {form.source_type && (!needsMerchant || form.merchant_id) && (
@@ -892,16 +880,16 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
           <div className="form-group"><label>المبلغ بالجنيه</label>
-            <input type="number" placeholder="0" value={form.egp_amount} onChange={(e) => set("egp_amount", e.target.value)} />
+            <NumberInput value={Number(form.egp_amount) || 0} onChange={(n) => set("egp_amount", n === 0 ? "" : String(n))} min={0} />
           </div>
           <div className="form-group"><label>سعر الصرف</label>
-            <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
+            <NumberInput value={Number(form.exchange_rate) || 0} onChange={(n) => set("exchange_rate", n === 0 ? "" : String(n))} min={0} step="0.01" />
           </div>
           <div className="form-group"><label>المبلغ بالدولار (تلقائي)</label>
             <input value={fmtUSD(usd)} disabled />
           </div>
           <div className="form-group"><label>التاريخ</label>
-            <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+            <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
           </div>
           <div className="form-group full"><label>ملاحظات</label>
             <input value={form.note} onChange={(e) => set("note", e.target.value)} />

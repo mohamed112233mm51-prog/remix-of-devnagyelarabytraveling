@@ -7,6 +7,9 @@ import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/d
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { Briefcase, ArrowDownCircle, ArrowUpCircle, Wallet, UserPlus, Users, Receipt, FileText, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/investors")({
   component: InvestorsPage,
@@ -180,18 +183,12 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       <div className="card-header"><div className="card-title">{title}</div></div>
       <div className="form-grid">
         <div className="form-group"><label>المستثمر</label>
-          <select value={form.investor_id} onChange={(e) => set("investor_id", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {investors.map((i) => <option key={i.id} value={i.id}>{i.investor_name}</option>)}
-          </select>
+          <SearchableSelect value={form.investor_id} onChange={(v) => set("investor_id", v)} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="اختر..." />
         </div>
-        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-        <div className="form-group"><label>المبلغ</label><input type="number" placeholder="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></div>
+        <div className="form-group"><label>التاريخ</label><DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday /></div>
+        <div className="form-group"><label>المبلغ</label><NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} /></div>
         <div className="form-group"><label>{methodLabel}</label>
-          <select value={form.payment_method} onChange={(e) => set("payment_method", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <SearchableSelect value={form.payment_method} onChange={(v) => set("payment_method", v)} options={PAYMENT_METHODS as unknown as string[]} placeholder="اختر..." />
         </div>
         <div className="form-group full"><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
@@ -214,12 +211,9 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
       <div className="card-header"><div className="card-title">📜 سجل الحركات المالية للمستثمرين</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <select value={investorId} onChange={(e) => setInvestorId(e.target.value)}>
-            <option value="">كل المستثمرين</option>
-            {investors.map((i) => <option key={i.id} value={i.id}>{i.investor_name}</option>)}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="من" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} placeholder="إلى" />
+          <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="كل المستثمرين" />
+          <DateInput value={from} onChange={setFrom} placeholder="من" />
+          <DateInput value={to} onChange={setTo} placeholder="إلى" />
           <button className="action-btn" onClick={() => { setInvestorId(""); setFrom(""); setTo(""); }}>إعادة ضبط</button>
         </div>
         <div className="table-wrap enterprise-table">
@@ -310,13 +304,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
           <div className="form-group"><label>المستثمر</label>
-            <select value={investorId} onChange={(e) => setInvestorId(e.target.value)}>
-              <option value="">اختر...</option>
-              {investors.map((i) => <option key={i.id} value={i.id}>{i.investor_name}</option>)}
-            </select>
+            <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="اختر..." />
           </div>
-          <div className="form-group"><label>التاريخ من</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label>التاريخ إلى</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="form-group"><label>التاريخ من</label><DateInput value={from} onChange={setFrom} /></div>
+          <div className="form-group"><label>التاريخ إلى</label><DateInput value={to} onChange={setTo} /></div>
         </div>
 
         {investor && (

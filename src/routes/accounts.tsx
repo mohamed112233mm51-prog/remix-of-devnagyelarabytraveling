@@ -13,6 +13,9 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 import { AgentLedger } from "@/components/AgentLedger";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/accounts")({
@@ -239,10 +242,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
           <div className="form-group"><label>المحافظة</label>
-            <select value={form.governorate} onChange={(e) => set("governorate", e.target.value)}>
-              <option value="">اختر...</option>
-              {GOVERNORATES.map((g) => <option key={g} value={g}>{g}</option>)}
-            </select>
+            <SearchableSelect value={form.governorate} onChange={(v) => set("governorate", v)} options={GOVERNORATES as unknown as string[]} />
           </div>
         </div>
 
@@ -251,13 +251,13 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           <div className="card-body">
             <div className="form-grid">
               <div className="form-group"><label>رصيد سابق مدين</label>
-                <input type="number" min="0" value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} placeholder="0" />
+                <NumberInput value={Number(form.opening_debit) || 0} onChange={(n) => set("opening_debit", n === 0 ? "" : String(n))} min={0} />
               </div>
               <div className="form-group"><label>رصيد سابق دائن</label>
-                <input type="number" min="0" value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} placeholder="0" />
+                <NumberInput value={Number(form.opening_credit) || 0} onChange={(n) => set("opening_credit", n === 0 ? "" : String(n))} min={0} />
               </div>
               <div className="form-group"><label>تاريخ الرصيد السابق</label>
-                <input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} />
+                <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
               </div>
               <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
                 <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
@@ -377,10 +377,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
         <div className="form-group"><label>المحافظة</label>
-          <select value={form.governorate} onChange={(e) => set("governorate", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {GOVERNORATES.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
+          <SearchableSelect value={form.governorate} onChange={(v) => set("governorate", v)} options={GOVERNORATES as unknown as string[]} />
         </div>
       </div>
 
@@ -389,13 +386,13 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         <div className="card-body">
           <div className="form-grid">
             <div className="form-group"><label>رصيد سابق مدين</label>
-              <input type="number" min="0" value={opening.debit} onChange={(e) => setOp("debit", e.target.value)} placeholder="0" />
+              <NumberInput value={Number(opening.debit) || 0} onChange={(n) => setOp("debit", n === 0 ? "" : String(n))} min={0} />
             </div>
             <div className="form-group"><label>رصيد سابق دائن</label>
-              <input type="number" min="0" value={opening.credit} onChange={(e) => setOp("credit", e.target.value)} placeholder="0" />
+              <NumberInput value={Number(opening.credit) || 0} onChange={(n) => setOp("credit", n === 0 ? "" : String(n))} min={0} />
             </div>
             <div className="form-group"><label>تاريخ الرصيد السابق</label>
-              <input type="date" value={opening.date} onChange={(e) => setOp("date", e.target.value)} />
+              <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
@@ -427,8 +424,8 @@ function AgentForm({ onDone }: { onDone: () => void }) {
                   return (
                     <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_price} onChange={(e) => updateRow(st, { company_price: e.target.value })} /></td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.agent_price} onChange={(e) => updateRow(st, { agent_price: e.target.value })} /></td>
+                      <td style={{ padding: 6 }}><NumberInput value={Number(r.company_price) || 0} onChange={(n) => updateRow(st, { company_price: n === 0 ? "" : String(n) })} min={0} /></td>
+                      <td style={{ padding: 6 }}><NumberInput value={Number(r.agent_price) || 0} onChange={(n) => updateRow(st, { agent_price: n === 0 ? "" : String(n) })} min={0} /></td>
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
                       <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
                       <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>

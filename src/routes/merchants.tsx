@@ -21,6 +21,8 @@ import {
   methodsForSplit,
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/merchants")({
   component: MerchantsPage,
@@ -314,7 +316,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
     <div className="card">
       <div className="card-header"><div className="card-title">💵 تحصيل نقدية من تاجر</div></div>
       <div className="form-grid">
-        <div className="form-group"><label>التاريخ</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="form-group"><label>التاريخ</label><DateInput value={date} onChange={setDate} defaultToday /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
       </div>
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" hideSource />
@@ -336,8 +338,8 @@ function HistoryTab({ collections, merchants }: { collections: MerchantCashColle
       <div className="card-header"><div className="card-title">📜 سجل التحصيلات النقدية</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <div className="form-group"><label>التاريخ من</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label>التاريخ إلى</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="form-group"><label>التاريخ من</label><DateInput value={from} onChange={setFrom} /></div>
+          <div className="form-group"><label>التاريخ إلى</label><DateInput value={to} onChange={setTo} /></div>
           <div className="form-group" style={{ display: "flex", alignItems: "flex-end" }}>
             <button className="btn" onClick={() => { setFrom(""); setTo(""); }}>إعادة تعيين</button>
           </div>
@@ -383,12 +385,9 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
       <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (تاجر الكاش)</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-          <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-            <option value="">كل الوكلاء</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="من" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} placeholder="إلى" />
+          <SearchableSelect value={agentId} onChange={setAgentId} options={agents.map((a) => ({ value: a.id, label: a.name }))} placeholder="كل الوكلاء" />
+          <DateInput value={from} onChange={setFrom} placeholder="من" />
+          <DateInput value={to} onChange={setTo} placeholder="إلى" />
         </div>
         <div className="table-wrap" style={{ marginTop: 12 }}>
           <table className="mobile-cards">
@@ -433,12 +432,9 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
       <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">كل الشركات</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="من" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} placeholder="إلى" />
+          <SearchableSelect value={companyId} onChange={setCompanyId} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="كل الشركات" />
+          <DateInput value={from} onChange={setFrom} placeholder="من" />
+          <DateInput value={to} onChange={setTo} placeholder="إلى" />
         </div>
         <div className="table-wrap" style={{ marginTop: 12 }}>
           <table className="mobile-cards">
@@ -661,20 +657,23 @@ function MerchantStatementTab({
           <div className="form-grid" style={{ marginBottom: 12 }}>
             <div className="form-group">
               <label>التاجر</label>
-              <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>
-                {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
+              <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} allowClear={false} />
             </div>
-            <div className="form-group"><label><Calendar size={12} /> من تاريخ</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div className="form-group"><label><Calendar size={12} /> إلى تاريخ</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+            <div className="form-group"><label><Calendar size={12} /> من تاريخ</label><DateInput value={from} onChange={setFrom} /></div>
+            <div className="form-group"><label><Calendar size={12} /> إلى تاريخ</label><DateInput value={to} onChange={setTo} /></div>
             <div className="form-group">
               <label>نوع الحركة</label>
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}>
-                <option value="all">كل الحركات</option>
-                <option value="incoming">وارد من وكيل</option>
-                <option value="outgoing">صادر لشركة</option>
-                <option value="collection">تحصيل نقدي</option>
-              </select>
+              <SearchableSelect
+                value={typeFilter}
+                onChange={(v) => setTypeFilter((v as typeof typeFilter) || "all")}
+                options={[
+                  { value: "all", label: "كل الحركات" },
+                  { value: "incoming", label: "وارد من وكيل" },
+                  { value: "outgoing", label: "صادر لشركة" },
+                  { value: "collection", label: "تحصيل نقدي" },
+                ]}
+                allowClear={false}
+              />
             </div>
             <div className="form-group full"><label><Search size={12} /> بحث سريع</label><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في البيان أو نوع الحركة..." /></div>
           </div>

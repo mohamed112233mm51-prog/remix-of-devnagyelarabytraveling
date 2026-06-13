@@ -17,6 +17,9 @@ import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateF
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -546,61 +549,77 @@ function ExecutionForm({
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
         <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} style={inputStyle} /></Field>
-        <Field label="تاريخ الميلاد"><input type="text" inputMode="numeric" placeholder="DD/MM/YYYY" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} maxLength={10} /></Field>
+        <Field label="تاريخ الميلاد"><DateInput value={parseDisplayDate(form.dob) || ""} onChange={(iso) => setForm({ ...form, dob: toDisplayDate(iso) || "" })} /></Field>
         <Field label="رقم الجواز"><input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} style={inputStyle} /></Field>
         <Field label="محل الميلاد"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} style={inputStyle} /></Field>
         <Field label="الوكيل">
-          <select value={form.agent_id} onChange={(e) => setForm({ ...form, agent_id: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.agent_id}
+            onChange={(v) => setForm({ ...form, agent_id: v })}
+            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+          />
         </Field>
         <Field label="حالة الموافقة">
-          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
-            {withSelected(approvalStatuses, form.status).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.status}
+            onChange={(v) => setForm({ ...form, status: v })}
+            options={withSelected(approvalStatuses, form.status)}
+            allowClear={false}
+          />
         </Field>
         <Field label="حالة العملية">
-          <select value={form.operation_status} onChange={(e) => setForm({ ...form, operation_status: e.target.value })} style={inputStyle}>
-            {withSelected(operationStatuses, form.operation_status).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.operation_status}
+            onChange={(v) => setForm({ ...form, operation_status: v })}
+            options={withSelected(operationStatuses, form.operation_status)}
+            allowClear={false}
+          />
         </Field>
 
         <Field label="جهة المغادرة">
-          <select value={form.departure_from} onChange={(e) => setForm({ ...form, departure_from: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(departures, form.departure_from).map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.departure_from}
+            onChange={(v) => setForm({ ...form, departure_from: v })}
+            options={withSelected(departures, form.departure_from)}
+          />
         </Field>
         <Field label="الوجهة">
-          <select value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(destinations, form.destination).map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.destination}
+            onChange={(v) => setForm({ ...form, destination: v })}
+            options={withSelected(destinations, form.destination)}
+          />
         </Field>
         <Field label="الطيران">
-          <select value={form.airline} onChange={(e) => setForm({ ...form, airline: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(airlines, form.airline).map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.airline}
+            onChange={(v) => setForm({ ...form, airline: v })}
+            options={withSelected(airlines, form.airline)}
+          />
         </Field>
-        <Field label="تاريخ المغادرة"><input type="date" value={form.travel_date} onChange={(e) => setForm({ ...form, travel_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="تاريخ المغادرة"><DateInput value={form.travel_date} onChange={(iso) => setForm({ ...form, travel_date: iso })} /></Field>
         <Field label="جهة الموافقة (الشركة الصادرة)">
-          <select value={form.approval_company_id} onChange={(e) => setForm({ ...form, approval_company_id: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {activeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-            {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
-              <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
-            )}
-          </select>
+          <SearchableSelect
+            value={form.approval_company_id}
+            onChange={(v) => setForm({ ...form, approval_company_id: v })}
+            options={(() => {
+              const opts = activeCompanies.map((c) => ({ value: c.id, label: c.company_name }));
+              if (form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id)) {
+                const inactive = companies.find((c) => c.id === form.approval_company_id);
+                if (inactive) opts.push({ value: inactive.id, label: `${inactive.company_name} (غير نشطة)` });
+              }
+              return opts;
+            })()}
+          />
         </Field>
         <Field label="نوع المسافر">
-          <select value={form.passenger_type} onChange={(e) => setForm({ ...form, passenger_type: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(passengerTypes, form.passenger_type).map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.passenger_type}
+            onChange={(v) => setForm({ ...form, passenger_type: v })}
+            options={withSelected(passengerTypes, form.passenger_type)}
+          />
         </Field>
-        <Field label="تاريخ الصدور"><input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="تاريخ الصدور"><DateInput value={form.issue_date} onChange={(iso) => setForm({ ...form, issue_date: iso })} /></Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
         <Field label="تفعيل صلاحية الموافقة" full>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff" }}>
@@ -632,18 +651,22 @@ function ExecutionForm({
               <div key={i} style={{ border: "1px solid #c7d2fe", borderRadius: 10, padding: 12, background: "#eef2ff" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="الشركة الصادرة">
-                    <select value={s.company_id || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_id: e.target.value || null } : x))} style={inputStyle}>
-                      <option value="">— اختر —</option>
-                      {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={s.company_id || ""}
+                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_id: v || null } : x))}
+                      options={companies.map((c) => ({ value: c.id, label: c.company_name }))}
+                    />
                   </Field>
                   <Field label="نوع الخدمة">
-                    <select value={s.service_type} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: e.target.value } : x))} style={inputStyle}>
-                      {withSelected(serviceKinds, s.service_type).map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={s.service_type}
+                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: v } : x))}
+                      options={withSelected(serviceKinds, s.service_type)}
+                      allowClear={false}
+                    />
                   </Field>
-                  <Field label="العدد"><input type="number" min={1} value={s.count ?? 1} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: Number(e.target.value) || 1 } : x))} style={inputStyle} /></Field>
-                  <Field label="سعر الشركة (للوحدة)"><input type="number" min={0} value={s.company_price ?? 0} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: Number(e.target.value) || 0 } : x))} style={inputStyle} /></Field>
+                  <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
+                  <Field label="سعر الشركة (للوحدة)"><NumberInput value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} /></Field>
                   <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
@@ -674,12 +697,15 @@ function ExecutionForm({
               <div key={i} style={{ border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="نوع الخدمة المباعة">
-                    <select value={s.service_type} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: e.target.value } : x))} style={inputStyle}>
-                      {withSelected(serviceKinds, s.service_type).map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={s.service_type}
+                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: v } : x))}
+                      options={withSelected(serviceKinds, s.service_type)}
+                      allowClear={false}
+                    />
                   </Field>
-                  <Field label="العدد"><input type="number" min={1} value={s.count ?? 1} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: Number(e.target.value) || 1 } : x))} style={inputStyle} /></Field>
-                  <Field label="سعر البيع للوكيل (للوحدة)"><input type="number" min={0} value={s.agent_price ?? 0} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: Number(e.target.value) || 0 } : x))} style={inputStyle} /></Field>
+                  <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
+                  <Field label="سعر البيع للوكيل (للوحدة)"><NumberInput value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} /></Field>
                   <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
