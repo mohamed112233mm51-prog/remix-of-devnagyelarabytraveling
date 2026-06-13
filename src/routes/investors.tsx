@@ -183,18 +183,12 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       <div className="card-header"><div className="card-title">{title}</div></div>
       <div className="form-grid">
         <div className="form-group"><label>المستثمر</label>
-          <select value={form.investor_id} onChange={(e) => set("investor_id", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {investors.map((i) => <option key={i.id} value={i.id}>{i.investor_name}</option>)}
-          </select>
+          <SearchableSelect value={form.investor_id} onChange={(v) => set("investor_id", v)} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="اختر..." />
         </div>
-        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
-        <div className="form-group"><label>المبلغ</label><input type="number" placeholder="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} /></div>
+        <div className="form-group"><label>التاريخ</label><DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday /></div>
+        <div className="form-group"><label>المبلغ</label><NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} /></div>
         <div className="form-group"><label>{methodLabel}</label>
-          <select value={form.payment_method} onChange={(e) => set("payment_method", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <SearchableSelect value={form.payment_method} onChange={(v) => set("payment_method", v)} options={PAYMENT_METHODS as unknown as string[]} placeholder="اختر..." />
         </div>
         <div className="form-group full"><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
