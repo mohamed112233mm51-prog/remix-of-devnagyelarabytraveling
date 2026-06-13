@@ -634,9 +634,23 @@ const LAUNCH_WIPE_ORDER: readonly string[] = [
   "import_batches",
 ];
 
+// Core entities (wiped only when wipeCoreEntities=true).
+const CORE_ENTITY_DEPENDENTS: readonly string[] = [
+  "agent_service_pricing",
+];
+const CORE_ENTITIES: readonly string[] = [
+  "agents",
+  "issuing_companies",
+  "merchants",
+  "currency_suppliers",
+];
+
 export const prepareForLaunch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { confirm?: string } | undefined) => ({ confirm: d?.confirm ?? "" }))
+  .inputValidator((d: { confirm?: string; wipeCoreEntities?: boolean } | undefined) => ({
+    confirm: d?.confirm ?? "",
+    wipeCoreEntities: d?.wipeCoreEntities === true,
+  }))
   .handler(async ({ data, context }) => {
     await ensureSuperAdmin(context.supabase, context.userId);
     if (data.confirm !== "PREPARE") {
@@ -658,6 +672,21 @@ export const prepareForLaunch = createServerFn({ method: "POST" })
       }
       summary[t] = count ?? 0;
       totalDeleted += count ?? 0;
+    }
+
+    if (data.wipeCoreEntities) {
+      for (const t of [...CORE_ENTITY_DEPENDENTS, ...CORE_ENTITIES]) {
+        const { count, error } = await sb
+          .from(t as any)
+          .delete({ count: "exact" })
+          .not("id", "is", null);
+        if (error) {
+          summary[t] = 0;
+          continue;
+        }
+        summary[t] = count ?? 0;
+        totalDeleted += count ?? 0;
+      }
     }
 
     // Reset cash box balances to zero (entities preserved).
