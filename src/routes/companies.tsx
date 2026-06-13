@@ -567,13 +567,13 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         <div className="card-body">
           <div className="form-grid">
             <div className="form-group"><label>رصيد سابق مدين</label>
-              <input type="number" min="0" value={opening.debit} onChange={(e) => setOp("debit", e.target.value)} placeholder="0" />
+              <NumberInput value={Number(opening.debit) || 0} onChange={(n) => setOp("debit", n === 0 ? "" : String(n))} min={0} />
             </div>
             <div className="form-group"><label>رصيد سابق دائن</label>
-              <input type="number" min="0" value={opening.credit} onChange={(e) => setOp("credit", e.target.value)} placeholder="0" />
+              <NumberInput value={Number(opening.credit) || 0} onChange={(n) => setOp("credit", n === 0 ? "" : String(n))} min={0} />
             </div>
             <div className="form-group"><label>تاريخ الرصيد السابق</label>
-              <input type="date" value={opening.date} onChange={(e) => setOp("date", e.target.value)} />
+              <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
