@@ -66,7 +66,7 @@ export default function Login() {
     <div dir="rtl" style={wrap}>
       <form onSubmit={onSubmit} style={card}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 14 }}>
-          {branding.hasCustomLogo && branding.logoUrl ? (
+          {branding.logoUrl && (
             <img
               src={branding.logoUrl}
               alt={branding.companyName}
@@ -74,17 +74,11 @@ export default function Login() {
               decoding="async"
               draggable={false}
             />
-          ) : (
-            <div style={{ fontSize: 26, fontWeight: 900, color: BRAND_NAVY, letterSpacing: ".3px", textAlign: "center" }}>
-              {branding.companyName}
-            </div>
           )}
-          {branding.hasCustomLogo && (
-            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: BRAND_NAVY, letterSpacing: ".2px" }}>
-              {branding.companyName}
-            </div>
-          )}
-          <div style={{ marginTop: 2, height: 3, width: 42, background: BRAND_GOLD, borderRadius: 2 }} />
+          <div style={{ marginTop: 10, fontSize: 18, fontWeight: 800, color: BRAND_NAVY, letterSpacing: ".2px", textAlign: "center" }}>
+            {branding.companyName}
+          </div>
+          <div style={{ marginTop: 6, height: 3, width: 42, background: BRAND_GOLD, borderRadius: 2 }} />
         </div>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, marginBottom: 6, textAlign: "center", color: BRAND_NAVY }}>تسجيل الدخول</h1>
         <p style={{ marginTop: 0, color: "#6b7280", fontSize: 12, textAlign: "center" }}>مرحبًا بعودتك — أدخل بياناتك للمتابعة</p>
