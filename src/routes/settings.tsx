@@ -1161,7 +1161,7 @@ function GeneralTab() {
           <DropdownListManager category="service_type" title="نوع الخدمة" icon={<Wrench size={16} />} />
           <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
           <DropdownListManager category="operation_status" title="حالة العملية" icon={<ListChecks size={16} />} />
-          <DropdownListManager category="submission_notes" title="الملاحظات" icon={<Inbox size={16} />} />
+          <DropdownListManager category="passenger_type" title="نوع المسافر" icon={<Inbox size={16} />} />
         </div>
       </div>
 
