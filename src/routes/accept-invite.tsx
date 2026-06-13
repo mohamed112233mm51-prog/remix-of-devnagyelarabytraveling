@@ -66,7 +66,7 @@ function AcceptInvitePage() {
   const navigate = useNavigate();
   const { setPasswordDone } = useAuth();
   const acceptInvite = useServerFn(acceptInviteFn);
-  const branding = getBranding();
+  const branding = getBrandingSync();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
