@@ -134,10 +134,9 @@ import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
 function SplashScreen(_props: { stage?: string; warning?: string }) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   useEffect(() => {
-    const t = window.setTimeout(() => setVisible(true), 2000);
-    return () => window.clearTimeout(t);
+    return () => {};
   }, []);
   if (!visible) return null;
   return (
