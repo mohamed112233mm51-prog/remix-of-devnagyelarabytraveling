@@ -326,6 +326,14 @@ function ExecutionsPage() {
                         if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>;
                         if (c.key === "op_status") return <td key={c.key} style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>;
                         if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(e.dob) || "—"}</td>;
+                        if (c.key === "validity") {
+                          const r = computeValidity(e);
+                          if (!r) return <td key={c.key} style={tdStyle}>-</td>;
+                          const color = r.expired ? "#b91c1c" : "#15803d";
+                          const bg = r.expired ? "#fef2f2" : "#dcfce7";
+                          const bd = r.expired ? "#fecaca" : "#bbf7d0";
+                          return <td key={c.key} style={tdStyle}><span style={{ padding: "3px 9px", borderRadius: 999, background: bg, color, border: `1px solid ${bd}`, fontWeight: 700, fontSize: 11 }}>{r.expiry} • {r.expired ? "منتهية" : "جارية"}</span></td>;
+                        }
                         const v = c.accessor(e);
                         return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
                       })}
