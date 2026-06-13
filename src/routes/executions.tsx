@@ -494,6 +494,9 @@ function ExecutionForm({
       travel_date: form.travel_date || null,
       notes: form.notes || null,
       approval_company_id: form.approval_company_id || null,
+      passenger_type: form.passenger_type || null,
+      issue_date: form.issue_date || null,
+      approval_validity_enabled: !!form.approval_validity_enabled,
       services: services as any,
       submission_id: form.submission_id,
     };
