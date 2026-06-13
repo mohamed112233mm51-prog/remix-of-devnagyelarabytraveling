@@ -40,6 +40,32 @@ function ExecutionsPage() {
   const DESTINATIONS = useDropdownOptions("destination");
   const AIRLINES = useDropdownOptions("airline");
   const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
+  const PASSENGER_TYPES = useDropdownOptions("passenger_type" as any);
+
+  // Approval validity days from app_settings (mirrors submissions logic)
+  const [validityDays, setValidityDays] = useState<number>(30);
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle()
+      .then(({ data }) => {
+        const v = (data as any)?.value?.v;
+        if (typeof v === "number" && v > 0) setValidityDays(v);
+      });
+  }, []);
+
+  const computeValidity = (e: Execution): { expiry: string; expired: boolean } | null => {
+    if (!(e as any).approval_validity_enabled) return null;
+    const iso = (e as any).issue_date;
+    if (!iso) return null;
+    const base = new Date(iso + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return null;
+    const exp = new Date(base.getTime());
+    exp.setDate(exp.getDate() + validityDays);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
+  };
+  const validityStatusOf = (e: Execution): string => {
+    const r = computeValidity(e); return r ? (r.expired ? "منتهية" : "جارية") : "";
+  };
 
   const [tab, setTab] = useState<"list" | "add">("list");
   const [editing, setEditing] = useState<Execution | null>(null);
@@ -73,9 +99,12 @@ function ExecutionsPage() {
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
           approval_company_id: sub.approval_company_id || null,
+          passenger_type: sub.passenger_type || null,
+          issue_date: sub.issue_date || null,
+          approval_validity_enabled: !!sub.approval_validity_enabled,
           services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s: { service_type: string }) => s.service_type),
           created_at: "", updated_at: "",
-        } as Execution);
+        } as any);
         setTab("add");
       }
     } catch {}
@@ -106,6 +135,8 @@ function ExecutionsPage() {
     return list.map((s: any) => s?.service_type).filter(Boolean).join(" + ");
   };
 
+
+
   // Column definitions
   const EXECUTION_COLUMNS: (ColumnDef & {
     filter?: "text" | "date" | "multi";
@@ -126,7 +157,11 @@ function ExecutionsPage() {
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (e) => companyName((e as any).approval_company_id) },
     { key: "company_services", label: "خدمات الشركة", filter: "multi", accessor: (e) => svcText(e, "company") },
     { key: "agent_services", label: "خدمات الوكيل", filter: "multi", accessor: (e) => svcText(e, "agent") },
+    { key: "passenger_type", label: "نوع المسافر", filter: "multi", accessor: (e) => (e as any).passenger_type || "" },
     { key: "notes", label: "ملاحظات", filter: "text", accessor: (e) => e.notes || "" },
+    { key: "validity", label: "صلاحية الموافقة", filter: "multi", accessor: (e) => {
+      const r = computeValidity(e); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
+    } },
   ];
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => {
@@ -149,15 +184,16 @@ function ExecutionsPage() {
     for (const c of EXECUTION_COLUMNS) {
       const fs = safeFilters[c.key];
       if (!CF.isFilterActive(fs)) continue;
-      const v = c.accessor(e);
+      const v = c.key === "validity" ? validityStatusOf(e) : c.accessor(e);
       if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
       if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
       if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [executions, agents, companies, safeFilters]);
+  }), [executions, agents, companies, safeFilters, validityDays]);
 
   const optionsFor = (key: string) => {
+    if (key === "validity") return ["جارية", "منتهية"];
     const col = EXECUTION_COLUMNS.find((c) => c.key === key);
     if (!col) return [];
     const set = new Set<string>();
@@ -290,6 +326,14 @@ function ExecutionsPage() {
                         if (c.key === "status") return <td key={c.key} style={tdStyle}><span style={approvalBadge(e.status)}>{e.status}</span></td>;
                         if (c.key === "op_status") return <td key={c.key} style={tdStyle}><span style={statusBadge(e.operation_status)}>{e.operation_status}</span></td>;
                         if (c.key === "dob") return <td key={c.key} style={tdStyle}>{toDisplayDate(e.dob) || "—"}</td>;
+                        if (c.key === "validity") {
+                          const r = computeValidity(e);
+                          if (!r) return <td key={c.key} style={tdStyle}>-</td>;
+                          const color = r.expired ? "#b91c1c" : "#15803d";
+                          const bg = r.expired ? "#fef2f2" : "#dcfce7";
+                          const bd = r.expired ? "#fecaca" : "#bbf7d0";
+                          return <td key={c.key} style={tdStyle}><span style={{ padding: "3px 9px", borderRadius: 999, background: bg, color, border: `1px solid ${bd}`, fontWeight: 700, fontSize: 11 }}>{r.expiry} • {r.expired ? "منتهية" : "جارية"}</span></td>;
+                        }
                         const v = c.accessor(e);
                         return <td key={c.key} style={tdStyle}>{v || "—"}</td>;
                       })}
@@ -319,6 +363,7 @@ function ExecutionsPage() {
           destinations={DESTINATIONS}
           airlines={AIRLINES}
           serviceKinds={SERVICE_KIND_OPTS.length ? SERVICE_KIND_OPTS : [...SERVICE_KINDS]}
+          passengerTypes={PASSENGER_TYPES}
           onDone={() => { setTab("list"); setEditing(null); }}
         />
       )}
@@ -347,7 +392,7 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
 }
 
 function ExecutionForm({
-  editing, agents, companies, activeCompanies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
+  editing, agents, companies, activeCompanies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, passengerTypes, onDone,
 }: {
   editing: Execution | null;
   agents: Agent[];
@@ -360,6 +405,7 @@ function ExecutionForm({
   destinations: readonly string[];
   airlines: readonly string[];
   serviceKinds: readonly string[];
+  passengerTypes: readonly string[];
   onDone: () => void;
 }) {
   const [form, setForm] = useState({
@@ -377,6 +423,9 @@ function ExecutionForm({
     travel_date: editing?.travel_date || "",
     notes: editing?.notes || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
+    passenger_type: (editing as any)?.passenger_type || "",
+    issue_date: (editing as any)?.issue_date || "",
+    approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     submission_id: editing?.submission_id || null as string | null,
   });
   const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
@@ -445,6 +494,9 @@ function ExecutionForm({
       travel_date: form.travel_date || null,
       notes: form.notes || null,
       approval_company_id: form.approval_company_id || null,
+      passenger_type: form.passenger_type || null,
+      issue_date: form.issue_date || null,
+      approval_validity_enabled: !!form.approval_validity_enabled,
       services: services as any,
       submission_id: form.submission_id,
     };
@@ -542,7 +594,24 @@ function ExecutionForm({
             )}
           </select>
         </Field>
+        <Field label="نوع المسافر">
+          <select value={form.passenger_type} onChange={(e) => setForm({ ...form, passenger_type: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {withSelected(passengerTypes, form.passenger_type).map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="تاريخ الصدور"><input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} style={inputStyle} /></Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
+        <Field label="تفعيل صلاحية الموافقة" full>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff" }}>
+            <span style={{ position: "relative", display: "inline-block", width: 40, height: 22 }}>
+              <input type="checkbox" checked={!!form.approval_validity_enabled} onChange={(e) => setForm({ ...form, approval_validity_enabled: e.target.checked })} style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{ position: "absolute", inset: 0, borderRadius: 999, background: form.approval_validity_enabled ? "#15803d" : "#cbd5e1", transition: "background .15s" }} />
+              <span style={{ position: "absolute", top: 2, [form.approval_validity_enabled ? "right" : "left"]: 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.2)", transition: "all .15s" } as any} />
+            </span>
+            <span style={{ fontSize: 12.5, color: "#334155", fontWeight: 700 }}>{form.approval_validity_enabled ? "مفعلة — تُحسب من تاريخ الصدور" : "غير مفعلة"}</span>
+          </label>
+        </Field>
       </div>
 
       {/* خدمات الشركات الصادرة (شراء) */}

@@ -31,6 +31,7 @@ function SubmissionsPage() {
   const OPERATION_STATUSES = useDropdownOptions("operation_status" as any);
   const DEPARTURES = useDropdownOptions("departure_from" as any);
   const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
+  const PASSENGER_TYPES = useDropdownOptions("passenger_type" as any);
   const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
   const companyName = (id: string | null | undefined, fallback?: string | null) =>
     (id && companies.find((c) => c.id === id)?.company_name) || fallback || "—";
@@ -127,6 +128,7 @@ function SubmissionsPage() {
     { key: "issue_date", label: "تاريخ الصدور", filter: "date", accessor: (s) => s.issue_date || "" },
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
     { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
+      { key: "passenger_type", label: "نوع المسافر", filter: "multi", accessor: (s) => (s as any).passenger_type || "" },
       { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
       { key: "validity", label: "صلاحية الموافقة", filter: "multi", accessor: (s) => {
         const r = computeValidity(s); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
@@ -351,6 +353,7 @@ function SubmissionsPage() {
           statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
           serviceKinds={SERVICE_KIND_OPTS}
+          passengerTypes={PASSENGER_TYPES}
           companies={companies}
           activeCompanies={activeCompanies}
           onDone={() => { setTab("list"); setEditing(null); }}
@@ -361,13 +364,14 @@ function SubmissionsPage() {
 }
 
 function SubmissionForm({
-  editing, agents, statuses, departures, serviceKinds, companies, activeCompanies, onDone,
+  editing, agents, statuses, departures, serviceKinds, passengerTypes, companies, activeCompanies, onDone,
 }: {
   editing: Submission | null;
   agents: Agent[];
   statuses: readonly string[];
   departures: readonly string[];
   serviceKinds: readonly string[];
+  passengerTypes: readonly string[];
   companies: IssuingCompany[];
   activeCompanies: IssuingCompany[];
   onDone: () => void;
@@ -387,6 +391,7 @@ function SubmissionForm({
     issue_date: editing?.issue_date || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
     approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
+    passenger_type: (editing as any)?.passenger_type || "",
     notes: editing?.notes || "",
   });
   const [saving, setSaving] = useState(false);
@@ -416,6 +421,7 @@ function SubmissionForm({
         ? (companies.find((c) => c.id === form.approval_company_id)?.company_name || null)
         : null,
       approval_validity_enabled: !!form.approval_validity_enabled,
+      passenger_type: form.passenger_type || null,
       notes: form.notes || null,
     };
     try {
@@ -478,6 +484,12 @@ function SubmissionForm({
             {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
               <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
             )}
+          </select>
+        </Field>
+        <Field label="نوع المسافر">
+          <select value={form.passenger_type} onChange={(e) => setForm({ ...form, passenger_type: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {withSelected(passengerTypes, form.passenger_type).map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>

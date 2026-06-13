@@ -81,12 +81,12 @@ export const SERVICE_TYPES = ["تذاكر طيران", "موافقة أمنية"
 export type DropdownCategory =
   | "authority" | "destination" | "airline" | "service_type"
   | "execution_status" | "submission_status" | "departure_from" | "service_kind"
-  | "submission_notes" | "airport" | "operation_status";
+  | "submission_notes" | "airport" | "operation_status" | "passenger_type";
 
 export const VALID_DROPDOWN_CATEGORIES: DropdownCategory[] = [
   "authority", "destination", "airline", "service_type",
   "execution_status", "submission_status", "departure_from", "service_kind",
-  "submission_notes", "airport", "operation_status",
+  "submission_notes", "airport", "operation_status", "passenger_type",
 ];
 
 const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
@@ -108,7 +108,9 @@ const DROPDOWN_FALLBACKS: Record<DropdownCategory, readonly string[]> = {
   airport: ["برج العرب", "القاهرة"],
   // حالة العملية (workflow / operation status)
   operation_status: ["قيد المتابعة", "قيد التنفيذ", "جاهز للتنفيذ", "منفذ", "مؤجل", "ملغي"],
+  passenger_type: ["سيدات", "رضع", "طفل تحت 8", "طفل تحت 12"],
 };
+
 
 
 function fallbackDropdownOptions(category: DropdownCategory): string[] {

@@ -402,6 +402,7 @@ export type Database = {
           agent_id: string | null
           airline: string | null
           approval_company_id: string | null
+          approval_validity_enabled: boolean | null
           birth_place: string | null
           created_at: string
           departure_from: string | null
@@ -409,10 +410,12 @@ export type Database = {
           dob: string | null
           id: string
           is_demo: boolean
+          issue_date: string | null
           national_id: string | null
           notes: string | null
           operation_status: string
           passenger_name: string
+          passenger_type: string | null
           passport: string | null
           services: Json
           status: string
@@ -424,6 +427,7 @@ export type Database = {
           agent_id?: string | null
           airline?: string | null
           approval_company_id?: string | null
+          approval_validity_enabled?: boolean | null
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
@@ -431,10 +435,12 @@ export type Database = {
           dob?: string | null
           id?: string
           is_demo?: boolean
+          issue_date?: string | null
           national_id?: string | null
           notes?: string | null
           operation_status?: string
           passenger_name: string
+          passenger_type?: string | null
           passport?: string | null
           services?: Json
           status?: string
@@ -446,6 +452,7 @@ export type Database = {
           agent_id?: string | null
           airline?: string | null
           approval_company_id?: string | null
+          approval_validity_enabled?: boolean | null
           birth_place?: string | null
           created_at?: string
           departure_from?: string | null
@@ -453,10 +460,12 @@ export type Database = {
           dob?: string | null
           id?: string
           is_demo?: boolean
+          issue_date?: string | null
           national_id?: string | null
           notes?: string | null
           operation_status?: string
           passenger_name?: string
+          passenger_type?: string | null
           passport?: string | null
           services?: Json
           status?: string
@@ -905,6 +914,7 @@ export type Database = {
           notes: string | null
           operation_status: string
           passenger_name: string
+          passenger_type: string | null
           passport: string | null
           services: string[]
           status: string
@@ -929,6 +939,7 @@ export type Database = {
           notes?: string | null
           operation_status?: string
           passenger_name: string
+          passenger_type?: string | null
           passport?: string | null
           services?: string[]
           status?: string
@@ -953,6 +964,7 @@ export type Database = {
           notes?: string | null
           operation_status?: string
           passenger_name?: string
+          passenger_type?: string | null
           passport?: string | null
           services?: string[]
           status?: string
