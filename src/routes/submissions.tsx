@@ -353,6 +353,7 @@ function SubmissionsPage() {
           statuses={APPROVAL_STATUSES}
           departures={DEPARTURES}
           serviceKinds={SERVICE_KIND_OPTS}
+          passengerTypes={PASSENGER_TYPES}
           companies={companies}
           activeCompanies={activeCompanies}
           onDone={() => { setTab("list"); setEditing(null); }}
