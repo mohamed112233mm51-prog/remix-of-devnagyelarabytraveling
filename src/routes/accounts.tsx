@@ -13,6 +13,9 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 import { AgentLedger } from "@/components/AgentLedger";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/accounts")({
