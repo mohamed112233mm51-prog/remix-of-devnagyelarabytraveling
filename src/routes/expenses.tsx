@@ -358,14 +358,12 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       <div className="form-grid">
         <div className="form-group"><label>اسم المصروف</label><input value={form.expense_name} onChange={(e) => set("expense_name", e.target.value)} /></div>
         <div className="form-group"><label>نوع المصروف</label>
-          <select value={form.expense_type} onChange={(e) => set("expense_type", e.target.value)}>
-            {EXPENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <SearchableSelect value={form.expense_type} onChange={(v) => set("expense_type", v)} options={EXPENSE_TYPES as unknown as string[]} allowClear={false} />
         </div>
         <div className="form-group"><label>إجمالي المصروف (ج.م)</label>
-          <input type="number" placeholder="0" value={form.amount} onChange={(e) => set("amount", e.target.value)} />
+          <NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} />
         </div>
-        <div className="form-group"><label>التاريخ</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></div>
+        <div className="form-group"><label>التاريخ</label><DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday /></div>
         <div className="form-group full"><label>البيان / ملاحظات</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
 
         {form.expense_type === "ثابت" && (
