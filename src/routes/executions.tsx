@@ -99,9 +99,12 @@ function ExecutionsPage() {
           destination: null, airline: null, travel_date: null,
           notes: sub.notes,
           approval_company_id: sub.approval_company_id || null,
+          passenger_type: sub.passenger_type || null,
+          issue_date: sub.issue_date || null,
+          approval_validity_enabled: !!sub.approval_validity_enabled,
           services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s: { service_type: string }) => s.service_type),
           created_at: "", updated_at: "",
-        } as Execution);
+        } as any);
         setTab("add");
       }
     } catch {}
@@ -122,6 +125,15 @@ function ExecutionsPage() {
       }
     } catch {}
   }, [executions]);
+
+
+  const svcText = (e: Execution, side: "company" | "agent") => {
+    const svcs = Array.isArray(e.services) ? e.services : [];
+    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
+    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
+    const list = svcs.filter(side === "company" ? isCompanySvc : isAgentSvc);
+    return list.map((s: any) => s?.service_type).filter(Boolean).join(" + ");
+  };
 
 
   const svcText = (e: Execution, side: "company" | "agent") => {
