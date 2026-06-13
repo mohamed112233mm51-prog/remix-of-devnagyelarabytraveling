@@ -889,7 +889,7 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
             <input value={fmtUSD(usd)} disabled />
           </div>
           <div className="form-group"><label>التاريخ</label>
-            <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+            <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
           </div>
           <div className="form-group full"><label>ملاحظات</label>
             <input value={form.note} onChange={(e) => set("note", e.target.value)} />
