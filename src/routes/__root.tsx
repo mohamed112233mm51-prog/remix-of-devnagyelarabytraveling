@@ -133,7 +133,13 @@ import { ConfirmSaveModalHost } from "../components/ConfirmSaveModal";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
-function SplashScreen({ stage, warning }: { stage?: string; warning?: string }) {
+function SplashScreen(_props: { stage?: string; warning?: string }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setVisible(true), 300);
+    return () => window.clearTimeout(t);
+  }, []);
+  if (!visible) return null;
   return (
     <div
       dir="rtl"
@@ -146,21 +152,16 @@ function SplashScreen({ stage, warning }: { stage?: string; warning?: string }) 
         zIndex: 9999,
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            border: `4px solid rgba(15,27,61,.12)`,
-            borderTopColor: BRAND_NAVY,
-            animation: "brand-spin 0.9s linear infinite",
-          }}
-        />
-        <div style={{ height: 3, width: 56, background: BRAND_GOLD, borderRadius: 2 }} />
-        {stage && <div style={{ fontSize: 13, fontWeight: 700, color: BRAND_NAVY }}>مرحلة التحميل: {stage}</div>}
-        {warning && <div style={{ maxWidth: 360, textAlign: "center", fontSize: 12, color: "#92400e" }}>{warning}</div>}
-      </div>
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: "50%",
+          border: `3px solid rgba(15,27,61,.12)`,
+          borderTopColor: BRAND_NAVY,
+          animation: "brand-spin 0.7s linear infinite",
+        }}
+      />
       <style>{`@keyframes brand-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
