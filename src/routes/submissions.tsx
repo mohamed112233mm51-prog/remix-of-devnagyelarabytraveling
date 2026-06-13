@@ -486,6 +486,12 @@ function SubmissionForm({
             )}
           </select>
         </Field>
+        <Field label="نوع المسافر">
+          <select value={form.passenger_type} onChange={(e) => setForm({ ...form, passenger_type: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {withSelected(passengerTypes, form.passenger_type).map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
         <Field label="تفعيل صلاحية الموافقة" full>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff" }}>
