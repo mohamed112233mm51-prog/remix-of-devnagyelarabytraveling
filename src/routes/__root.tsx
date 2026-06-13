@@ -136,7 +136,7 @@ import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND
 function SplashScreen(_props: { stage?: string; warning?: string }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
-    const t = window.setTimeout(() => setVisible(true), 300);
+    const t = window.setTimeout(() => setVisible(true), 2000);
     return () => window.clearTimeout(t);
   }, []);
   if (!visible) return null;
