@@ -498,13 +498,13 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <div className="card-body">
             <div className="form-grid">
               <div className="form-group"><label>رصيد سابق مدين</label>
-                <input type="number" min="0" value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} placeholder="0" />
+                <NumberInput value={Number(form.opening_debit) || 0} onChange={(n) => set("opening_debit", n === 0 ? "" : String(n))} min={0} />
               </div>
               <div className="form-group"><label>رصيد سابق دائن</label>
-                <input type="number" min="0" value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} placeholder="0" />
+                <NumberInput value={Number(form.opening_credit) || 0} onChange={(n) => set("opening_credit", n === 0 ? "" : String(n))} min={0} />
               </div>
               <div className="form-group"><label>تاريخ الرصيد السابق</label>
-                <input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} />
+                <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
               </div>
               <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
                 <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
