@@ -392,7 +392,7 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
 }
 
 function ExecutionForm({
-  editing, agents, companies, activeCompanies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, onDone,
+  editing, agents, companies, activeCompanies, merchants, approvalStatuses, operationStatuses, departures, destinations, airlines, serviceKinds, passengerTypes, onDone,
 }: {
   editing: Execution | null;
   agents: Agent[];
@@ -405,6 +405,7 @@ function ExecutionForm({
   destinations: readonly string[];
   airlines: readonly string[];
   serviceKinds: readonly string[];
+  passengerTypes: readonly string[];
   onDone: () => void;
 }) {
   const [form, setForm] = useState({
