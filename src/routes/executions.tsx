@@ -423,6 +423,9 @@ function ExecutionForm({
     travel_date: editing?.travel_date || "",
     notes: editing?.notes || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
+    passenger_type: (editing as any)?.passenger_type || "",
+    issue_date: (editing as any)?.issue_date || "",
+    approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     submission_id: editing?.submission_id || null as string | null,
   });
   const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
