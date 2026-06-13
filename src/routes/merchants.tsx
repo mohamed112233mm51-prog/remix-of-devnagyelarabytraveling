@@ -316,7 +316,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
     <div className="card">
       <div className="card-header"><div className="card-title">💵 تحصيل نقدية من تاجر</div></div>
       <div className="form-grid">
-        <div className="form-group"><label>التاريخ</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="form-group"><label>التاريخ</label><DateInput value={date} onChange={setDate} defaultToday /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
       </div>
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" hideSource />
