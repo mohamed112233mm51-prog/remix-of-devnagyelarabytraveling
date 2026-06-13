@@ -385,12 +385,9 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
       <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (تاجر الكاش)</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-          <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-            <option value="">كل الوكلاء</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="من" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} placeholder="إلى" />
+          <SearchableSelect value={agentId} onChange={setAgentId} options={agents.map((a) => ({ value: a.id, label: a.name }))} placeholder="كل الوكلاء" />
+          <DateInput value={from} onChange={setFrom} placeholder="من" />
+          <DateInput value={to} onChange={setTo} placeholder="إلى" />
         </div>
         <div className="table-wrap" style={{ marginTop: 12 }}>
           <table className="mobile-cards">
