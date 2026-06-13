@@ -594,7 +594,24 @@ function ExecutionForm({
             )}
           </select>
         </Field>
+        <Field label="نوع المسافر">
+          <select value={form.passenger_type} onChange={(e) => setForm({ ...form, passenger_type: e.target.value })} style={inputStyle}>
+            <option value="">— اختر —</option>
+            {withSelected(passengerTypes, form.passenger_type).map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="تاريخ الصدور"><input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} style={inputStyle} /></Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
+        <Field label="تفعيل صلاحية الموافقة" full>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff" }}>
+            <span style={{ position: "relative", display: "inline-block", width: 40, height: 22 }}>
+              <input type="checkbox" checked={!!form.approval_validity_enabled} onChange={(e) => setForm({ ...form, approval_validity_enabled: e.target.checked })} style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{ position: "absolute", inset: 0, borderRadius: 999, background: form.approval_validity_enabled ? "#15803d" : "#cbd5e1", transition: "background .15s" }} />
+              <span style={{ position: "absolute", top: 2, [form.approval_validity_enabled ? "right" : "left"]: 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.2)", transition: "all .15s" } as any} />
+            </span>
+            <span style={{ fontSize: 12.5, color: "#334155", fontWeight: 700 }}>{form.approval_validity_enabled ? "مفعلة — تُحسب من تاريخ الصدور" : "غير مفعلة"}</span>
+          </label>
+        </Field>
       </div>
 
       {/* خدمات الشركات الصادرة (شراء) */}
