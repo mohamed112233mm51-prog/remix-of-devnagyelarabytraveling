@@ -215,8 +215,11 @@ function AcceptInvitePage() {
           {branding.logoUrl && (
             <img
               src={branding.logoUrl}
-              alt="Logo"
-              style={{ width: 64, height: 64, objectFit: "contain", margin: "0 auto 10px" }}
+              alt={branding.companyName}
+              className="brand-logo brand-logo--login"
+              style={{ margin: "0 auto 12px" }}
+              decoding="async"
+              draggable={false}
             />
           )}
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: BRAND_NAVY }}>
