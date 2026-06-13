@@ -7,6 +7,9 @@ import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/d
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { Briefcase, ArrowDownCircle, ArrowUpCircle, Wallet, UserPlus, Users, Receipt, FileText, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/investors")({
   component: InvestorsPage,
