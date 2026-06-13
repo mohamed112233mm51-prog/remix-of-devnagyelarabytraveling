@@ -2836,11 +2836,13 @@ function PrepareForLaunchCard() {
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<null | Awaited<ReturnType<typeof prepareForLaunch>>>(null);
+  const [wipeCore, setWipeCore] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   async function run() {
     setBusy(true);
     try {
-      const res = await prepareFn({ data: { confirm: "PREPARE" } });
+      const res = await prepareFn({ data: { confirm: "PREPARE", wipeCoreEntities: wipeCore } });
       setResult(res);
       toast.success("تم تجهيز النظام للنشر بنجاح");
       qc.invalidateQueries();
@@ -2849,8 +2851,11 @@ function PrepareForLaunchCard() {
     } finally {
       setBusy(false);
       setStep(0);
+      setConfirmText("");
     }
   }
+
+  const coreReady = !wipeCore || confirmText.trim() === "تأكيد";
 
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden", border: "1px solid #FDE68A" }}>
@@ -2866,19 +2871,54 @@ function PrepareForLaunchCard() {
         <div style={{ display: "flex", gap: 12, padding: 14, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, alignItems: "flex-start" }}>
           <AlertTriangle size={18} color="#B91C1C" style={{ marginTop: 2, flexShrink: 0 }} />
           <div style={{ fontSize: 13, color: "#7F1D1D", lineHeight: 1.7 }}>
-            يحذف جميع البيانات التشغيلية (التقديمات، التنفيذات، المدفوعات، المصروفات، حركات الخزائن، الوكلاء، الشركات، التجار، موردي العملات، الإشعارات، البيانات التجريبية) ويعيد تصفير أرصدة الخزائن.
+            يحذف جميع البيانات التشغيلية (التقديمات، التنفيذات، المدفوعات، المصروفات، حركات الخزائن، الإشعارات) ويعيد تصفير أرصدة الخزائن.
             <br />
-            <b>يبقى:</b> المستخدمون، الصلاحيات، الإعدادات، القوائم المنسدلة، الوكلاء، الشركات، التجار، موردو العملات، الخزائن، الشعار وبيانات المؤسسة.
+            <b>يبقى:</b> المستخدمون، الصلاحيات، الإعدادات، القوائم المنسدلة، الخزائن الأساسية، الشعار وبيانات المؤسسة.
           </div>
         </div>
 
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 14, background: wipeCore ? "#FEF2F2" : "#F8FAFC", border: `1px solid ${wipeCore ? "#FECACA" : "#E5E7EB"}`, borderRadius: 12, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={wipeCore}
+            onChange={(e) => { setWipeCore(e.target.checked); setConfirmText(""); }}
+            style={{ marginTop: 3, width: 16, height: 16, accentColor: "#B91C1C" }}
+          />
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: wipeCore ? "#7F1D1D" : "#0F1F44" }}>
+              تنظيف الكيانات الأساسية
+            </div>
+            <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.7 }}>
+              يحذف أيضاً: الوكلاء، الشركات الصادرة، تجار الكاش، موردي العملات، وكل البيانات التابعة لهم
+              (كشوف الحساب، الأرصدة السابقة، التسعير، الحركات المرتبطة، وسائل الدفع، حركات موردي العملات).
+            </div>
+          </div>
+        </label>
+
+        {wipeCore && (
+          <div style={{ display: "grid", gap: 8, padding: 14, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12 }}>
+            <div style={{ fontSize: 13, color: "#78350F", lineHeight: 1.7 }}>
+              سيتم حذف الوكلاء والشركات والتجار وموردي العملات وكل البيانات المرتبطة بهم. هذا الإجراء لا يمكن التراجع عنه.
+              <br />
+              اكتب كلمة <b>تأكيد</b> للمتابعة:
+            </div>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="تأكيد"
+              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #FDE68A", background: "#fff", fontSize: 14, fontWeight: 700, color: "#7F1D1D", textAlign: "right" }}
+            />
+          </div>
+        )}
+
         <button
           onClick={() => setStep(1)}
-          disabled={busy}
+          disabled={busy || !coreReady}
           style={{
             display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", borderRadius: 10,
-            background: "#92400E", color: "#fff", border: 0, fontWeight: 800, fontSize: 14,
-            cursor: busy ? "not-allowed" : "pointer", justifySelf: "start",
+            background: !coreReady ? "#9CA3AF" : "#92400E", color: "#fff", border: 0, fontWeight: 800, fontSize: 14,
+            cursor: busy || !coreReady ? "not-allowed" : "pointer", justifySelf: "start",
           }}
         >
           <Sparkles size={16} />
@@ -2889,7 +2929,9 @@ function PrepareForLaunchCard() {
       {step === 1 && (
         <ConfirmModal
           title="تأكيد أول — تجهيز النظام للنشر"
-          message="سيتم حذف كل البيانات التشغيلية مع الاحتفاظ بالإعدادات والكيانات الأساسية. هل تريد المتابعة؟"
+          message={wipeCore
+            ? "سيتم حذف كل البيانات التشغيلية بالإضافة إلى الوكلاء والشركات والتجار وموردي العملات. هل تريد المتابعة؟"
+            : "سيتم حذف كل البيانات التشغيلية مع الاحتفاظ بالكيانات الأساسية. هل تريد المتابعة؟"}
           confirmLabel="نعم، تابع"
           danger
           onCancel={() => setStep(0)}
