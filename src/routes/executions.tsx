@@ -697,12 +697,15 @@ function ExecutionForm({
               <div key={i} style={{ border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="نوع الخدمة المباعة">
-                    <select value={s.service_type} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: e.target.value } : x))} style={inputStyle}>
-                      {withSelected(serviceKinds, s.service_type).map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
+                    <SearchableSelect
+                      value={s.service_type}
+                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: v } : x))}
+                      options={withSelected(serviceKinds, s.service_type)}
+                      allowClear={false}
+                    />
                   </Field>
-                  <Field label="العدد"><input type="number" min={1} value={s.count ?? 1} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: Number(e.target.value) || 1 } : x))} style={inputStyle} /></Field>
-                  <Field label="سعر البيع للوكيل (للوحدة)"><input type="number" min={0} value={s.agent_price ?? 0} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: Number(e.target.value) || 0 } : x))} style={inputStyle} /></Field>
+                  <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
+                  <Field label="سعر البيع للوكيل (للوحدة)"><NumberInput value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} /></Field>
                   <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
