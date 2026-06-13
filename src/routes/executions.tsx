@@ -136,13 +136,6 @@ function ExecutionsPage() {
   };
 
 
-  const svcText = (e: Execution, side: "company" | "agent") => {
-    const svcs = Array.isArray(e.services) ? e.services : [];
-    const isCompanySvc = (s: any) => s?.kind === "company" || (!s?.kind && Number(s?.company_price || 0) > 0);
-    const isAgentSvc = (s: any) => s?.kind === "agent" || (!s?.kind && Number(s?.agent_price || 0) > 0);
-    const list = svcs.filter(side === "company" ? isCompanySvc : isAgentSvc);
-    return list.map((s: any) => s?.service_type).filter(Boolean).join(" + ");
-  };
 
   // Column definitions
   const EXECUTION_COLUMNS: (ColumnDef & {
