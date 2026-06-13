@@ -128,6 +128,7 @@ function SubmissionsPage() {
     { key: "issue_date", label: "تاريخ الصدور", filter: "date", accessor: (s) => s.issue_date || "" },
     { key: "company", label: "جهة الموافقة", filter: "multi", accessor: (s) => companyName((s as any).approval_company_id, s.approval_authority) },
     { key: "services", label: "الخدمات", filter: "multi", accessor: (s) => (Array.isArray(s.services) ? s.services : []).join(" + ") },
+      { key: "passenger_type", label: "نوع المسافر", filter: "multi", accessor: (s) => (s as any).passenger_type || "" },
       { key: "notes", label: "ملاحظات", filter: "text", accessor: (s) => (s as any).notes || "" },
       { key: "validity", label: "صلاحية الموافقة", filter: "multi", accessor: (s) => {
         const r = computeValidity(s); return r ? `${r.expiry} (${r.expired ? "منتهية" : "جارية"})` : "-";
