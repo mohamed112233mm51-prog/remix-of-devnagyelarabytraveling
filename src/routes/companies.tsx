@@ -861,19 +861,16 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
         <div className="card-header"><div className="card-title">💱 تحويل إلى الخزينة الدولارية</div></div>
         <div className="form-grid">
           <div className="form-group"><label>مصدر التحويل</label>
-            <select value={form.source_type} onChange={(e) => set("source_type", e.target.value)}>
-              <option value="" disabled>اختر...</option>
-              {(Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>).map((k) => (
-                <option key={k} value={k}>{SOURCE_LABELS[k]}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.source_type}
+              onChange={(v) => set("source_type", v)}
+              options={(Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>).map((k) => ({ value: k, label: SOURCE_LABELS[k] }))}
+              placeholder="اختر..."
+            />
           </div>
           {needsMerchant && (
             <div className="form-group"><label>التاجر</label>
-              <select value={form.merchant_id} onChange={(e) => set("merchant_id", e.target.value)}>
-                <option value="" disabled>اختر...</option>
-                {activeMerchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
+              <SearchableSelect value={form.merchant_id} onChange={(v) => set("merchant_id", v)} options={activeMerchants.map((m) => ({ value: m.id, label: m.merchant_name }))} placeholder="اختر..." />
             </div>
           )}
           {form.source_type && (!needsMerchant || form.merchant_id) && (
@@ -883,10 +880,10 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
           <div className="form-group"><label>المبلغ بالجنيه</label>
-            <input type="number" placeholder="0" value={form.egp_amount} onChange={(e) => set("egp_amount", e.target.value)} />
+            <NumberInput value={Number(form.egp_amount) || 0} onChange={(n) => set("egp_amount", n === 0 ? "" : String(n))} min={0} />
           </div>
           <div className="form-group"><label>سعر الصرف</label>
-            <input type="number" step="0.01" placeholder="0.00" value={form.exchange_rate} onChange={(e) => set("exchange_rate", e.target.value)} />
+            <NumberInput value={Number(form.exchange_rate) || 0} onChange={(n) => set("exchange_rate", n === 0 ? "" : String(n))} min={0} step="0.01" />
           </div>
           <div className="form-group"><label>المبلغ بالدولار (تلقائي)</label>
             <input value={fmtUSD(usd)} disabled />
