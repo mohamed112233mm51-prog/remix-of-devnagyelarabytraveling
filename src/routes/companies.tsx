@@ -25,6 +25,9 @@ import {
 } from "@/components/PaymentSplits";
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 import * as CF from "@/components/ColumnFilter";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
