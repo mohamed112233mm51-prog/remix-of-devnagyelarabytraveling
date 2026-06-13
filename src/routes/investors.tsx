@@ -211,12 +211,9 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
       <div className="card-header"><div className="card-title">📜 سجل الحركات المالية للمستثمرين</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <select value={investorId} onChange={(e) => setInvestorId(e.target.value)}>
-            <option value="">كل المستثمرين</option>
-            {investors.map((i) => <option key={i.id} value={i.id}>{i.investor_name}</option>)}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="من" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} placeholder="إلى" />
+          <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="كل المستثمرين" />
+          <DateInput value={from} onChange={setFrom} placeholder="من" />
+          <DateInput value={to} onChange={setTo} placeholder="إلى" />
           <button className="action-btn" onClick={() => { setInvestorId(""); setFrom(""); setTo(""); }}>إعادة ضبط</button>
         </div>
         <div className="table-wrap enterprise-table">
