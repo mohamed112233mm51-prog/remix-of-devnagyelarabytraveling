@@ -657,20 +657,23 @@ function MerchantStatementTab({
           <div className="form-grid" style={{ marginBottom: 12 }}>
             <div className="form-group">
               <label>التاجر</label>
-              <select value={merchantId} onChange={(e) => setMerchantId(e.target.value)}>
-                {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-              </select>
+              <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} allowClear={false} />
             </div>
-            <div className="form-group"><label><Calendar size={12} /> من تاريخ</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div className="form-group"><label><Calendar size={12} /> إلى تاريخ</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+            <div className="form-group"><label><Calendar size={12} /> من تاريخ</label><DateInput value={from} onChange={setFrom} /></div>
+            <div className="form-group"><label><Calendar size={12} /> إلى تاريخ</label><DateInput value={to} onChange={setTo} /></div>
             <div className="form-group">
               <label>نوع الحركة</label>
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}>
-                <option value="all">كل الحركات</option>
-                <option value="incoming">وارد من وكيل</option>
-                <option value="outgoing">صادر لشركة</option>
-                <option value="collection">تحصيل نقدي</option>
-              </select>
+              <SearchableSelect
+                value={typeFilter}
+                onChange={(v) => setTypeFilter((v as typeof typeFilter) || "all")}
+                options={[
+                  { value: "all", label: "كل الحركات" },
+                  { value: "incoming", label: "وارد من وكيل" },
+                  { value: "outgoing", label: "صادر لشركة" },
+                  { value: "collection", label: "تحصيل نقدي" },
+                ]}
+                allowClear={false}
+              />
             </div>
             <div className="form-group full"><label><Search size={12} /> بحث سريع</label><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في البيان أو نوع الحركة..." /></div>
           </div>
