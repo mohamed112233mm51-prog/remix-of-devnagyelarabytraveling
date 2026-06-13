@@ -383,10 +383,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       <div className="card-body">
         <div className="form-grid" style={{ marginBottom: 12 }}>
           <div className="form-group"><label>الشركة الصادرة</label>
-            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-              <option value="">اختر...</option>
-              {safeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-            </select>
+            <SearchableSelect value={companyId} onChange={setCompanyId} options={safeCompanies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
           </div>
         </div>
 
