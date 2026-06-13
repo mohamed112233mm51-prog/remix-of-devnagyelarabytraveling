@@ -363,6 +363,7 @@ function ExecutionsPage() {
           destinations={DESTINATIONS}
           airlines={AIRLINES}
           serviceKinds={SERVICE_KIND_OPTS.length ? SERVICE_KIND_OPTS : [...SERVICE_KINDS]}
+          passengerTypes={PASSENGER_TYPES}
           onDone={() => { setTab("list"); setEditing(null); }}
         />
       )}
