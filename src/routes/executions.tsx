@@ -184,15 +184,16 @@ function ExecutionsPage() {
     for (const c of EXECUTION_COLUMNS) {
       const fs = safeFilters[c.key];
       if (!CF.isFilterActive(fs)) continue;
-      const v = c.accessor(e);
+      const v = c.key === "validity" ? validityStatusOf(e) : c.accessor(e);
       if (c.filter === "date" && !CF.matchDateRange(v, fs)) return false;
       if (c.filter === "multi" && !CF.matchMultiSelect(v, fs)) return false;
       if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [executions, agents, companies, safeFilters]);
+  }), [executions, agents, companies, safeFilters, validityDays]);
 
   const optionsFor = (key: string) => {
+    if (key === "validity") return ["جارية", "منتهية"];
     const col = EXECUTION_COLUMNS.find((c) => c.key === key);
     if (!col) return [];
     const set = new Set<string>();
