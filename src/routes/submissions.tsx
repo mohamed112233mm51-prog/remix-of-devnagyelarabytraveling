@@ -364,13 +364,14 @@ function SubmissionsPage() {
 }
 
 function SubmissionForm({
-  editing, agents, statuses, departures, serviceKinds, companies, activeCompanies, onDone,
+  editing, agents, statuses, departures, serviceKinds, passengerTypes, companies, activeCompanies, onDone,
 }: {
   editing: Submission | null;
   agents: Agent[];
   statuses: readonly string[];
   departures: readonly string[];
   serviceKinds: readonly string[];
+  passengerTypes: readonly string[];
   companies: IssuingCompany[];
   activeCompanies: IssuingCompany[];
   onDone: () => void;
