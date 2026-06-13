@@ -432,12 +432,9 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
       <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">كل الشركات</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="من" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} placeholder="إلى" />
+          <SearchableSelect value={companyId} onChange={setCompanyId} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="كل الشركات" />
+          <DateInput value={from} onChange={setFrom} placeholder="من" />
+          <DateInput value={to} onChange={setTo} placeholder="إلى" />
         </div>
         <div className="table-wrap" style={{ marginTop: 12 }}>
           <table className="mobile-cards">
