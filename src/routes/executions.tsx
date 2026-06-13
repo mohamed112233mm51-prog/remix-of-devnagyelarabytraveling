@@ -549,61 +549,77 @@ function ExecutionForm({
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
         <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} style={inputStyle} /></Field>
-        <Field label="تاريخ الميلاد"><input type="text" inputMode="numeric" placeholder="DD/MM/YYYY" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} maxLength={10} /></Field>
+        <Field label="تاريخ الميلاد"><DateInput value={parseDisplayDate(form.dob) || ""} onChange={(iso) => setForm({ ...form, dob: toDisplayDate(iso) || "" })} /></Field>
         <Field label="رقم الجواز"><input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} style={inputStyle} /></Field>
         <Field label="محل الميلاد"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} style={inputStyle} /></Field>
         <Field label="الوكيل">
-          <select value={form.agent_id} onChange={(e) => setForm({ ...form, agent_id: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.agent_id}
+            onChange={(v) => setForm({ ...form, agent_id: v })}
+            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+          />
         </Field>
         <Field label="حالة الموافقة">
-          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
-            {withSelected(approvalStatuses, form.status).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.status}
+            onChange={(v) => setForm({ ...form, status: v })}
+            options={withSelected(approvalStatuses, form.status)}
+            allowClear={false}
+          />
         </Field>
         <Field label="حالة العملية">
-          <select value={form.operation_status} onChange={(e) => setForm({ ...form, operation_status: e.target.value })} style={inputStyle}>
-            {withSelected(operationStatuses, form.operation_status).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.operation_status}
+            onChange={(v) => setForm({ ...form, operation_status: v })}
+            options={withSelected(operationStatuses, form.operation_status)}
+            allowClear={false}
+          />
         </Field>
 
         <Field label="جهة المغادرة">
-          <select value={form.departure_from} onChange={(e) => setForm({ ...form, departure_from: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(departures, form.departure_from).map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.departure_from}
+            onChange={(v) => setForm({ ...form, departure_from: v })}
+            options={withSelected(departures, form.departure_from)}
+          />
         </Field>
         <Field label="الوجهة">
-          <select value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(destinations, form.destination).map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.destination}
+            onChange={(v) => setForm({ ...form, destination: v })}
+            options={withSelected(destinations, form.destination)}
+          />
         </Field>
         <Field label="الطيران">
-          <select value={form.airline} onChange={(e) => setForm({ ...form, airline: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(airlines, form.airline).map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.airline}
+            onChange={(v) => setForm({ ...form, airline: v })}
+            options={withSelected(airlines, form.airline)}
+          />
         </Field>
-        <Field label="تاريخ المغادرة"><input type="date" value={form.travel_date} onChange={(e) => setForm({ ...form, travel_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="تاريخ المغادرة"><DateInput value={form.travel_date} onChange={(iso) => setForm({ ...form, travel_date: iso })} /></Field>
         <Field label="جهة الموافقة (الشركة الصادرة)">
-          <select value={form.approval_company_id} onChange={(e) => setForm({ ...form, approval_company_id: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {activeCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-            {form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id) && companies.find((c) => c.id === form.approval_company_id) && (
-              <option value={form.approval_company_id}>{companies.find((c) => c.id === form.approval_company_id)!.company_name} (غير نشطة)</option>
-            )}
-          </select>
+          <SearchableSelect
+            value={form.approval_company_id}
+            onChange={(v) => setForm({ ...form, approval_company_id: v })}
+            options={(() => {
+              const opts = activeCompanies.map((c) => ({ value: c.id, label: c.company_name }));
+              if (form.approval_company_id && !activeCompanies.find((c) => c.id === form.approval_company_id)) {
+                const inactive = companies.find((c) => c.id === form.approval_company_id);
+                if (inactive) opts.push({ value: inactive.id, label: `${inactive.company_name} (غير نشطة)` });
+              }
+              return opts;
+            })()}
+          />
         </Field>
         <Field label="نوع المسافر">
-          <select value={form.passenger_type} onChange={(e) => setForm({ ...form, passenger_type: e.target.value })} style={inputStyle}>
-            <option value="">— اختر —</option>
-            {withSelected(passengerTypes, form.passenger_type).map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.passenger_type}
+            onChange={(v) => setForm({ ...form, passenger_type: v })}
+            options={withSelected(passengerTypes, form.passenger_type)}
+          />
         </Field>
-        <Field label="تاريخ الصدور"><input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="تاريخ الصدور"><DateInput value={form.issue_date} onChange={(iso) => setForm({ ...form, issue_date: iso })} /></Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>
         <Field label="تفعيل صلاحية الموافقة" full>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff" }}>
