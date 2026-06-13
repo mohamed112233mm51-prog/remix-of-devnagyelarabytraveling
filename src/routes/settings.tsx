@@ -2823,6 +2823,11 @@ const LAUNCH_LABELS: Record<string, string> = {
   activity_logs: "السجلات والإشعارات",
   import_batches: "دفعات الاستيراد المؤقتة",
   cash_boxes_reset: "تصفير أرصدة الخزائن",
+  agent_service_pricing: "تسعير خدمات الوكلاء",
+  agents: "الوكلاء",
+  issuing_companies: "الشركات الصادرة",
+  merchants: "تجار الكاش",
+  currency_suppliers: "موردو العملات",
 };
 
 function PrepareForLaunchCard() {
