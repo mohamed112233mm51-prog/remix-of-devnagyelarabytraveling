@@ -718,31 +718,22 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       <div className="card-header"><div className="card-title">💳 صرف حركة مالية للشركة</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <select value={form.company_id} onChange={(e) => set("company_id", e.target.value)}>
-            <option value="" disabled>اختر...</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-          </select>
+          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
         </div>
         <div className="form-group"><label>التاريخ *</label>
-          <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
+          <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
         </div>
         <div className="form-group"><label>نوع الخدمة (اختياري)</label>
-          <select value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
-            <option value="">— بدون خدمة —</option>
-            <SafeSelectOptions options={SERVICE_TYPES} />
-          </select>
+          <SearchableSelect value={form.service_type} onChange={(v) => set("service_type", v)} options={SERVICE_TYPES as unknown as string[]} placeholder="— بدون خدمة —" />
         </div>
         <div className="form-group"><label>وجهة السفر (اختياري)</label>
-          <select value={form.destination} onChange={(e) => set("destination", e.target.value)}>
-            <option value="">—</option>
-            <SafeSelectOptions options={DESTINATIONS} />
-          </select>
+          <SearchableSelect value={form.destination} onChange={(v) => set("destination", v)} options={DESTINATIONS as unknown as string[]} />
         </div>
         <div className="form-group"><label>العدد (اختياري)</label>
-          <input type="number" min={0} value={form.count} onChange={(e) => set("count", e.target.value)} />
+          <NumberInput value={Number(form.count) || 0} onChange={(n) => set("count", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>السعر (اختياري)</label>
-          <input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} />
+          <NumberInput value={Number(form.price) || 0} onChange={(n) => set("price", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
           <input type="number" value={tripValueNum || ""} disabled readOnly />
