@@ -40,6 +40,32 @@ function ExecutionsPage() {
   const DESTINATIONS = useDropdownOptions("destination");
   const AIRLINES = useDropdownOptions("airline");
   const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
+  const PASSENGER_TYPES = useDropdownOptions("passenger_type" as any);
+
+  // Approval validity days from app_settings (mirrors submissions logic)
+  const [validityDays, setValidityDays] = useState<number>(30);
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle()
+      .then(({ data }) => {
+        const v = (data as any)?.value?.v;
+        if (typeof v === "number" && v > 0) setValidityDays(v);
+      });
+  }, []);
+
+  const computeValidity = (e: Execution): { expiry: string; expired: boolean } | null => {
+    if (!(e as any).approval_validity_enabled) return null;
+    const iso = (e as any).issue_date;
+    if (!iso) return null;
+    const base = new Date(iso + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return null;
+    const exp = new Date(base.getTime());
+    exp.setDate(exp.getDate() + validityDays);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
+  };
+  const validityStatusOf = (e: Execution): string => {
+    const r = computeValidity(e); return r ? (r.expired ? "منتهية" : "جارية") : "";
+  };
 
   const [tab, setTab] = useState<"list" | "add">("list");
   const [editing, setEditing] = useState<Execution | null>(null);
