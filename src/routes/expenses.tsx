@@ -18,6 +18,9 @@ import {
 } from "@/lib/db";
 import { confirmDialog } from "@/lib/confirm";
 import { Wallet, Receipt, TrendingDown, Plus } from "lucide-react";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 import {
   PaymentSplits,
   type PaymentSplitRow,
