@@ -338,8 +338,8 @@ function HistoryTab({ collections, merchants }: { collections: MerchantCashColle
       <div className="card-header"><div className="card-title">📜 سجل التحصيلات النقدية</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <div className="form-group"><label>التاريخ من</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label>التاريخ إلى</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="form-group"><label>التاريخ من</label><DateInput value={from} onChange={setFrom} /></div>
+          <div className="form-group"><label>التاريخ إلى</label><DateInput value={to} onChange={setTo} /></div>
           <div className="form-group" style={{ display: "flex", alignItems: "flex-end" }}>
             <button className="btn" onClick={() => { setFrom(""); setTo(""); }}>إعادة تعيين</button>
           </div>
