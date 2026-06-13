@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useLive, useDropdownOptions, type Agent, type Merchant } from "@/lib/db";
-import { SafeSelectOptions } from "@/components/SafeSelectOptions";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { NumberInput } from "@/components/inputs/NumberInput";
+import { DateInput } from "@/components/inputs/DateInput";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
