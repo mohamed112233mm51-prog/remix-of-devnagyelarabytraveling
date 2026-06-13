@@ -382,13 +382,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
             {form.auto_deduct_enabled && (
               <div className="form-group">
                 <label>تاريخ الخصم الشهري (يوم 1-28)</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={28}
-                  value={form.auto_deduct_day}
-                  onChange={(e) => set("auto_deduct_day", e.target.value)}
-                />
+                <NumberInput value={Number(form.auto_deduct_day) || 0} onChange={(n) => set("auto_deduct_day", String(n))} min={1} max={28} />
               </div>
             )}
           </>
