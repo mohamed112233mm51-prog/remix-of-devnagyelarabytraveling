@@ -17,7 +17,7 @@ import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateF
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
-import { ensureApprovalFines } from "@/lib/approvalFines";
+import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
