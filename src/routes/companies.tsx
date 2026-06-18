@@ -640,6 +640,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       const allowed = methodsForSplitWidget(r, merchants).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
     }
+    const balanceErr = validateSplitOutflows(validSplits, balances, merchants);
+    if (balanceErr) return toast.error(balanceErr);
+
+
 
 
     // Aggregate (NO commission on merchant wallet for company payments)
