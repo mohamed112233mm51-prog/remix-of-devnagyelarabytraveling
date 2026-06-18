@@ -38,34 +38,50 @@ function MerchantsPage() {
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
 
+  // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
+  // Includes both wallet (net after 1% commission) and physical cash, plus USD treasury conversions.
   const merchantTotals = useMemo(() => {
-    const map = new Map<string, { incoming: number; outgoing: number }>();
+    const map = new Map<string, { incoming: number; outgoing: number; collected: number; converted: number }>();
+    const get = (id: string) => {
+      let v = map.get(id);
+      if (!v) { v = { incoming: 0, outgoing: 0, collected: 0, converted: 0 }; map.set(id, v); }
+      return v;
+    };
+    for (const t of txns) {
+      if (!t.merchant_id) continue;
+      get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+    }
+    for (const t of cTxns) {
+      if (!t.merchant_id) continue;
+      get(t.merchant_id).outgoing += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+    }
     for (const c of collections) {
-      const v = map.get(c.merchant_id) || { incoming: 0, outgoing: 0 };
-      v.incoming += Number(c.amount || 0);
-      map.set(c.merchant_id, v);
+      get(c.merchant_id).collected += Number(c.amount || 0);
+    }
+    for (const r of usdRows) {
+      if (r.type !== "conversion" || !r.merchant_id) continue;
+      if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
+      get(r.merchant_id).converted += Number(r.egp_amount || 0);
     }
     return map;
-  }, [collections]);
+  }, [txns, cTxns, collections, usdRows]);
 
-  const collectedByMerchant = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const c of collections) {
-      m.set(c.merchant_id, (m.get(c.merchant_id) || 0) + Number(c.amount || 0));
-    }
-    return m;
-  }, [collections]);
+  const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
+  const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [cTxns]);
 
-  const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0), [txns]);
-  const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0), [cTxns]);
-
-  const totalIncoming = incomingTxns.reduce((s, t) => s + merchantCashNet(t), 0);
-  const totalOutgoing = outgoingTxns.reduce((s, t) => s + merchantCashNet(t), 0);
-  const totalCollected = collections.reduce((s, c) => s + Number(c.amount || 0), 0);
-  const balance = totalIncoming - totalOutgoing - totalCollected;
+  // Headline KPIs aggregate per-merchant rollups so they always equal the sum of statements.
+  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalConverted = 0;
+  for (const v of merchantTotals.values()) {
+    totalIncoming += v.incoming;
+    totalOutgoing += v.outgoing;
+    totalCollected += v.collected;
+    totalConverted += v.converted;
+  }
+  const balance = totalIncoming - totalOutgoing - totalCollected - totalConverted;
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
   const companyName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
