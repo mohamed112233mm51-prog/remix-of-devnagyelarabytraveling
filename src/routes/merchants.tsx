@@ -621,6 +621,7 @@ function MerchantStatementTab({
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
     if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
+    if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   }), [movements, from, to, typeFilter, debouncedSearch]);
@@ -636,6 +637,7 @@ function MerchantStatementTab({
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
   const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدي").reduce((s, m) => s + m.net, 0);
+  const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
 
