@@ -1821,7 +1821,7 @@ function BackupsTab() {
   const allLogs = data?.logs ?? [];
   const totalCount = allBackups.length;
   const totalSize = allBackups.reduce((s: number, b: any) => s + (b.size || 0), 0);
-  const latestSuccessLog = allLogs.find((l: any) => (l.statu(s === "success" || s === "completed") || l.status === "completed") && l.backup_type !== "restore");
+  const latestSuccessLog = allLogs.find((l: any) => (l.status === "success" || l.status === "completed") && l.backup_type !== "restore");
   const latestFailLog = allLogs.find((l: any) => l.status === "failed");
   const systemHealthy = !!latestSuccessLog && (!latestFailLog || latestFailLog.created_at <= latestSuccessLog.created_at);
 
@@ -2014,7 +2014,7 @@ function BackupsTab() {
         const statusOf = (b: any): "success" | "failed" | "pending" => {
           const log = allLogs.find((l: any) => l.file_path === b.path && l.backup_type !== "restore");
           if (log?.status === "failed") return "failed";
-          if ((log?.statu(s === "success" || s === "completed") || log?.status === "completed")) return "success";
+          if ((log?.status === "success" || log?.status === "completed")) return "success";
           return "success";
         };
         const filtered = allBackups.filter((b: any) => {
@@ -2481,7 +2481,7 @@ function InfoCard({ label, value, icon, badgeBg, badgeFg, badgeBorder }: { label
 }
 function AutoBackupsSummary({ backups, logs }: { backups: any[]; logs: any[] }) {
   const latestByType = (t: string) => backups.find((b) => b.type === t);
-  const latestSuccess = logs.find((l) => (l.statu(s === "success" || s === "completed") || l.status === "completed") && l.backup_type !== "restore");
+  const latestSuccess = logs.find((l) => (l.status === "success" || l.status === "completed") && l.backup_type !== "restore");
   const latestFail = logs.find((l) => l.status === "failed");
   const lastDaily = latestByType("daily");
   const lastWeekly = latestByType("weekly");
