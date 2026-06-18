@@ -107,13 +107,19 @@ export async function uploadBackup(type: BackupType, payload: BackupPayload) {
   const json = JSON.stringify(payload);
   const gz = gzipSync(Buffer.from(json, "utf8"));
   const path = backupFilePath(type);
+  // Wrap in Blob for Cloudflare Workers compatibility (avoids Node Buffer edge cases).
+  const blob = new Blob([new Uint8Array(gz)], { type: "application/gzip" });
+  console.log(`[backup] uploading ${path} (${gz.byteLength} bytes)`);
   const { error } = await supabaseAdmin.storage
     .from("system-backups")
-    .upload(path, gz, {
+    .upload(path, blob, {
       contentType: "application/gzip",
       upsert: false,
     });
-  if (error) throw new Error(`upload: ${error.message}`);
+  if (error) {
+    console.error(`[backup] upload error for ${path}:`, error);
+    throw new Error(`upload: ${error.message}`);
+  }
   return { path, size: gz.byteLength };
 }
 
