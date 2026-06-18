@@ -16,6 +16,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { ensureApprovalFines } from "@/lib/approvalFines";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -71,44 +72,22 @@ function SubmissionsPage() {
     return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
   };
 
-  // Auto-create a fine transaction for expired submissions (once per submission).
+  // Auto-create approval-expiry fines (agent debit + company credit) for "موافقة أمنية" only.
   useEffect(() => {
     if (!Array.isArray(submissions) || submissions.length === 0) return;
-    if (!(fineAmount > 0)) return;
-    const expiredOnes = submissions
-      .map((s) => ({ s, r: computeValidity(s) }))
-      .filter((x) => x.r && x.r.expired && x.s.agent_id);
-    if (expiredOnes.length === 0) return;
-    const ids = expiredOnes.map((x) => String(x.s.id));
-    let cancelled = false;
-    (async () => {
-      const { data: existing } = await supabase
-        .from("transactions")
-        .select("source_service_id")
-        .eq("source_service_type", "submission_fine")
-        .in("source_service_id", ids);
-      if (cancelled) return;
-      const have = new Set((existing || []).map((r: any) => String(r.source_service_id)));
-      const toInsert = expiredOnes
-        .filter((x) => !have.has(String(x.s.id)))
-        .map((x) => ({
-          agent_id: x.s.agent_id,
-          date: x.r!.expiry,
-          destination: "—",
-          count: 1,
-          price: fineAmount,
-          paid: 0,
-          total_paid: 0,
-          service_type: "غرامة مالية",
-          travel_statement: "غرامة مالية",
-          note: "غرامة مالية — انتهاء صلاحية الموافقة",
-          source_service_type: "submission_fine",
-          source_service_id: String(x.s.id),
-        }));
-      if (toInsert.length === 0) return;
-      await supabase.from("transactions").insert(toInsert as any);
-    })();
-    return () => { cancelled = true; };
+    void ensureApprovalFines(
+      "submission",
+      submissions.map((s) => ({
+        id: String(s.id),
+        agent_id: s.agent_id,
+        approval_company_id: (s as any).approval_company_id ?? null,
+        issue_date: s.issue_date,
+        approval_validity_enabled: !!(s as any).approval_validity_enabled,
+        services: (s as any).services,
+      })),
+      validityDays,
+      fineAmount,
+    );
   }, [submissions, fineAmount, validityDays]);
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";

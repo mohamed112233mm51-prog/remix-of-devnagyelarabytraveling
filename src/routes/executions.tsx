@@ -17,6 +17,7 @@ import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateF
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { ensureApprovalFines } from "@/lib/approvalFines";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
@@ -45,15 +46,39 @@ function ExecutionsPage() {
   const SERVICE_KIND_OPTS = useDropdownOptions("service_kind" as any);
   const PASSENGER_TYPES = useDropdownOptions("passenger_type" as any);
 
-  // Approval validity days from app_settings (mirrors submissions logic)
+  // Approval validity days + fine amount from app_settings (mirrors submissions logic)
   const [validityDays, setValidityDays] = useState<number>(30);
+  const [fineAmount, setFineAmount] = useState<number>(0);
   useEffect(() => {
     supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle()
       .then(({ data }) => {
         const v = (data as any)?.value?.v;
         if (typeof v === "number" && v > 0) setValidityDays(v);
       });
+    supabase.from("app_settings").select("value").eq("key", "approval_expiry_fine").maybeSingle()
+      .then(({ data }) => {
+        const v = (data as any)?.value?.v;
+        if (typeof v === "number" && v >= 0) setFineAmount(v);
+      });
   }, []);
+
+  // Auto-create approval-expiry fines (agent debit + company credit) for "موافقة أمنية" only.
+  useEffect(() => {
+    if (!Array.isArray(executions) || executions.length === 0) return;
+    void ensureApprovalFines(
+      "execution",
+      executions.map((e) => ({
+        id: String(e.id),
+        agent_id: e.agent_id,
+        approval_company_id: (e as any).approval_company_id ?? null,
+        issue_date: (e as any).issue_date ?? null,
+        approval_validity_enabled: !!(e as any).approval_validity_enabled,
+        services: (e as any).services,
+      })),
+      validityDays,
+      fineAmount,
+    );
+  }, [executions, fineAmount, validityDays]);
 
   const computeValidity = (e: Execution): { expiry: string; expired: boolean } | null => {
     if (!(e as any).approval_validity_enabled) return null;
