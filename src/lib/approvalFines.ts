@@ -42,14 +42,47 @@ function hasApprovalService(services: unknown): boolean {
   });
 }
 
+/**
+ * Today's date in Africa/Cairo as "YYYY-MM-DD" — no time component, no UTC drift.
+ */
+export function cairoToday(): string {
+  // en-CA → "YYYY-MM-DD"
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+}
+
+/**
+ * Add N days to a "YYYY-MM-DD" date using pure UTC math (no DST / TZ drift).
+ * Returns "YYYY-MM-DD" or null.
+ */
+export function addDaysISO(isoDate: string | null, days: number): string | null {
+  if (!isoDate) return null;
+  const m = String(isoDate).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t + days * 86400000);
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const da = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${mo}-${da}`;
+}
+
 export function computeApprovalExpiry(issueDate: string | null, validityDays: number): string | null {
   if (!issueDate || !validityDays) return null;
-  const base = new Date(String(issueDate).slice(0, 10) + "T00:00:00");
-  if (Number.isNaN(base.getTime())) return null;
-  const exp = new Date(base.getTime());
-  exp.setDate(exp.getDate() + validityDays);
-  return exp.toISOString().slice(0, 10);
+  return addDaysISO(issueDate, validityDays);
 }
+
+/**
+ * Status rule: today <= expiry → "جارية", today > expiry → "منتهية".
+ * Pure YYYY-MM-DD lexicographic comparison.
+ */
+export function approvalStatusFor(issueDate: string | null, validityDays: number, today?: string): "جارية" | "منتهية" | null {
+  const exp = computeApprovalExpiry(issueDate, validityDays);
+  if (!exp) return null;
+  const t = today || cairoToday();
+  return t > exp ? "منتهية" : "جارية";
+}
+
 
 async function readSettings(): Promise<{ validityDays: number; fineAmount: number }> {
   const [{ data: dDays }, { data: dFine }] = await Promise.all([
