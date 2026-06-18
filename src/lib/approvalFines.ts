@@ -104,7 +104,7 @@ export async function ensureApprovalFines(
   if (!(fineAmount > 0) || !(validityDays > 0) || !Array.isArray(entities) || entities.length === 0) return 0;
 
   const sourceType = source === "submission" ? "submission_fine" : "execution_fine";
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = cairoToday(); // "YYYY-MM-DD" in Africa/Cairo
   const skip = report?.skipped ?? ({} as Record<string, number>);
   const bump = (k: string) => { skip[k] = (skip[k] || 0) + 1; };
 
@@ -118,10 +118,11 @@ export async function ensureApprovalFines(
     if (!e.approval_company_id) { bump("no_company"); continue; }
     const expiry = computeApprovalExpiry(e.issue_date, validityDays);
     if (!expiry) { bump("invalid_issue_date"); continue; }
-    const exp = new Date(expiry + "T00:00:00");
-    if (exp.getTime() > today.getTime()) { bump("not_yet_expired"); continue; }
+    // Rule: today > expiry → expired. today <= expiry → still valid.
+    if (!(today > expiry)) { bump("not_yet_expired"); continue; }
     eligible.push({ id: String(e.id), agent_id: e.agent_id, company_id: e.approval_company_id, expiry });
   }
+
 
   if (report) report.expired += eligible.length;
   if (eligible.length === 0) return 0;
