@@ -18,6 +18,7 @@ type InviteLinkData = {
   otpType?: string;
   code?: string;
   urlError?: string;
+  urlErrorCode?: string;
 };
 
 const inviteOtpTypes = ["invite", "recovery", "signup", "magiclink", "email"] as const;
@@ -43,6 +44,10 @@ function parseInviteLink(): InviteLinkData {
       hashParams.get("error_description") ||
       hashParams.get("error") ||
       undefined,
+    urlErrorCode:
+      url.searchParams.get("error_code") ||
+      hashParams.get("error_code") ||
+      undefined,
   };
 }
 
@@ -62,6 +67,22 @@ function decodeEmailFromJwt(token?: string) {
   }
 }
 
+/**
+ * Maps the raw provider error to a clear, actionable Arabic message.
+ * Distinguishes: expired / already-used / cancelled / malformed link.
+ */
+function classifyInviteError(raw?: string | null, code?: string | null): string {
+  const m = (raw || "").toLowerCase();
+  const c = (code || "").toLowerCase();
+  if (!raw && !code) return "رابط الدعوة غير صحيح";
+  if (c === "otp_expired" || m.includes("expired")) return "انتهت صلاحية رابط الدعوة. يرجى طلب دعوة جديدة.";
+  if (m.includes("already") && (m.includes("registered") || m.includes("used") || m.includes("confirmed"))) {
+    return "تم استخدام هذه الدعوة مسبقاً. سجّل الدخول مباشرة.";
+  }
+  if (m.includes("not found") || m.includes("invalid")) return "رابط الدعوة غير صحيح أو تم إلغاؤه.";
+  return raw || "رابط الدعوة غير صحيح";
+}
+
 function AcceptInvitePage() {
   const navigate = useNavigate();
   const { setPasswordDone } = useAuth();
@@ -77,67 +98,73 @@ function AcceptInvitePage() {
   const [success, setSuccess] = useState(false);
   const initRef = useRef(false);
   const submittingRef = useRef(false);
-  const inviteLinkRef = useRef<InviteLinkData>({});
+  // Once verified, the session is live; no need to re-verify on submit.
+  const sessionEstablishedRef = useRef(false);
 
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     const link = parseInviteLink();
-    inviteLinkRef.current = link;
 
+    // 1) Provider already redirected back with an explicit error → show it.
     if (link.urlError) {
-      setLinkError("رابط الدعوة غير صالح أو انتهت صلاحيته");
+      setLinkError(classifyInviteError(link.urlError, link.urlErrorCode));
       setReady(true);
       return;
     }
 
-    const hasLinkToken = !!(link.accessToken || link.tokenHash || link.code);
-
     (async () => {
-      let initialEmail = decodeEmailFromJwt(link.accessToken);
-      if (!hasLinkToken) {
-        const { data } = await supabase.auth.getSession();
-        initialEmail = data.session?.user?.email || "";
-        if (!data.session) {
-          setLinkError("رابط الدعوة غير صالح أو انتهت صلاحيته");
+      try {
+        // 2) Implicit-flow link: access_token + refresh_token in URL hash.
+        if (link.accessToken && link.refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: link.accessToken,
+            refresh_token: link.refreshToken,
+          });
+          if (error || !data.user) throw new Error(error?.message || "تعذر تفعيل جلسة الدعوة");
+          sessionEstablishedRef.current = true;
+          setEmail(data.user.email || decodeEmailFromJwt(link.accessToken));
         }
-      }
-      setEmail(initialEmail);
-      setReady(true);
-      if (window.location.search || window.location.hash) {
-        window.history.replaceState(null, "", "/accept-invite");
+        // 3) PKCE-style link: token_hash + type (today's default for invites).
+        else if (link.tokenHash && link.otpType) {
+          if (!isInviteOtpType(link.otpType)) throw new Error("نوع رابط الدعوة غير مدعوم");
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: link.tokenHash,
+            type: link.otpType,
+          });
+          if (error || !data.user) throw new Error(error?.message || "تعذر التحقق من رابط الدعوة");
+          sessionEstablishedRef.current = true;
+          setEmail(data.user.email || "");
+        }
+        // 4) Auth-code flow.
+        else if (link.code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(link.code);
+          if (error || !data.user) throw new Error(error?.message || "تعذر تفعيل رابط الدعوة");
+          sessionEstablishedRef.current = true;
+          setEmail(data.user.email || "");
+        }
+        // 5) No link params — only OK if a session already exists (returning user mid-flow).
+        else {
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user) {
+            sessionEstablishedRef.current = true;
+            setEmail(data.session.user.email || "");
+          } else {
+            // Truly missing/malformed link.
+            setLinkError("رابط الدعوة غير صحيح");
+          }
+        }
+      } catch (e: any) {
+        setLinkError(classifyInviteError(e?.message));
+      } finally {
+        setReady(true);
+        // Strip params from the URL only after we're done reading them.
+        if (window.location.search || window.location.hash) {
+          window.history.replaceState(null, "", "/accept-invite");
+        }
       }
     })();
   }, []);
-
-  async function ensureInviteSession() {
-    const link = inviteLinkRef.current;
-    if (link.accessToken && link.refreshToken) {
-      const { data, error } = await supabase.auth.setSession({
-        access_token: link.accessToken,
-        refresh_token: link.refreshToken,
-      });
-      if (error || !data.user) throw new Error(error?.message || "تعذر تفعيل جلسة الدعوة");
-      return data.user;
-    }
-    if (link.tokenHash && link.otpType) {
-      if (!isInviteOtpType(link.otpType)) throw new Error("نوع رابط الدعوة غير مدعوم");
-      const { data, error } = await supabase.auth.verifyOtp({
-        token_hash: link.tokenHash,
-        type: link.otpType,
-      });
-      if (error || !data.user) throw new Error(error?.message || "تعذر التحقق من رابط الدعوة");
-      return data.user;
-    }
-    if (link.code) {
-      const { data, error } = await supabase.auth.exchangeCodeForSession(link.code);
-      if (error || !data.user) throw new Error(error?.message || "تعذر تفعيل رابط الدعوة");
-      return data.user;
-    }
-    const current = await supabase.auth.getSession();
-    if (current.data.session?.user) return current.data.session.user;
-    throw new Error("رابط الدعوة غير صالح أو انتهت صلاحيته");
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,7 +176,11 @@ function AcceptInvitePage() {
     submittingRef.current = true;
     setBusy(true);
     try {
-      await ensureInviteSession();
+      if (!sessionEstablishedRef.current) {
+        // Sanity check — should already be set in useEffect.
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) throw new Error("انتهت صلاحية الجلسة. أعد فتح رابط الدعوة.");
+      }
       const { error: updErr } = await supabase.auth.updateUser({ password: pw });
       if (updErr) throw new Error(updErr.message || "تعذر تعيين كلمة المرور");
       await acceptInvite();
@@ -159,7 +190,7 @@ function AcceptInvitePage() {
       setTimeout(() => navigate({ to: "/" }), 900);
     } catch (error: any) {
       submittingRef.current = false;
-      const message = error?.message || "رابط الدعوة غير صالح أو انتهت صلاحيته";
+      const message = error?.message ? classifyInviteError(error.message) : "تعذر إتمام التفعيل";
       setErr(message);
       toast.error(message);
     } finally {
@@ -203,7 +234,7 @@ function AcceptInvitePage() {
   if (!ready) {
     return (
       <div dir="rtl" style={wrap}>
-        <div style={{ ...card, textAlign: "center", color: "#64748B" }}>جارِ تجهيز الصفحة...</div>
+        <div style={{ ...card, textAlign: "center", color: "#64748B" }}>جارِ التحقق من رابط الدعوة...</div>
       </div>
     );
   }
