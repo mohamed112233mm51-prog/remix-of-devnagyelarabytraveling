@@ -605,6 +605,8 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const SERVICE_TYPES = useDropdownOptions("service_type");
   const DESTINATIONS = useDropdownOptions("destination");
+  const balances = useSourceBalances();
+
 
   const [form, setForm] = useState({
     company_id: "",
