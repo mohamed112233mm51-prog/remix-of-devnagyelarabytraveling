@@ -42,14 +42,47 @@ function hasApprovalService(services: unknown): boolean {
   });
 }
 
+/**
+ * Today's date in Africa/Cairo as "YYYY-MM-DD" — no time component, no UTC drift.
+ */
+export function cairoToday(): string {
+  // en-CA → "YYYY-MM-DD"
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+}
+
+/**
+ * Add N days to a "YYYY-MM-DD" date using pure UTC math (no DST / TZ drift).
+ * Returns "YYYY-MM-DD" or null.
+ */
+export function addDaysISO(isoDate: string | null, days: number): string | null {
+  if (!isoDate) return null;
+  const m = String(isoDate).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t + days * 86400000);
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const da = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${mo}-${da}`;
+}
+
 export function computeApprovalExpiry(issueDate: string | null, validityDays: number): string | null {
   if (!issueDate || !validityDays) return null;
-  const base = new Date(String(issueDate).slice(0, 10) + "T00:00:00");
-  if (Number.isNaN(base.getTime())) return null;
-  const exp = new Date(base.getTime());
-  exp.setDate(exp.getDate() + validityDays);
-  return exp.toISOString().slice(0, 10);
+  return addDaysISO(issueDate, validityDays);
 }
+
+/**
+ * Status rule: today <= expiry → "جارية", today > expiry → "منتهية".
+ * Pure YYYY-MM-DD lexicographic comparison.
+ */
+export function approvalStatusFor(issueDate: string | null, validityDays: number, today?: string): "جارية" | "منتهية" | null {
+  const exp = computeApprovalExpiry(issueDate, validityDays);
+  if (!exp) return null;
+  const t = today || cairoToday();
+  return t > exp ? "منتهية" : "جارية";
+}
+
 
 async function readSettings(): Promise<{ validityDays: number; fineAmount: number }> {
   const [{ data: dDays }, { data: dFine }] = await Promise.all([
@@ -71,7 +104,7 @@ export async function ensureApprovalFines(
   if (!(fineAmount > 0) || !(validityDays > 0) || !Array.isArray(entities) || entities.length === 0) return 0;
 
   const sourceType = source === "submission" ? "submission_fine" : "execution_fine";
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = cairoToday(); // "YYYY-MM-DD" in Africa/Cairo
   const skip = report?.skipped ?? ({} as Record<string, number>);
   const bump = (k: string) => { skip[k] = (skip[k] || 0) + 1; };
 
@@ -85,10 +118,11 @@ export async function ensureApprovalFines(
     if (!e.approval_company_id) { bump("no_company"); continue; }
     const expiry = computeApprovalExpiry(e.issue_date, validityDays);
     if (!expiry) { bump("invalid_issue_date"); continue; }
-    const exp = new Date(expiry + "T00:00:00");
-    if (exp.getTime() > today.getTime()) { bump("not_yet_expired"); continue; }
+    // Rule: today > expiry → expired. today <= expiry → still valid.
+    if (!(today > expiry)) { bump("not_yet_expired"); continue; }
     eligible.push({ id: String(e.id), agent_id: e.agent_id, company_id: e.approval_company_id, expiry });
   }
+
 
   if (report) report.expired += eligible.length;
   if (eligible.length === 0) return 0;

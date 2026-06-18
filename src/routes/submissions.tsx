@@ -16,7 +16,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
-import { ensureApprovalFines } from "@/lib/approvalFines";
+import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -59,22 +59,34 @@ function SubmissionsPage() {
   }, []);
 
   // Compute approval validity status for a submission row.
-  // Returns null when disabled / no issue date.
+  // Pure date (YYYY-MM-DD) compare in Africa/Cairo. No time component.
+  // Rule: today <= expiry → جارية, today > expiry → منتهية.
   const computeValidity = (s: Submission): { expiry: string; expired: boolean } | null => {
     if (!(s as any).approval_validity_enabled) return null;
-    const iso = s.issue_date;
-    if (!iso) return null;
-    const base = new Date(iso + "T00:00:00");
-    if (Number.isNaN(base.getTime())) return null;
-    const exp = new Date(base.getTime());
-    exp.setDate(exp.getDate() + validityDays);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
+    const expiry = computeApprovalExpiry(s.issue_date, validityDays);
+    if (!expiry) return null;
+    const today = cairoToday();
+    const expired = today > expiry;
+    return { expiry, expired };
   };
 
   // Auto-create approval-expiry fines (agent debit + company credit) for "موافقة أمنية" only.
   useEffect(() => {
     if (!Array.isArray(submissions) || submissions.length === 0) return;
+    // Temporary debug — first row sample.
+    const sample = submissions.find((s) => (s as any).approval_validity_enabled && s.issue_date);
+    if (sample) {
+      const expiry = computeApprovalExpiry(sample.issue_date, validityDays);
+      const today = cairoToday();
+      // eslint-disable-next-line no-console
+      console.info("[approvalValidity:submission]", {
+        today,
+        issue_date: sample.issue_date,
+        validityDays,
+        expiry,
+        status: expiry ? (today > expiry ? "منتهية" : "جارية") : null,
+      });
+    }
     void ensureApprovalFines(
       "submission",
       submissions.map((s) => ({
@@ -89,6 +101,7 @@ function SubmissionsPage() {
       fineAmount,
     );
   }, [submissions, fineAmount, validityDays]);
+
 
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
