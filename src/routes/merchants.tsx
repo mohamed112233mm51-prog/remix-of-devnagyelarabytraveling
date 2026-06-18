@@ -234,6 +234,7 @@ function MerchantsPage() {
           incomingTxns={incomingTxns}
           outgoingTxns={outgoingTxns}
           collections={collections}
+          conversions={usdRows}
           agents={agents}
           companies={companies}
         />
