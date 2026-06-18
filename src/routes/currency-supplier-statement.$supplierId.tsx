@@ -418,6 +418,8 @@ function TxModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const balances = useSourceBalances();
+
   // For buy: foreign is the BOUGHT side, EGP is the SOLD side.
   // For sell: foreign is the SOLD side, EGP is the BOUGHT side.
   const [foreignCurrency, setForeignCurrency] = useState<string>("دولار");
