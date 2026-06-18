@@ -16,7 +16,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
-import { ensureApprovalFines, computeApprovalExpiry, cairoToday, processExpiredApprovalPenalties } from "@/lib/approvalFines";
+import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
