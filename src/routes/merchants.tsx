@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fmtDL, merchantCashGross, merchantCashNet, useLive,
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
-  type Transaction, type CompanyTransaction,
+  type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -38,34 +38,50 @@ function MerchantsPage() {
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
 
+  // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
+  // Includes both wallet (net after 1% commission) and physical cash, plus USD treasury conversions.
   const merchantTotals = useMemo(() => {
-    const map = new Map<string, { incoming: number; outgoing: number }>();
+    const map = new Map<string, { incoming: number; outgoing: number; collected: number; converted: number }>();
+    const get = (id: string) => {
+      let v = map.get(id);
+      if (!v) { v = { incoming: 0, outgoing: 0, collected: 0, converted: 0 }; map.set(id, v); }
+      return v;
+    };
+    for (const t of txns) {
+      if (!t.merchant_id) continue;
+      get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+    }
+    for (const t of cTxns) {
+      if (!t.merchant_id) continue;
+      get(t.merchant_id).outgoing += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+    }
     for (const c of collections) {
-      const v = map.get(c.merchant_id) || { incoming: 0, outgoing: 0 };
-      v.incoming += Number(c.amount || 0);
-      map.set(c.merchant_id, v);
+      get(c.merchant_id).collected += Number(c.amount || 0);
+    }
+    for (const r of usdRows) {
+      if (r.type !== "conversion" || !r.merchant_id) continue;
+      if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
+      get(r.merchant_id).converted += Number(r.egp_amount || 0);
     }
     return map;
-  }, [collections]);
+  }, [txns, cTxns, collections, usdRows]);
 
-  const collectedByMerchant = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const c of collections) {
-      m.set(c.merchant_id, (m.get(c.merchant_id) || 0) + Number(c.amount || 0));
-    }
-    return m;
-  }, [collections]);
+  const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
+  const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [cTxns]);
 
-  const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0), [txns]);
-  const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0), [cTxns]);
-
-  const totalIncoming = incomingTxns.reduce((s, t) => s + merchantCashNet(t), 0);
-  const totalOutgoing = outgoingTxns.reduce((s, t) => s + merchantCashNet(t), 0);
-  const totalCollected = collections.reduce((s, c) => s + Number(c.amount || 0), 0);
-  const balance = totalIncoming - totalOutgoing - totalCollected;
+  // Headline KPIs aggregate per-merchant rollups so they always equal the sum of statements.
+  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalConverted = 0;
+  for (const v of merchantTotals.values()) {
+    totalIncoming += v.incoming;
+    totalOutgoing += v.outgoing;
+    totalCollected += v.collected;
+    totalConverted += v.converted;
+  }
+  const balance = totalIncoming - totalOutgoing - totalCollected - totalConverted;
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
   const companyName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
@@ -145,9 +161,8 @@ function MerchantsPage() {
                   {merchants.length === 0 ? (
                     <tr><td colSpan={9}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
-                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0 };
-                    const bal = t.incoming - t.outgoing;
-                    const collected = collectedByMerchant.get(m.id) || 0;
+                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, converted: 0 };
+                    const bal = t.incoming - t.outgoing - t.collected - t.converted;
                     return (
                       <tr key={m.id}>
                         <td data-label="#">{i + 1}</td>
@@ -155,8 +170,8 @@ function MerchantsPage() {
                         <td data-label="الهاتف">{m.phone || "—"}</td>
                         <td data-label="الواتساب">{m.whatsapp || "—"}</td>
                         <td className="num-col" data-label="إجمالي الوارد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.incoming)}</td>
-                        <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing)}</td>
-                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(collected)}</td>
+                        <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing + t.converted)}</td>
+                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(t.collected)}</td>
                         <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
                         <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditMerchant(m)}>✏️ تعديل</button> : null}</td>
                       </tr>
@@ -219,6 +234,7 @@ function MerchantsPage() {
           incomingTxns={incomingTxns}
           outgoingTxns={outgoingTxns}
           collections={collections}
+          conversions={usdRows}
           agents={agents}
           companies={companies}
         />
@@ -520,7 +536,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "تحويل لـ USD";
   statement: string;
   gross: number;
   commission: number;
@@ -529,19 +545,20 @@ type StatementMovement = {
 };
 
 function MerchantStatementTab({
-  merchants, incomingTxns, outgoingTxns, collections, agents, companies,
+  merchants, incomingTxns, outgoingTxns, collections, conversions, agents, companies,
 }: {
   merchants: Merchant[];
   incomingTxns: Transaction[];
   outgoingTxns: CompanyTransaction[];
   collections: MerchantCashCollection[];
+  conversions: UsdTreasuryTransaction[];
   agents: Agent[];
   companies: IssuingCompany[];
 }) {
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "conversion">("all");
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
@@ -553,8 +570,8 @@ function MerchantStatementTab({
     const list: StatementMovement[] = [];
     for (const t of incomingTxns) {
       if (t.merchant_id !== merchantId) continue;
-      const gross = merchantCashGross(t);
-      const net = merchantCashNet(t);
+      const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
+      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       list.push({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: `${aName(t.agent_id)} — ${t.travel_statement || t.destination || "—"}`,
@@ -563,8 +580,8 @@ function MerchantStatementTab({
     }
     for (const t of outgoingTxns) {
       if (t.merchant_id !== merchantId) continue;
-      const gross = merchantCashGross(t);
-      const net = merchantCashNet(t);
+      const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
+      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: `${cName(t.company_id)} — ${t.destination || "—"}`,
@@ -574,14 +591,28 @@ function MerchantStatementTab({
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
+      const isExpense = !!(c as any).expense_id;
+      const label = isExpense
+        ? `دفع مصروف عبر التاجر${c.note ? ` — ${c.note}` : ""}`
+        : (c.note || "تحصيل نقدية من التاجر");
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
-        statement: c.note || "تحصيل نقدية من التاجر",
+        statement: label,
+        gross: amt, commission: 0, net: amt, delta: -amt,
+      });
+    }
+    for (const r of conversions) {
+      if (r.type !== "conversion" || r.merchant_id !== merchantId) continue;
+      if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
+      const amt = Number(r.egp_amount || 0);
+      list.push({
+        id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
+        statement: `تحويل عملة إلى USD${r.note ? ` — ${r.note}` : ""}`,
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
-  }, [merchantId, incomingTxns, outgoingTxns, collections, agents, companies]);
+  }, [merchantId, incomingTxns, outgoingTxns, collections, conversions, agents, companies]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
@@ -590,6 +621,7 @@ function MerchantStatementTab({
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
     if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
+    if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   }), [movements, from, to, typeFilter, debouncedSearch]);
@@ -605,6 +637,7 @@ function MerchantStatementTab({
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
   const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدي").reduce((s, m) => s + m.net, 0);
+  const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
 
@@ -616,6 +649,7 @@ function MerchantStatementTab({
       { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
       { label: "إجمالي التحصيل", value: fmtDL(totalCollected) },
       { label: "إجمالي الصادر", value: fmtDL(totalOutgoing) },
+      { label: "تحويل لـ USD", value: fmtDL(totalConverted) },
       { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
       { label: "صافي الرصيد", value: fmtDL(finalBalance) },
     ],
@@ -671,6 +705,7 @@ function MerchantStatementTab({
                   { value: "incoming", label: "وارد من وكيل" },
                   { value: "outgoing", label: "صادر لشركة" },
                   { value: "collection", label: "تحصيل نقدي" },
+                  { value: "conversion", label: "تحويل لـ USD" },
                 ]}
                 allowClear={false}
               />
@@ -745,7 +780,7 @@ function MerchantStatementTab({
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming - totalOutgoing - totalCollected)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
+                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming - totalOutgoing - totalCollected - totalConverted)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
               </tfoot>
             </table>
           </div>
