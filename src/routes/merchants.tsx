@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fmtDL, merchantCashGross, merchantCashNet, useLive,
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
-  type Transaction, type CompanyTransaction,
+  type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
