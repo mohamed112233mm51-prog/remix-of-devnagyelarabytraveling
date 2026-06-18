@@ -649,6 +649,7 @@ function MerchantStatementTab({
       { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
       { label: "إجمالي التحصيل", value: fmtDL(totalCollected) },
       { label: "إجمالي الصادر", value: fmtDL(totalOutgoing) },
+      { label: "تحويل لـ USD", value: fmtDL(totalConverted) },
       { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
       { label: "صافي الرصيد", value: fmtDL(finalBalance) },
     ],
