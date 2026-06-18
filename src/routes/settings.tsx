@@ -1129,7 +1129,27 @@ function GeneralTab() {
             <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>قيمة الغرامة عند انتهاء صلاحية الموافقة (غير مُطبَّقة حاليًا — يتم حفظها فقط).</div>
           </div>
         </div>
+        <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { processExpiredApprovalPenalties } = await import("@/lib/approvalFines");
+                const r = await processExpiredApprovalPenalties();
+                const { toast } = await import("sonner");
+                toast.success(`تم الفحص — تم إنشاء ${r.created} غرامة (منتهية: ${r.expired} / مفحوصة: ${r.scanned})`);
+              } catch (e: any) {
+                const { toast } = await import("sonner");
+                toast.error(e?.message || "تعذر تشغيل الفحص");
+              }
+            }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 10, background: "#0F1F44", color: "#fff", border: 0, fontWeight: 800, fontSize: 13, cursor: "pointer" }}
+          >
+            فحص غرامات الموافقات الآن
+          </button>
+        </div>
       </div>
+
 
       {/* Brand colors */}
       <div style={cardStyle}>
