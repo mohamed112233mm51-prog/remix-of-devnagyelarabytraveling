@@ -7,9 +7,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 // without FK constraints, order is informational only.
 export const BACKUP_TABLES = [
   "agents",
+  "agent_service_pricing",
   "issuing_companies",
   "merchants",
   "investors",
+  "currency_suppliers",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
+  "cash_boxes",
+  "payment_splits",
   "submissions",
   "executions",
   "transactions",
@@ -18,6 +24,7 @@ export const BACKUP_TABLES = [
   "investor_transactions",
   "expenses",
   "expense_deductions",
+  "import_batches",
   "system_dropdown_options",
   "app_settings",
   "profiles",
