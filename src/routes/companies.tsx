@@ -23,6 +23,8 @@ import {
   filterValidSplits,
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
+import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
+
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
