@@ -65,6 +65,20 @@ function ExecutionsPage() {
   // Auto-create approval-expiry fines (agent debit + company credit) for "موافقة أمنية" only.
   useEffect(() => {
     if (!Array.isArray(executions) || executions.length === 0) return;
+    const sample = executions.find((e) => (e as any).approval_validity_enabled && (e as any).issue_date);
+    if (sample) {
+      const issue = (sample as any).issue_date as string;
+      const expiry = computeApprovalExpiry(issue, validityDays);
+      const today = cairoToday();
+      // eslint-disable-next-line no-console
+      console.info("[approvalValidity:execution]", {
+        today,
+        issue_date: issue,
+        validityDays,
+        expiry,
+        status: expiry ? (today > expiry ? "منتهية" : "جارية") : null,
+      });
+    }
     void ensureApprovalFines(
       "execution",
       executions.map((e) => ({
@@ -80,17 +94,15 @@ function ExecutionsPage() {
     );
   }, [executions, fineAmount, validityDays]);
 
+  // Pure date compare in Africa/Cairo. today <= expiry → جارية, today > expiry → منتهية.
   const computeValidity = (e: Execution): { expiry: string; expired: boolean } | null => {
     if (!(e as any).approval_validity_enabled) return null;
-    const iso = (e as any).issue_date;
-    if (!iso) return null;
-    const base = new Date(iso + "T00:00:00");
-    if (Number.isNaN(base.getTime())) return null;
-    const exp = new Date(base.getTime());
-    exp.setDate(exp.getDate() + validityDays);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    return { expiry: exp.toISOString().slice(0, 10), expired: exp.getTime() < today.getTime() };
+    const expiry = computeApprovalExpiry((e as any).issue_date ?? null, validityDays);
+    if (!expiry) return null;
+    const today = cairoToday();
+    return { expiry, expired: today > expiry };
   };
+
   const validityStatusOf = (e: Execution): string => {
     const r = computeValidity(e); return r ? (r.expired ? "منتهية" : "جارية") : "";
   };
