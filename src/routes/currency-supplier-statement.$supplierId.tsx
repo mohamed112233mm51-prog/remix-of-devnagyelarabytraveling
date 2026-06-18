@@ -16,6 +16,8 @@ import {
   validatePaymentSplits,
   filterValidSplits,
 } from "@/components/PaymentSplits";
+import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+
 
 export const Route = createFileRoute("/currency-supplier-statement/$supplierId")({
   component: () => <AppErrorBoundary><CurrencySupplierStatementPage /></AppErrorBoundary>,
