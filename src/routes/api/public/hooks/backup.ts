@@ -24,7 +24,10 @@ const routeOptions = {
         const action = (body?.action ?? "backup") as "backup" | "retention";
 
         try {
-          const { runBackupWithRetry, applyRetention } = await import("@/lib/backups.server");
+          const serverModPath = "@/lib/backups.server";
+          const { runBackupWithRetry, applyRetention } = await import(
+            /* @vite-ignore */ serverModPath
+          );
           if (action === "retention") {
             const r = await applyRetention();
             return Response.json({ ok: true, ...r });
