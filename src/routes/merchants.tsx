@@ -536,7 +536,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "تحويل لـ USD";
   statement: string;
   gross: number;
   commission: number;
@@ -545,19 +545,20 @@ type StatementMovement = {
 };
 
 function MerchantStatementTab({
-  merchants, incomingTxns, outgoingTxns, collections, agents, companies,
+  merchants, incomingTxns, outgoingTxns, collections, conversions, agents, companies,
 }: {
   merchants: Merchant[];
   incomingTxns: Transaction[];
   outgoingTxns: CompanyTransaction[];
   collections: MerchantCashCollection[];
+  conversions: UsdTreasuryTransaction[];
   agents: Agent[];
   companies: IssuingCompany[];
 }) {
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "conversion">("all");
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
@@ -569,8 +570,8 @@ function MerchantStatementTab({
     const list: StatementMovement[] = [];
     for (const t of incomingTxns) {
       if (t.merchant_id !== merchantId) continue;
-      const gross = merchantCashGross(t);
-      const net = merchantCashNet(t);
+      const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
+      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       list.push({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: `${aName(t.agent_id)} — ${t.travel_statement || t.destination || "—"}`,
@@ -579,8 +580,8 @@ function MerchantStatementTab({
     }
     for (const t of outgoingTxns) {
       if (t.merchant_id !== merchantId) continue;
-      const gross = merchantCashGross(t);
-      const net = merchantCashNet(t);
+      const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
+      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: `${cName(t.company_id)} — ${t.destination || "—"}`,
@@ -590,14 +591,28 @@ function MerchantStatementTab({
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
+      const isExpense = !!(c as any).expense_id;
+      const label = isExpense
+        ? `دفع مصروف عبر التاجر${c.note ? ` — ${c.note}` : ""}`
+        : (c.note || "تحصيل نقدية من التاجر");
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
-        statement: c.note || "تحصيل نقدية من التاجر",
+        statement: label,
+        gross: amt, commission: 0, net: amt, delta: -amt,
+      });
+    }
+    for (const r of conversions) {
+      if (r.type !== "conversion" || r.merchant_id !== merchantId) continue;
+      if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
+      const amt = Number(r.egp_amount || 0);
+      list.push({
+        id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
+        statement: `تحويل عملة إلى USD${r.note ? ` — ${r.note}` : ""}`,
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
-  }, [merchantId, incomingTxns, outgoingTxns, collections, agents, companies]);
+  }, [merchantId, incomingTxns, outgoingTxns, collections, conversions, agents, companies]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
