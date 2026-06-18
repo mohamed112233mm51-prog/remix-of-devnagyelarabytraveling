@@ -16,6 +16,8 @@ import {
   validatePaymentSplits,
   filterValidSplits,
 } from "@/components/PaymentSplits";
+import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+
 
 export const Route = createFileRoute("/currency-supplier-statement/$supplierId")({
   component: () => <AppErrorBoundary><CurrencySupplierStatementPage /></AppErrorBoundary>,
@@ -416,6 +418,8 @@ function TxModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const balances = useSourceBalances();
+
   // For buy: foreign is the BOUGHT side, EGP is the SOLD side.
   // For sell: foreign is the SOLD side, EGP is the BOUGHT side.
   const [foreignCurrency, setForeignCurrency] = useState<string>("دولار");
@@ -481,6 +485,24 @@ function TxModal({
     if (Math.abs(splitsDiff) > 0.5) {
       return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) لا يساوي قيمة العملة المباعة بالجنيه (${fmtNum(egpNum)})`);
     }
+    const validForCheck = filterValidSplits(splits);
+    if (kind === "شراء عملة") {
+      // EGP leaves the company / merchants → guard balances.
+      const balanceErr = validateSplitOutflows(validForCheck, balances, merchants);
+      if (balanceErr) return toast.error(balanceErr);
+    } else {
+      // sell: foreign currency leaves treasury → guard the foreign box.
+      const code = CURRENCY_CODE[foreignCurrency];
+      const box = boxes.find((b) => b.currency === code && b.is_active !== false);
+      const available = Number(box?.balance || 0);
+      const sErr = validateSingleOutflow(
+        box?.name || `خزينة ${foreignCurrency}`,
+        available,
+        a,
+      );
+      if (sErr) return toast.error(sErr);
+    }
+
 
     const valid = filterValidSplits(splits);
     // Resolve method label for storage (kept consistent with what other forms persist)

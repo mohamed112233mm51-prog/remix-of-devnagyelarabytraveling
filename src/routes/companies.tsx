@@ -23,6 +23,8 @@ import {
   filterValidSplits,
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
+import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
+
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
@@ -603,6 +605,8 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const SERVICE_TYPES = useDropdownOptions("service_type");
   const DESTINATIONS = useDropdownOptions("destination");
+  const balances = useSourceBalances();
+
 
   const [form, setForm] = useState({
     company_id: "",
@@ -636,6 +640,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       const allowed = methodsForSplitWidget(r, merchants).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
     }
+    const balanceErr = validateSplitOutflows(validSplits, balances, merchants);
+    if (balanceErr) return toast.error(balanceErr);
+
+
 
 
     // Aggregate (NO commission on merchant wallet for company payments)

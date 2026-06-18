@@ -261,7 +261,10 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     if (Math.abs(splitsDiff) > 0.5) {
       return toast.error(`إجمالي وسائل الدفع (${fmtDL(splitsTotal)}) لا يساوي إجمالي المصروف (${fmtDL(totalAmount)})`);
     }
-    if (balanceWarnings.length) return toast.error(balanceWarnings[0]);
+    const { validateSplitOutflows } = await import("@/lib/balanceGuard");
+    const balanceErr = validateSplitOutflows(valid, balances, merchants);
+    if (balanceErr) return toast.error(balanceErr);
+
 
     // Build a human-readable summary for back-compat columns
     const summary = valid
