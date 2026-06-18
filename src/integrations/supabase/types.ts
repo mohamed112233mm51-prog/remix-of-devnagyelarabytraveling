@@ -151,40 +151,52 @@ export type Database = {
       }
       backup_logs: {
         Row: {
+          backup_name: string | null
           backup_type: string
+          completed_at: string | null
           created_at: string
           created_by: string | null
+          error_message: string | null
           failure_reason: string | null
           file_path: string | null
           file_size: number | null
+          file_url: string | null
           id: string
           restore_date: string | null
           restored_by: string | null
-          status: string
+          status: string | null
         }
         Insert: {
+          backup_name?: string | null
           backup_type: string
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          error_message?: string | null
           failure_reason?: string | null
           file_path?: string | null
           file_size?: number | null
+          file_url?: string | null
           id?: string
           restore_date?: string | null
           restored_by?: string | null
-          status?: string
+          status?: string | null
         }
         Update: {
+          backup_name?: string | null
           backup_type?: string
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          error_message?: string | null
           failure_reason?: string | null
           file_path?: string | null
           file_size?: number | null
+          file_url?: string | null
           id?: string
           restore_date?: string | null
           restored_by?: string | null
-          status?: string
+          status?: string | null
         }
         Relationships: []
       }
