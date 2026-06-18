@@ -780,7 +780,7 @@ function MerchantStatementTab({
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming - totalOutgoing - totalCollected)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
+                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming - totalOutgoing - totalCollected - totalConverted)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
               </tfoot>
             </table>
           </div>
