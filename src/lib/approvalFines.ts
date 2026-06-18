@@ -112,7 +112,6 @@ export async function ensureApprovalFines(
   for (const e of entities) {
     if (!e) { bump("invalid"); continue; }
     if (!e.approval_validity_enabled) { bump("validity_disabled"); continue; }
-    if (!hasApprovalService(e.services)) { bump("not_security_approval"); continue; }
     if (!e.issue_date) { bump("no_issue_date"); continue; }
     if (!e.agent_id) { bump("no_agent"); continue; }
     if (!e.approval_company_id) { bump("no_company"); continue; }
