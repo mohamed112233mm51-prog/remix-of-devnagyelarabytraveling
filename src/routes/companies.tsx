@@ -43,6 +43,11 @@ function CompaniesPage() {
   const flights: any[] = [];
   const approvals: any[] = [];
   const { rows: agents } = useLive<Agent>("agents");
+
+  // Trigger approval-expiry fine scan when this page is opened.
+  useEffect(() => {
+    import("@/lib/approvalFines").then((m) => m.processExpiredApprovalPenalties({ silent: true })).catch(() => {});
+  }, []);
   const [tab, setTab] = useState<"list" | "add" | "txn" | "statement">("list");
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");

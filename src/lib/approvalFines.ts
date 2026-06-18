@@ -3,15 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Approval expiry fine logic — applies ONLY to "موافقة أمنية".
  *
- * For each expired approval we ensure exactly one fine row exists on:
- *   - public.transactions (agent side, debit)        source_service_type=submission_fine|execution_fine
- *   - public.company_transactions (company, credit)  source_service_type=submission_fine|execution_fine
+ * Creates one fine per (source, source_id):
+ *   - public.transactions          → agent debit  (price = fineAmount, paid = 0)
+ *   - public.company_transactions  → company credit (cash_amount = total_paid = fineAmount)
  *
- * Duplicates are prevented via (source_service_type, source_service_id).
+ * Idempotency: (source_service_type, source_service_id) where source_service_type
+ * is "submission_fine" or "execution_fine".
  */
 
 export const APPROVAL_SERVICE_LABEL = "موافقة أمنية";
 export const FINE_LABEL = "غرامة مالية - انتهاء صلاحية الموافقة";
+export const PENALTY_TYPE = "approval_expiry";
 
 export type ApprovalFineSource = "submission" | "execution";
 
@@ -21,8 +23,15 @@ export interface ApprovalEntity {
   approval_company_id: string | null;
   issue_date: string | null;
   approval_validity_enabled: boolean;
-  /** submissions: string[]; executions: {service_type:string}[] */
+  /** submissions: string[]  |  executions: {service_type:string}[] */
   services: unknown;
+}
+
+export interface PenaltyScanReport {
+  scanned: number;
+  expired: number;
+  created: number;
+  skipped: Record<string, number>;
 }
 
 function hasApprovalService(services: unknown): boolean {
@@ -35,11 +44,21 @@ function hasApprovalService(services: unknown): boolean {
 
 export function computeApprovalExpiry(issueDate: string | null, validityDays: number): string | null {
   if (!issueDate || !validityDays) return null;
-  const base = new Date(issueDate + "T00:00:00");
+  const base = new Date(String(issueDate).slice(0, 10) + "T00:00:00");
   if (Number.isNaN(base.getTime())) return null;
   const exp = new Date(base.getTime());
   exp.setDate(exp.getDate() + validityDays);
   return exp.toISOString().slice(0, 10);
+}
+
+async function readSettings(): Promise<{ validityDays: number; fineAmount: number }> {
+  const [{ data: dDays }, { data: dFine }] = await Promise.all([
+    supabase.from("app_settings").select("value").eq("key", "approval_validity_days").maybeSingle(),
+    supabase.from("app_settings").select("value").eq("key", "approval_expiry_fine").maybeSingle(),
+  ]);
+  const validityDays = Number((dDays as any)?.value?.v) || 0;
+  const fineAmount = Number((dFine as any)?.value?.v) || 0;
+  return { validityDays, fineAmount };
 }
 
 export async function ensureApprovalFines(
@@ -47,28 +66,34 @@ export async function ensureApprovalFines(
   entities: ApprovalEntity[],
   validityDays: number,
   fineAmount: number,
-): Promise<void> {
-  if (!(fineAmount > 0) || !(validityDays > 0) || !Array.isArray(entities) || entities.length === 0) return;
+  report?: PenaltyScanReport,
+): Promise<number> {
+  if (!(fineAmount > 0) || !(validityDays > 0) || !Array.isArray(entities) || entities.length === 0) return 0;
 
   const sourceType = source === "submission" ? "submission_fine" : "execution_fine";
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  const skip = report?.skipped ?? ({} as Record<string, number>);
+  const bump = (k: string) => { skip[k] = (skip[k] || 0) + 1; };
 
-  const eligible = entities
-    .map((e) => {
-      if (!e || !e.approval_validity_enabled) return null;
-      if (!hasApprovalService(e.services)) return null;
-      const expiry = computeApprovalExpiry(e.issue_date, validityDays);
-      if (!expiry) return null;
-      const exp = new Date(expiry + "T00:00:00");
-      if (exp.getTime() > today.getTime()) return null; // not yet expired
-      return { id: String(e.id), agent_id: e.agent_id, company_id: e.approval_company_id, expiry };
-    })
-    .filter((x): x is { id: string; agent_id: string | null; company_id: string | null; expiry: string } => !!x);
+  const eligible: { id: string; agent_id: string; company_id: string; expiry: string }[] = [];
+  for (const e of entities) {
+    if (!e) { bump("invalid"); continue; }
+    if (!e.approval_validity_enabled) { bump("validity_disabled"); continue; }
+    if (!hasApprovalService(e.services)) { bump("not_security_approval"); continue; }
+    if (!e.issue_date) { bump("no_issue_date"); continue; }
+    if (!e.agent_id) { bump("no_agent"); continue; }
+    if (!e.approval_company_id) { bump("no_company"); continue; }
+    const expiry = computeApprovalExpiry(e.issue_date, validityDays);
+    if (!expiry) { bump("invalid_issue_date"); continue; }
+    const exp = new Date(expiry + "T00:00:00");
+    if (exp.getTime() > today.getTime()) { bump("not_yet_expired"); continue; }
+    eligible.push({ id: String(e.id), agent_id: e.agent_id, company_id: e.approval_company_id, expiry });
+  }
 
-  if (eligible.length === 0) return;
+  if (report) report.expired += eligible.length;
+  if (eligible.length === 0) return 0;
   const ids = eligible.map((x) => x.id);
 
-  // Existing fines (agent + company) — keyed by source_service_id
   const [{ data: existingAgent }, { data: existingCompany }] = await Promise.all([
     supabase.from("transactions").select("source_service_id").eq("source_service_type", sourceType).in("source_service_id", ids),
     supabase.from("company_transactions").select("source_service_id").eq("source_service_type", sourceType).in("source_service_id", ids),
@@ -77,7 +102,7 @@ export async function ensureApprovalFines(
   const haveCompany = new Set((existingCompany || []).map((r: any) => String(r.source_service_id)));
 
   const agentRows = eligible
-    .filter((x) => x.agent_id && !haveAgent.has(x.id))
+    .filter((x) => !haveAgent.has(x.id))
     .map((x) => ({
       agent_id: x.agent_id,
       date: x.expiry,
@@ -94,7 +119,7 @@ export async function ensureApprovalFines(
     }));
 
   const companyRows = eligible
-    .filter((x) => x.company_id && !haveCompany.has(x.id))
+    .filter((x) => !haveCompany.has(x.id))
     .map((x) => ({
       company_id: x.company_id,
       date: x.expiry,
@@ -110,10 +135,86 @@ export async function ensureApprovalFines(
       source_service_id: x.id,
     }));
 
+  const dupes = eligible.length - Math.max(agentRows.length, companyRows.length);
+  if (dupes > 0 && report) skip["already_exists"] = (skip["already_exists"] || 0) + dupes;
+
+  let created = 0;
   try {
-    if (agentRows.length > 0) await supabase.from("transactions").insert(agentRows as any);
-    if (companyRows.length > 0) await supabase.from("company_transactions").insert(companyRows as any);
-  } catch {
-    // swallow — fine creation must never break the UI
+    if (agentRows.length > 0) {
+      const { error, data } = await supabase.from("transactions").insert(agentRows as any).select("id");
+      if (error) console.error("[approvalFines] agent insert error:", error);
+      else created += data?.length || 0;
+    }
+    if (companyRows.length > 0) {
+      const { error, data } = await supabase.from("company_transactions").insert(companyRows as any).select("id");
+      if (error) console.error("[approvalFines] company insert error:", error);
+      else created += data?.length || 0;
+    }
+  } catch (e) {
+    console.error("[approvalFines] insert exception:", e);
   }
+
+  if (report) report.created += created;
+  return created;
+}
+
+/**
+ * Central scan: fetch all submissions + executions, evaluate, create missing fines.
+ * Safe to call repeatedly. Returns a report and logs a debug summary to console.
+ */
+export async function processExpiredApprovalPenalties(opts?: { silent?: boolean }): Promise<PenaltyScanReport> {
+  const report: PenaltyScanReport = { scanned: 0, expired: 0, created: 0, skipped: {} };
+  const { validityDays, fineAmount } = await readSettings();
+
+  if (!(validityDays > 0) || !(fineAmount > 0)) {
+    if (!opts?.silent) {
+      console.warn("[approvalFines] settings incomplete", { validityDays, fineAmount });
+    }
+    return report;
+  }
+
+  const [{ data: subs, error: subErr }, { data: execs, error: execErr }] = await Promise.all([
+    supabase
+      .from("submissions")
+      .select("id, agent_id, approval_company_id, issue_date, approval_validity_enabled, services"),
+    supabase
+      .from("executions")
+      .select("id, agent_id, approval_company_id, issue_date, approval_validity_enabled, services"),
+  ]);
+  if (subErr) console.error("[approvalFines] submissions read error:", subErr);
+  if (execErr) console.error("[approvalFines] executions read error:", execErr);
+
+  const subList = (subs || []) as any[];
+  const execList = (execs || []) as any[];
+  report.scanned = subList.length + execList.length;
+
+  await ensureApprovalFines("submission", subList.map((s) => ({
+    id: String(s.id),
+    agent_id: s.agent_id,
+    approval_company_id: s.approval_company_id,
+    issue_date: s.issue_date,
+    approval_validity_enabled: !!s.approval_validity_enabled,
+    services: s.services,
+  })), validityDays, fineAmount, report);
+
+  await ensureApprovalFines("execution", execList.map((e) => ({
+    id: String(e.id),
+    agent_id: e.agent_id,
+    approval_company_id: e.approval_company_id,
+    issue_date: e.issue_date,
+    approval_validity_enabled: !!e.approval_validity_enabled,
+    services: e.services,
+  })), validityDays, fineAmount, report);
+
+  if (!opts?.silent) {
+    console.info("[approvalFines] scan report", {
+      scanned: report.scanned,
+      expired: report.expired,
+      created: report.created,
+      skipped: report.skipped,
+      settings: { validityDays, fineAmount },
+    });
+  }
+
+  return report;
 }
