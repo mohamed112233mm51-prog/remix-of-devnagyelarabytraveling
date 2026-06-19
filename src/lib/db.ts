@@ -446,7 +446,7 @@ export type Execution = {
 };
 
 
-type LiveTable =
+export type LiveTable =
   | "agents" | "transactions" | "issuing_companies"
   | "company_transactions" | "merchants" | "merchant_cash_collections"
   | "investors" | "investor_transactions" | "expenses" | "expense_deductions"
@@ -550,6 +550,17 @@ export function useLive<T>(table: LiveTable) {
   useEffect(() => subscribe(table, () => force((n) => n + 1)), [table]);
   const store = getStore(table);
   return { rows: (Array.isArray(store.rows) ? store.rows : []) as T[], loading: store.loading, error: store.error };
+}
+
+/** Force a fresh read from the database and replace any shared in-memory live cache. */
+export async function refetchLiveTables(tables?: readonly LiveTable[]) {
+  const targets = tables?.length ? tables : Array.from(liveStores.keys());
+  await Promise.all(targets.map(async (table) => {
+    const store = getStore(table);
+    store.loading = true;
+    notify(store);
+    await loadStore(table, store);
+  }));
 }
 
 /** Optimistic helper: mutate the local cache for a table immediately. */
