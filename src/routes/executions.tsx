@@ -429,7 +429,7 @@ function ExecutionsPage() {
   );
 }
 
-function KpiCard({ icon, label, value, tone }: { icon: string; label: string; value: number | string; tone: "navy" | "emerald" | "sky" | "rose" | "amber" }) {
+function KpiCard({ icon, label, value, tone, onClick }: { icon: string; label: string; value: number | string; tone: "navy" | "emerald" | "sky" | "rose" | "amber"; onClick?: () => void }) {
   const tones: Record<string, { bg: string; fg: string; bd: string }> = {
     navy:    { bg: "#eef2ff", fg: NAVY,      bd: "#dbe3ee" },
     emerald: { bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
@@ -438,8 +438,15 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
     amber:   { bg: "#fffbeb", fg: "#b45309", bd: "#fde68a" },
   };
   const t = tones[tone];
+  const clickable = typeof onClick === "function";
   return (
-    <div style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+    <div
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)", cursor: clickable ? "pointer" : "default" }}
+    >
       <div style={{ width: 42, height: 42, borderRadius: 10, background: t.bg, color: t.fg, border: `1px solid ${t.bd}`, display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 3 }}>{label}</div>
