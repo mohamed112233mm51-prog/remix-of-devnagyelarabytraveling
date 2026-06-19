@@ -264,10 +264,34 @@ async function updateBackupRow(id: string, patch: Record<string, any>) {
   }
 }
 
-export async function runBackupWithRetry(type: BackupType, createdBy: string | null, retries = 1) {
+export async function runBackupWithRetry(
+  type: BackupType,
+  createdBy: string | null,
+  retries = 1,
+  triggerType: "manual" | "automatic" = "manual",
+) {
   const startedAt = new Date();
   const backupName = `backup-${type}-${startedAt.toISOString().replace(/[:.]/g, "-")}`;
-  console.log(`[backup] start ${backupName}`);
+  console.log(`[backup] start ${backupName} trigger=${triggerType}`);
+
+  // Dedup: if an automatic backup of the same type already ran today (completed),
+  // skip to avoid duplicate runs for the same scheduled slot.
+  if (triggerType === "automatic") {
+    const since = new Date();
+    since.setUTCHours(0, 0, 0, 0);
+    const { data: existing } = await (supabaseAdmin as SupabaseClient)
+      .from("backup_logs")
+      .select("id, file_path")
+      .eq("backup_type", type)
+      .eq("trigger_type", "automatic")
+      .eq("status", "completed")
+      .gte("created_at", since.toISOString())
+      .limit(1);
+    if (existing && existing.length > 0) {
+      console.log(`[backup] skip duplicate automatic ${type} for today`);
+      return { path: existing[0].file_path as string, size: 0, file_url: null, backup_name: backupName, skipped: true };
+    }
+  }
 
   // 1) Insert "processing" tracking row
   const rowId = await logBackupRow({
@@ -275,7 +299,9 @@ export async function runBackupWithRetry(type: BackupType, createdBy: string | n
     backup_name: backupName,
     status: "processing",
     created_by: createdBy,
-  });
+    trigger_type: triggerType,
+    started_at: startedAt.toISOString(),
+  } as any);
 
   let lastErr: any = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
