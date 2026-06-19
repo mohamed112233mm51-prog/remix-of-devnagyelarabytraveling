@@ -516,9 +516,9 @@ export const deleteDemoData = createServerFn({ method: "POST" })
 // Production Cleanup — safe pre-release wipe of all demo/test data.
 // - Admin-only (enforced server-side).
 // - Optionally creates an emergency backup snapshot first.
-// - Deletes ONLY rows where is_demo = true across operational tables.
+// - Deletes ALL operational rows regardless of is_demo.
 // - Never touches: profiles, user_roles, app_settings, system_dropdown_options,
-//   backup_logs, storage buckets, or any row where is_demo = false.
+//   backup_logs, storage buckets, or admin users.
 // ============================================================
 export const productionCleanup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
