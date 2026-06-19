@@ -389,51 +389,62 @@ export const productionCleanup = createServerFn({ method: "POST" })
       }
     }
 
-    // 2) Delete demo records (child → parent order)
-    const order: DemoTable[] = [
+    // 2) Full operational wipe — children → parents.
+    // Deletes ALL rows (not is_demo-scoped) so the system becomes a clean
+    // production copy. Preserves: profiles, user_roles, app_settings,
+    // system_dropdown_options, backup_logs, cash_boxes (balances reset),
+    // storage (branding/logo) and any auth user that holds an admin role.
+    const order: string[] = [
+      "payment_splits",
       "expense_deductions",
       "expenses",
       "investor_transactions",
       "merchant_cash_collections",
+      "currency_supplier_transactions",
       "usd_treasury_transactions",
       "company_transactions",
       "transactions",
+      "submissions",
+      "executions",
+      "agent_service_pricing",
       "investors",
       "merchants",
+      "currency_suppliers",
       "issuing_companies",
       "agents",
+      "activity_logs",
+      "import_batches",
     ];
     const summary: Record<string, number> = {};
     let totalDeleted = 0;
     for (const t of order) {
-      const { count } = await sb
-        .from(t)
+      const { count, error } = await sb
+        .from(t as any)
         .delete({ count: "exact" })
-        .eq("is_demo", true);
+        .not("id", "is", null);
+      if (error) {
+        summary[t] = 0;
+        console.error(`[productionCleanup] failed to wipe ${t}:`, error.message);
+        continue;
+      }
       summary[t] = count ?? 0;
       totalDeleted += count ?? 0;
     }
 
-    // Extra safety: USD treasury must read zero after a production cleanup.
-    // Wipe ALL remaining usd_treasury_transactions (deposits, conversions,
-    // company payments, mixed EGP/USD records) so the balance resets to 0.
-    {
-      const { count } = await sb
-        .from("usd_treasury_transactions")
-        .delete({ count: "exact" })
+    // Reset cash box balances to zero (boxes themselves are preserved).
+    try {
+      await sb
+        .from("cash_boxes")
+        .update({ balance: 0 } as any)
         .not("id", "is", null);
-      const extra = count ?? 0;
-      summary["usd_treasury_transactions"] = (summary["usd_treasury_transactions"] ?? 0) + extra;
-      totalDeleted += extra;
-    }
+    } catch {}
 
-    // 3) Verification — confirm no demo rows remain.
+    // 3) Verification — confirm wiped tables are now empty.
     let remaining = 0;
     for (const t of order) {
       const { count } = await sb
-        .from(t)
-        .select("*", { count: "exact", head: true })
-        .eq("is_demo", true);
+        .from(t as any)
+        .select("*", { count: "exact", head: true });
       remaining += count ?? 0;
     }
 
