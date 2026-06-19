@@ -1,14 +1,15 @@
-import { Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Wifi, WifiOff } from "lucide-react";
 import { useRealtimeStatus } from "@/hooks/useRealtime";
+import { Spinner } from "@/components/Spinner";
 
 export function RealtimeIndicator() {
   const status = useRealtimeStatus();
   const map = {
-    connected: { label: "Realtime Connected", color: "var(--green, #10b981)", Icon: Wifi },
-    connecting: { label: "Realtime Connecting", color: "var(--gold, #d4a017)", Icon: Loader2 },
-    disconnected: { label: "Realtime Disconnected", color: "var(--red, #ef4444)", Icon: WifiOff },
+    connected: { label: "Realtime Connected", color: "var(--green, #10b981)" },
+    connecting: { label: "Realtime Connecting", color: "var(--gold, #C9A84C)" },
+    disconnected: { label: "Realtime Disconnected", color: "var(--red, #ef4444)" },
   } as const;
-  const { label, color, Icon } = map[status];
+  const { label, color } = map[status];
   return (
     <div
       title={label}
@@ -26,12 +27,15 @@ export function RealtimeIndicator() {
         whiteSpace: "nowrap",
       }}
     >
-      <Icon
-        size={13}
-        strokeWidth={2.4}
-        className={status === "connecting" ? "animate-spin" : undefined}
-      />
+      {status === "connecting" ? (
+        <Spinner size={14} aria-label="جارٍ الاتصال" />
+      ) : status === "connected" ? (
+        <Wifi size={13} strokeWidth={2.4} />
+      ) : (
+        <WifiOff size={13} strokeWidth={2.4} />
+      )}
       <span>{status === "connected" ? "متصل" : status === "connecting" ? "جارٍ الاتصال" : "غير متصل"}</span>
     </div>
   );
 }
+
