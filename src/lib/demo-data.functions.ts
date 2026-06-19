@@ -56,10 +56,11 @@ export const checkDemoData = createServerFn({ method: "GET" })
     const counts: Record<string, number> = {};
     let total = 0;
     for (const t of DEMO_TABLES) {
+      // Count ALL rows — production cleanup wipes everything in these tables
+      // (regardless of is_demo flag), so the UI must reflect real totals.
       const { count } = await sb
         .from(t)
-        .select("*", { count: "exact", head: true })
-        .eq("is_demo", true);
+        .select("*", { count: "exact", head: true });
       counts[t] = count ?? 0;
       total += count ?? 0;
     }
