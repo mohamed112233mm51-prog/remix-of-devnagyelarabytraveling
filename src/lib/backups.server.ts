@@ -7,9 +7,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 // without FK constraints, order is informational only.
 export const BACKUP_TABLES = [
   "agents",
+  "agent_service_pricing",
   "issuing_companies",
   "merchants",
   "investors",
+  "currency_suppliers",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
+  "cash_boxes",
+  "payment_splits",
   "submissions",
   "executions",
   "transactions",
@@ -18,6 +24,7 @@ export const BACKUP_TABLES = [
   "investor_transactions",
   "expenses",
   "expense_deductions",
+  "import_batches",
   "system_dropdown_options",
   "app_settings",
   "profiles",
@@ -100,13 +107,19 @@ export async function uploadBackup(type: BackupType, payload: BackupPayload) {
   const json = JSON.stringify(payload);
   const gz = gzipSync(Buffer.from(json, "utf8"));
   const path = backupFilePath(type);
+  // Wrap in Blob for Cloudflare Workers compatibility (avoids Node Buffer edge cases).
+  const blob = new Blob([new Uint8Array(gz)], { type: "application/gzip" });
+  console.log(`[backup] uploading ${path} (${gz.byteLength} bytes)`);
   const { error } = await supabaseAdmin.storage
     .from("system-backups")
-    .upload(path, gz, {
+    .upload(path, blob, {
       contentType: "application/gzip",
       upsert: false,
     });
-  if (error) throw new Error(`upload: ${error.message}`);
+  if (error) {
+    console.error(`[backup] upload error for ${path}:`, error);
+    throw new Error(`upload: ${error.message}`);
+  }
   return { path, size: gz.byteLength };
 }
 
@@ -213,39 +226,122 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function logBackupRow(row: {
   backup_type: BackupType;
+  backup_name?: string | null;
   file_path?: string | null;
+  file_url?: string | null;
   file_size?: number | null;
-  status: "success" | "failed" | "running";
+  status: "success" | "failed" | "running" | "pending" | "processing" | "completed";
   failure_reason?: string | null;
+  error_message?: string | null;
   created_by?: string | null;
   restore_date?: string | null;
   restored_by?: string | null;
+  completed_at?: string | null;
 }) {
   try {
-    await (supabaseAdmin as SupabaseClient).from("backup_logs").insert(row as any);
+    const { data, error } = await (supabaseAdmin as SupabaseClient)
+      .from("backup_logs")
+      .insert(row as any)
+      .select("id")
+      .single();
+    if (error) console.error("[backup] log insert error", error);
+    return data?.id as string | undefined;
   } catch (e) {
     console.error("[backup] log insert failed", e);
+    return undefined;
+  }
+}
+
+async function updateBackupRow(id: string, patch: Record<string, any>) {
+  try {
+    const { error } = await (supabaseAdmin as SupabaseClient)
+      .from("backup_logs")
+      .update(patch)
+      .eq("id", id);
+    if (error) console.error("[backup] log update error", error);
+  } catch (e) {
+    console.error("[backup] log update failed", e);
   }
 }
 
 export async function runBackupWithRetry(type: BackupType, createdBy: string | null, retries = 1) {
+  const startedAt = new Date();
+  const backupName = `backup-${type}-${startedAt.toISOString().replace(/[:.]/g, "-")}`;
+  console.log(`[backup] start ${backupName}`);
+
+  // 1) Insert "processing" tracking row
+  const rowId = await logBackupRow({
+    backup_type: type,
+    backup_name: backupName,
+    status: "processing",
+    created_by: createdBy,
+  });
+
   let lastErr: any = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const payload = await buildBackupPayload(type);
       const { path, size } = await uploadBackup(type, payload);
-      await logBackupRow({ backup_type: type, file_path: path, file_size: size, status: "success", created_by: createdBy });
-      return { path, size };
+
+      // Generate a long-lived signed URL for convenience (7 days).
+      let fileUrl: string | null = null;
+      try {
+        const { data: signed } = await supabaseAdmin.storage
+          .from("system-backups")
+          .createSignedUrl(path, 60 * 60 * 24 * 7);
+        fileUrl = signed?.signedUrl ?? null;
+      } catch (e) {
+        console.error("[backup] sign url failed", e);
+      }
+
+      const completedAt = new Date().toISOString();
+      if (rowId) {
+        await updateBackupRow(rowId, {
+          file_path: path,
+          file_url: fileUrl,
+          file_size: size,
+          status: "completed",
+          completed_at: completedAt,
+        });
+      } else {
+        // Fallback insert if processing row couldn't be created
+        await logBackupRow({
+          backup_type: type,
+          backup_name: backupName,
+          file_path: path,
+          file_url: fileUrl,
+          file_size: size,
+          status: "completed",
+          completed_at: completedAt,
+          created_by: createdBy,
+        });
+      }
+      console.log(`[backup] success ${backupName} -> ${path}`);
+      return { path, size, file_url: fileUrl, backup_name: backupName };
     } catch (e: any) {
       lastErr = e;
       console.error(`[backup] attempt ${attempt + 1} failed`, e);
     }
   }
-  await logBackupRow({
-    backup_type: type,
-    status: "failed",
-    failure_reason: lastErr?.message ?? String(lastErr),
-    created_by: createdBy,
-  });
+  const errMsg = lastErr?.message ?? String(lastErr);
+  const completedAt = new Date().toISOString();
+  if (rowId) {
+    await updateBackupRow(rowId, {
+      status: "failed",
+      failure_reason: errMsg,
+      error_message: errMsg,
+      completed_at: completedAt,
+    });
+  } else {
+    await logBackupRow({
+      backup_type: type,
+      backup_name: backupName,
+      status: "failed",
+      failure_reason: errMsg,
+      error_message: errMsg,
+      created_by: createdBy,
+      completed_at: completedAt,
+    });
+  }
   throw lastErr;
 }
