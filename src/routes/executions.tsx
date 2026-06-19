@@ -265,8 +265,26 @@ function ExecutionsPage() {
   const totalCount = executions.length;
   const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;
   const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;
-  const today = new Date().toISOString().slice(0, 10);
-  const todayCount = executions.filter((e) => e.operation_status === "منفذ" && (e.created_at || "").slice(0, 10) === today).length;
+  // "تنفيذ اليوم" = السجلات التي تاريخ مغادرتها (travel_date) يساوي اليوم بتوقيت القاهرة،
+  // باستثناء الملغية فقط. لا يعتمد على تاريخ الإنشاء/التقديم/الإصدار أو الحالة.
+  const todayISO = cairoToday();
+  const CANCELLED_STATUSES = new Set(["ملغي", "ملغية", "ملغى", "محذوف"]);
+  const isTodayDeparture = (e: Execution) => {
+    const raw = String((e as any).travel_date || "").trim();
+    if (!raw) return false;
+    // dعم ISO (YYYY-MM-DD[...]) و DD/MM/YYYY
+    const iso = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : (parseDisplayDate(raw) || "");
+    if (iso !== todayISO) return false;
+    return !CANCELLED_STATUSES.has(String(e.operation_status || "").trim());
+  };
+  const todayCount = executions.filter(isTodayDeparture).length;
+
+  const applyTodayFilter = () => {
+    const base = initialFilters();
+    base["travel_date"] = { type: "dateRange", from: todayISO, to: todayISO } as CF.ColumnFilterState;
+    setFilters(base);
+    setTab("list");
+  };
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
@@ -315,7 +333,7 @@ function ExecutionsPage() {
         <KpiCard icon="📋" label="إجمالي التنفيذ" value={totalCount} tone="navy" />
         <KpiCard icon="✅" label="منفذ" value={doneCount} tone="emerald" />
         <KpiCard icon="⏳" label="قيد التنفيذ" value={pendingCount} tone="sky" />
-        <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" />
+        <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" onClick={applyTodayFilter} />
       </div>
 
 
@@ -411,7 +429,7 @@ function ExecutionsPage() {
   );
 }
 
-function KpiCard({ icon, label, value, tone }: { icon: string; label: string; value: number | string; tone: "navy" | "emerald" | "sky" | "rose" | "amber" }) {
+function KpiCard({ icon, label, value, tone, onClick }: { icon: string; label: string; value: number | string; tone: "navy" | "emerald" | "sky" | "rose" | "amber"; onClick?: () => void }) {
   const tones: Record<string, { bg: string; fg: string; bd: string }> = {
     navy:    { bg: "#eef2ff", fg: NAVY,      bd: "#dbe3ee" },
     emerald: { bg: "#ecfdf5", fg: "#047857", bd: "#a7f3d0" },
@@ -420,8 +438,15 @@ function KpiCard({ icon, label, value, tone }: { icon: string; label: string; va
     amber:   { bg: "#fffbeb", fg: "#b45309", bd: "#fde68a" },
   };
   const t = tones[tone];
+  const clickable = typeof onClick === "function";
   return (
-    <div style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+    <div
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      style={{ minHeight: 84, padding: 14, borderRadius: 12, background: "#fff", border: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)", cursor: clickable ? "pointer" : "default" }}
+    >
       <div style={{ width: 42, height: 42, borderRadius: 10, background: t.bg, color: t.fg, border: `1px solid ${t.bd}`, display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 3 }}>{label}</div>
