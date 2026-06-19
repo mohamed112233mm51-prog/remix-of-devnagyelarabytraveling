@@ -407,7 +407,7 @@ export function SearchBox() {
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
         />
-        {loading && <Loader2 size={14} className="topbar-search-spin" />}
+        {loading && <Spinner size={14} aria-label="جارٍ البحث" />}
       </div>
 
       {showDropdown && (
