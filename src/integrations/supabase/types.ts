@@ -164,7 +164,9 @@ export type Database = {
           id: string
           restore_date: string | null
           restored_by: string | null
+          started_at: string | null
           status: string | null
+          trigger_type: string
         }
         Insert: {
           backup_name?: string | null
@@ -180,7 +182,9 @@ export type Database = {
           id?: string
           restore_date?: string | null
           restored_by?: string | null
+          started_at?: string | null
           status?: string | null
+          trigger_type?: string
         }
         Update: {
           backup_name?: string | null
@@ -196,7 +200,9 @@ export type Database = {
           id?: string
           restore_date?: string | null
           restored_by?: string | null
+          started_at?: string | null
           status?: string | null
+          trigger_type?: string
         }
         Relationships: []
       }

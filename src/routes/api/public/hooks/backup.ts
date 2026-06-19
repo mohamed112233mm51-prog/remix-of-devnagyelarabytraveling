@@ -36,7 +36,7 @@ const routeOptions = {
           if (!ALLOWED.includes(type)) {
             return new Response(JSON.stringify({ error: "invalid type" }), { status: 400, headers: { "Content-Type": "application/json" } });
           }
-          const r = await runBackupWithRetry(type, null, 1);
+          const r = await runBackupWithRetry(type, null, 1, "automatic");
           return Response.json({ ok: true, ...r });
         } catch (e: any) {
           return new Response(JSON.stringify({ error: e?.message ?? "backup failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
