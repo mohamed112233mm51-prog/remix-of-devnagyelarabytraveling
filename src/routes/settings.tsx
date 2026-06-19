@@ -3245,7 +3245,7 @@ function DemoDataCleanupCard() {
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>issuing_companies count</span><b>{result.verification.issuing_companies}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>حسابات الشركات المحذوفة</span><b>{result.companyAccountsDeleted}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>العمليات المرتبطة المتبقية</span><b>{result.verification.company_related_total}</b></div>
-                {Object.keys(result.errors).length > 0 && <div style={{ color: "#991B1B", fontSize: 12 }}>Supabase errors: {Object.values(result.errors).join(" | ")}</div>}
+                {Object.keys(result.errors).length > 0 && <div style={{ color: "#991B1B", fontSize: 12 }}>Backend errors: {Object.values(result.errors).join(" | ")}</div>}
               </div>
               <details style={{ marginTop: 6, fontSize: 12, color: "#475569" }}>
                 <summary style={{ cursor: "pointer", fontWeight: 700 }}>تفاصيل لكل جدول</summary>
