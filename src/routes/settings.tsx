@@ -3120,7 +3120,7 @@ function DemoDataCleanupCard() {
         </div>
 
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>البيانات التجريبية الحالية</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>السجلات الحالية في الجداول التشغيلية</div>
           {isLoading ? (
             <div style={{ color: "#94A3B8", fontSize: 13 }}>جارٍ التحميل...</div>
           ) : (
