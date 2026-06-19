@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { normalizeDropdownValue, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
+import { normalizeDropdownValue, refetchLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
 import { withFaviconVersion } from "@/lib/favicon";
 import {
@@ -18,7 +18,7 @@ import {
 import {
   createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow,
 } from "@/lib/backups.functions";
-import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, prepareForLaunch, type WipeCategory } from "@/lib/demo-data.functions";
+import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, prepareForLaunch, resetVerification, type WipeCategory } from "@/lib/demo-data.functions";
 import { getBackendDiagnostics, isProdEnv } from "@/lib/env";
 import { Settings as SettingsIcon, Users, UserPlus, ShieldCheck, SlidersHorizontal, DatabaseBackup, Search, Power, Trash2, KeyRound, Mail, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserCheck, UserCog, Clock, Building2, Palette, Image as ImageIcon, ListChecks, Plus, Pencil, Check, X as XIcon, Upload, Save, Inbox, MapPin, Plane, Wrench, Phone, DollarSign, Sparkles, AlertCircle, Trash, Database, HardDrive, Download, RotateCcw, Eye, RefreshCw, Calendar, Activity, FileArchive, XCircle, AlertTriangle, Cloud } from "lucide-react";
 
@@ -3053,6 +3053,7 @@ function EnvironmentDiagnosticsCard() {
 function DemoDataCleanupCard() {
   const checkFn = useServerFn(checkDemoData);
   const cleanupFn = useServerFn(productionCleanup);
+  const verifyFn = useServerFn(resetVerification);
   const qc = useQueryClient();
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["demo-data-counts"],
@@ -3061,7 +3062,9 @@ function DemoDataCleanupCard() {
   const [withBackup, setWithBackup] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<null | Awaited<ReturnType<typeof productionCleanup>>>(null);
+  const [verification, setVerification] = useState<null | Awaited<ReturnType<typeof resetVerification>>>(null);
 
   const total = data?.total ?? 0;
 
@@ -3085,17 +3088,38 @@ function DemoDataCleanupCard() {
     try {
       const res = await cleanupFn({ data: { createBackup: withBackup } });
       setResult(res);
+      setVerification({ verification: res.verification, errors: res.errors, ok: res.status === "clean" });
+      console.info("[Reset Verification] cleanup", res.verification, res.errors);
+      await refetchLiveTables(["issuing_companies", "company_transactions", "usd_treasury_transactions", "submissions", "executions"]);
+      await qc.invalidateQueries();
+      await refetch();
       if (res.status === "clean") {
-        toast.success(`تم تنظيف النظام • ${res.totalDeleted} سجل محذوف`);
+        toast.success(`تم تنظيف النظام • الشركات الصادرة الآن ${res.verification.issuing_companies}`);
       } else {
-        toast.warning(`اكتمل التنظيف مع ${res.remaining} سجلات متبقية`);
+        toast.warning(`فشل التحقق النهائي: الشركات الصادرة ${res.verification.issuing_companies}`);
       }
-      qc.invalidateQueries();
-      refetch();
     } catch (e: any) {
       toast.error(e?.message || "فشل التنظيف");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runResetVerification() {
+    setVerifying(true);
+    try {
+      const res = await verifyFn();
+      setVerification(res);
+      console.info("[Reset Verification] manual", res.verification, res.errors);
+      await refetchLiveTables(["issuing_companies", "company_transactions", "usd_treasury_transactions", "submissions", "executions"]);
+      await qc.invalidateQueries();
+      await refetch();
+      if (res.ok) toast.success(`Reset Verification: issuing_companies = ${res.verification.issuing_companies}`);
+      else toast.warning(`Reset Verification: issuing_companies = ${res.verification.issuing_companies}`);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل التحقق");
+    } finally {
+      setVerifying(false);
     }
   }
 
@@ -3154,7 +3178,28 @@ function DemoDataCleanupCard() {
             <Trash2 size={16} />
             <span>{busy ? "جارٍ التنظيف..." : total === 0 ? "النظام نظيف بالفعل" : `تنظيف النظام للإنتاج (${total})`}</span>
           </button>
+          <button
+            onClick={runResetVerification}
+            disabled={busy || verifying}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, background: "#fff", color: "#0F1F44", border: "1px solid #0F1F44", fontWeight: 800, fontSize: 14, cursor: busy || verifying ? "not-allowed" : "pointer" }}
+          >
+            <Database size={16} />
+            <span>{verifying ? "جارٍ التحقق..." : "Reset Verification"}</span>
+          </button>
         </div>
+
+        {verification && (
+          <div style={{ padding: 12, background: verification.ok ? "#ECFDF5" : "#FEF2F2", border: `1px solid ${verification.ok ? "#A7F3D0" : "#FECACA"}`, borderRadius: 10, display: "grid", gap: 6, fontSize: 12 }}>
+            <div style={{ fontWeight: 800, color: verification.ok ? "#065F46" : "#991B1B" }}>Reset Verification</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 6 }}>
+              <span>issuing_companies: <b>{verification.verification.issuing_companies}</b></span>
+              <span>company_transactions: <b>{verification.verification.company_transactions}</b></span>
+              <span>company accounts: <b>{verification.verification.company_accounts_total}</b></span>
+              <span>company refs: <b>{verification.verification.company_related_total}</b></span>
+            </div>
+            {Object.keys(verification.errors).length > 0 && <div style={{ color: "#991B1B" }}>Errors: {Object.values(verification.errors).join(" | ")}</div>}
+          </div>
+        )}
       </div>
 
       {confirmOpen && (
@@ -3194,6 +3239,13 @@ function DemoDataCleanupCard() {
                 <span style={{ fontWeight: 800, color: result.status === "clean" ? "#065F46" : "#92400E" }}>
                   {result.status === "clean" ? "جاهز للإنتاج ✓" : `${result.remaining} سجل متبقٍ`}
                 </span>
+              </div>
+              <div style={{ display: "grid", gap: 6, padding: "10px 12px", background: result.verification.issuing_companies === 0 ? "#ECFDF5" : "#FEF2F2", border: `1px solid ${result.verification.issuing_companies === 0 ? "#A7F3D0" : "#FECACA"}`, borderRadius: 8, fontSize: 13 }}>
+                <div style={{ color: "#334155", fontWeight: 800 }}>Reset Verification</div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>issuing_companies count</span><b>{result.verification.issuing_companies}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>حسابات الشركات المحذوفة</span><b>{result.companyAccountsDeleted}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>العمليات المرتبطة المتبقية</span><b>{result.verification.company_related_total}</b></div>
+                {Object.keys(result.errors).length > 0 && <div style={{ color: "#991B1B", fontSize: 12 }}>Supabase errors: {Object.values(result.errors).join(" | ")}</div>}
               </div>
               <details style={{ marginTop: 6, fontSize: 12, color: "#475569" }}>
                 <summary style={{ cursor: "pointer", fontWeight: 700 }}>تفاصيل لكل جدول</summary>

@@ -33,20 +33,171 @@ async function ensureAdmin(supabase: any, userId: string) {
 }
 
 const DEMO_TABLES = [
+  "payment_splits",
+  "expense_deductions",
+  "expenses",
+  "investor_transactions",
+  "merchant_cash_collections",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
+  "company_transactions",
+  "transactions",
+  "submissions",
+  "executions",
+  "agent_service_pricing",
   "agents",
   "issuing_companies",
   "merchants",
+  "currency_suppliers",
   "investors",
-  "transactions",
-  "company_transactions",
-  "merchant_cash_collections",
-  "investor_transactions",
-  "expenses",
-  "expense_deductions",
-  "usd_treasury_transactions",
+  "activity_logs",
+  "import_batches",
 ] as const;
 
 type DemoTable = (typeof DEMO_TABLES)[number];
+
+const COMPANY_ACCOUNT_REPORT_TABLES = [
+  "company_accounts",
+  "issuing_company_accounts",
+  "company_services",
+  "company_balances",
+] as const;
+
+const PRODUCTION_DELETE_ORDER: readonly DemoTable[] = [
+  "payment_splits",
+  "expense_deductions",
+  "expenses",
+  "investor_transactions",
+  "merchant_cash_collections",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
+  "company_transactions",
+  "transactions",
+  "submissions",
+  "executions",
+  "agent_service_pricing",
+  "investors",
+  "merchants",
+  "currency_suppliers",
+  "issuing_companies",
+  "agents",
+  "activity_logs",
+  "import_batches",
+];
+
+type CleanupErrors = Record<string, string>;
+
+function isMissingTableError(error: any) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("could not find the table") || msg.includes("does not exist") || msg.includes("pgrst205");
+}
+
+async function countAllRows(sb: ReturnType<typeof admin>, table: string, errors?: CleanupErrors) {
+  const { count, error } = await sb
+    .from(table as any)
+    .select("*", { count: "exact", head: true });
+  if (error) {
+    if (errors) errors[table] = error.message;
+    console.error(`[Reset Verification] failed to count ${table}:`, error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+async function countRowsWithValue(sb: ReturnType<typeof admin>, table: string, column: string, errors?: CleanupErrors) {
+  const { count, error } = await sb
+    .from(table as any)
+    .select("*", { count: "exact", head: true })
+    .not(column, "is", null);
+  if (error) {
+    if (errors) errors[`${table}.${column}`] = error.message;
+    console.error(`[Reset Verification] failed to count ${table}.${column}:`, error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+async function deleteAllRows(sb: ReturnType<typeof admin>, table: string, summary: Record<string, number>, errors: CleanupErrors) {
+  const { count, error } = await sb
+    .from(table as any)
+    .delete({ count: "exact" })
+    .not("id", "is", null);
+  if (error) {
+    summary[table] = 0;
+    errors[table] = error.message;
+    console.error(`[productionCleanup] failed to wipe ${table}:`, error.message);
+    return 0;
+  }
+  summary[table] = count ?? 0;
+  return count ?? 0;
+}
+
+async function countOptionalRows(sb: ReturnType<typeof admin>, table: string, errors?: CleanupErrors) {
+  const { count, error } = await sb
+    .from(table as any)
+    .select("*", { count: "exact", head: true });
+  if (error) {
+    if (!isMissingTableError(error) && errors) errors[table] = error.message;
+    return 0;
+  }
+  return count ?? 0;
+}
+
+async function deleteOptionalRows(sb: ReturnType<typeof admin>, table: string, summary: Record<string, number>, errors: CleanupErrors) {
+  const { count, error } = await sb
+    .from(table as any)
+    .delete({ count: "exact" })
+    .not("id", "is", null);
+  if (error) {
+    summary[table] = 0;
+    if (!isMissingTableError(error)) {
+      errors[table] = error.message;
+      console.error(`[productionCleanup] failed to wipe ${table}:`, error.message);
+    }
+    return 0;
+  }
+  summary[table] = count ?? 0;
+  return count ?? 0;
+}
+
+async function buildResetVerification(sb: ReturnType<typeof admin>, errors: CleanupErrors = {}) {
+  const issuingCompanies = await countAllRows(sb, "issuing_companies", errors);
+  const companyTransactions = await countAllRows(sb, "company_transactions", errors);
+  const usdTreasuryCompanyRefs = await countRowsWithValue(sb, "usd_treasury_transactions", "company_id", errors);
+  const submissionCompanyRefs = await countRowsWithValue(sb, "submissions", "approval_company_id", errors);
+  const executionCompanyRefs = await countRowsWithValue(sb, "executions", "approval_company_id", errors);
+  const companyAccountCounts: Record<string, number> = {};
+  for (const t of COMPANY_ACCOUNT_REPORT_TABLES) companyAccountCounts[t] = await countOptionalRows(sb, t, errors);
+
+  return {
+    issuing_companies: issuingCompanies,
+    company_transactions: companyTransactions,
+    company_accounts: companyAccountCounts.company_accounts,
+    issuing_company_accounts: companyAccountCounts.issuing_company_accounts,
+    company_services: companyAccountCounts.company_services,
+    company_balances: companyAccountCounts.company_balances,
+    usd_treasury_company_refs: usdTreasuryCompanyRefs,
+    submissions_company_refs: submissionCompanyRefs,
+    executions_company_refs: executionCompanyRefs,
+    company_accounts_total: Object.values(companyAccountCounts).reduce((s, n) => s + n, 0),
+    company_related_total: issuingCompanies + companyTransactions + usdTreasuryCompanyRefs + submissionCompanyRefs + executionCompanyRefs,
+  };
+}
+
+function companyAccountsDeleted(summary: Record<string, number>) {
+  return COMPANY_ACCOUNT_REPORT_TABLES.reduce((sum, table) => sum + (summary[table] ?? 0), 0);
+}
+
+export const resetVerification = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await ensureAdmin(context.supabase, context.userId);
+    const sb = admin();
+    const errors: CleanupErrors = {};
+    const verification = await buildResetVerification(sb, errors);
+    console.info("[Reset Verification]", { verification, errors });
+    return { verification, errors, ok: verification.issuing_companies === 0 && verification.company_related_total === 0 };
+  });
 
 export const checkDemoData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -395,41 +546,14 @@ export const productionCleanup = createServerFn({ method: "POST" })
     // production copy. Preserves: profiles, user_roles, app_settings,
     // system_dropdown_options, backup_logs, cash_boxes (balances reset),
     // storage (branding/logo) and any auth user that holds an admin role.
-    const order: string[] = [
-      "payment_splits",
-      "expense_deductions",
-      "expenses",
-      "investor_transactions",
-      "merchant_cash_collections",
-      "currency_supplier_transactions",
-      "usd_treasury_transactions",
-      "company_transactions",
-      "transactions",
-      "submissions",
-      "executions",
-      "agent_service_pricing",
-      "investors",
-      "merchants",
-      "currency_suppliers",
-      "issuing_companies",
-      "agents",
-      "activity_logs",
-      "import_batches",
-    ];
     const summary: Record<string, number> = {};
+    const errors: CleanupErrors = {};
     let totalDeleted = 0;
-    for (const t of order) {
-      const { count, error } = await sb
-        .from(t as any)
-        .delete({ count: "exact" })
-        .not("id", "is", null);
-      if (error) {
-        summary[t] = 0;
-        console.error(`[productionCleanup] failed to wipe ${t}:`, error.message);
-        continue;
-      }
-      summary[t] = count ?? 0;
-      totalDeleted += count ?? 0;
+    for (const t of COMPANY_ACCOUNT_REPORT_TABLES) {
+      totalDeleted += await deleteOptionalRows(sb, t, summary, errors);
+    }
+    for (const t of PRODUCTION_DELETE_ORDER) {
+      totalDeleted += await deleteAllRows(sb, t, summary, errors);
     }
 
     // Reset cash box balances to zero (boxes themselves are preserved).
@@ -440,22 +564,26 @@ export const productionCleanup = createServerFn({ method: "POST" })
         .not("id", "is", null);
     } catch {}
 
-    // 3) Verification — confirm wiped tables are now empty.
+    // 3) Verification — confirm wiped tables are now empty and specifically
+    // prove issuing_companies = 0 before reporting success.
     let remaining = 0;
-    for (const t of order) {
-      const { count } = await sb
-        .from(t as any)
-        .select("*", { count: "exact", head: true });
-      remaining += count ?? 0;
+    for (const t of PRODUCTION_DELETE_ORDER) {
+      remaining += await countAllRows(sb, t, errors);
     }
+    const verification = await buildResetVerification(sb, errors);
+    const clean = remaining === 0 && verification.issuing_companies === 0 && verification.company_related_total === 0;
+    console.info("[Reset Verification] production cleanup result", { verification, summary, errors, remaining });
 
     return {
       backup,
       summary,
+      errors,
+      verification,
+      companyAccountsDeleted: companyAccountsDeleted(summary),
       totalDeleted,
       usersDeleted: 0, // admins / real users are intentionally preserved
       remaining,
-      status: remaining === 0 ? "clean" : "partial",
+      status: clean ? "clean" : "partial",
     };
   });
 
