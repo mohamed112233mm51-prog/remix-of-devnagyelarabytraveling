@@ -265,8 +265,26 @@ function ExecutionsPage() {
   const totalCount = executions.length;
   const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;
   const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;
-  const today = new Date().toISOString().slice(0, 10);
-  const todayCount = executions.filter((e) => e.operation_status === "منفذ" && (e.created_at || "").slice(0, 10) === today).length;
+  // "تنفيذ اليوم" = السجلات التي تاريخ مغادرتها (travel_date) يساوي اليوم بتوقيت القاهرة،
+  // باستثناء الملغية فقط. لا يعتمد على تاريخ الإنشاء/التقديم/الإصدار أو الحالة.
+  const todayISO = cairoToday();
+  const CANCELLED_STATUSES = new Set(["ملغي", "ملغية", "ملغى", "محذوف"]);
+  const isTodayDeparture = (e: Execution) => {
+    const raw = String((e as any).travel_date || "").trim();
+    if (!raw) return false;
+    // dعم ISO (YYYY-MM-DD[...]) و DD/MM/YYYY
+    const iso = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : (parseDisplayDate(raw) || "");
+    if (iso !== todayISO) return false;
+    return !CANCELLED_STATUSES.has(String(e.operation_status || "").trim());
+  };
+  const todayCount = executions.filter(isTodayDeparture).length;
+
+  const applyTodayFilter = () => {
+    const base = initialFilters();
+    base["travel_date"] = { type: "dateRange", from: todayISO, to: todayISO } as CF.ColumnFilterState;
+    setFilters(base);
+    setTab("list");
+  };
 
   const buildExportData = () => {
     const cols = [{ header: "م", key: "n" }, ...visibleColumns.map((c) => ({ header: c.label, key: c.key }))];
