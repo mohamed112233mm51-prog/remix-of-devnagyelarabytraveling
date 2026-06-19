@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { Search, Bell, Loader2, ClipboardCheck, Wallet, Database, UserPlus, Building2 } from "lucide-react";
+import { Spinner } from "@/components/Spinner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL } from "@/lib/db";
 import { useAuth } from "@/hooks/useAuth";
