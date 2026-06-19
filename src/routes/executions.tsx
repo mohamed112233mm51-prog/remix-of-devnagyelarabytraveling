@@ -333,7 +333,7 @@ function ExecutionsPage() {
         <KpiCard icon="📋" label="إجمالي التنفيذ" value={totalCount} tone="navy" />
         <KpiCard icon="✅" label="منفذ" value={doneCount} tone="emerald" />
         <KpiCard icon="⏳" label="قيد التنفيذ" value={pendingCount} tone="sky" />
-        <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" />
+        <KpiCard icon="📅" label="تنفيذ اليوم" value={todayCount} tone="amber" onClick={applyTodayFilter} />
       </div>
 
 
