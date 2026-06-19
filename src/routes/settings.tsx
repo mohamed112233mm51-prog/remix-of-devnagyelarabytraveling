@@ -3113,14 +3113,14 @@ function DemoDataCleanupCard() {
         <div style={{ display: "flex", gap: 12, padding: 14, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, alignItems: "flex-start" }}>
           <AlertTriangle size={18} color="#B91C1C" style={{ marginTop: 2, flexShrink: 0 }} />
           <div style={{ fontSize: 13, color: "#7F1D1D", lineHeight: 1.7 }}>
-            تستخدم هذه الأداة قبل تسليم النظام للعميل لإزالة جميع البيانات التجريبية الموسومة بـ <code>is_demo = true</code>.
+            تستخدم هذه الأداة قبل تسليم النظام للعميل لحذف <b>كامل البيانات التشغيلية والمرجعية</b> (الوكلاء، الشركات المصدرة، التجار، المستثمرين، موردي العملة، التقديمات، التنفيذات، كل المعاملات والمدفوعات والمصروفات وسجل النشاط) — بغض النظر عن وسم <code>is_demo</code>.
             <br />
-            يتم الحفاظ على: الهوية البصرية، إعدادات النظام، الصلاحيات، الأدوار، إعدادات النسخ الاحتياطي، وحساب المسؤول.
+            يتم الحفاظ على: حساب المسؤول، الإعدادات، الهوية البصرية، الصلاحيات، الأدوار، القوائم المنسدلة، الخزائن (مع تصفير أرصدتها)، وسجل النسخ الاحتياطي.
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>البيانات التجريبية الحالية</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>السجلات الحالية في الجداول التشغيلية</div>
           {isLoading ? (
             <div style={{ color: "#94A3B8", fontSize: 13 }}>جارٍ التحميل...</div>
           ) : (
@@ -3160,7 +3160,7 @@ function DemoDataCleanupCard() {
       {confirmOpen && (
         <ConfirmModal
           title="تأكيد تنظيف النظام للإنتاج"
-          message="سيتم حذف جميع البيانات التجريبية نهائيًا مع الحفاظ على إعدادات النظام. لا يمكن التراجع عن هذه العملية."
+          message="سيتم حذف جميع البيانات التشغيلية والمرجعية (الشركات، الوكلاء، التجار، المستثمرين، التقديمات، التنفيذات، المعاملات...) نهائيًا، مع الحفاظ على الإعدادات والصلاحيات والمستخدمين. لا يمكن التراجع."
           confirmLabel="نعم، نظّف الآن"
           danger
           onCancel={() => setConfirmOpen(false)}
