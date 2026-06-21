@@ -177,7 +177,7 @@ export async function restoreFromPayload(payload: BackupPayload) {
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
-        const onConflict = t === "user_roles" ? "user_id,role" : "id";
+        const onConflict = UPSERT_CONFLICT_KEY[t] ?? "id";
         const res = isReference
           ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
           : await (supabaseAdmin.from as any)(t).insert(slice);
