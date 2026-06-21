@@ -6,16 +6,15 @@ export const ALL_ACTIONS: PermAction[] = ["view", "create", "edit", "delete", "e
 
 export const SECTION_KEYS = [
   "dashboard",
-  "agents",
   "submissions",
   "executions",
   "accounts",
-  "expenses",
-  "reports",
   "companies",
   "merchants",
-  "investors",
   "currency_suppliers",
+  "investors",
+  "expenses",
+  "reports",
   "data_import",
 ] as const;
 
