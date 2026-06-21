@@ -149,6 +149,13 @@ export const REFERENCE_TABLES_NO_WIPE: ReadonlySet<string> = new Set([
   "system_dropdown_options",
 ]);
 
+// Per-table conflict key for upsert. Default is "id" for tables that have it.
+// Tables without an "id" column must declare their real PK here.
+const UPSERT_CONFLICT_KEY: Record<string, string> = {
+  app_settings: "key",
+  user_roles: "user_id,role",
+};
+
 // Performs full restore. Reference tables are upserted (no wipe). Other tables
 // are wiped then re-inserted in chunks. Bypasses RLS via service role.
 // Caller MUST be admin (enforced upstream).
