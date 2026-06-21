@@ -824,22 +824,32 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
             </div>
           </div>
 
+          {u.is_super_admin && (
+            <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 10, padding: 10, marginBottom: 8, fontSize: 12, color: "#78350F", fontWeight: 700 }}>
+              صلاحيات الأقسام موروثة تلقائيًا من صاحب النظام — جميع الأقسام مفعّلة بكل الإجراءات.
+            </div>
+          )}
           <div style={{ display: "grid", gap: 8 }}>
             {PERMISSION_KEYS.map((p) => {
-              const cur = normalizePerm(u.permissions?.[p.key]);
+              const supa = !!u.is_super_admin;
+              const cur = supa
+                ? { view: true, create: true, edit: true, delete: true, export: true }
+                : normalizePerm(u.permissions?.[p.key]);
               const allOn = ACTIONS.every((a) => cur[a.key]);
               const anyOn = ACTIONS.some((a) => cur[a.key]);
               return (
-                <div key={p.key} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: 10 }}>
+                <div key={p.key} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: 10, opacity: supa ? 0.75 : 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <strong style={{ fontSize: 13, color: "#0F172A" }}>{p.label}</strong>
                       {anyOn && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#1E3A8A", background: "#EEF2FF", padding: "1px 7px", borderRadius: 999, border: "1px solid #C7D2FE" }}>مفعّل</span>}
+                      {supa && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", background: "#FEF3C7", padding: "1px 7px", borderRadius: 999, border: "1px solid #FDE68A" }}>موروثة من صاحب النظام</span>}
                     </div>
-                    <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer", color: "#475569", fontWeight: 600 }}>
+                    <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center", cursor: supa ? "not-allowed" : "pointer", color: "#475569", fontWeight: 600 }}>
                       <input
                         type="checkbox"
                         checked={allOn}
+                        disabled={supa}
                         onChange={(e) => {
                           const v = e.target.checked;
                           commit(p.key, { view: v, create: v, edit: v, delete: v, export: v });
@@ -850,10 +860,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {ACTIONS.map((a) => (
-                      <label key={a.key} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155", padding: "4px 10px", background: cur[a.key] ? "#EFF6FF" : "transparent", border: `1px solid ${cur[a.key] ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8 }}>
+                      <label key={a.key} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 12, cursor: supa ? "not-allowed" : "pointer", color: "#334155", padding: "4px 10px", background: cur[a.key] ? "#EFF6FF" : "transparent", border: `1px solid ${cur[a.key] ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8 }}>
                         <input
                           type="checkbox"
                           checked={!!cur[a.key]}
+                          disabled={supa}
                           onChange={(e) => {
                             const next = { ...cur, [a.key]: e.target.checked };
                             if (a.key !== "view" && e.target.checked) next.view = true;
