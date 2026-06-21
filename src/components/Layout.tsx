@@ -50,6 +50,7 @@ const NAV: { label: string; items: Item[] }[] = [
       { to: "/companies", icon: Building2, label: "حسابات الشركات الصادرة", section: "الحسابات المالية", permKey: "companies" },
       { to: "/merchants", icon: HandCoins, label: "حسابات تاجر الكاش", section: "الحسابات المالية", permKey: "merchants" },
       { to: "/currency-suppliers", icon: Coins, label: "حسابات موردي العملة", section: "الحسابات المالية", permKey: "currency_suppliers" },
+      { to: "/investors", icon: Briefcase, label: "حسابات المستثمرين", section: "الحسابات المالية", permKey: "investors" },
     ],
   },
   {

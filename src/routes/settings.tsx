@@ -33,18 +33,21 @@ function SafePageError() {
 
 type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "devtools";
 
-const PERMISSION_KEYS: { key: string; label: string }[] = [
-  { key: "dashboard", label: "لوحة التحكم" },
-  { key: "agents", label: "الوكلاء" },
-  { key: "submissions", label: "التقديمات" },
-  { key: "executions", label: "التنفيذ" },
-  { key: "accounts", label: "الحسابات" },
-  { key: "expenses", label: "المصروفات" },
-  { key: "reports", label: "التقارير" },
-  { key: "companies", label: "الشركات" },
-  { key: "merchants", label: "التجار" },
-  { key: "investors", label: "المستثمرين" },
-  { key: "data_import", label: "إدارة واستيراد البيانات" },
+// Permissions list MUST mirror the actual navigable sections of the system
+// (see src/components/Layout.tsx NAV + src/hooks/usePerm.tsx ROUTE_PERM).
+// Each key is independent and controls exactly one route/section.
+const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
+  { key: "dashboard",          label: "لوحة التحكم",              route: "/" },
+  { key: "submissions",        label: "التقديمات",                route: "/submissions" },
+  { key: "executions",         label: "التنفيذ",                  route: "/executions" },
+  { key: "accounts",           label: "حسابات الوكلاء",           route: "/accounts" },
+  { key: "companies",          label: "حسابات الشركات الصادرة",   route: "/companies" },
+  { key: "merchants",          label: "حسابات تاجر الكاش",        route: "/merchants" },
+  { key: "currency_suppliers", label: "حسابات موردي العملة",      route: "/currency-suppliers" },
+  { key: "investors",          label: "حسابات المستثمرين",        route: "/investors" },
+  { key: "expenses",           label: "المصروفات",                route: "/expenses" },
+  { key: "reports",            label: "التقارير",                 route: "/reports" },
+  { key: "data_import",        label: "مركز استيراد البيانات",    route: "/data-import" },
 ];
 
 const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: string }[] = [
