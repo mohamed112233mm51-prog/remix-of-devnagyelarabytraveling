@@ -44,7 +44,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "companies",          label: "حسابات الشركات الصادرة",   route: "/companies" },
   { key: "merchants",          label: "حسابات تاجر الكاش",        route: "/merchants" },
   { key: "currency_suppliers", label: "حسابات موردي العملة",      route: "/currency-suppliers" },
-  { key: "investors",          label: "حسابات المستثمرين",        route: "/investors" },
+  
   { key: "expenses",           label: "المصروفات",                route: "/expenses" },
   { key: "reports",            label: "التقارير",                 route: "/reports" },
   { key: "data_import",        label: "مركز استيراد البيانات",    route: "/data-import" },
@@ -76,7 +76,7 @@ function SettingsPage() {
     // قائمة "قوائم النظام" تم دمجها في تبويب "إعدادات عامة → القوائم المنسدلة" — مصدر واحد لجميع القوائم.
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
-    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "diagnostics" as SettingsSubKey }] : []),
+    ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "system_tools" as SettingsSubKey }] : []),
   ];
   const tabs = allTabs.filter((t) => can(t.perm));
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "users");
@@ -134,7 +134,7 @@ function SettingsPage() {
       {/* تبويب "قوائم النظام" تم حذفه — القوائم تُدار حصراً من "إعدادات عامة". */}
       {tab === "backups" && can("backups_manage") && <BackupsTab />}
       {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
-      {tab === "devtools" && can("diagnostics") && !isProdEnv() && <DevToolsTab />}
+      {tab === "devtools" && can("system_tools") && !isProdEnv() && <DevToolsTab />}
     </div>
   );
 }
@@ -785,7 +785,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                   checked={!!u.is_super_admin}
                   onChange={async (e) => {
                     await updFn({ data: { id: u.id, is_super_admin: e.target.checked } });
-                    toast.success(e.target.checked ? "تم تعيين كصاحب نظام" : "تم إلغاء صلاحية صاحب النظام");
+                    toast.success(e.target.checked ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
                     onChanged();
                   }}
                 />
