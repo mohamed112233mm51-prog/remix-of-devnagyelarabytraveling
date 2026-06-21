@@ -133,30 +133,53 @@ export async function downloadBackupPayload(path: string): Promise<BackupPayload
   return parsed;
 }
 
-// Performs full restore by wiping each backed-up table then re-inserting in chunks.
-// Bypasses RLS via service role. Caller MUST be admin (enforced upstream).
+// Reference/master tables: never wiped during restore. Rows are upserted by id
+// so existing records get updated and missing ones get inserted, but related
+// operational data (users, companies, agents, boxes, currencies) is preserved.
+export const REFERENCE_TABLES_NO_WIPE: ReadonlySet<string> = new Set([
+  "issuing_companies",
+  "agents",
+  "profiles",
+  "user_roles",
+  "cash_boxes",
+  "currency_suppliers",
+  "merchants",
+  "investors",
+  "app_settings",
+  "system_dropdown_options",
+]);
+
+// Performs full restore. Reference tables are upserted (no wipe). Other tables
+// are wiped then re-inserted in chunks. Bypasses RLS via service role.
+// Caller MUST be admin (enforced upstream).
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; error?: string }> = {};
+  const summary: Record<string, { restored: number; mode: "upsert" | "wipe-insert"; error?: string }> = {};
   for (const t of BACKUP_TABLES) {
     const rows = payload.data[t] ?? [];
+    const isReference = REFERENCE_TABLES_NO_WIPE.has(t);
     try {
-      // Wipe table. Using a non-null id filter ensures DELETE has a where.
-      const del = await (supabaseAdmin.from as any)(t).delete().not("id", "is", null);
-      if (del.error) throw new Error(`wipe: ${del.error.message}`);
+      if (!isReference) {
+        // Wipe table. Using a non-null id filter ensures DELETE has a where.
+        const del = await (supabaseAdmin.from as any)(t).delete().not("id", "is", null);
+        if (del.error) throw new Error(`wipe: ${del.error.message}`);
+      }
 
-      // Insert in chunks
+      // Insert / upsert in chunks
       const CHUNK = 500;
-      let inserted = 0;
+      let written = 0;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
-        const ins = await (supabaseAdmin.from as any)(t).insert(slice);
-        if (ins.error) throw new Error(`insert: ${ins.error.message}`);
-        inserted += slice.length;
+        const onConflict = t === "user_roles" ? "user_id,role" : "id";
+        const res = isReference
+          ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
+          : await (supabaseAdmin.from as any)(t).insert(slice);
+        if (res.error) throw new Error(`${isReference ? "upsert" : "insert"}: ${res.error.message}`);
+        written += slice.length;
       }
-      summary[t] = { restored: inserted };
+      summary[t] = { restored: written, mode: isReference ? "upsert" : "wipe-insert" };
     } catch (e: any) {
-      summary[t] = { restored: 0, error: e?.message ?? String(e) };
+      summary[t] = { restored: 0, mode: isReference ? "upsert" : "wipe-insert", error: e?.message ?? String(e) };
     }
   }
   return summary;
