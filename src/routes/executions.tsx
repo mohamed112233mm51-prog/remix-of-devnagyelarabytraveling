@@ -107,53 +107,64 @@ function ExecutionsPage() {
     const r = computeValidity(e); return r ? (r.expired ? "منتهية" : "جارية") : "";
   };
 
-  const [tab, setTab] = useState<"list" | "add">("list");
-  const [editing, setEditing] = useState<Execution | null>(null);
+  // Prefill from a submission (if user clicked "تحويل التقديم إلى تنفيذ").
+  // Read synchronously in the useState initializer so React StrictMode's
+  // double-mount in dev cannot collapse the form back to the list before
+  // the user has saved (a useEffect-based read would remove the key on the
+  // first mount and find nothing on the second).
+  const initialPrefill = (() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem("execution:fromSubmission");
+      if (!raw) return null;
+      const sub = JSON.parse(raw);
+      if (!sub || typeof sub !== "object" || Array.isArray(sub)) return null;
+      const submissionServices = Array.isArray(sub.services) ? sub.services : [];
+      return {
+        id: "",
+        submission_id: sub.id,
+        passenger_name: sub.passenger_name,
+        national_id: sub.national_id,
+        dob: sub.dob,
+        passport: sub.passport,
+        birth_place: sub.birth_place,
+        agent_id: sub.agent_id,
+        status: sub.status || "بطيء",
+        operation_status: "قيد التنفيذ",
+        departure_from: sub.departure_from,
+        destination: null, airline: null, travel_date: null,
+        notes: sub.notes,
+        approval_company_id: sub.approval_company_id || null,
+        passenger_type: sub.passenger_type || null,
+        issue_date: sub.issue_date || null,
+        approval_validity_enabled: !!sub.approval_validity_enabled,
+        services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s: { service_type: string }) => s.service_type),
+        created_at: "", updated_at: "",
+      } as any as Execution;
+    } catch { return null; }
+  })();
+
+  const [tab, setTab] = useState<"list" | "add">(initialPrefill ? "add" : "list");
+  const [editing, setEditing] = useState<Execution | null>(initialPrefill);
   const activeCompanies = useMemo(() => companies.filter((c) => (c.status || "نشط") === "نشط"), [companies]);
   const companyName = (id: string | null | undefined) =>
     (id && companies.find((c) => c.id === id)?.company_name) || "—";
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || "—";
 
-
-  // If arriving from a submission, prefill the form
+  // Clear the prefill key only after both StrictMode mounts have read it.
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("execution:fromSubmission");
-      if (raw) {
-        const sub = JSON.parse(raw);
-        sessionStorage.removeItem("execution:fromSubmission");
-        if (!sub || typeof sub !== "object" || Array.isArray(sub)) return;
-        const submissionServices = Array.isArray(sub.services) ? sub.services : [];
-        setEditing({
-          id: "",
-          submission_id: sub.id,
-          passenger_name: sub.passenger_name,
-          national_id: sub.national_id,
-          dob: sub.dob,
-          passport: sub.passport,
-          birth_place: sub.birth_place,
-          agent_id: sub.agent_id,
-          status: sub.status || "بطيء",
-          operation_status: "قيد التنفيذ",
-          departure_from: sub.departure_from,
-          destination: null, airline: null, travel_date: null,
-          notes: sub.notes,
-          approval_company_id: sub.approval_company_id || null,
-          passenger_type: sub.passenger_type || null,
-          issue_date: sub.issue_date || null,
-          approval_validity_enabled: !!sub.approval_validity_enabled,
-          services: submissionServices.map((s: string) => ({ service_type: String(s || ""), count: 1, agent_price: 0, company_price: 0, company_value: 0 })).filter((s: { service_type: string }) => s.service_type),
-          created_at: "", updated_at: "",
-        } as any);
-        setTab("add");
-      }
-    } catch {}
+    if (!initialPrefill) return;
+    const t = setTimeout(() => {
+      try { sessionStorage.removeItem("execution:fromSubmission"); } catch {}
+    }, 0);
+    return () => clearTimeout(t);
+     
   }, []);
 
   // Open existing execution by id (when coming from submission already converted)
   useEffect(() => {
     try {
-      const openId = sessionStorage.getItem("executions:openId");
+      const openId = typeof window !== "undefined" ? sessionStorage.getItem("executions:openId") : null;
       const safeExecutions = Array.isArray(executions) ? executions : [];
       if (openId && safeExecutions.length) {
         const found = safeExecutions.find((e) => e.id === openId);
