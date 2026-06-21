@@ -12,7 +12,6 @@ export const SECTION_KEYS = [
   "companies",
   "merchants",
   "currency_suppliers",
-  "investors",
   "expenses",
   "reports",
   "data_import",
@@ -24,9 +23,7 @@ export const SETTINGS_SUB_KEYS = [
   "roles_manage",
   "backups_manage",
   "company_manage",
-  "system_lists",
   "system_tools",
-  "diagnostics",
   "import_data",
 ] as const;
 export type SettingsSubKey = typeof SETTINGS_SUB_KEYS[number];
@@ -36,9 +33,7 @@ export const SETTINGS_SUB_LABELS: Record<SettingsSubKey, string> = {
   roles_manage: "إدارة الصلاحيات",
   backups_manage: "النسخ الاحتياطي",
   company_manage: "إعدادات الشركة",
-  system_lists: "إدارة قوائم النظام",
   system_tools: "أدوات النظام",
-  diagnostics: "تشخيص النظام",
   import_data: "مركز البيانات / الاستيراد",
 };
 
@@ -50,7 +45,6 @@ export const ROUTE_PERM: Record<string, string | null> = {
   "/accounts": "accounts",
   "/companies": "companies",
   "/merchants": "merchants",
-  "/investors": "investors",
   "/currency-suppliers": "currency_suppliers",
   "/expenses": "expenses",
   "/reports": "reports",

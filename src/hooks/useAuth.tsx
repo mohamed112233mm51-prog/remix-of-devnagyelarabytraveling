@@ -245,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     profileLoaded,
     roles,
-    isAdmin: roles.includes("admin"),
+    isAdmin: roles.includes("admin") || isSuperAdmin,
     isSuperAdmin,
     needsPassword,
     blocked,
