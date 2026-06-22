@@ -12,7 +12,7 @@ import { normalizeDropdownValue, refetchLiveTables, VALID_DROPDOWN_CATEGORIES, t
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
 import { withFaviconVersion } from "@/lib/favicon";
 import {
-  listUsers, inviteUser, deleteUser, setUserRole,
+  listUsers, inviteUser, createUserDirect, deleteUser, setUserRole,
   setUserActive, updateUserProfile, resendInvite, sendPasswordReset,
 } from "@/lib/admin.functions";
 import {
