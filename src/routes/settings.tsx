@@ -570,6 +570,41 @@ function InviteUserTab() {
           .invite-actions button { flex: 1 1 auto; justify-content: center; }
         }
       `}</style>
+
+      {createdInfo && createPortal(
+        <div onClick={() => setCreatedInfo(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "grid", placeItems: "center", zIndex: 9999, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: 22, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,.25)", border: "1px solid #E5E7EB" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg,#0F1F44,#1E3A8A)", color: "#F5D27A", display: "grid", placeItems: "center" }}>
+                <KeyRound size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تم إنشاء المستخدم</div>
+                <div style={{ fontSize: 12, color: "#64748B" }}>انسخ بيانات الدخول وأرسلها للمستخدم بشكل آمن — لن تظهر مرة أخرى.</div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: "#475569" }}>البريد الإلكتروني</div>
+              <div style={{ padding: "10px 12px", borderRadius: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", fontFamily: "monospace", direction: "ltr", textAlign: "left" }}>{createdInfo.email}</div>
+              <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>كلمة المرور المؤقتة</div>
+              <div style={{ padding: "10px 12px", borderRadius: 10, background: "#FEF9C3", border: "1px solid #FDE68A", fontFamily: "monospace", direction: "ltr", textAlign: "left", fontWeight: 700 }}>{createdInfo.password}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(`${createdInfo.email}\n${createdInfo.password}`);
+                    toast.success("تم النسخ");
+                  } catch { toast.error("تعذر النسخ"); }
+                }}
+                style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #E2E8F0", background: "#fff", fontWeight: 700, cursor: "pointer" }}
+              >نسخ</button>
+              <button onClick={() => setCreatedInfo(null)} style={{ padding: "9px 16px", borderRadius: 10, border: 0, background: "linear-gradient(135deg,#0F1F44,#1E3A8A)", color: "#F5D27A", fontWeight: 800, cursor: "pointer" }}>تم</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
