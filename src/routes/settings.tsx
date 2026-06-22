@@ -483,16 +483,28 @@ function InviteUserTab() {
                 if (!form.email || !form.full_name) return toast.error("أكمل الحقول");
                 setBusy(true);
                 try {
-                  await fn({ data: {
-                    email: form.email.trim(), full_name: form.full_name, role: accessLevel,
-                    agent_id: form.agent_id || null, permissions: form.permissions as any,
-                    origin: window.location.origin,
-                  } });
-                  toast.success("تم إرسال الدعوة بنجاح");
-                  resetForm();
+                  if (directMode) {
+                    const res = await fnDirect({ data: {
+                      email: form.email.trim(), full_name: form.full_name, role: accessLevel,
+                      agent_id: form.agent_id || null, permissions: form.permissions as any,
+                      password: customPassword.trim() || undefined,
+                    } });
+                    toast.success("تم إنشاء المستخدم بنجاح");
+                    setCreatedInfo({ email: res.email, password: (res as any).password });
+                    resetForm();
+                    setCustomPassword("");
+                  } else {
+                    await fn({ data: {
+                      email: form.email.trim(), full_name: form.full_name, role: accessLevel,
+                      agent_id: form.agent_id || null, permissions: form.permissions as any,
+                      origin: window.location.origin,
+                    } });
+                    toast.success("تم إرسال الدعوة بنجاح");
+                    resetForm();
+                  }
                   qc.invalidateQueries({ queryKey: ["admin-users"] });
                 } catch (e: any) {
-                  toast.error(e.message || "فشل إرسال الدعوة");
+                  toast.error(e.message || (directMode ? "فشل إنشاء المستخدم" : "فشل إرسال الدعوة"));
                 } finally {
                   setBusy(false);
                 }
@@ -504,7 +516,9 @@ function InviteUserTab() {
                 boxShadow: canSubmit ? "0 6px 16px rgba(15,31,68,.22)" : "none",
               }}
             >
-              <Mail size={15} /> {busy ? "جارٍ الإرسال..." : "إرسال الدعوة"}
+              {directMode
+                ? <><UserPlus size={15} /> {busy ? "جارٍ الإنشاء..." : "إنشاء المستخدم"}</>
+                : <><Mail size={15} /> {busy ? "جارٍ الإرسال..." : "إرسال الدعوة"}</>}
             </button>
           </div>
         </div>
