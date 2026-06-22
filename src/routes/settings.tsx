@@ -335,6 +335,7 @@ function UsersTab() {
 
 function InviteUserTab() {
   const fn = useServerFn(inviteUser);
+  const fnDirect = useServerFn(createUserDirect);
   const qc = useQueryClient();
   const agents = useAgents();
   const [form, setForm] = useState({
@@ -342,6 +343,9 @@ function InviteUserTab() {
     agent_id: "" as string,
     permissions: {} as Record<string, Record<string, boolean>>,
   });
+  const [directMode, setDirectMode] = useState(true);
+  const [customPassword, setCustomPassword] = useState("");
+  const [createdInfo, setCreatedInfo] = useState<{ email: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   function toggleAction(section: string, action: string, val: boolean) {
