@@ -142,20 +142,15 @@ export const inviteUser = createServerFn({ method: "POST" })
       data: { full_name: data.full_name, invited_by: context.userId },
       ...(redirectTo ? { redirectTo } : {}),
     });
-    if (error || !invited?.user) {
-      const { data: list } = await sb.auth.admin.listUsers();
-      const existing = list?.users.find((u) => u.email === data.email);
-      if (!existing) throw new Error(error?.message ?? "Invite failed");
-      await sb.auth.admin.generateLink({
-        type: "invite",
-        email: data.email,
-        ...(redirectTo ? { options: { redirectTo } } : {}),
-      } as any);
+    if (error) {
+      console.error("[inviteUser] provider error:", error);
+      // Surface the real reason (e.g. "User already registered", SMTP/domain issues)
+      throw new Error(error.message || "فشل إرسال الدعوة من مزود البريد");
     }
-    const userId =
-      invited?.user?.id ??
-      (await sb.auth.admin.listUsers()).data.users.find((u) => u.email === data.email)?.id;
-    if (!userId) throw new Error("Could not resolve user id");
+    if (!invited?.user?.id) {
+      throw new Error("لم يتمكن النظام من تأكيد إرسال الدعوة — تحقق من إعدادات نطاق البريد");
+    }
+    const userId = invited.user.id;
 
     await sb.from("profiles").upsert({
       id: userId,
@@ -169,7 +164,7 @@ export const inviteUser = createServerFn({ method: "POST" })
     });
     await sb.from("user_roles").delete().eq("user_id", userId);
     await sb.from("user_roles").insert({ user_id: userId, role: data.role });
-    return { id: userId };
+    return { id: userId, email: data.email };
   });
 
 export const resendInvite = createServerFn({ method: "POST" })
