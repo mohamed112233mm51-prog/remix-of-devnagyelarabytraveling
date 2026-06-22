@@ -12,7 +12,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { useEffect, useState } from "react";
-import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
+import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, FIXED_MANIFEST_HREF, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
   return (
