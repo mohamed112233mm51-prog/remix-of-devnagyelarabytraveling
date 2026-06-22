@@ -202,22 +202,47 @@ export const createUserDirect = createServerFn({ method: "POST" })
       user_metadata: { full_name: data.full_name, created_by: context.userId },
     });
     if (createErr || !created?.user?.id) {
-      throw new Error(createErr?.message || "فشل إنشاء المستخدم");
+      throw new Error(createErr?.message || "فشل إنشاء حساب الدخول");
     }
     const userId = created.user.id;
 
-    await sb.from("profiles").upsert({
-      id: userId,
-      email: data.email,
-      full_name: data.full_name,
-      is_active: true,
-      invite_accepted: true,
-      agent_id: data.agent_id ?? null,
-      permissions: data.permissions ?? {},
-      invited_by: context.userId,
-    });
-    await sb.from("user_roles").delete().eq("user_id", userId);
-    await sb.from("user_roles").insert({ user_id: userId, role: data.role });
+    // If profile/role creation fails, roll back the auth user to avoid orphans.
+    try {
+      const { error: profileErr } = await sb.from("profiles").upsert({
+        id: userId,
+        email: data.email,
+        full_name: data.full_name,
+        is_active: true,
+        invite_accepted: true,
+        agent_id: data.agent_id ?? null,
+        permissions: data.permissions ?? {},
+        invited_by: context.userId,
+      });
+      if (profileErr) throw new Error(profileErr.message || "تعذر إنشاء ملف المستخدم");
+
+      const { error: delRoleErr } = await sb.from("user_roles").delete().eq("user_id", userId);
+      if (delRoleErr) throw new Error(delRoleErr.message || "تعذر تهيئة صلاحيات الدور");
+
+      const { error: roleErr } = await sb.from("user_roles").insert({ user_id: userId, role: data.role });
+      if (roleErr) throw new Error(roleErr.message || "تعذر تعيين دور المستخدم");
+
+      // Verify everything landed before reporting success.
+      const { data: verify } = await sb
+        .from("profiles")
+        .select("id, is_active, invite_accepted")
+        .eq("id", userId)
+        .maybeSingle();
+      const { data: verifyRole } = await sb
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!verify || !verifyRole) throw new Error("تعذر التحقق من إنشاء المستخدم بالكامل");
+    } catch (err: any) {
+      // Roll back the orphaned auth user so retries work cleanly.
+      try { await sb.auth.admin.deleteUser(userId); } catch {}
+      throw new Error(err?.message || "فشل إنشاء المستخدم");
+    }
 
     return { id: userId, email: data.email, password };
   });
