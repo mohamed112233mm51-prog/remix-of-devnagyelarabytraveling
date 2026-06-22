@@ -401,8 +401,26 @@ function InviteUserTab() {
           </Field>
           <Field label="البريد الإلكتروني">
             <input style={inp} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@example.com" disabled={busy} />
-            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>سيتم إرسال رابط الدعوة إلى هذا البريد</div>
+            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>{directMode ? "سيتم إنشاء الحساب مباشرة بدون إرسال بريد" : "سيتم إرسال رابط الدعوة إلى هذا البريد"}</div>
           </Field>
+          <Field label="طريقة الإنشاء">
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                <input type="radio" checked={directMode} onChange={() => setDirectMode(true)} disabled={busy} />
+                إنشاء مباشر بدون بريد دعوة (مستحسن)
+              </label>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                <input type="radio" checked={!directMode} onChange={() => setDirectMode(false)} disabled={busy} />
+                إرسال دعوة بالبريد
+              </label>
+            </div>
+          </Field>
+          {directMode && (
+            <Field label="كلمة مرور مؤقتة (اختياري)">
+              <input style={inp} type="text" value={customPassword} onChange={(e) => setCustomPassword(e.target.value)} placeholder="اتركها فارغة لتوليد كلمة آمنة تلقائياً" disabled={busy} />
+              <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>سيتم عرض كلمة المرور بعد الإنشاء لمشاركتها مع المستخدم</div>
+            </Field>
+          )}
           <Field label="الدور">
             <input
               style={inp}
