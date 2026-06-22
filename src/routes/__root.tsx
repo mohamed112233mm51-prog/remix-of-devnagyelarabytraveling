@@ -85,8 +85,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "العربى للخدمات السياحيه" },
       { name: "twitter:description", content: "نظام إدارة الوكلاء والرحلات والموافقات والحسابات" },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8eXJTguD3Sfx2iDE2AEFNtqTKZH3/social-images/social-1778785833231-1000478204.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8eXJTguD3Sfx2iDE2AEFNtqTKZH3/social-images/social-1778785833231-1000478204.webp" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8eXJTguD3Sfx2iDE2AEFNtqTKZH3/social-images/social-1782164251785-1000480094.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8eXJTguD3Sfx2iDE2AEFNtqTKZH3/social-images/social-1782164251785-1000480094.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
