@@ -12,7 +12,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { useEffect, useState } from "react";
-import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, getFaviconBootScript } from "@/lib/favicon";
+import { FIXED_FAVICON_HREF, FIXED_SHORTCUT_HREF, FIXED_MANIFEST_HREF, getFaviconBootScript } from "@/lib/favicon";
 
 function NotFoundComponent() {
   return (
@@ -90,6 +90,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: FIXED_MANIFEST_HREF },
       { rel: "icon", type: "image/png", href: FIXED_FAVICON_HREF },
       { rel: "shortcut icon", href: FIXED_SHORTCUT_HREF },
       { rel: "apple-touch-icon", href: FIXED_FAVICON_HREF },
