@@ -12,7 +12,7 @@ import { normalizeDropdownValue, refetchLiveTables, VALID_DROPDOWN_CATEGORIES, t
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
 import { withFaviconVersion } from "@/lib/favicon";
 import {
-  listUsers, inviteUser, deleteUser, setUserRole,
+  listUsers, inviteUser, createUserDirect, deleteUser, setUserRole,
   setUserActive, updateUserProfile, resendInvite, sendPasswordReset,
 } from "@/lib/admin.functions";
 import {
@@ -335,6 +335,7 @@ function UsersTab() {
 
 function InviteUserTab() {
   const fn = useServerFn(inviteUser);
+  const fnDirect = useServerFn(createUserDirect);
   const qc = useQueryClient();
   const agents = useAgents();
   const [form, setForm] = useState({
@@ -342,6 +343,9 @@ function InviteUserTab() {
     agent_id: "" as string,
     permissions: {} as Record<string, Record<string, boolean>>,
   });
+  const [directMode, setDirectMode] = useState(true);
+  const [customPassword, setCustomPassword] = useState("");
+  const [createdInfo, setCreatedInfo] = useState<{ email: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   function toggleAction(section: string, action: string, val: boolean) {
@@ -397,8 +401,26 @@ function InviteUserTab() {
           </Field>
           <Field label="البريد الإلكتروني">
             <input style={inp} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@example.com" disabled={busy} />
-            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>سيتم إرسال رابط الدعوة إلى هذا البريد</div>
+            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>{directMode ? "سيتم إنشاء الحساب مباشرة بدون إرسال بريد" : "سيتم إرسال رابط الدعوة إلى هذا البريد"}</div>
           </Field>
+          <Field label="طريقة الإنشاء">
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                <input type="radio" checked={directMode} onChange={() => setDirectMode(true)} disabled={busy} />
+                إنشاء مباشر بدون بريد دعوة (مستحسن)
+              </label>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                <input type="radio" checked={!directMode} onChange={() => setDirectMode(false)} disabled={busy} />
+                إرسال دعوة بالبريد
+              </label>
+            </div>
+          </Field>
+          {directMode && (
+            <Field label="كلمة مرور مؤقتة (اختياري)">
+              <input style={inp} type="text" value={customPassword} onChange={(e) => setCustomPassword(e.target.value)} placeholder="اتركها فارغة لتوليد كلمة آمنة تلقائياً" disabled={busy} />
+              <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>سيتم عرض كلمة المرور بعد الإنشاء لمشاركتها مع المستخدم</div>
+            </Field>
+          )}
           <Field label="الدور">
             <input
               style={inp}
@@ -461,16 +483,28 @@ function InviteUserTab() {
                 if (!form.email || !form.full_name) return toast.error("أكمل الحقول");
                 setBusy(true);
                 try {
-                  await fn({ data: {
-                    email: form.email.trim(), full_name: form.full_name, role: accessLevel,
-                    agent_id: form.agent_id || null, permissions: form.permissions as any,
-                    origin: window.location.origin,
-                  } });
-                  toast.success("تم إرسال الدعوة بنجاح");
-                  resetForm();
+                  if (directMode) {
+                    const res = await fnDirect({ data: {
+                      email: form.email.trim(), full_name: form.full_name, role: accessLevel,
+                      agent_id: form.agent_id || null, permissions: form.permissions as any,
+                      password: customPassword.trim() || undefined,
+                    } });
+                    toast.success("تم إنشاء المستخدم بنجاح");
+                    setCreatedInfo({ email: res.email, password: (res as any).password });
+                    resetForm();
+                    setCustomPassword("");
+                  } else {
+                    await fn({ data: {
+                      email: form.email.trim(), full_name: form.full_name, role: accessLevel,
+                      agent_id: form.agent_id || null, permissions: form.permissions as any,
+                      origin: window.location.origin,
+                    } });
+                    toast.success("تم إرسال الدعوة بنجاح");
+                    resetForm();
+                  }
                   qc.invalidateQueries({ queryKey: ["admin-users"] });
                 } catch (e: any) {
-                  toast.error(e.message || "فشل إرسال الدعوة");
+                  toast.error(e.message || (directMode ? "فشل إنشاء المستخدم" : "فشل إرسال الدعوة"));
                 } finally {
                   setBusy(false);
                 }
@@ -482,7 +516,9 @@ function InviteUserTab() {
                 boxShadow: canSubmit ? "0 6px 16px rgba(15,31,68,.22)" : "none",
               }}
             >
-              <Mail size={15} /> {busy ? "جارٍ الإرسال..." : "إرسال الدعوة"}
+              {directMode
+                ? <><UserPlus size={15} /> {busy ? "جارٍ الإنشاء..." : "إنشاء المستخدم"}</>
+                : <><Mail size={15} /> {busy ? "جارٍ الإرسال..." : "إرسال الدعوة"}</>}
             </button>
           </div>
         </div>
@@ -534,6 +570,41 @@ function InviteUserTab() {
           .invite-actions button { flex: 1 1 auto; justify-content: center; }
         }
       `}</style>
+
+      {createdInfo && createPortal(
+        <div onClick={() => setCreatedInfo(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "grid", placeItems: "center", zIndex: 9999, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: 22, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,.25)", border: "1px solid #E5E7EB" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg,#0F1F44,#1E3A8A)", color: "#F5D27A", display: "grid", placeItems: "center" }}>
+                <KeyRound size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تم إنشاء المستخدم</div>
+                <div style={{ fontSize: 12, color: "#64748B" }}>انسخ بيانات الدخول وأرسلها للمستخدم بشكل آمن — لن تظهر مرة أخرى.</div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: "#475569" }}>البريد الإلكتروني</div>
+              <div style={{ padding: "10px 12px", borderRadius: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", fontFamily: "monospace", direction: "ltr", textAlign: "left" }}>{createdInfo.email}</div>
+              <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>كلمة المرور المؤقتة</div>
+              <div style={{ padding: "10px 12px", borderRadius: 10, background: "#FEF9C3", border: "1px solid #FDE68A", fontFamily: "monospace", direction: "ltr", textAlign: "left", fontWeight: 700 }}>{createdInfo.password}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(`${createdInfo.email}\n${createdInfo.password}`);
+                    toast.success("تم النسخ");
+                  } catch { toast.error("تعذر النسخ"); }
+                }}
+                style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid #E2E8F0", background: "#fff", fontWeight: 700, cursor: "pointer" }}
+              >نسخ</button>
+              <button onClick={() => setCreatedInfo(null)} style={{ padding: "9px 16px", borderRadius: 10, border: 0, background: "linear-gradient(135deg,#0F1F44,#1E3A8A)", color: "#F5D27A", fontWeight: 800, cursor: "pointer" }}>تم</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

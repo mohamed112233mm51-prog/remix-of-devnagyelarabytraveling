@@ -167,6 +167,61 @@ export const inviteUser = createServerFn({ method: "POST" })
     return { id: userId, email: data.email };
   });
 
+// Create a user directly without sending an invitation email.
+// Generates a secure temporary password and returns it to the admin caller
+// so it can be communicated to the user out-of-band.
+export const createUserDirect = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    email: string;
+    full_name: string;
+    role: "admin" | "manager" | "user";
+    agent_id?: string | null;
+    permissions?: Record<string, any>;
+    password?: string;
+  }) => d)
+  .handler(async ({ context, data }) => {
+    await ensureAdmin(context.supabase, context.userId);
+    const sb = admin();
+
+    function genPassword() {
+      const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      let out = "";
+      for (let i = 0; i < bytes.length; i++) out += charset[bytes[i] % charset.length];
+      return out;
+    }
+
+    const password = (data.password && data.password.length >= 8) ? data.password : genPassword();
+
+    const { data: created, error: createErr } = await sb.auth.admin.createUser({
+      email: data.email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: data.full_name, created_by: context.userId },
+    });
+    if (createErr || !created?.user?.id) {
+      throw new Error(createErr?.message || "فشل إنشاء المستخدم");
+    }
+    const userId = created.user.id;
+
+    await sb.from("profiles").upsert({
+      id: userId,
+      email: data.email,
+      full_name: data.full_name,
+      is_active: true,
+      invite_accepted: true,
+      agent_id: data.agent_id ?? null,
+      permissions: data.permissions ?? {},
+      invited_by: context.userId,
+    });
+    await sb.from("user_roles").delete().eq("user_id", userId);
+    await sb.from("user_roles").insert({ user_id: userId, role: data.role });
+
+    return { id: userId, email: data.email, password };
+  });
+
 export const resendInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { email: string; origin?: string }) => d)
