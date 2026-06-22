@@ -784,8 +784,9 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                   type="checkbox"
                   checked={!!u.is_super_admin}
                   onChange={async (e) => {
-                    await updFn({ data: { id: u.id, is_super_admin: e.target.checked } });
-                    toast.success(e.target.checked ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
+                    const nextVal = e.target.checked;
+                    await updFn({ data: { id: u.id, is_super_admin: nextVal } });
+                    toast.success(nextVal ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
                     onChanged();
                   }}
                 />
