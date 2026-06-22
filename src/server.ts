@@ -44,18 +44,12 @@ self.addEventListener("activate", (event) => event.waitUntil((async () => {
 })()));
 `;
 
-async function faviconCacheResponse(request: Request): Promise<Response | null> {
-  const { pathname } = new URL(request.url);
-  if (pathname === "/sw.js" || pathname === "/service-worker.js") {
-    return new Response(SW_UNREGISTER_SCRIPT, {
-      headers: {
-        "cache-control": "no-store",
-        "content-type": "application/javascript; charset=utf-8",
-      },
-    });
-  }
+async function faviconCacheResponse(_request: Request): Promise<Response | null> {
+  // Service worker is now served from public/sw.js as a real PWA worker.
   return null;
 }
+// Keep SW_UNREGISTER_SCRIPT defined above unused — left in source for history.
+void SW_UNREGISTER_SCRIPT;
 
 function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boolean {
   let payload: unknown;
