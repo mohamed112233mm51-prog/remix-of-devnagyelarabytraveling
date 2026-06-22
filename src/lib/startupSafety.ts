@@ -74,18 +74,17 @@ function cleanHistoryState() {
   } catch {}
 }
 
-async function unregisterPreviewServiceWorkers() {
+async function manageServiceWorker() {
   try {
-    if (!("serviceWorker" in navigator) || !isPreviewHost(window.location.hostname)) return;
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.allSettled(
-      registrations
-        .filter((registration) => {
-          const url = registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL || "";
-          return url.includes("/sw.js") || url.includes("/service-worker.js");
-        })
-        .map((registration) => registration.unregister()),
-    );
+    if (!("serviceWorker" in navigator)) return;
+    if (isPreviewHost(window.location.hostname)) {
+      // In Lovable preview iframe, unregister to avoid stale caches during development.
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.allSettled(registrations.map((r) => r.unregister()));
+      return;
+    }
+    // On production / installed app: register the real PWA service worker.
+    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
   } catch {}
 }
 
