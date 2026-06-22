@@ -95,7 +95,7 @@ export function installStartupSafety() {
   cleanSessionState();
   cleanLocalState();
   cleanHistoryState();
-  void unregisterPreviewServiceWorkers();
+  void manageServiceWorker();
 }
 
 installStartupSafety();
