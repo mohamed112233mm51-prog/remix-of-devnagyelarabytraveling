@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,8 +16,9 @@ import {
   setUserActive, updateUserProfile, resendInvite, sendPasswordReset,
 } from "@/lib/admin.functions";
 import {
-  createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow,
+  createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow, importBackup,
 } from "@/lib/backups.functions";
+
 import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, prepareForLaunch, resetVerification, type WipeCategory } from "@/lib/demo-data.functions";
 import { getBackendDiagnostics, isProdEnv } from "@/lib/env";
 import { Settings as SettingsIcon, Users, UserPlus, ShieldCheck, SlidersHorizontal, DatabaseBackup, Search, Power, Trash2, KeyRound, Mail, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserCheck, UserCog, Clock, Building2, Palette, Image as ImageIcon, ListChecks, Plus, Pencil, Check, X as XIcon, Upload, Save, Inbox, MapPin, Plane, Wrench, Phone, DollarSign, Sparkles, AlertCircle, Trash, Database, HardDrive, Download, RotateCcw, Eye, RefreshCw, Calendar, Activity, FileArchive, XCircle, AlertTriangle, Cloud } from "lucide-react";
@@ -1782,6 +1783,9 @@ function BackupsTab() {
   const restoreFn = useServerFn(restoreBackup);
   const previewFn = useServerFn(previewBackup);
   const retentionFn = useServerFn(runRetentionNow);
+  const importFn = useServerFn(importBackup);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
   const qc = useQueryClient();
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["backups-list"],
@@ -1832,6 +1836,45 @@ function BackupsTab() {
       toast.error(e?.message || "فشل إنشاء النسخة");
     } finally { setBusy(""); }
   };
+
+  const onPickImport = () => {
+    if (busy) return;
+    fileInputRef.current?.click();
+  };
+
+  const onImportFile = async (file: File) => {
+    const name = (file.name || "").toLowerCase();
+    const isGz = name.endsWith(".gz");
+    const isJson = name.endsWith(".json");
+    if (!isGz && !isJson) {
+      toast.error("ملف غير مدعوم. اختر .json أو .json.gz");
+      return;
+    }
+    try {
+      setBusy("import");
+      const buf = new Uint8Array(await file.arrayBuffer());
+      // Base64 encode in chunks to avoid call-stack limits on large files
+      let bin = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < buf.length; i += chunk) {
+        bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunk)) as any);
+      }
+      const base64 = btoa(bin);
+      const r: any = await importFn({ data: { filename: file.name, base64, isGzipped: isGz } });
+      if (r?.versionMismatch) {
+        toast.warning("تم استيراد النسخة الاحتياطية بنجاح، ولكنها مأخوذة من إصدار مختلف من النظام. قد تحتاج قاعدة البيانات إلى التحديث قبل الاستعادة.");
+      } else {
+        toast.success("تم استيراد النسخة الاحتياطية بنجاح");
+      }
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل استيراد النسخة");
+    } finally {
+      setBusy("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
 
   const onDownload = async (path: string) => {
     try {
@@ -2021,6 +2064,24 @@ function BackupsTab() {
             }}>
               {busy === "create" ? <RefreshCw size={14} className="bk-spin" /> : <Plus size={14} />}
               {busy === "create" ? "جارٍ الإنشاء..." : "إنشاء نسخة الآن"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.gz,application/json,application/gzip"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onImportFile(f);
+              }}
+            />
+            <button className="bk-btn bk-btn-ghost" onClick={onPickImport} disabled={busy === "import"} style={{
+              display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 14px", borderRadius: 10,
+              background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)",
+              fontWeight: 700, fontSize: 12.5, cursor: busy === "import" ? "wait" : "pointer", backdropFilter: "blur(6px)",
+            }}>
+              {busy === "import" ? <RefreshCw size={13} className="bk-spin" /> : <Upload size={13} />}
+              {busy === "import" ? "جارٍ الاستيراد..." : "استيراد نسخة احتياطية"}
             </button>
             <button className="bk-btn bk-btn-ghost" onClick={() => refetch()} disabled={isFetching} style={{
               display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 14px", borderRadius: 10,
@@ -2330,8 +2391,9 @@ const TABLE_LABELS_AR: Record<string, string> = {
 };
 
 const TYPE_LABELS_AR: Record<string, string> = {
-  manual: "يدوية", daily: "يومية", weekly: "أسبوعية", monthly: "شهرية", emergency: "طوارئ",
+  manual: "يدوية", daily: "يومية", weekly: "أسبوعية", monthly: "شهرية", emergency: "طوارئ", imported: "مستوردة",
 };
+
 
 function typeColor(t: string) {
   switch (t) {
