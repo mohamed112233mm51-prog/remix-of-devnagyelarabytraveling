@@ -195,7 +195,8 @@ export const importBackup = createServerFn({ method: "POST" })
     } catch {}
 
     const backupName = `imported-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-    await logBackupRow({
+    console.log("[importBackup] storage upload ok:", { path, size: gzBuf.byteLength });
+    const logId = await logBackupRow({
       backup_type: "imported" as any,
       backup_name: backupName,
       file_path: path,
@@ -205,9 +206,16 @@ export const importBackup = createServerFn({ method: "POST" })
       created_by: context.userId,
       completed_at: new Date().toISOString(),
     } as any);
+    console.log("[importBackup] backup_logs insert result:", { logId });
+    if (!logId) {
+      // Roll back the storage upload so we don't leave orphan files when the
+      // DB record couldn't be created.
+      try { await supabaseAdmin.storage.from("system-backups").remove([path]); } catch {}
+      throw new Error("تم رفع الملف ولكن فشل تسجيله في قائمة النسخ الاحتياطية.");
+    }
 
     const versionMismatch = payload.meta.version !== 1;
-    return { path, size: gzBuf.byteLength, versionMismatch, meta: payload.meta };
+    return { path, logId, size: gzBuf.byteLength, versionMismatch, meta: payload.meta };
   });
 
 
