@@ -2065,6 +2065,24 @@ function BackupsTab() {
               {busy === "create" ? <RefreshCw size={14} className="bk-spin" /> : <Plus size={14} />}
               {busy === "create" ? "جارٍ الإنشاء..." : "إنشاء نسخة الآن"}
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.gz,application/json,application/gzip"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onImportFile(f);
+              }}
+            />
+            <button className="bk-btn bk-btn-ghost" onClick={onPickImport} disabled={busy === "import"} style={{
+              display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 14px", borderRadius: 10,
+              background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)",
+              fontWeight: 700, fontSize: 12.5, cursor: busy === "import" ? "wait" : "pointer", backdropFilter: "blur(6px)",
+            }}>
+              {busy === "import" ? <RefreshCw size={13} className="bk-spin" /> : <Upload size={13} />}
+              {busy === "import" ? "جارٍ الاستيراد..." : "استيراد نسخة احتياطية"}
+            </button>
             <button className="bk-btn bk-btn-ghost" onClick={() => refetch()} disabled={isFetching} style={{
               display: "inline-flex", alignItems: "center", gap: 6, height: 38, padding: "0 14px", borderRadius: 10,
               background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.22)",
