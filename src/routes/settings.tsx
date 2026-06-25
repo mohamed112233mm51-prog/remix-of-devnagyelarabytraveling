@@ -2330,8 +2330,9 @@ const TABLE_LABELS_AR: Record<string, string> = {
 };
 
 const TYPE_LABELS_AR: Record<string, string> = {
-  manual: "يدوية", daily: "يومية", weekly: "أسبوعية", monthly: "شهرية", emergency: "طوارئ",
+  manual: "يدوية", daily: "يومية", weekly: "أسبوعية", monthly: "شهرية", emergency: "طوارئ", imported: "مستوردة",
 };
+
 
 function typeColor(t: string) {
   switch (t) {
