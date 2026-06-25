@@ -1783,6 +1783,9 @@ function BackupsTab() {
   const restoreFn = useServerFn(restoreBackup);
   const previewFn = useServerFn(previewBackup);
   const retentionFn = useServerFn(runRetentionNow);
+  const importFn = useServerFn(importBackup);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
   const qc = useQueryClient();
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["backups-list"],
