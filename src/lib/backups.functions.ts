@@ -32,7 +32,8 @@ export const listBackups = createServerFn({ method: "GET" })
     await ensureAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { listAllUnder } = await import("./backups.server");
-    const types: BackupType[] = ["manual", "daily", "weekly", "monthly", "emergency"];
+    const types: (BackupType | "imported")[] = ["manual", "daily", "weekly", "monthly", "emergency", "imported"];
+
     const all: Array<{ type: string; path: string; name: string; size: number; created_at?: string }> = [];
     for (const t of types) {
       const items = await listAllUnder(t + "/");
