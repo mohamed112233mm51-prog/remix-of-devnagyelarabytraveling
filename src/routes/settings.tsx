@@ -1846,6 +1846,7 @@ function BackupsTab() {
     const name = (file.name || "").toLowerCase();
     const isGz = name.endsWith(".gz");
     const isJson = name.endsWith(".json");
+    console.log("[import-backup] selected file:", { name: file.name, size: file.size, isGz, isJson });
     if (!isGz && !isJson) {
       toast.error("ملف غير مدعوم. اختر .json أو .json.gz");
       return;
@@ -1860,14 +1861,28 @@ function BackupsTab() {
         bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunk)) as any);
       }
       const base64 = btoa(bin);
+      console.log("[import-backup] uploading to server fn...", { base64Length: base64.length });
       const r: any = await importFn({ data: { filename: file.name, base64, isGzipped: isGz } });
+      console.log("[import-backup] server result:", r);
+      if (!r?.path || !r?.logId) {
+        throw new Error("لم يتم إنشاء سجل في قائمة النسخ الاحتياطية");
+      }
+      // Force a real refetch (not just invalidate) so the new row shows immediately
+      const refetched = await refetch();
+      const found = (refetched.data?.logs ?? []).some((l: any) => l.id === r.logId)
+        || (refetched.data?.backups ?? []).some((b: any) => b.path === r.path);
+      console.log("[import-backup] refetch found new row:", found);
+      if (!found) {
+        toast.error("تم رفع الملف ولكن لم يظهر في القائمة. حاول تحديث الصفحة.");
+        return;
+      }
       if (r?.versionMismatch) {
         toast.warning("تم استيراد النسخة الاحتياطية بنجاح، ولكنها مأخوذة من إصدار مختلف من النظام. قد تحتاج قاعدة البيانات إلى التحديث قبل الاستعادة.");
       } else {
         toast.success("تم استيراد النسخة الاحتياطية بنجاح");
       }
-      refresh();
     } catch (e: any) {
+      console.error("[import-backup] failed:", e);
       toast.error(e?.message || "فشل استيراد النسخة");
     } finally {
       setBusy("");
