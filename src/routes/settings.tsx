@@ -2225,6 +2225,7 @@ function BackupsTab() {
                 <option value="weekly">أسبوعية</option>
                 <option value="monthly">شهرية</option>
                 <option value="emergency">طوارئ</option>
+                <option value="imported">مستوردة</option>
               </select>
               <select value={archiveStatus} onChange={(e) => { setArchiveStatus(e.target.value); setArchivePage(1); }} style={{ ...inputStyle, minWidth: 130 }}>
                 <option value="all">كل الحالات</option>
