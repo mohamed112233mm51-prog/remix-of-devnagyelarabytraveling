@@ -1837,6 +1837,45 @@ function BackupsTab() {
     } finally { setBusy(""); }
   };
 
+  const onPickImport = () => {
+    if (busy) return;
+    fileInputRef.current?.click();
+  };
+
+  const onImportFile = async (file: File) => {
+    const name = (file.name || "").toLowerCase();
+    const isGz = name.endsWith(".gz");
+    const isJson = name.endsWith(".json");
+    if (!isGz && !isJson) {
+      toast.error("ملف غير مدعوم. اختر .json أو .json.gz");
+      return;
+    }
+    try {
+      setBusy("import");
+      const buf = new Uint8Array(await file.arrayBuffer());
+      // Base64 encode in chunks to avoid call-stack limits on large files
+      let bin = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < buf.length; i += chunk) {
+        bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunk)) as any);
+      }
+      const base64 = btoa(bin);
+      const r: any = await importFn({ data: { filename: file.name, base64, isGzipped: isGz } });
+      if (r?.versionMismatch) {
+        toast.warning("تم استيراد النسخة الاحتياطية بنجاح، ولكنها مأخوذة من إصدار مختلف من النظام. قد تحتاج قاعدة البيانات إلى التحديث قبل الاستعادة.");
+      } else {
+        toast.success("تم استيراد النسخة الاحتياطية بنجاح");
+      }
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل استيراد النسخة");
+    } finally {
+      setBusy("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+
   const onDownload = async (path: string) => {
     try {
       setBusy(path);
