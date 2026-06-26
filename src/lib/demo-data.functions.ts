@@ -44,7 +44,7 @@ const DEMO_TABLES = [
   "transactions",
   "submissions",
   "executions",
-  "agent_service_pricing",
+  "company_pricing_rules",
   "agents",
   "issuing_companies",
   "merchants",
@@ -75,7 +75,7 @@ const PRODUCTION_DELETE_ORDER: readonly DemoTable[] = [
   "transactions",
   "submissions",
   "executions",
-  "agent_service_pricing",
+  "company_pricing_rules",
   "investors",
   "merchants",
   "currency_suppliers",
@@ -776,7 +776,7 @@ const LAUNCH_WIPE_ORDER: readonly string[] = [
 
 // Core entities (wiped only when wipeCoreEntities=true).
 const CORE_ENTITY_DEPENDENTS: readonly string[] = [
-  "agent_service_pricing",
+  "company_pricing_rules",
 ];
 const CORE_ENTITIES: readonly string[] = [
   "agents",

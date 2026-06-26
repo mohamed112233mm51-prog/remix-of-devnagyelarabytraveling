@@ -285,45 +285,12 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
 
 
 
-type PricingRow = { company_price: string; agent_price: string; company_percentage: string; company_profit_value: string };
-const EMPTY_PRICING_ROW: PricingRow = { company_price: "", agent_price: "", company_percentage: "", company_profit_value: "" };
-function r2(n: number) { return Math.round(n * 100) / 100; }
-
 function AgentForm({ onDone }: { onDone: () => void }) {
-  const serviceTypes = useDropdownOptions("service_type");
-  const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "" });
+  const tierOptions = useDropdownOptions("agent_tier" as any);
+  const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" });
   const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
-  const [rows, setRows] = useState<Record<string, PricingRow>>({});
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
-
-  const updateRow = (st: string, patch: Partial<PricingRow>) => {
-    setRows((prev) => {
-      const cur = { ...(prev[st] || EMPTY_PRICING_ROW), ...patch };
-      const cp = Number(cur.company_price) || 0;
-      const ap = Number(cur.agent_price) || 0;
-      if (ap >= cp && ap > 0) {
-        const profit = r2(ap - cp);
-        const percentage = r2((profit / ap) * 100);
-        cur.company_profit_value = String(profit);
-        cur.company_percentage = String(percentage);
-      } else {
-        cur.company_profit_value = "";
-        cur.company_percentage = "";
-      }
-      return { ...prev, [st]: cur };
-    });
-  };
-
-  const confirmRow = (st: string) => {
-    const r = rows[st];
-    if (!r || (!Number(r.company_price) && !Number(r.agent_price))) return toast.error("أدخل السعر أولاً");
-    if (Number(r.agent_price) < Number(r.company_price)) return toast.error("سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة");
-    toast.success(`تم تجهيز تسعير: ${st}`);
-  };
-  const clearRow = (st: string) => {
-    setRows((p) => ({ ...p, [st]: { ...EMPTY_PRICING_ROW } }));
-  };
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
@@ -336,6 +303,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       phone: form.phone,
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
+      tier: form.tier || "A",
       opening_debit: opDebit,
       opening_credit: opCredit,
       opening_date: opening.date || null,
@@ -343,34 +311,12 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     } as any).select("id").single();
     if (error) return toast.error(error.message);
     const agentId = data?.id;
-    if (agentId) {
-      const candidates = serviceTypes
-        .filter((st: string) => Number(rows[st]?.company_price) > 0 || Number(rows[st]?.agent_price) > 0);
-      const invalid = candidates.find((st) => Number(rows[st].agent_price) < Number(rows[st].company_price));
-      if (invalid) {
-        toast.error(`(${invalid}) سعر الوكيل يجب أن يكون أكبر من أو يساوي سعر الشركة`);
-        onDone();
-        return;
-      }
-      const pricingRows = candidates.map((st) => ({
-        agent_id: agentId,
-        service_type: st,
-        company_price: Number(rows[st].company_price) || 0,
-        agent_price: Number(rows[st].agent_price) || 0,
-        company_percentage: Number(rows[st].company_percentage) || 0,
-        company_profit_value: Number(rows[st].company_profit_value) || 0,
-      }));
-      if (pricingRows.length) {
-        const { error: pErr } = await supabase.from("agent_service_pricing").insert(pricingRows);
-        if (pErr) toast.error("تم حفظ الوكيل لكن فشل حفظ التسعير: " + pErr.message);
-      }
-      if (opDebit > 0 || opCredit > 0) {
-        await syncAgentOpeningBalance(agentId, {
-          debit: opDebit, credit: opCredit,
-          date: opening.date || null,
-          note: opening.note.trim() || null,
-        });
-      }
+    if (agentId && (opDebit > 0 || opCredit > 0)) {
+      await syncAgentOpeningBalance(agentId, {
+        debit: opDebit, credit: opCredit,
+        date: opening.date || null,
+        note: opening.note.trim() || null,
+      });
     }
     onDone();
   };
@@ -384,6 +330,9 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
         <div className="form-group"><label>المحافظة</label>
           <SearchableSelect value={form.governorate} onChange={(v) => set("governorate", v)} options={GOVERNORATES as unknown as string[]} />
+        </div>
+        <div className="form-group"><label>شريحة الوكيل</label>
+          <SearchableSelect value={form.tier} onChange={(v) => set("tier", v)} options={(tierOptions.length ? tierOptions : ["A","B","C"]) as string[]} />
         </div>
       </div>
 
@@ -403,46 +352,6 @@ function AgentForm({ onDone }: { onDone: () => void }) {
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-        <div className="card-header"><div className="card-title">💰 تسعير الخدمات</div></div>
-        <div className="card-body">
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "var(--card)" }}>
-                  <th style={{ padding: 8, textAlign: "right" }}>نوع الخدمة</th>
-                  <th style={{ padding: 8 }}>سعر الشركة</th>
-                  <th style={{ padding: 8 }}>سعر الوكيل</th>
-                  <th style={{ padding: 8 }}>نسبة الشركة %</th>
-                  <th style={{ padding: 8 }}>ربح الشركة</th>
-                  <th style={{ padding: 8 }}>إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {serviceTypes.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>أضف أنواع الخدمة من الإعدادات → القوائم المنسدلة</td></tr>
-                ) : serviceTypes.map((st: string) => {
-                  const r = rows[st] || EMPTY_PRICING_ROW;
-                  return (
-                    <tr key={st} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: 6, fontWeight: 700 }}>{st}</td>
-                      <td style={{ padding: 6 }}><NumberInput value={Number(r.company_price) || 0} onChange={(n) => updateRow(st, { company_price: n === 0 ? "" : String(n) })} min={0} /></td>
-                      <td style={{ padding: 6 }}><NumberInput value={Number(r.agent_price) || 0} onChange={(n) => updateRow(st, { agent_price: n === 0 ? "" : String(n) })} min={0} /></td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_percentage} disabled readOnly /></td>
-                      <td style={{ padding: 6 }}><input type="number" style={{ width: "100%" }} value={r.company_profit_value} disabled readOnly /></td>
-                      <td style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        <button data-confirm-save="تأكيد حفظ الصلاحية" type="button" className="btn btn-gold" onClick={() => confirmRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حفظ</button>
-                        <button type="button" className="action-btn" onClick={() => clearRow(st)} style={{ padding: "4px 8px", fontSize: 11 }}>حذف</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
         </div>
       </div>

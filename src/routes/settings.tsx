@@ -3007,7 +3007,7 @@ const LAUNCH_LABELS: Record<string, string> = {
   activity_logs: "السجلات والإشعارات",
   import_batches: "دفعات الاستيراد المؤقتة",
   cash_boxes_reset: "تصفير أرصدة الخزائن",
-  agent_service_pricing: "تسعير خدمات الوكلاء",
+  company_pricing_rules: "ملفات التسعير",
   agents: "الوكلاء",
   issuing_companies: "الشركات الصادرة",
   merchants: "تجار الكاش",
