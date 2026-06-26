@@ -16,13 +16,14 @@ import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
-import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft } from "lucide-react";
+import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft, Banknote } from "lucide-react";
+import { AgentCashOutForm } from "@/components/CashMovementForms";
 
 export const Route = createFileRoute("/accounts")({
   component: () => <AppErrorBoundary><AccountsPage /></AppErrorBoundary>,
 });
 
-type Tab = "list" | "add" | "txn" | "statement";
+type Tab = "list" | "add" | "txn" | "cashout" | "statement";
 
 function AccountsPage() {
   const perm = usePerm("accounts");
@@ -108,6 +109,11 @@ function AccountsPage() {
             <CreditCard size={15} strokeWidth={2} /> <span>إضافة دفعة من الوكيل</span>
           </div>
         )}
+        {perm.create && (
+          <div className={`tool-tab ${tab === "cashout" ? "active" : ""}`} onClick={() => setTab("cashout")}>
+            <Banknote size={15} strokeWidth={2} /> <span>صرف نقدية</span>
+          </div>
+        )}
         <div className={`tool-tab ${tab === "statement" ? "active" : ""}`} onClick={() => setTab("statement")}>
           <FileText size={15} strokeWidth={2} /> <span>كشف حساب</span>
         </div>
@@ -181,6 +187,7 @@ function AccountsPage() {
 
       {tab === "add" && perm.create && <AgentForm onDone={() => setTab("list")} />}
       {tab === "txn" && perm.create && <TxnForm agents={agents} merchants={merchants} txns={txns} onDone={() => setTab("list")} />}
+      {tab === "cashout" && perm.create && <AgentCashOutForm onDone={() => setTab("list")} />}
       {tab === "statement" && <AppErrorBoundary name="AgentLedger"><AgentLedger initialAgentId={statementAgentId} canExport={perm.export} /></AppErrorBoundary>}
 
       {editAgent && perm.edit && <EditAgentModal agent={editAgent} onClose={() => setEditAgent(null)} />}
