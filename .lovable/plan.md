@@ -1,99 +1,145 @@
-# قسم حسابات موردي العملة
+## نظرة عامة
 
-قسم مستقل تمامًا، بنفس أسلوب "حسابات الوكلاء" و"حسابات الشركات الصادرة"، بدون أي ارتباط بالوكلاء/الشركات/تجار الكاش.
+نحذف نظام التسعير القديم (`agent_service_pricing` + `AgentPricingSection`) ونبني نظاماً جديداً مرتبطاً بالشركة الصادرة، يعتمد على شرائح الوكلاء، مع مطابقة ذكية للأسعار وقت إنشاء التنفيذ.
 
-## 1. قاعدة البيانات (Migration)
+---
 
-جدولان جديدان في `public`:
+## 1) قاعدة البيانات
 
-### `currency_suppliers`
-- `id` uuid PK
-- `name` text NOT NULL (اسم المورد)
-- `phone` text
-- `notes` text
-- `status` text default 'نشط'
+### جدول جديد: `company_pricing_rules`
+ملف التسعير لكل شركة، صف واحد = قاعدة سعر واحدة.
+
+الحقول الرئيسية:
+- `company_id` (FK → issuing_companies) — إلزامي
+- `service_type` (text) — إلزامي
+- `agent_tier` (text) — إلزامي (A/B/C…)
+- `departure_from`, `destination`, `airline`, `approval_company_id`, `status`, `passenger_type` — كلها اختيارية (NULL = لا يؤثر)
+- `company_price` (numeric) — إلزامي
+- `commission_type` (text: 'percentage' | 'fixed') — إلزامي
+- `commission_value` (numeric) — إلزامي (نسبة أو مبلغ)
+- `agent_price` (numeric) — محسوب تلقائياً عبر trigger
 - `created_at`, `updated_at`
 
-### `currency_supplier_transactions`
-- `id` uuid PK
-- `supplier_id` uuid FK → currency_suppliers
-- `tx_date` date NOT NULL
-- `tx_type` text NOT NULL CHECK in ('شراء عملة','بيع عملة')
-- `bought_currency` text NOT NULL  (العملة المشتراة)
-- `bought_amount` numeric NOT NULL  (قيمة العملة المشتراة)
-- `sold_currency` text NOT NULL  (العملة المباعة)
-- `sold_amount` numeric NOT NULL  (قيمة العملة المباعة)
-- `description` text
-- `created_by` uuid
-- `created_at`, `updated_at`
+### تعديل `agents`
+- إضافة عمود `tier` (text) — إلزامي مع default 'A'
 
-GRANTs لـ authenticated + service_role، RLS مفعّل، policies تسمح للمستخدم المسجّل بالقراءة/الكتابة (نفس نمط الجداول الحالية في المشروع).
+### قائمة منسدلة جديدة
+- إضافة category جديدة في `system_dropdown_options` باسم `agent_tier` (يبدأ بـ A, B, C)
+- تحديث trigger `validate_system_dropdown_option` لقبول الـ category الجديد
 
-تحديث خزائن العملات: عند الحفظ من الواجهة، نزيد رصيد خزينة `bought_currency` بـ `bought_amount`، وننقص خزينة `sold_currency` بـ `sold_amount`، عبر `cash_boxes` (نفس الجدول المستخدم حاليًا). لا triggers — المنطق في الواجهة ليبقى متّسقًا مع باقي النظام.
+### Trigger لحساب سعر الوكيل
+يحسب `agent_price = company_price + (percentage% أو fixed)` قبل INSERT/UPDATE.
 
-## 2. Routes
+### حذف القديم
+- `DROP TABLE agent_service_pricing` (المستخدم أكد الحذف)
 
-- `src/routes/currency-suppliers.tsx` — قائمة الموردين + إضافة/تعديل + زر "كشف الحساب".
-- `src/routes/currency-supplier-statement.$supplierId.tsx` — كشف حساب المورد.
+### الصلاحيات والـ RLS
+- GRANT للـ authenticated + service_role
+- RLS: authenticated يقدر يقرأ/يكتب (نفس نمط باقي الجداول التشغيلية)
 
-تسجيلهما في `routeTree.gen.ts` (يتم تلقائيًا).
+---
 
-## 3. الواجهات
+## 2) واجهة الـ UI
 
-### قائمة الموردين
-- جدول بأعمدة: الاسم، الهاتف، الحالة، إجراءات (تعديل/كشف الحساب/حذف).
-- زر "إضافة مورد" يفتح Modal.
-- نفس مكوّنات `ColumnFilter` و`ColumnVisibility` و`SearchBox` المستخدمة في `accounts.tsx`.
+### تبويب جديد داخل صفحة الشركة (`companies.tsx`)
+تبويب "ملف التسعير" يظهر عند تعديل/فتح شركة. يحتوي:
+- جدول بكل الحقول حسب الترتيب المطلوب (12 عمود)
+- زر إضافة صف، تعديل سطري، حذف
+- زر "استيراد من شركة أخرى" → modal فيه:
+  - dropdown اختيار الشركة المصدر
+  - radio: كل الخدمات / خدمة محددة
+  - radio: استبدال / دمج
+- كل dropdown مربوط بـ `useDropdownOptions(...)` الموجود
+- حقل سعر الوكيل readonly + محسوب تلقائياً client-side للعرض الفوري
 
-### كشف حساب المورد
-- ترويسة: اسم المورد + ملخص أرصدة لكل عملة (صافي = مشترى - مباع لكل عملة).
-- شريط أدوات: فلاتر (تاريخ من/إلى، نوع الحركة، العملة)، زر "إضافة حركة شراء"، زر "إضافة حركة بيع"، زر التصدير الموحّد (`ExportButton`) — Excel/PDF.
-- جدول بأعمدة:
-  - التاريخ
-  - نوع الحركة
-  - العملة المشتراة
-  - قيمة العملة المشتراة
-  - العملة المباعة
-  - قيمة العملة المباعة
-  - البيان
-  - الرصيد الحالي (نعرض رصيد جاري بالعملة الأساسية المختارة في الفلتر؛ بدون فلتر يُعرض "متعدد")
+### حقل في صفحة الوكيل
+- إضافة dropdown "شريحة الوكيل" مربوط بـ `agent_tier`
 
-### Modal الحركة (شراء/بيع)
-حقول:
-- التاريخ (افتراضي اليوم)
-- نوع الحركة (مُحدّد مسبقًا حسب الزر)
-- العملة المشتراة + قيمتها
-- العملة المباعة + قيمتها
-- البيان
+### حذف الكود القديم
+- حذف `src/components/AgentPricingSection.tsx`
+- حذف استخدامه من صفحة الوكيل
+- إزالة spec `agent_pricing` من `src/lib/dataImport/specs.ts`
 
-عند الحفظ:
-1. insert في `currency_supplier_transactions`.
-2. update `cash_boxes`: +bought / -sold للعملات المناظرة.
-3. toast نجاح + إعادة تحميل.
+---
 
-## 4. القائمة الجانبية
+## 3) منطق المطابقة في التنفيذ
 
-إضافة عنصر جديد في `src/components/Layout.tsx` تحت قسم "الحسابات المالية":
-- `حسابات موردي العملة` → `/currency-suppliers` (أيقونة Coins من lucide).
-- `permKey: "currency_suppliers"` (نضيفه إلى نظام الصلاحيات).
+دالة جديدة `src/lib/pricingMatch.ts`:
 
-## 5. التصدير
+```text
+resolveAgentPrice({ companyId, agentId, serviceType, departureFrom?, 
+                    destination?, airline?, approvalCompanyId?, 
+                    status?, passengerType? })
+```
 
-استخدام `ExportButton` الحالي مع `exportStatement` لتصدير الأعمدة المرئية مع احترام الفلاتر — نفس الأسلوب في كشف حساب الوكيل تمامًا.
+خطوات:
+1. اقرأ شريحة الوكيل من جدول agents
+2. اقرأ كل قواعد التسعير حيث company_id = X و service_type = Y و agent_tier = Z
+3. لكل قاعدة: تأكد أن كل حقل غير NULL في القاعدة يطابق المُدخل
+4. احسب درجة التحديد = عدد الحقول غير الفارغة المطابقة
+5. اختر القاعدة بأعلى درجة (لو تساوي → الأحدث)
+6. أرجع agent_price، أو null + رسالة لو ما في مطابقة
 
-## 6. لا يُمسّ
+استدعاء من `executions.tsx` و `submissions.tsx` عند تغيير الشركة/الوكيل/الخدمة → ملء `agent_price` تلقائياً مع رسالة "لم يتم العثور على سعر مطابق" لو فشلت المطابقة.
 
-- لا تعديل في: agents, companies, merchants, executions, submissions, expenses.
-- لا تغيير في أي منطق حسابي قائم.
-- لا تعديل على جدول `cash_boxes` نفسه (نستخدمه فقط).
+---
 
-## الملفات المعدّلة/المنشأة
+## 4) الصلاحيات
 
-- `supabase/migrations/<new>.sql` — جدولان + GRANT + RLS + policies.
-- `src/routes/currency-suppliers.tsx` (جديد)
-- `src/routes/currency-supplier-statement.$supplierId.tsx` (جديد)
-- `src/components/Layout.tsx` — عنصر قائمة جديد + permKey.
-- `src/hooks/usePerm.tsx` — إضافة مفتاح صلاحية `currency_suppliers` للقائمة الافتراضية.
-- `src/integrations/supabase/types.ts` — يُعاد توليده بعد الـ migration.
+إضافة key جديد `pricing` في `SECTION_KEYS` ضمن `usePerm.tsx`:
+- view, create, edit, delete, export (الـ export = استيراد)
 
-بعد موافقتك أبدأ بـ migration ثم بقية التنفيذ.
+تطبيق `usePerm("pricing")` على تبويب ملف التسعير وأزرار الاستيراد.
+
+تحديث شاشة الصلاحيات (`settings.tsx`) لعرض القسم الجديد.
+
+---
+
+## 5) الملفات المتأثرة
+
+**جديد:**
+- migration واحد (جدول جديد + tier + dropdown + trigger + DROP القديم)
+- `src/components/CompanyPricingTab.tsx`
+- `src/components/PricingImportModal.tsx`
+- `src/lib/pricingMatch.ts`
+
+**تعديل:**
+- `src/routes/companies.tsx` — إضافة التبويب
+- `src/routes/executions.tsx` + `src/routes/submissions.tsx` — استدعاء resolveAgentPrice
+- صفحة الوكيل (في `accounts.tsx` أو ما شابه) — حقل tier
+- `src/hooks/usePerm.tsx` + `src/routes/settings.tsx` — صلاحية pricing
+- `src/lib/db.ts` — hooks لقراءة قواعد التسعير live
+- `src/lib/dataImport/specs.ts` — إزالة `agent_pricing`
+
+**حذف:**
+- `src/components/AgentPricingSection.tsx`
+- جدول `agent_service_pricing` من DB
+
+---
+
+## 6) مثال عملي
+
+**قواعد شركة "X" للخدمة "تأشيرة":**
+
+| service | tier | destination | airline | company_price | type | value | → agent_price |
+|---------|------|-------------|---------|---------------|------|-------|---------------|
+| تأشيرة | A | — | — | 1000 | % | 10 | 1100 |
+| تأشيرة | A | ليبيا | — | 1000 | fixed | 150 | 1150 |
+| تأشيرة | B | — | — | 1000 | % | 5 | 1050 |
+
+**تنفيذ:** شركة=X، وكيل شريحته A، خدمة=تأشيرة، وجهة=ليبيا، طيران=مصر للطيران
+- القاعدة 1 تطابق (0 حقول اختيارية مملوءة)
+- القاعدة 2 تطابق (1 حقل = الوجهة)
+- القاعدة 3 لا تطابق (شريحة مختلفة)
+- → يُختار صف 2، السعر = 1150
+
+**استيراد:** فتح شركة Y → ملف التسعير → استيراد من X → اختيار "تأشيرة" فقط + "دمج" → ينسخ كل قواعد تأشيرة من X إلى Y.
+
+---
+
+## 7) قيود الأمان
+
+- Migration يستخدم `IF NOT EXISTS` لكل CREATE
+- `DROP TABLE agent_service_pricing` (تأكيد المستخدم على الحذف)
+- لا تعديل على auth/invites/الصلاحيات الحالية عدا إضافة pricing
+- GRANT صريح على الجدول الجديد قبل RLS
