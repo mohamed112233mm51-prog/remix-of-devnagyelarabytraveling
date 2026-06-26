@@ -26,7 +26,8 @@ import {
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 
-import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft } from "lucide-react";
+import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, Banknote } from "lucide-react";
+import { CompanySupplyForm } from "@/components/CashMovementForms";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -51,7 +52,7 @@ function CompaniesPage() {
   useEffect(() => {
     import("@/lib/approvalFines").then((m) => m.processExpiredApprovalPenalties({ silent: true })).catch(() => {});
   }, []);
-  const [tab, setTab] = useState<"list" | "add" | "txn" | "statement">("list");
+  const [tab, setTab] = useState<"list" | "add" | "txn" | "supply" | "statement">("list");
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
@@ -132,6 +133,11 @@ function CompaniesPage() {
             <CreditCard size={15} strokeWidth={2} /> <span>تسجيل دفعة</span>
           </div>
         )}
+        {perm.create && (
+          <div className={`tool-tab ${tab === "supply" ? "active" : ""}`} onClick={() => setTab("supply")}>
+            <Banknote size={15} strokeWidth={2} /> <span>توريد نقدية</span>
+          </div>
+        )}
         <div className={`tool-tab ${tab === "statement" ? "active" : ""}`} onClick={() => setTab("statement")}>
           <FileText size={15} strokeWidth={2} /> <span>كشف حساب</span>
         </div>
@@ -205,6 +211,7 @@ function CompaniesPage() {
 
       {tab === "add" && perm.create && <CompanyForm onDone={() => setTab("list")} />}
       {tab === "txn" && perm.create && <CompanyTxnForm companies={companies} merchants={merchants} txns={txns} flights={flights} approvals={approvals} agents={agents} onDone={() => setTab("list")} />}
+      {tab === "supply" && perm.create && <CompanySupplyForm onDone={() => setTab("statement")} />}
       {tab === "statement" && <AppErrorBoundary name="CompanyStatementTab"><CompanyStatementTab companies={companies} txns={txns} initialCompanyId={statementCompanyId} canExport={perm.export} /></AppErrorBoundary>}
 
       {editCompany && perm.edit && (
