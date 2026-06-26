@@ -21,6 +21,7 @@ import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/ap
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
+import { resolveAgentPrice } from "@/lib/pricingMatch";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -778,7 +779,34 @@ function ExecutionForm({
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
-                  <Field label="سعر البيع للوكيل (للوحدة)"><NumberInput value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} /></Field>
+                  <Field label="سعر البيع للوكيل (للوحدة)">
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <NumberInput value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} />
+                      <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
+                        onClick={async () => {
+                          const agent = agents.find((a) => a.id === form.agent_id);
+                          if (!form.approval_company_id) return toast.error("اختر جهة الموافقة (الشركة) أولاً");
+                          if (!agent) return toast.error("اختر الوكيل أولاً");
+                          const tier = (agent as any).tier || "A";
+                          const res = await resolveAgentPrice({
+                            company_id: form.approval_company_id,
+                            service_type: s.service_type,
+                            agent_tier: tier,
+                            departure_from: form.departure_from || null,
+                            destination: form.destination || null,
+                            airline: form.airline || null,
+                            approval_company_id: form.approval_company_id || null,
+                            status: form.status || null,
+                            passenger_type: form.passenger_type || null,
+                          });
+                          if (res.agentPrice == null) return toast.error(res.reason || "لا يوجد سعر مطابق");
+                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: res.agentPrice as number } : x));
+                          toast.success(`تم جلب السعر: ${res.agentPrice}`);
+                        }}
+                        style={{ padding: "4px 8px", fontSize: 11 }}
+                      >🔄</button>
+                    </div>
+                  </Field>
                   <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
