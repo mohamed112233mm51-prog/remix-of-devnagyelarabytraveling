@@ -14,6 +14,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
+import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 
 import {
   PaymentSplits,
@@ -455,6 +456,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
 function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClose: () => void }) {
   const c = company as any;
+  const [activeTab, setActiveTab] = useState<"info" | "pricing">("info");
   const [form, setForm] = useState({
     company_name: company.company_name || "",
     phone: company.phone || "",
@@ -495,8 +497,14 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
   if (typeof document === "undefined") return null;
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 920, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
         <div className="card-header"><div className="card-title">✏️ تعديل بيانات الشركة</div></div>
+        <div className="tools-tabs" style={{ display: "flex", gap: 8, padding: "0 12px", borderBottom: "1px solid var(--border)" }}>
+          <div className={`tool-tab ${activeTab === "info" ? "active" : ""}`} onClick={() => setActiveTab("info")} style={{ cursor: "pointer", padding: "8px 12px" }}>📋 البيانات</div>
+          <div className={`tool-tab ${activeTab === "pricing" ? "active" : ""}`} onClick={() => setActiveTab("pricing")} style={{ cursor: "pointer", padding: "8px 12px" }}>💰 ملف التسعير</div>
+        </div>
+
+        {activeTab === "info" && (<>
         <div className="form-grid">
           <div className="form-group"><label>اسم الشركة</label><input value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
@@ -527,6 +535,9 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
           <button data-confirm-save="تأكيد حفظ التعديلات" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
         </div>
+        </>)}
+
+        {activeTab === "pricing" && <CompanyPricingTab companyId={company.id} />}
       </div>
     </div>,
     document.body,

@@ -134,17 +134,6 @@ export const IMPORT_SPECS: ImportSpec[] = [
     dedupeKey: (r) =>
       `exp:${String(r.expense_name || "").trim().toLowerCase()}|${r.date || ""}|${Number(r.amount || 0)}`,
   },
-  {
-    id: "agent_pricing", label: "تسعير خدمات الوكلاء", table: "agent_service_pricing",
-    fields: [
-      baseAgent,
-      { key: "service_type", label: "نوع الخدمة", type: "string", required: true, synonyms: S.serviceType },
-      { key: "agent_price", label: "سعر الوكيل", type: "number", required: true, synonyms: S.agentPrice, default: 0 },
-      { key: "company_price", label: "سعر الشركة", type: "number", required: true, synonyms: S.companyPrice, default: 0 },
-      { key: "company_percentage", label: "نسبة الشركة %", type: "number", synonyms: ["النسبة", "نسبة الشركة"], default: 0 },
-    ],
-    dedupeKey: (r) => `price:${r.agent_id || ""}|${String(r.service_type || "").trim()}`,
-  },
 ];
 
 export function getSpec(id: string): ImportSpec | undefined {

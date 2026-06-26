@@ -47,6 +47,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "currency_suppliers", label: "حسابات موردي العملة",      route: "/currency-suppliers" },
   
   { key: "expenses",           label: "المصروفات",                route: "/expenses" },
+  { key: "pricing",            label: "إدارة التسعير",            route: "/companies#pricing" },
   { key: "reports",            label: "التقارير",                 route: "/reports" },
   { key: "data_import",        label: "مركز استيراد البيانات",    route: "/data-import" },
 ];
@@ -3007,7 +3008,7 @@ const LAUNCH_LABELS: Record<string, string> = {
   activity_logs: "السجلات والإشعارات",
   import_batches: "دفعات الاستيراد المؤقتة",
   cash_boxes_reset: "تصفير أرصدة الخزائن",
-  agent_service_pricing: "تسعير خدمات الوكلاء",
+  company_pricing_rules: "ملفات التسعير",
   agents: "الوكلاء",
   issuing_companies: "الشركات الصادرة",
   merchants: "تجار الكاش",
