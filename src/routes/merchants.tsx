@@ -11,7 +11,8 @@ import {
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
-import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone } from "lucide-react";
+import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone, ArrowUpFromLine } from "lucide-react";
+import { MerchantCashOutForm } from "@/components/CashMovementForms";
 import { ExportButton } from "@/components/ExportButton";
 import {
   PaymentSplits,
@@ -39,7 +40,7 @@ function MerchantsPage() {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const [tab, setTab] = useState<"list" | "add" | "collect" | "history" | "incoming" | "outgoing" | "statement">("history");
+  const [tab, setTab] = useState<"list" | "add" | "collect" | "cashout" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
 
   // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
@@ -139,6 +140,11 @@ function MerchantsPage() {
             <ListChecks size={15} strokeWidth={2} /> <span>تحصيل نقدية</span>
           </div>
         )}
+        {perm.create && (
+          <div className={`tool-tab ${tab === "cashout" ? "active" : ""}`} onClick={() => setTab("cashout")}>
+            <ArrowUpFromLine size={15} strokeWidth={2} /> <span>صرف نقدية</span>
+          </div>
+        )}
         <div className={`tool-tab ${tab === "incoming" ? "active" : ""}`} onClick={() => setTab("incoming")}>
           <ArrowDownLeft size={15} strokeWidth={2} /> <span>وارد من وكلاء</span>
         </div>
@@ -216,6 +222,10 @@ function MerchantsPage() {
 
       {tab === "collect" && perm.create && (
         <CollectForm merchants={merchants} />
+      )}
+
+      {tab === "cashout" && perm.create && (
+        <MerchantCashOutForm onDone={() => setTab("history")} />
       )}
 
       {tab === "history" && (
