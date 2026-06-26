@@ -44,45 +44,6 @@ export type Database = {
         }
         Relationships: []
       }
-      agent_service_pricing: {
-        Row: {
-          agent_id: string
-          agent_price: number
-          company_percentage: number
-          company_price: number
-          company_profit_value: number
-          created_at: string
-          id: string
-          is_demo: boolean
-          service_type: string
-          updated_at: string
-        }
-        Insert: {
-          agent_id: string
-          agent_price?: number
-          company_percentage?: number
-          company_price?: number
-          company_profit_value?: number
-          created_at?: string
-          id?: string
-          is_demo?: boolean
-          service_type: string
-          updated_at?: string
-        }
-        Update: {
-          agent_id?: string
-          agent_price?: number
-          company_percentage?: number
-          company_price?: number
-          company_profit_value?: number
-          created_at?: string
-          id?: string
-          is_demo?: boolean
-          service_type?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       agents: {
         Row: {
           created_at: string
@@ -97,6 +58,7 @@ export type Database = {
           opening_note: string | null
           phone: string | null
           status: string
+          tier: string
           whatsapp: string | null
         }
         Insert: {
@@ -112,6 +74,7 @@ export type Database = {
           opening_note?: string | null
           phone?: string | null
           status?: string
+          tier?: string
           whatsapp?: string | null
         }
         Update: {
@@ -127,6 +90,7 @@ export type Database = {
           opening_note?: string | null
           phone?: string | null
           status?: string
+          tier?: string
           whatsapp?: string | null
         }
         Relationships: []
@@ -235,6 +199,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      company_pricing_rules: {
+        Row: {
+          agent_price: number
+          agent_tier: string
+          airline: string | null
+          approval_company_id: string | null
+          commission_type: string
+          commission_value: number
+          company_id: string
+          company_price: number
+          created_at: string
+          departure_from: string | null
+          destination: string | null
+          id: string
+          passenger_type: string | null
+          service_type: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_price?: number
+          agent_tier: string
+          airline?: string | null
+          approval_company_id?: string | null
+          commission_type?: string
+          commission_value?: number
+          company_id: string
+          company_price?: number
+          created_at?: string
+          departure_from?: string | null
+          destination?: string | null
+          id?: string
+          passenger_type?: string | null
+          service_type: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_price?: number
+          agent_tier?: string
+          airline?: string | null
+          approval_company_id?: string | null
+          commission_type?: string
+          commission_value?: number
+          company_id?: string
+          company_price?: number
+          created_at?: string
+          departure_from?: string | null
+          destination?: string | null
+          id?: string
+          passenger_type?: string | null
+          service_type?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_pricing_rules_approval_company_id_fkey"
+            columns: ["approval_company_id"]
+            isOneToOne: false
+            referencedRelation: "issuing_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_pricing_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "issuing_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_transactions: {
         Row: {
