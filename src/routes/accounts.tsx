@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, tripValue, txnTotalPaid, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
-import { AgentPricingSection } from "@/components/AgentPricingSection";
+
 import { syncAgentOpeningBalance } from "@/lib/openingBalance";
 import { toast } from "sonner";
 import { usePerm } from "@/hooks/usePerm";
@@ -190,12 +190,14 @@ function AccountsPage() {
 
 function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const a = agent as any;
+  const tierOptions = useDropdownOptions("agent_tier" as any);
   const [form, setForm] = useState({
     name: agent.name || "",
     national_id: agent.national_id || "",
     phone: agent.phone || "",
     whatsapp: agent.whatsapp || "",
     governorate: agent.governorate || "",
+    tier: a.tier || "A",
     opening_debit: a.opening_debit ? String(a.opening_debit) : "",
     opening_credit: a.opening_credit ? String(a.opening_credit) : "",
     opening_date: a.opening_date || "",
@@ -213,6 +215,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       phone: form.phone.trim(),
       whatsapp: form.whatsapp.trim() || null,
       governorate: form.governorate || null,
+      tier: form.tier || "A",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: form.opening_date || null,
@@ -244,6 +247,9 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           <div className="form-group"><label>المحافظة</label>
             <SearchableSelect value={form.governorate} onChange={(v) => set("governorate", v)} options={GOVERNORATES as unknown as string[]} />
           </div>
+          <div className="form-group"><label>شريحة الوكيل</label>
+            <SearchableSelect value={form.tier} onChange={(v) => set("tier", v)} options={(tierOptions.length ? tierOptions : ["A","B","C"]) as string[]} />
+          </div>
         </div>
 
         <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
@@ -266,7 +272,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           </div>
         </div>
 
-        <AgentPricingSection agentId={agent.id} />
+        
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
           <button data-confirm-save="تأكيد حفظ التعديلات" className="btn btn-gold" onClick={save}>💾 حفظ التعديلات</button>
