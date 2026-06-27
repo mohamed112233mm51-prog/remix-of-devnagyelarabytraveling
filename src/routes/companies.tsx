@@ -26,7 +26,7 @@ import {
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 
-import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, Banknote } from "lucide-react";
+import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, Banknote, BadgeDollarSign } from "lucide-react";
 import { CompanySupplyForm } from "@/components/CashMovementForms";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
