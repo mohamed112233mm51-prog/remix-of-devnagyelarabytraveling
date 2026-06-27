@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
-import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionBranch } from "@/lib/permissionKeys";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { normalizeDropdownValue, refetchLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
@@ -64,9 +64,7 @@ const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: s
 ];
 
 function normalizePerm(v: any): Record<string, boolean> {
-  if (v === true) return { view: true, create: true, edit: true, delete: true, export: true };
-  if (v && typeof v === "object") return { view: !!v.view, create: !!v.create, edit: !!v.edit, delete: !!v.delete, export: !!v.export };
-  return { view: false, create: false, edit: false, delete: false, export: false };
+  return normalizePermissionBranch(v);
 }
 
 function SettingsPage() {
@@ -766,9 +764,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
       const result: any = await updFn({ data: { id: u.id, permissions: merged } });
       const savedPermissions = result?.profile?.permissions ?? merged;
       setDraftPermissions(savedPermissions);
+      qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
+      qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+      qc.removeQueries({ queryKey: ["dashboard-profit"] });
       if (currentAuthUser?.id === u.id) {
         await refreshProfile();
-        await qc.invalidateQueries({ queryKey: ["dashboard-profit"] });
       }
       await onChanged();
       toast.success("تم حفظ الصلاحيات");
@@ -891,9 +891,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                     setDraftSuperAdmin(nextVal);
                     try {
                       await updFn({ data: { id: u.id, is_super_admin: nextVal } });
+                      qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
+                      qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+                      qc.removeQueries({ queryKey: ["dashboard-profit"] });
                       if (currentAuthUser?.id === u.id) {
                         await refreshProfile();
-                        await qc.invalidateQueries({ queryKey: ["dashboard-profit"] });
                       }
                       toast.success(nextVal ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
                       await onChanged();

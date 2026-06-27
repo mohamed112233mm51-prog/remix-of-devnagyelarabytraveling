@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { normalizeProfitPermissionsForSave } from "@/lib/permissionKeys";
 
 function admin() {
   return createClient<Database>(
@@ -14,30 +14,6 @@ function admin() {
 
 const BOOTSTRAP_EMAIL = "mohamed112233.mm51@gmail.com";
 const BOOTSTRAP_PASSWORD = "nagy1420260000";
-const PROFIT_PERMISSION_SET = new Set([NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY]);
-
-function normalizePermissionBranch(v: any) {
-  if (v === true) return { view: true, create: true, edit: true, delete: true, export: true };
-  if (v && typeof v === "object") {
-    return {
-      view: !!v.view,
-      create: !!v.create,
-      edit: !!v.edit,
-      delete: !!v.delete,
-      export: !!v.export,
-    };
-  }
-  return { view: false, create: false, edit: false, delete: false, export: false };
-}
-
-function normalizePermissionsForSave(perms: Record<string, any>) {
-  const out = { ...(perms ?? {}) };
-  for (const key of PROFIT_PERMISSION_SET) {
-    if (Object.prototype.hasOwnProperty.call(out, key)) out[key] = normalizePermissionBranch(out[key]);
-  }
-  return out;
-}
-
 export const bootstrapAdmin = createServerFn({ method: "POST" }).handler(async () => {
   const sb = admin();
 
@@ -183,7 +159,7 @@ export const inviteUser = createServerFn({ method: "POST" })
       is_active: false,
       invite_accepted: false,
       agent_id: data.agent_id ?? null,
-      permissions: normalizePermissionsForSave(data.permissions ?? {}),
+      permissions: normalizeProfitPermissionsForSave(data.permissions ?? {}),
       invited_by: context.userId,
     });
     await sb.from("user_roles").delete().eq("user_id", userId);
@@ -239,7 +215,7 @@ export const createUserDirect = createServerFn({ method: "POST" })
         is_active: true,
         invite_accepted: true,
         agent_id: data.agent_id ?? null,
-        permissions: normalizePermissionsForSave(data.permissions ?? {}),
+        permissions: normalizeProfitPermissionsForSave(data.permissions ?? {}),
         invited_by: context.userId,
       });
       if (profileErr) throw new Error(profileErr.message || "تعذر إنشاء ملف المستخدم");
@@ -351,7 +327,7 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     const patch: any = {};
     if (data.full_name !== undefined) patch.full_name = data.full_name;
     if (data.agent_id !== undefined) patch.agent_id = data.agent_id;
-    if (data.permissions !== undefined) patch.permissions = normalizePermissionsForSave(data.permissions);
+    if (data.permissions !== undefined) patch.permissions = normalizeProfitPermissionsForSave(data.permissions);
     if (data.is_super_admin !== undefined) patch.is_super_admin = data.is_super_admin;
     const { data: saved, error } = await sb
       .from("profiles")

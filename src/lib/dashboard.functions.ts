@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 type Period = "today" | "week" | "month" | "year" | "all";
 
@@ -14,10 +14,31 @@ function admin() {
   );
 }
 
-function hasExplicitViewPerm(perms: Record<string, any> | null | undefined, key: string) {
-  const v = perms?.[key];
-  if (v === true) return true;
-  return !!(v && typeof v === "object" && (v.view === true || v.create === true || v.edit === true || v.delete === true || v.export === true));
+async function getProfitAuthorization(userId: string) {
+  const sb = admin();
+  const { data: profile, error } = await sb
+    .from("profiles")
+    .select("permissions, is_super_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || "تعذر التحقق من صلاحيات الأرباح");
+  const permissions = ((profile as any)?.permissions ?? {}) as Record<string, any>;
+  const isSuperAdmin = !!(profile as any)?.is_super_admin;
+  return {
+    sb,
+    canNetProfit: hasProfitViewPermission(permissions, isSuperAdmin, NET_PROFIT_PERMISSION_KEY),
+    canProfitSummary: hasProfitViewPermission(permissions, isSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
+  };
+}
+
+async function loadProfitRows(sb: ReturnType<typeof admin>) {
+  const [{ data: executions, error: executionsError }, { data: expenses, error: expensesError }] = await Promise.all([
+    sb.from("executions").select("id, created_at, operation_status, services"),
+    sb.from("expenses").select("id, created_at, amount"),
+  ]);
+  if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
+  if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
+  return { executionRows: executions ?? [], expenseRows: expenses ?? [] };
 }
 
 function getPeriodRange(period: Period, ref: Date = new Date()) {
@@ -100,71 +121,55 @@ function inRange(d: string | null | undefined, range: { start: Date; end: Date }
   return t >= range.start.getTime() && t < range.end.getTime();
 }
 
-export const getDashboardProfitData = createServerFn({ method: "POST" })
+export const getDashboardNetProfitData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { period: Period; netProfit?: boolean; profitSummary?: boolean }) => d)
+  .inputValidator((d: { period: Period }) => d)
   .handler(async ({ context, data }) => {
-    const sb = admin();
-    const { data: profile, error: profileError } = await sb
-      .from("profiles")
-      .select("permissions, is_super_admin")
-      .eq("id", context.userId)
-      .maybeSingle();
-    if (profileError) throw new Error(profileError.message || "تعذر التحقق من صلاحيات الأرباح");
-
-    const permissions = ((profile as any)?.permissions ?? {}) as Record<string, any>;
-    const isSuperAdmin = !!(profile as any)?.is_super_admin;
-    const canNetProfit = isSuperAdmin || hasExplicitViewPerm(permissions, NET_PROFIT_PERMISSION_KEY);
-    const canProfitSummary = isSuperAdmin || hasExplicitViewPerm(permissions, PROFIT_SUMMARY_PERMISSION_KEY);
-    const wantsNetProfit = !!data.netProfit && canNetProfit;
-    const wantsProfitSummary = !!data.profitSummary && canProfitSummary;
-
-    if (!wantsNetProfit && !wantsProfitSummary) {
-      return {
-        canNetProfit,
-        canProfitSummary,
-        netProfit: null,
-        profitSummary: null,
-      };
+    const { sb, canNetProfit } = await getProfitAuthorization(context.userId);
+    if (!canNetProfit) {
+      return { canNetProfit, netProfit: null };
     }
 
-    const [{ data: executions, error: executionsError }, { data: expenses, error: expensesError }] = await Promise.all([
-      sb.from("executions").select("id, created_at, operation_status, services"),
-      sb.from("expenses").select("id, created_at, amount"),
-    ]);
-    if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
-    if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
-
-    const executionRows = executions ?? [];
-    const expenseRows = expenses ?? [];
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
     const expensesAll = expenseSum(expenseRows, () => true);
     const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
 
-    let netProfit: any = null;
-    if (wantsNetProfit) {
-      const range = getPeriodRange(data.period);
-      const prevRange = getPreviousRange(data.period);
-      const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
-      const periodExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, range));
-      const periodProfit = periodExec.sales - periodExec.companyCost - periodExpenses;
-      let previousProfit: number | null = null;
-      if (prevRange) {
-        const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
-        const prevExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, prevRange));
-        previousProfit = prevExec.sales - prevExec.companyCost - prevExpenses;
-      }
-      netProfit = { periodProfit, previousProfit, companyProfit };
+    const range = getPeriodRange(data.period);
+    const prevRange = getPreviousRange(data.period);
+    const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
+    const periodExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, range));
+    const periodProfit = periodExec.sales - periodExec.companyCost - periodExpenses;
+    let previousProfit: number | null = null;
+    if (prevRange) {
+      const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
+      const prevExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, prevRange));
+      previousProfit = prevExec.sales - prevExec.companyCost - prevExpenses;
     }
 
-    const profitSummary = wantsProfitSummary
-      ? {
-          execSales: allExec.sales,
-          execCompanyCost: allExec.companyCost,
-          expensesAll,
-          companyProfit,
-        }
-      : null;
+    return { canNetProfit, netProfit: { periodProfit, previousProfit, companyProfit } };
+  });
 
-    return { canNetProfit, canProfitSummary, netProfit, profitSummary };
+export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { sb, canProfitSummary } = await getProfitAuthorization(context.userId);
+    if (!canProfitSummary) {
+      return { canProfitSummary, profitSummary: null };
+    }
+
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const allExec = computeExecutionAgg(executionRows, () => true);
+    const expensesAll = expenseSum(expenseRows, () => true);
+    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+
+    return {
+      canProfitSummary,
+      profitSummary: {
+        execSales: allExec.sales,
+        execCompanyCost: allExec.companyCost,
+        expensesAll,
+        companyProfit,
+      },
+    };
   });
