@@ -766,9 +766,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
       const result: any = await updFn({ data: { id: u.id, permissions: merged } });
       const savedPermissions = result?.profile?.permissions ?? merged;
       setDraftPermissions(savedPermissions);
+      qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
+      qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+      qc.removeQueries({ queryKey: ["dashboard-profit"] });
       if (currentAuthUser?.id === u.id) {
         await refreshProfile();
-        await qc.invalidateQueries({ queryKey: ["dashboard-profit"] });
       }
       await onChanged();
       toast.success("تم حفظ الصلاحيات");
@@ -891,9 +893,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                     setDraftSuperAdmin(nextVal);
                     try {
                       await updFn({ data: { id: u.id, is_super_admin: nextVal } });
+                      qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
+                      qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+                      qc.removeQueries({ queryKey: ["dashboard-profit"] });
                       if (currentAuthUser?.id === u.id) {
                         await refreshProfile();
-                        await qc.invalidateQueries({ queryKey: ["dashboard-profit"] });
                       }
                       toast.success(nextVal ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
                       await onChanged();
