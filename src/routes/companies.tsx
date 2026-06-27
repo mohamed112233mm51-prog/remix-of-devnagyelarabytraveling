@@ -562,7 +562,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
 
 
 
-        {activeTab === "info" && (<div key="tab-info" className="bk-fade-in">
+        {activeTab === "info" && (<div key="tab-info">
         <div className="form-grid">
           <div className="form-group"><label>اسم الشركة</label><input value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
