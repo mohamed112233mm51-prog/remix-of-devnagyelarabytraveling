@@ -50,6 +50,8 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "pricing",            label: "إدارة التسعير",            route: "/companies#pricing" },
   { key: "reports",            label: "التقارير",                 route: "/reports" },
   { key: "data_import",        label: "مركز استيراد البيانات",    route: "/data-import" },
+  { key: "net_profit",         label: "صافي الأرباح",             route: "/#net-profit" },
+  { key: "profit_summary",     label: "ملخص الأرباح",             route: "/#profit-summary" },
 ];
 
 const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: string }[] = [
