@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 export { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
@@ -89,6 +89,9 @@ export function checkOwnerOrExplicitPerm(
   section: string | null | undefined,
   action: PermAction = "view",
 ): boolean {
+  if ((section === NET_PROFIT_PERMISSION_KEY || section === PROFIT_SUMMARY_PERMISSION_KEY) && action === "view") {
+    return hasProfitViewPermission(perms, isSuperAdmin, section);
+  }
   return !!isSuperAdmin || checkPerm(perms, false, section, action);
 }
 
