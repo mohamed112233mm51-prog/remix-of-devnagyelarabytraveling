@@ -1053,7 +1053,7 @@ export type Database = {
       }
       transactions: {
         Row: {
-          agent_id: string
+          agent_id: string | null
           arabic_tourism_cash_amount: number
           arabic_tourism_cash_net_amount: number
           cash_amount: number
@@ -1081,7 +1081,7 @@ export type Database = {
           travel_statement: string | null
         }
         Insert: {
-          agent_id: string
+          agent_id?: string | null
           arabic_tourism_cash_amount?: number
           arabic_tourism_cash_net_amount?: number
           cash_amount?: number
@@ -1109,7 +1109,7 @@ export type Database = {
           travel_statement?: string | null
         }
         Update: {
-          agent_id?: string
+          agent_id?: string | null
           arabic_tourism_cash_amount?: number
           arabic_tourism_cash_net_amount?: number
           cash_amount?: number

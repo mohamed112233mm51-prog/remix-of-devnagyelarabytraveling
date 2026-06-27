@@ -1,0 +1,1 @@
+ALTER TABLE public.transactions ALTER COLUMN agent_id DROP NOT NULL;
