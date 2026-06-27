@@ -595,7 +595,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
         </div>
         </div>)}
 
-        {activeTab === "pricing" && <div key="tab-pricing" className="bk-fade-in"><CompanyPricingTab companyId={company.id} /></div>}
+        {activeTab === "pricing" && <div key="tab-pricing"><CompanyPricingTab companyId={company.id} /></div>}
       </div>
     </div>,
     document.body,
