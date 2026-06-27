@@ -2,7 +2,7 @@ import { createContext, useContext, useCallback, useEffect, useState, type React
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { hasPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
 type Role = "admin" | "manager" | "user";
 
@@ -48,15 +48,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
 
   const applyPermissions = useCallback((uid: string, nextPerms: Record<string, any>, nextIsSuperAdmin: boolean) => {
+    const effectivePerms = normalizePermissionsForLoad(nextPerms);
     setPermissions((prev) =>
-      JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms,
+      JSON.stringify(prev) === JSON.stringify(effectivePerms) ? prev : effectivePerms,
     );
     if (import.meta.env.DEV) {
       console.debug("[permissions] loaded", {
         userId: uid,
-        permissions: nextPerms,
-        hasNetProfitPermission: hasProfitViewPermission(nextPerms, nextIsSuperAdmin, NET_PROFIT_PERMISSION_KEY),
-        hasProfitSummaryPermission: hasProfitViewPermission(nextPerms, nextIsSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
+        permissions: effectivePerms,
+        isSystemOwner: nextIsSuperAdmin,
+        hasNetProfitPermission: nextIsSuperAdmin || hasPermission(effectivePerms, NET_PROFIT_PERMISSION_KEY),
+        hasProfitSummaryPermission: nextIsSuperAdmin || hasPermission(effectivePerms, PROFIT_SUMMARY_PERMISSION_KEY),
       });
     }
   }, []);

@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { hasPermission, hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
 export { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
@@ -62,8 +62,11 @@ export function checkPerm(
   section: string | null | undefined,
   action: PermAction = "view",
 ): boolean {
-  if (isAdmin) return true;
   if (!section) return true;
+  if ((section === NET_PROFIT_PERMISSION_KEY || section === PROFIT_SUMMARY_PERMISSION_KEY) && action === "view") {
+    return hasPermission(normalizePermissionsForLoad(perms ?? {}), section);
+  }
+  if (isAdmin) return true;
   const v = perms?.[section];
   if (v === true) return true; // legacy boolean = all actions
   if (!v) return false;
