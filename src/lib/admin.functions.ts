@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { normalizeProfitPermissionsForSave } from "@/lib/permissionKeys";
+import { normalizePermissionsForSave } from "@/lib/permissionKeys";
 
 function admin() {
   return createClient<Database>(
@@ -159,7 +159,7 @@ export const inviteUser = createServerFn({ method: "POST" })
       is_active: false,
       invite_accepted: false,
       agent_id: data.agent_id ?? null,
-      permissions: normalizeProfitPermissionsForSave(data.permissions ?? {}),
+      permissions: normalizePermissionsForSave(data.permissions ?? {}),
       invited_by: context.userId,
     });
     await sb.from("user_roles").delete().eq("user_id", userId);
@@ -215,7 +215,7 @@ export const createUserDirect = createServerFn({ method: "POST" })
         is_active: true,
         invite_accepted: true,
         agent_id: data.agent_id ?? null,
-        permissions: normalizeProfitPermissionsForSave(data.permissions ?? {}),
+        permissions: normalizePermissionsForSave(data.permissions ?? {}),
         invited_by: context.userId,
       });
       if (profileErr) throw new Error(profileErr.message || "تعذر إنشاء ملف المستخدم");
@@ -327,7 +327,7 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     const patch: any = {};
     if (data.full_name !== undefined) patch.full_name = data.full_name;
     if (data.agent_id !== undefined) patch.agent_id = data.agent_id;
-    if (data.permissions !== undefined) patch.permissions = normalizeProfitPermissionsForSave(data.permissions);
+    if (data.permissions !== undefined) patch.permissions = normalizePermissionsForSave(data.permissions);
     if (data.is_super_admin !== undefined) patch.is_super_admin = data.is_super_admin;
     const { data: saved, error } = await sb
       .from("profiles")
