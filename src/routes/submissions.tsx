@@ -15,7 +15,8 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
-import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 
 export const Route = createFileRoute("/submissions")({
