@@ -173,6 +173,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                     <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
                     <td style={{ padding: 6, display: "flex", gap: 4 }}>
                       {perm.edit && <button type="button" className="action-btn" onClick={() => startEdit(r)} style={{ padding: "2px 6px" }}>تعديل</button>}
+                      {perm.create && <button type="button" className="action-btn" onClick={() => duplicate(r)} title="تكرار" style={{ padding: "2px 6px", color: "var(--green, #16a34a)" }}>📋 تكرار</button>}
                       {perm.delete && <button type="button" className="action-btn" onClick={() => remove(r.id)} style={{ padding: "2px 6px" }}>حذف</button>}
                     </td>
                   </tr>
