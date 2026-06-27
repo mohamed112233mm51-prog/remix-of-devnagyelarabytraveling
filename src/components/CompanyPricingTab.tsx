@@ -4,6 +4,7 @@ import { useDropdownOptions, useLive, type IssuingCompany } from "@/lib/db";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { toast } from "sonner";
+import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 
