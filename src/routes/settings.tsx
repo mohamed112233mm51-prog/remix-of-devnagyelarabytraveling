@@ -67,6 +67,16 @@ function normalizePerm(v: any): Record<string, boolean> {
   return normalizePermissionBranch(v);
 }
 
+function actionsForPermission(key: string) {
+  return isProfitPermissionKey(key) ? ACTIONS.filter((a) => a.key === "view") : ACTIONS;
+}
+
+function permissionEnabledForUi(permissions: Record<string, any> | undefined, key: string) {
+  if (isProfitPermissionKey(key)) return permissions?.[key] === true;
+  const cur = normalizePerm(permissions?.[key]);
+  return actionsForPermission(key).every((a) => cur[a.key]);
+}
+
 function SettingsPage() {
   const { permissions, isSuperAdmin, loading } = useAuth();
   const can = (sub: SettingsSubKey | "view") => checkSettingsPerm(permissions, isSuperAdmin, sub);
@@ -352,12 +362,20 @@ function InviteUserTab() {
   const [busy, setBusy] = useState(false);
 
   function toggleAction(section: string, action: string, val: boolean) {
+    if (isProfitPermissionKey(section)) {
+      setForm({ ...form, permissions: { ...form.permissions, [section]: val as any } });
+      return;
+    }
     const cur = normalizePerm(form.permissions[section]);
     cur[action] = val;
     if (action !== "view" && val) cur.view = true; // any granted action implies view
     setForm({ ...form, permissions: { ...form.permissions, [section]: cur } });
   }
   function toggleAll(section: string, val: boolean) {
+    if (isProfitPermissionKey(section)) {
+      setForm({ ...form, permissions: { ...form.permissions, [section]: val as any } });
+      return;
+    }
     const cur: Record<string, boolean> = { view: val, create: val, edit: val, delete: val, export: val };
     setForm({ ...form, permissions: { ...form.permissions, [section]: cur } });
   }
@@ -452,7 +470,8 @@ function InviteUserTab() {
             <div style={{ display: "grid", gap: 8 }}>
               {PERMISSION_KEYS.map((p) => {
                 const cur = normalizePerm(form.permissions[p.key]);
-                const allOn = ACTIONS.every((a) => cur[a.key]);
+                const actionList = actionsForPermission(p.key);
+                const allOn = permissionEnabledForUi(form.permissions, p.key);
                 return (
                   <div key={p.key} style={{ background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 10, padding: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -463,9 +482,9 @@ function InviteUserTab() {
                       </label>
                     </div>
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      {ACTIONS.map((a) => (
+                      {actionList.map((a) => (
                         <label key={a.key} style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155" }}>
-                          <input type="checkbox" checked={!!cur[a.key]} onChange={(e) => toggleAction(p.key, a.key, e.target.checked)} />
+                          <input type="checkbox" checked={isProfitPermissionKey(p.key) ? form.permissions[p.key] === true : !!cur[a.key]} onChange={(e) => toggleAction(p.key, a.key, e.target.checked)} />
                           {a.label}
                         </label>
                       ))}
