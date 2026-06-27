@@ -516,6 +516,7 @@ function Dashboard() {
 
       {/* === PRIMARY KPIs (hero) — period-based === */}
       <div className="erp-hero-grid">
+        {canNetProfit && (
         <HeroKpi
           label={`صافي الأرباح — ${periodLabel}`}
           value={periodAgg.profit}
@@ -526,6 +527,7 @@ function Dashboard() {
           deltaPositive={prevAgg ? pctDelta(periodAgg.profit, prevAgg.profit) >= 0 : undefined}
           sub={prevAgg ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
         />
+        )}
         <HeroKpi
           label={`إجمالي التحصيلات — ${periodLabel}`}
           value={periodAgg.collected}
