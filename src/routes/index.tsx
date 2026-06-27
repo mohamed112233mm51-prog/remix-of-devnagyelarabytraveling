@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/useAuth";
+import { checkPerm } from "@/hooks/usePerm";
 import {
   fmtDL,
   fmtNum,
