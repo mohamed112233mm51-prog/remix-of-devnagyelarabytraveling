@@ -76,5 +76,5 @@ export function hasProfitViewPermission(
   key: typeof PROFIT_PERMISSION_KEYS[number],
 ) {
   if (isSuperAdmin) return true;
-  return hasPermission(normalizePermissionsForLoad(permissions), key);
+  return hasPermission(permissions, key);
 }
