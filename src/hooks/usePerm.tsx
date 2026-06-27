@@ -3,6 +3,8 @@ import { useAuth } from "@/hooks/useAuth";
 export type PermAction = "view" | "create" | "edit" | "delete" | "export";
 
 export const ALL_ACTIONS: PermAction[] = ["view", "create", "edit", "delete", "export"];
+export const NET_PROFIT_PERMISSION_KEY = "net_profit" as const;
+export const PROFIT_SUMMARY_PERMISSION_KEY = "profit_summary" as const;
 
 export const SECTION_KEYS = [
   "dashboard",
@@ -15,8 +17,8 @@ export const SECTION_KEYS = [
   "expenses",
   "reports",
   "data_import",
-  "net_profit",
-  "profit_summary",
+  NET_PROFIT_PERMISSION_KEY,
+  PROFIT_SUMMARY_PERMISSION_KEY,
 ] as const;
 
 // Settings sub-permissions (stored under permissions.settings.{key})
@@ -73,6 +75,20 @@ export function checkPerm(
     return v[action] === true;
   }
   return false;
+}
+
+/**
+ * Strict section check used for sensitive in-page permissions.
+ * Unlike `checkPerm`, this never treats the `admin` role as a bypass; callers
+ * must pass an explicit owner/super-admin flag separately.
+ */
+export function checkOwnerOrExplicitPerm(
+  perms: Record<string, any> | undefined | null,
+  isSuperAdmin: boolean,
+  section: string | null | undefined,
+  action: PermAction = "view",
+): boolean {
+  return !!isSuperAdmin || checkPerm(perms, false, section, action);
 }
 
 /**

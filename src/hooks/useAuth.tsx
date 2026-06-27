@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { checkOwnerOrExplicitPerm, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/hooks/usePerm";
 
 type Role = "admin" | "manager" | "user";
 
@@ -16,6 +17,7 @@ type AuthCtx = {
   needsPassword: boolean;
   blocked: null | "not_invited" | "disabled";
   permissions: Record<string, any>;
+  refreshProfile: () => Promise<void>;
   setPasswordDone: () => void;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<void>;
@@ -44,6 +46,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
+
+  const applyPermissions = useCallback((uid: string, nextPerms: Record<string, any>, nextIsSuperAdmin: boolean) => {
+    setPermissions((prev) =>
+      JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms,
+    );
+    if (import.meta.env.DEV) {
+      console.debug("[permissions] loaded", {
+        userId: uid,
+        permissions: nextPerms,
+        hasNetProfitPermission: checkOwnerOrExplicitPerm(nextPerms, nextIsSuperAdmin, NET_PROFIT_PERMISSION_KEY, "view"),
+        hasProfitSummaryPermission: checkOwnerOrExplicitPerm(nextPerms, nextIsSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY, "view"),
+      });
+    }
+  }, []);
+
+  const loadProfile = useCallback(async (uid: string) => {
+    console.info("[startup] Profile/Permissions loading start");
+    try {
+      const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
+        await withStartupTimeout(Promise.all([
+          supabase.from("user_roles").select("role").eq("user_id", uid),
+          supabase
+            .from("profiles")
+            .select("is_active, invite_accepted, permissions, is_super_admin")
+            .eq("id", uid)
+            .maybeSingle(),
+        ]), "Profile/Permissions");
+      if (roleError || profileError) {
+        toast.error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
+        setRoles([]);
+        setPermissions({});
+        setIsSuperAdmin(false);
+        setBlocked(null);
+        return;
+      }
+      const nextRoles = (roleRows ?? []).map((r: any) => r.role);
+      const nextPerms = (((profile as any)?.permissions as Record<string, any>) ?? {});
+      const nextIsSuperAdmin = !!(profile as any)?.is_super_admin;
+      setRoles(nextRoles);
+      setIsSuperAdmin(nextIsSuperAdmin);
+      applyPermissions(uid, nextPerms, nextIsSuperAdmin);
+      if (!profile) setBlocked("not_invited");
+      else if ((profile as any).is_active === false) setBlocked("disabled");
+      else if ((profile as any).invite_accepted === false) setBlocked("disabled");
+      else setBlocked(null);
+      console.info("[startup] Profile/Permissions loading complete");
+    } catch (error: any) {
+      console.warn("[startup] Profile/Permissions failed or timed out", error);
+      toast.error(error?.message || "تعذر تحميل صلاحيات المستخدم");
+      setRoles([]);
+      setPermissions({});
+      setIsSuperAdmin(false);
+      setBlocked(null);
+    } finally {
+      setProfileLoaded(true);
+    }
+  }, [applyPermissions]);
+
+  const refreshProfile = useCallback(async () => {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    setProfileLoaded(false);
+    await loadProfile(uid);
+  }, [loadProfile, session?.user?.id]);
 
   useEffect(() => {
     console.info("[startup] Auth bootstrap start");
@@ -88,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .finally(() => setLoading(false));
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [loadProfile]);
 
   // Realtime: subscribe to current user's profile + roles; sign out if disabled
   useEffect(() => {
@@ -130,8 +196,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (next && next.is_active !== false && next.invite_accepted !== false) {
             setBlocked(null);
           }
-          if (next && next.permissions) {
-            setPermissions(next.permissions as Record<string, any>);
+          if (next) {
+            const nextPerms = ((next as any).permissions ?? {}) as Record<string, any>;
+            const nextIsSuperAdmin = !!(next as any).is_super_admin;
+            setIsSuperAdmin(nextIsSuperAdmin);
+            applyPermissions(uid, nextPerms, nextIsSuperAdmin);
           }
         },
       )
@@ -162,11 +231,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setBlocked(null);
-        setIsSuperAdmin(!!(profile as any).is_super_admin);
+        const nextIsSuperAdmin = !!(profile as any).is_super_admin;
+        setIsSuperAdmin(nextIsSuperAdmin);
         const nextPerms = ((profile as any).permissions ?? {}) as Record<string, any>;
-        setPermissions((prev) =>
-          JSON.stringify(prev) === JSON.stringify(nextPerms) ? prev : nextPerms,
-        );
+        applyPermissions(uid, nextPerms, nextIsSuperAdmin);
         const { data: roleRows } = await supabase
           .from("user_roles")
           .select("role")
@@ -197,47 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.removeEventListener("storage", onStorage);
       }
     };
-  }, [session?.user?.id]);
-
-  async function loadProfile(uid: string) {
-    console.info("[startup] Profile/Permissions loading start");
-    try {
-      const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
-        await withStartupTimeout(Promise.all([
-          supabase.from("user_roles").select("role").eq("user_id", uid),
-          supabase
-            .from("profiles")
-            .select("is_active, invite_accepted, permissions, is_super_admin")
-            .eq("id", uid)
-            .maybeSingle(),
-        ]), "Profile/Permissions");
-      if (roleError || profileError) {
-        toast.error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
-        setRoles([]);
-        setPermissions({});
-        setIsSuperAdmin(false);
-        setBlocked(null);
-        return;
-      }
-      setRoles((roleRows ?? []).map((r: any) => r.role));
-      setPermissions(((profile as any)?.permissions as Record<string, any>) ?? {});
-      setIsSuperAdmin(!!(profile as any)?.is_super_admin);
-      if (!profile) setBlocked("not_invited");
-      else if ((profile as any).is_active === false) setBlocked("disabled");
-      else if ((profile as any).invite_accepted === false) setBlocked("disabled");
-      else setBlocked(null);
-      console.info("[startup] Profile/Permissions loading complete");
-    } catch (error: any) {
-      console.warn("[startup] Profile/Permissions failed or timed out", error);
-      toast.error(error?.message || "تعذر تحميل صلاحيات المستخدم");
-      setRoles([]);
-      setPermissions({});
-      setIsSuperAdmin(false);
-      setBlocked(null);
-    } finally {
-      setProfileLoaded(true);
-    }
-  }
+  }, [applyPermissions, loadProfile, session?.user?.id]);
 
   const value: AuthCtx = {
     session,
@@ -250,6 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     needsPassword,
     blocked,
     permissions,
+    refreshProfile,
     setPasswordDone: () => {
       setNeedsPassword(false);
       setBlocked(null);
