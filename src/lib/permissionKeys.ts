@@ -44,5 +44,5 @@ export function hasProfitViewPermission(
 ) {
   if (isSuperAdmin) return true;
   const branch = normalizePermissionBranch(permissions?.[key]);
-  return PERMISSION_ACTIONS.some((action) => branch[action] === true);
+  return branch.view === true;
 }
