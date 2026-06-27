@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { checkOwnerOrExplicitPerm } from "@/hooks/usePerm";
 import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
-import { getDashboardProfitData } from "@/lib/dashboard.functions";
+import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/dashboard.functions";
 import {
   fmtDL,
   fmtNum,
@@ -113,32 +113,14 @@ function Dashboard() {
   // Profit permissions are independent — admin role alone is NOT enough; only owner/super-admin or explicit DB permission.
   const canViewNetProfit = checkOwnerOrExplicitPerm(permissions, isSuperAdmin, NET_PROFIT_PERMISSION_KEY, "view");
   const canViewProfitSummary = checkOwnerOrExplicitPerm(permissions, isSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY, "view");
-  const profitFn = useServerFn(getDashboardProfitData);
-  const queryClient = useQueryClient();
+  const netProfitFn = useServerFn(getDashboardNetProfitData);
+  const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
     owner: isSuperAdmin,
     net: permissions?.[NET_PROFIT_PERMISSION_KEY] ?? null,
     summary: permissions?.[PROFIT_SUMMARY_PERMISSION_KEY] ?? null,
   });
-  const previousProfitPermissionSignature = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (previousProfitPermissionSignature.current === null) {
-      previousProfitPermissionSignature.current = profitPermissionSignature;
-      return;
-    }
-    if (previousProfitPermissionSignature.current !== profitPermissionSignature) {
-      previousProfitPermissionSignature.current = profitPermissionSignature;
-      queryClient.removeQueries({
-        queryKey: ["dashboard-profit"],
-        predicate: (q) => (q.queryKey as unknown[])[2] !== profitPermissionSignature,
-      });
-      if (canViewNetProfit || canViewProfitSummary) {
-        queryClient.invalidateQueries({ queryKey: ["dashboard-profit", period, profitPermissionSignature] });
-      }
-    }
-  }, [profitPermissionSignature, queryClient, canViewNetProfit, canViewProfitSummary, period]);
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
   const approvals: any[] = [];
@@ -169,17 +151,24 @@ function Dashboard() {
   // Heavy analytics use deferred period so KPI clicks feel instant
   const deferredPeriod = useDeferredValue(period);
 
-  const profitQuery = useQuery({
-    queryKey: ["dashboard-profit", period, profitPermissionSignature, canViewNetProfit, canViewProfitSummary],
-    enabled: canViewNetProfit || canViewProfitSummary,
+  const netProfitQuery = useQuery({
+    queryKey: ["dashboard-net-profit", period, profitPermissionSignature, canViewNetProfit],
+    enabled: canViewNetProfit,
     staleTime: 0,
     refetchOnMount: "always",
-    queryFn: () => profitFn({ data: { period, netProfit: canViewNetProfit, profitSummary: canViewProfitSummary } }),
+    queryFn: () => netProfitFn({ data: { period } }),
   });
-  const effectiveCanViewNetProfit = canViewNetProfit && profitQuery.data?.canNetProfit === true;
-  const effectiveCanViewProfitSummary = canViewProfitSummary && profitQuery.data?.canProfitSummary === true;
-  const netProfitData = effectiveCanViewNetProfit ? profitQuery.data?.netProfit : null;
-  const profitSummaryData = effectiveCanViewProfitSummary ? profitQuery.data?.profitSummary : null;
+  const profitSummaryQuery = useQuery({
+    queryKey: ["dashboard-profit-summary", profitPermissionSignature, canViewProfitSummary],
+    enabled: canViewProfitSummary,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: () => profitSummaryFn(),
+  });
+  const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
+  const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
+  const netProfitData = effectiveCanViewNetProfit ? netProfitQuery.data?.netProfit : null;
+  const profitSummaryData = effectiveCanViewProfitSummary ? profitSummaryQuery.data?.profitSummary : null;
   const periodProfit = netProfitData?.periodProfit ?? 0;
   const previousPeriodProfit = netProfitData?.previousProfit ?? null;
   const executionNetProfit = netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0;
