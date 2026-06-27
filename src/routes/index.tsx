@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/useAuth";
+import { checkPerm } from "@/hooks/usePerm";
 import {
   fmtDL,
   fmtNum,
@@ -141,6 +143,9 @@ function computeExecutionAgg(
 
 
 function Dashboard() {
+  const { permissions, isAdmin, isSuperAdmin } = useAuth();
+  const canNetProfit = isSuperAdmin || checkPerm(permissions, isAdmin, "net_profit", "view");
+  const canProfitSummary = isSuperAdmin || checkPerm(permissions, isAdmin, "profit_summary", "view");
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
   const approvals: any[] = [];
@@ -511,6 +516,7 @@ function Dashboard() {
 
       {/* === PRIMARY KPIs (hero) — period-based === */}
       <div className="erp-hero-grid">
+        {canNetProfit && (
         <HeroKpi
           label={`صافي الأرباح — ${periodLabel}`}
           value={periodAgg.profit}
@@ -521,6 +527,7 @@ function Dashboard() {
           deltaPositive={prevAgg ? pctDelta(periodAgg.profit, prevAgg.profit) >= 0 : undefined}
           sub={prevAgg ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
         />
+        )}
         <HeroKpi
           label={`إجمالي التحصيلات — ${periodLabel}`}
           value={periodAgg.collected}
@@ -784,12 +791,14 @@ function Dashboard() {
           <Stat label="مخصومة" value={fmtDL(expensesDeducted)} />
         </SectionCard>
 
+        {canProfitSummary && (
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
           <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(execSales)} tone="green" />
           <Stat label="إجمالي تكلفة الشركات" value={fmtDL(execCompanyCost)} tone="red" />
           <Stat label="إجمالي المصروفات" value={fmtDL(expensesAll)} tone="red" />
           <Stat label="صافي الأرباح" value={fmtDL(companyProfit)} highlight />
         </SectionCard>
+        )}
       </div>
 
       <style>{dashCss}</style>

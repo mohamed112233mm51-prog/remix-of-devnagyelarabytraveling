@@ -15,6 +15,8 @@ export const SECTION_KEYS = [
   "expenses",
   "reports",
   "data_import",
+  "net_profit",
+  "profit_summary",
 ] as const;
 
 // Settings sub-permissions (stored under permissions.settings.{key})
