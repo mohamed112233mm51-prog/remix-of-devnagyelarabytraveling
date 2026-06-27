@@ -591,7 +591,9 @@ function Dashboard() {
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
         <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
-        <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
+        {canNetProfit && (
+          <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
+        )}
       </div>
 
 
