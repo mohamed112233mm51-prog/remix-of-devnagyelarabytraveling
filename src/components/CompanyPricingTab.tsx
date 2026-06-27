@@ -116,10 +116,15 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
 
   const remove = async (id: string) => {
     if (!perm.delete) return toast.error("لا تملك صلاحية الحذف");
-    if (!confirm("حذف هذا السعر؟")) return;
+    const ok = await confirmDialog(
+      "تأكيد حذف سعر الخدمة\nهل أنت متأكد من حذف هذا السعر؟ لا يمكن التراجع عن هذا الإجراء.",
+      { confirmLabel: "حذف", cancelLabel: "إلغاء" },
+    );
+    if (!ok) return;
     const { error } = await supabase.from("company_pricing_rules" as any).delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) { console.error(error); return toast.error("تعذر حذف سعر الخدمة"); }
     await load();
+    toast.success("تم حذف سعر الخدمة بنجاح");
   };
 
   const duplicate = async (r: PricingRule) => {
