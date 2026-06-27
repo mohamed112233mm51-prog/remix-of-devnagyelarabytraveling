@@ -149,7 +149,7 @@ function SubmissionsPage() {
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
-  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, SUBMISSION_COLUMNS));
+  const [visible, setVisible] = usePersistentColumnVisibility("submissions", SUBMISSION_COLUMNS);
   const visibleColumns = SUBMISSION_COLUMNS.filter((c) => visible[c.key] !== false);
 
   const filtered = useMemo(() => submissions.filter((s) => {
