@@ -1,6 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { checkPerm } from "@/hooks/usePerm";
+import { supabase } from "@/integrations/supabase/client";
+import { checkOwnerOrExplicitPerm } from "@/hooks/usePerm";
+import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { getDashboardProfitData } from "@/lib/dashboard.functions";
 import {
   fmtDL,
   fmtNum,
@@ -17,7 +22,6 @@ import {
   type Merchant,
   type MerchantCashCollection,
   type Submission,
-  type Execution,
   type Transaction,
 } from "@/lib/db";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
@@ -104,49 +108,37 @@ function pctDelta(curr: number, prev: number) {
   return Math.round(((curr - prev) / Math.abs(prev)) * 100);
 }
 
-// ===== Execution-based profit components (services actually executed) =====
-// Profit must depend ONLY on the buy/sell difference of execution services,
-// plus expenses — NOT on agent/company payments, collections, balances, or
-// treasury movements.
-function computeExecutionAgg(
-  executions: Execution[],
-  predicate: (ex: Execution) => boolean,
-) {
-  let sales = 0;        // إجمالي سعر بيع خدمات التنفيذ (للوكلاء)
-  let companyCost = 0;  // إجمالي تكلفة خدمات الشركات الصادرة
-  let agentCost = 0;    // إجمالي تكلفة خدمات الوكلاء (لا يوجد مفهوم تكلفة من وكيل في النظام الحالي)
-  for (const ex of executions) {
-    if ((ex.operation_status || "") !== "منفذ") continue;
-    if (!predicate(ex)) continue;
-    const services = Array.isArray(ex.services) ? ex.services : [];
-    for (const s of services) {
-      if (!s || typeof s !== "object") continue;
-      const count = Math.max(1, Math.round(Number(s.count) || 1));
-      const agentPrice = Math.max(0, Number(s.agent_price) || 0);
-      const companyPrice = Math.max(0, Number(s.company_price) || 0);
-      const explicitCompanyValue = Math.max(0, Number(s.company_value) || 0);
-      const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
-      const kind = (s as { kind?: string }).kind;
-      if (kind === "company") {
-        companyCost += companyValue;
-      } else if (kind === "agent") {
-        sales += agentPrice * count;
-      } else {
-        // legacy: single line carrying both sides
-        sales += agentPrice * count;
-        if (s.company_id) companyCost += companyValue;
+function Dashboard() {
+  const { permissions, isSuperAdmin } = useAuth();
+  // Profit permissions are independent — admin role alone is NOT enough; only owner/super-admin or explicit DB permission.
+  const canViewNetProfit = checkOwnerOrExplicitPerm(permissions, isSuperAdmin, NET_PROFIT_PERMISSION_KEY, "view");
+  const canViewProfitSummary = checkOwnerOrExplicitPerm(permissions, isSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY, "view");
+  const profitFn = useServerFn(getDashboardProfitData);
+  const queryClient = useQueryClient();
+  const [period, setPeriod] = useState<Period>("month");
+  const profitPermissionSignature = JSON.stringify({
+    owner: isSuperAdmin,
+    net: permissions?.[NET_PROFIT_PERMISSION_KEY] ?? null,
+    summary: permissions?.[PROFIT_SUMMARY_PERMISSION_KEY] ?? null,
+  });
+  const previousProfitPermissionSignature = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (previousProfitPermissionSignature.current === null) {
+      previousProfitPermissionSignature.current = profitPermissionSignature;
+      return;
+    }
+    if (previousProfitPermissionSignature.current !== profitPermissionSignature) {
+      previousProfitPermissionSignature.current = profitPermissionSignature;
+      queryClient.removeQueries({
+        queryKey: ["dashboard-profit"],
+        predicate: (q) => (q.queryKey as unknown[])[2] !== profitPermissionSignature,
+      });
+      if (canViewNetProfit || canViewProfitSummary) {
+        queryClient.invalidateQueries({ queryKey: ["dashboard-profit", period, profitPermissionSignature] });
       }
     }
-  }
-  return { sales, companyCost, agentCost };
-}
-
-
-function Dashboard() {
-  const { permissions, isAdmin, isSuperAdmin } = useAuth();
-  // Profit permissions are independent — admin role alone is NOT enough; only super admin or explicit grant
-  const canNetProfit = isSuperAdmin || checkPerm(permissions, false, "net_profit", "view");
-  const canProfitSummary = isSuperAdmin || checkPerm(permissions, false, "profit_summary", "view");
+  }, [profitPermissionSignature, queryClient, canViewNetProfit, canViewProfitSummary, period]);
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
   const approvals: any[] = [];
@@ -157,14 +149,43 @@ function Dashboard() {
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const { rows: submissions } = useLive<Submission>("submissions");
-  const { rows: executions } = useLive<Execution>("executions");
+  const executionMetricsQuery = useQuery({
+    queryKey: ["dashboard-execution-metrics"],
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("executions")
+        .select("id, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as { id: string; created_at: string | null }[];
+    },
+  });
+  const executionMetrics = executionMetricsQuery.data ?? [];
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
   const { rows: currencyTxns } = useLive<{ id: string; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
 
-  const [period, setPeriod] = useState<Period>("month");
   // Heavy analytics use deferred period so KPI clicks feel instant
   const deferredPeriod = useDeferredValue(period);
+
+  const profitQuery = useQuery({
+    queryKey: ["dashboard-profit", period, profitPermissionSignature, canViewNetProfit, canViewProfitSummary],
+    enabled: canViewNetProfit || canViewProfitSummary,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: () => profitFn({ data: { period, netProfit: canViewNetProfit, profitSummary: canViewProfitSummary } }),
+  });
+  const effectiveCanViewNetProfit = canViewNetProfit && profitQuery.data?.canNetProfit === true;
+  const effectiveCanViewProfitSummary = canViewProfitSummary && profitQuery.data?.canProfitSummary === true;
+  const netProfitData = effectiveCanViewNetProfit ? profitQuery.data?.netProfit : null;
+  const profitSummaryData = effectiveCanViewProfitSummary ? profitQuery.data?.profitSummary : null;
+  const periodProfit = netProfitData?.periodProfit ?? 0;
+  const previousPeriodProfit = netProfitData?.previousProfit ?? null;
+  const executionNetProfit = netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0;
+  const profitExecSales = profitSummaryData?.execSales ?? 0;
+  const profitExecCompanyCost = profitSummaryData?.execCompanyCost ?? 0;
+  const profitExpensesAll = profitSummaryData?.expensesAll ?? 0;
 
   // ===== Lifetime totals — single pass per table =====
   const lifetime = useMemo(() => {
@@ -210,30 +231,21 @@ function Dashboard() {
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
 
-    // ===== Execution-based profit (lifetime) =====
-    const execAll = computeExecutionAgg(executions, () => true);
-    const companyProfit =
-      execAll.sales - execAll.companyCost - expensesAll;
-
     return {
       agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
       companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
       merchantCollected,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-      companyOutgoingNet, companyProfit,
-      execSales: execAll.sales,
-      execCompanyCost: execAll.companyCost,
-      execAgentCost: execAll.agentCost,
+      companyOutgoingNet,
     };
-  }, [txns, cTxns, collections, expenses, expenseDeductions, executions]);
+  }, [txns, cTxns, collections, expenses, expenseDeductions]);
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
     companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
     merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-    companyOutgoingNet, companyProfit,
-    execSales, execCompanyCost, execAgentCost,
+    companyOutgoingNet,
   } = lifetime;
 
 
@@ -299,27 +311,19 @@ function Dashboard() {
     }
     for (const f of flights) if (inR(f.created_at)) flightsCount += 1;
     for (const a of approvals) if (inR(a.created_at)) approvalsCount += 1;
-    // Execution-based profit for the period (no payments/balances involved)
-    const execAgg = computeExecutionAgg(executions, (ex) => inR(ex.created_at));
-    const profit =
-      execAgg.sales - execAgg.companyCost - expBase;
     return {
       collected,
       expenses: expSum,
-      profit,
       flightsCount,
       approvalsCount,
-      execSales: execAgg.sales,
-      execCompanyCost: execAgg.companyCost,
-      execAgentCost: execAgg.agentCost,
     };
   };
 
 
   const periodRange = useMemo(() => getPeriodRange(period), [period]);
   const prevRange = useMemo(() => getPreviousRange(period), [period]);
-  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals, executions]);
-  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals, executions]);
+  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
 
 
   const periodLabel = PERIOD_LABELS[period];
@@ -517,16 +521,16 @@ function Dashboard() {
 
       {/* === PRIMARY KPIs (hero) — period-based === */}
       <div className="erp-hero-grid">
-        {canNetProfit && (
+        {effectiveCanViewNetProfit && (
         <HeroKpi
           label={`صافي الأرباح — ${periodLabel}`}
-          value={periodAgg.profit}
+          value={periodProfit}
           format={fmtDL}
           icon={<TrendingUp size={18} />}
           tone="primary"
-          delta={prevAgg ? `${pctDelta(periodAgg.profit, prevAgg.profit) >= 0 ? "+" : ""}${pctDelta(periodAgg.profit, prevAgg.profit)}%` : undefined}
-          deltaPositive={prevAgg ? pctDelta(periodAgg.profit, prevAgg.profit) >= 0 : undefined}
-          sub={prevAgg ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
+          delta={previousPeriodProfit !== null ? `${pctDelta(periodProfit, previousPeriodProfit) >= 0 ? "+" : ""}${pctDelta(periodProfit, previousPeriodProfit)}%` : undefined}
+          deltaPositive={previousPeriodProfit !== null ? pctDelta(periodProfit, previousPeriodProfit) >= 0 : undefined}
+          sub={previousPeriodProfit !== null ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
         />
         )}
         <HeroKpi
@@ -555,7 +559,7 @@ function Dashboard() {
           format={fmtNum}
           icon={<ClipboardCheck size={18} />}
           tone="navy"
-          sub={`التنفيذات: ${fmtNum(executions.filter((e) => inRange(e.created_at, periodRange)).length)}`}
+          sub={`التنفيذات: ${fmtNum(executionMetrics.filter((e) => inRange(e.created_at, periodRange)).length)}`}
         />
       </div>
 
@@ -585,14 +589,14 @@ function Dashboard() {
       <div className="erp-section-title">المؤشرات الرئيسية</div>
       <div className="erp-hero-grid">
         <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
-        <HeroKpi label="عدد التنفيذات" value={executions.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
+        <HeroKpi label="عدد التنفيذات" value={executionMetrics.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
         <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
         <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
-        {canNetProfit && (
-          <HeroKpi label="صافي الربح من التنفيذات" value={companyProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
+        {effectiveCanViewNetProfit && (
+          <HeroKpi label="صافي الربح من التنفيذات" value={executionNetProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
         )}
       </div>
 
@@ -794,12 +798,12 @@ function Dashboard() {
           <Stat label="مخصومة" value={fmtDL(expensesDeducted)} />
         </SectionCard>
 
-        {canProfitSummary && (
+        {effectiveCanViewProfitSummary && (
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
-          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(execSales)} tone="green" />
-          <Stat label="إجمالي تكلفة الشركات" value={fmtDL(execCompanyCost)} tone="red" />
-          <Stat label="إجمالي المصروفات" value={fmtDL(expensesAll)} tone="red" />
-          <Stat label="صافي الأرباح" value={fmtDL(companyProfit)} highlight />
+          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(profitExecSales)} tone="green" />
+          <Stat label="إجمالي تكلفة الشركات" value={fmtDL(profitExecCompanyCost)} tone="red" />
+          <Stat label="إجمالي المصروفات" value={fmtDL(profitExpensesAll)} tone="red" />
+          <Stat label="صافي الأرباح" value={fmtDL(profitSummaryData?.companyProfit ?? 0)} highlight />
         </SectionCard>
         )}
       </div>
