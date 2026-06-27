@@ -740,7 +740,35 @@ function ExecutionForm({
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
-                  <Field label="سعر الشركة (للوحدة)"><NumberInput value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} /></Field>
+                  <Field label="سعر الشركة (للوحدة)">
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <NumberInput value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} />
+                      <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
+                        onClick={async () => {
+                          const companyId = s.company_id || form.approval_company_id;
+                          if (!companyId) return toast.error("اختر الشركة الصادرة أولاً");
+                          const agent = agents.find((a) => a.id === form.agent_id);
+                          const tier = (agent as any)?.tier || "A";
+                          const res = await resolveAgentPrice({
+                            company_id: companyId,
+                            service_type: s.service_type,
+                            agent_tier: tier,
+                            departure_from: form.departure_from || null,
+                            destination: form.destination || null,
+                            airline: form.airline || null,
+                            approval_company_id: form.approval_company_id || null,
+                            status: form.status || null,
+                            passenger_type: form.passenger_type || null,
+                          });
+                          const cp = res.rule ? Number(res.rule.company_price) : null;
+                          if (cp == null) return toast.error(res.reason || "لا يوجد سعر مطابق");
+                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: cp } : x));
+                          toast.success(`تم جلب السعر: ${cp}`);
+                        }}
+                        style={{ padding: "4px 8px", fontSize: 11 }}
+                      >🔄</button>
+                    </div>
+                  </Field>
                   <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
