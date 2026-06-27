@@ -230,7 +230,7 @@ function ExecutionsPage() {
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
-  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, EXECUTION_COLUMNS));
+  const [visible, setVisible] = usePersistentColumnVisibility("executions", EXECUTION_COLUMNS);
   const visibleColumns = EXECUTION_COLUMNS.filter((c) => visible[c.key] !== false);
 
   const filtered = useMemo(() => executions.filter((e) => {
