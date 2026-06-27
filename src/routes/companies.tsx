@@ -511,32 +511,16 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
             role="tablist"
             aria-label="أقسام بيانات الشركة"
             style={{
-              position: "relative",
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
               gap: 4,
               padding: 4,
               background: "var(--card)",
               border: "1px solid var(--border)",
-              borderRadius: 14,
-              height: 46,
+              borderRadius: 12,
+              height: 44,
             }}
           >
-            <span
-              aria-hidden
-              style={{
-                position: "absolute",
-                top: 4,
-                bottom: 4,
-                width: "calc(50% - 4px)",
-                right: activeTab === "info" ? 4 : "calc(50% + 0px)",
-                left: activeTab === "pricing" ? 4 : "auto",
-                background: "var(--primary)",
-                borderRadius: 10,
-                boxShadow: "0 2px 8px rgba(15,23,42,0.15)",
-                transition: "right 220ms ease-out, left 220ms ease-out",
-              }}
-            />
             {([
               { key: "info", label: "البيانات", Icon: Building2 },
               { key: "pricing", label: "ملف التسعير", Icon: BadgeDollarSign },
@@ -550,21 +534,20 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
                   aria-selected={active}
                   onClick={() => setActiveTab(key)}
                   style={{
-                    position: "relative",
-                    zIndex: 1,
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 8,
                     height: "100%",
                     border: 0,
-                    background: "transparent",
+                    background: active ? "var(--primary)" : "transparent",
                     color: active ? "#fff" : "var(--muted, #64748b)",
                     fontWeight: active ? 700 : 600,
                     fontSize: 14,
                     borderRadius: 10,
                     cursor: "pointer",
-                    transition: "color 180ms ease-out, background 180ms ease-out",
+                    boxShadow: active ? "0 1px 2px rgba(15,23,42,0.08)" : "none",
+                    transition: "background-color 150ms ease-out, color 150ms ease-out",
                   }}
                   onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "rgba(15,23,42,0.04)"; }}
                   onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
@@ -577,7 +560,9 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           </div>
         </div>
 
-        {activeTab === "info" && (<div key="tab-info" className="bk-fade-in">
+
+
+        {activeTab === "info" && (<div key="tab-info">
         <div className="form-grid">
           <div className="form-group"><label>اسم الشركة</label><input value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
@@ -610,7 +595,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
         </div>
         </div>)}
 
-        {activeTab === "pricing" && <div key="tab-pricing" className="bk-fade-in"><CompanyPricingTab companyId={company.id} /></div>}
+        {activeTab === "pricing" && <div key="tab-pricing"><CompanyPricingTab companyId={company.id} /></div>}
       </div>
     </div>,
     document.body,
