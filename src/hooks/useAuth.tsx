@@ -2,7 +2,7 @@ import { createContext, useContext, useCallback, useEffect, useState, type React
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { hasPermission, hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
+import { hasPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
 type Role = "admin" | "manager" | "user";
 
@@ -56,8 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.debug("[permissions] loaded", {
         userId: uid,
         permissions: effectivePerms,
-        hasNetProfitPermission: hasPermission(effectivePerms, NET_PROFIT_PERMISSION_KEY) || hasProfitViewPermission(effectivePerms, nextIsSuperAdmin, NET_PROFIT_PERMISSION_KEY),
-        hasProfitSummaryPermission: hasPermission(effectivePerms, PROFIT_SUMMARY_PERMISSION_KEY) || hasProfitViewPermission(effectivePerms, nextIsSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
+        isSystemOwner: nextIsSuperAdmin,
+        hasNetProfitPermission: nextIsSuperAdmin || hasPermission(effectivePerms, NET_PROFIT_PERMISSION_KEY),
+        hasProfitSummaryPermission: nextIsSuperAdmin || hasPermission(effectivePerms, PROFIT_SUMMARY_PERMISSION_KEY),
       });
     }
   }, []);

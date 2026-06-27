@@ -775,7 +775,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
     setDraftSuperAdmin(!!u.is_super_admin);
   }, [u.id, u.permissions, u.is_super_admin]);
 
-  const commit = async (sectionKey: string, next: Record<string, boolean>) => {
+  const commit = async (sectionKey: string, next: Record<string, boolean> | boolean) => {
     const previous = draftPermissions;
     const merged = { ...(draftPermissions || {}), [sectionKey]: next };
     setDraftPermissions(merged);
@@ -811,10 +811,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
       : { background: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA" };
 
   const grantedCount = PERMISSION_KEYS.reduce((sum, p) => {
+    if (isProfitPermissionKey(p.key)) return sum + (draftPermissions?.[p.key] === true ? 1 : 0);
     const cur = normalizePerm(draftPermissions?.[p.key]);
     return sum + ACTIONS.reduce((s, a) => s + (cur[a.key] ? 1 : 0), 0);
   }, 0);
-  const totalPerms = PERMISSION_KEYS.length * ACTIONS.length;
+  const totalPerms = PERMISSION_KEYS.reduce((sum, p) => sum + actionsForPermission(p.key).length, 0);
 
   return (
     <div style={{ border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", transition: "box-shadow .15s ease, border-color .15s ease", boxShadow: isOpen ? "0 6px 18px rgba(15,31,68,.08)" : "0 1px 2px rgba(15,23,42,.03)" }}>
@@ -967,11 +968,14 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
           <div style={{ display: "grid", gap: 8 }}>
             {PERMISSION_KEYS.map((p) => {
               const supa = draftSuperAdmin;
+              const actionList = actionsForPermission(p.key);
               const cur = supa
                 ? { view: true, create: true, edit: true, delete: true, export: true }
-                : normalizePerm(draftPermissions?.[p.key]);
-              const allOn = ACTIONS.every((a) => cur[a.key]);
-              const anyOn = ACTIONS.some((a) => cur[a.key]);
+                : isProfitPermissionKey(p.key)
+                  ? { view: draftPermissions?.[p.key] === true, create: false, edit: false, delete: false, export: false }
+                  : normalizePerm(draftPermissions?.[p.key]);
+              const allOn = actionList.every((a) => cur[a.key]);
+              const anyOn = actionList.some((a) => cur[a.key]);
               return (
                 <div key={p.key} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: 10, opacity: supa ? 0.75 : 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
@@ -987,6 +991,10 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                         disabled={supa}
                         onChange={(e) => {
                           const v = e.target.checked;
+                          if (isProfitPermissionKey(p.key)) {
+                            commit(p.key, v);
+                            return;
+                          }
                           commit(p.key, { view: v, create: v, edit: v, delete: v, export: v });
                         }}
                       />
@@ -994,13 +1002,17 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                     </label>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {ACTIONS.map((a) => (
+                    {actionList.map((a) => (
                       <label key={a.key} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 12, cursor: supa ? "not-allowed" : "pointer", color: "#334155", padding: "4px 10px", background: cur[a.key] ? "#EFF6FF" : "transparent", border: `1px solid ${cur[a.key] ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8 }}>
                         <input
                           type="checkbox"
                           checked={!!cur[a.key]}
                           disabled={supa}
                           onChange={(e) => {
+                            if (isProfitPermissionKey(p.key)) {
+                              commit(p.key, e.target.checked);
+                              return;
+                            }
                             const next = { ...cur, [a.key]: e.target.checked };
                             if (a.key !== "view" && e.target.checked) next.view = true;
                             commit(p.key, next);

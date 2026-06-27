@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { normalizePermissionsForSave } from "@/lib/permissionKeys";
+import { normalizePermissionsForLoad, normalizePermissionsForSave } from "@/lib/permissionKeys";
 
 function admin() {
   return createClient<Database>(
@@ -114,7 +114,7 @@ export const listUsers = createServerFn({ method: "GET" })
         is_active: profile?.is_active ?? true,
         is_super_admin: profile?.is_super_admin ?? false,
         agent_id: profile?.agent_id ?? null,
-        permissions: profile?.permissions ?? {},
+        permissions: normalizePermissionsForLoad(profile?.permissions ?? {}),
         roles: userRoles,
       };
     });
@@ -337,7 +337,7 @@ export const updateUserProfile = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message || "تعذر حفظ صلاحيات المستخدم");
     if (!saved) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
-    return { ok: true, profile: saved };
+    return { ok: true, profile: { ...saved, permissions: normalizePermissionsForLoad((saved as any).permissions ?? {}) } };
   });
 
 // Activates the invited user's profile (bypasses privilege-escalation trigger

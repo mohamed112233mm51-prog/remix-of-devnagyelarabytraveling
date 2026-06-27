@@ -3,8 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { checkOwnerOrExplicitPerm } from "@/hooks/usePerm";
-import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { hasPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/dashboard.functions";
 import {
   fmtDL,
@@ -109,10 +108,10 @@ function pctDelta(curr: number, prev: number) {
 }
 
 function Dashboard() {
-  const { permissions, isSuperAdmin } = useAuth();
-  // Profit permissions are independent — admin role alone is NOT enough; only owner/super-admin or explicit DB permission.
-  const canViewNetProfit = checkOwnerOrExplicitPerm(permissions, isSuperAdmin, NET_PROFIT_PERMISSION_KEY, "view");
-  const canViewProfitSummary = checkOwnerOrExplicitPerm(permissions, isSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY, "view");
+  const { user, roles, permissions, isSuperAdmin } = useAuth();
+  // Profit permissions are independent — admin role alone is NOT enough; only owner/super-admin or the exact DB boolean key.
+  const canViewNetProfit = isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
+  const canViewProfitSummary = isSuperAdmin || hasPermission(permissions, PROFIT_SUMMARY_PERMISSION_KEY);
   const netProfitFn = useServerFn(getDashboardNetProfitData);
   const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
   const [period, setPeriod] = useState<Period>("month");
@@ -165,6 +164,19 @@ function Dashboard() {
     refetchOnMount: "always",
     queryFn: () => profitSummaryFn(),
   });
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    console.debug("[dashboard:profit-permissions]", {
+      userId: user?.id ?? null,
+      role: roles,
+      isSystemOwner: isSuperAdmin,
+      permissions,
+      net_profit_view: hasPermission(permissions, NET_PROFIT_PERMISSION_KEY),
+      profit_summary_view: hasPermission(permissions, PROFIT_SUMMARY_PERMISSION_KEY),
+    });
+  }, [user?.id, roles, isSuperAdmin, permissions]);
+
   const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
   const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
   const netProfitData = effectiveCanViewNetProfit ? netProfitQuery.data?.netProfit : null;
