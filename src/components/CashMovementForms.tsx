@@ -1,126 +1,129 @@
-// Cash movement forms — reuse existing tables and balance-mutation logic.
-// - Agent "صرف نقدية":   transactions(paid<0) + payment_splits(amount<0) → cash box decreases via existing trigger.
-// - Merchant "صرف نقدية": merchant_cash_collections(amount<0) + direct cash_boxes.balance update (same effect as the trigger).
-// - Company "توريد نقدية": company_transactions(total_paid<0, cash_amount<0) + direct cash_boxes.balance increase.
-// No new financial logic — only re-uses the shapes the rest of the app already reads.
+// Cash movement forms — reuse the system's existing payment-splits flow.
+// Each form exposes ONLY entity / date / notes, then the standard
+// <PaymentSplits/> widget handles cashbox / amount / currency / method.
+//
+// Persistence mirrors the existing forms, with signs inverted where the
+// movement is an outflow (agent/merchant cash out) or an inflow without
+// trip (company cash supply). No new financial logic is introduced.
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/db";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
-import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
+import {
+  PaymentSplits,
+  newPaymentSplitRow,
+  validatePaymentSplits,
+  filterValidSplits,
+  methodsForSplit,
+  type PaymentSplitRow,
+} from "@/components/PaymentSplits";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
-
-const CURRENCIES = ["EGP", "USD", "LYD"];
-
-function useCashBoxes() {
-  const { rows } = useLive<CashBox>("cash_boxes");
-  return rows.filter((b) => b.is_active);
-}
-
-function FieldGrid({ children }: { children: React.ReactNode }) {
-  return <div className="form-grid">{children}</div>;
-}
 
 /* ============================ AGENT CASH OUT ============================ */
 export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: string; onDone?: () => void }) {
   const { rows: agents } = useLive<Agent>("agents");
-  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const boxes = useCashBoxes();
+  const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [form, setForm] = useState({
-    agent_id: initialAgentId || "",
-    company_id: "",
-    currency: "EGP",
-    cash_box_id: "",
-    amount: "",
-    date: new Date().toISOString().slice(0, 10),
-    note: "",
-  });
+  const [agentId, setAgentId] = useState(initialAgentId || "");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const filteredBoxes = useMemo(() => boxes.filter((b) => b.currency === form.currency), [boxes, form.currency]);
+  const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
   const save = async () => {
-    const amount = Number(form.amount) || 0;
-    if (!form.agent_id) return toast.error("اختر الوكيل");
-    if (!form.company_id) return toast.error("اختر الشركة الصادرة");
-    if (!form.cash_box_id) return toast.error("اختر الخزينة");
-    if (amount <= 0) return toast.error("المبلغ يجب أن يكون أكبر من صفر");
-    const box = boxes.find((b) => b.id === form.cash_box_id);
-    if (!box) return toast.error("الخزينة غير موجودة");
-    if (Number(box.balance || 0) < amount) {
-      return toast.error(`رصيد الخزينة غير كافٍ. المتاح: ${Number(box.balance || 0).toLocaleString()} — المطلوب: ${amount.toLocaleString()}`);
-    }
-    const companyName = companies.find((c) => c.id === form.company_id)?.company_name || "";
-    const noteText = `صرف نقدية - ${companyName}${form.note ? " - " + form.note : ""}`;
+    if (!agentId) return toast.error("اختر الوكيل");
+    if (!date) return toast.error("التاريخ مطلوب");
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    const valid = filterValidSplits(splits);
 
     setSaving(true);
-    // 1) Insert a reverse-payment transaction on the agent ledger (negative paid).
-    const { data: txn, error: txnErr } = await supabase.from("transactions").insert({
-      agent_id: form.agent_id,
-      date: form.date,
-      count: 1,
+    // Reverse-payment on agent ledger (negative paid).
+    const payload: any = {
+      agent_id: agentId,
+      date,
+      count: 0,
       price: 0,
-      paid: -amount,
-      total_paid: -amount,
-      cash_amount: -amount,
+      paid: -total,
+      total_paid: -total,
+      cash_amount: -total,
       payment_method: "نقدي",
-      note: noteText,
+      note: note.trim() || "صرف نقدية للوكيل",
       source_service_type: "agent_cash_out",
-    } as any).select("id").single();
+    };
+    const { data: txn, error: txnErr } = await supabase
+      .from("transactions").insert(payload).select("id").single();
     if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
 
-    // 2) Insert payment_splits row → existing trigger decreases the cash box.
-    const { error: spErr } = await supabase.from("payment_splits").insert({
-      transaction_id: txn.id,
-      method: "نقدي",
-      currency: form.currency,
-      cash_box_id: form.cash_box_id,
-      amount: -amount,
-      gross_amount: -amount,
-      net_amount: -amount,
-      egp_equivalent: form.currency === "EGP" ? -amount : 0,
-      exchange_rate: 1,
-    } as any);
-    if (spErr) { setSaving(false); return toast.error(spErr.message); }
+    // payment_splits → existing trigger decreases cash boxes for company rows.
+    const rows = valid.map((r) => {
+      const a = Number(r.amount) || 0;
+      let methodLabel = "نقدي";
+      let cashBoxId: string | null = null;
+      if (r.method === "company_instapay") {
+        methodLabel = "إنستاباي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "company_cash") {
+        methodLabel = "نقدي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
+      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
+      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+      const signed = -a;
+      return {
+        transaction_id: txn.id,
+        method: methodLabel,
+        currency: r.currency,
+        cash_box_id: cashBoxId,
+        amount: signed,
+        gross_amount: a,
+        merchant_commission_rate: 0,
+        merchant_commission_amount: 0,
+        net_amount: a,
+        exchange_rate: 1,
+        egp_equivalent: r.currency === "EGP" ? signed : 0,
+      };
+    });
+    if (rows.length) {
+      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
+      if (spErr) { setSaving(false); return toast.error(spErr.message); }
+    }
 
     setSaving(false);
     toast.success("تم تسجيل صرف النقدية");
-    setForm((p) => ({ ...p, amount: "", note: "" }));
+    setSplits([newPaymentSplitRow()]); setNote("");
     onDone?.();
   };
 
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">💸 صرف نقدية للوكيل</div></div>
-      <FieldGrid>
+      <div className="form-grid">
         <div className="form-group"><label>الوكيل *</label>
-          <SearchableSelect value={form.agent_id} onChange={(v) => set("agent_id", v)} options={agents.map((a) => ({ value: a.id, label: a.name }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>العملة</label>
-          <SearchableSelect value={form.currency} onChange={(v) => { set("currency", v); set("cash_box_id", ""); }} options={CURRENCIES} />
-        </div>
-        <div className="form-group"><label>الخزينة *</label>
-          <SearchableSelect value={form.cash_box_id} onChange={(v) => set("cash_box_id", v)} options={filteredBoxes.map((b) => ({ value: b.id, label: `${b.name} (${Number(b.balance || 0).toLocaleString()} ${b.currency})` }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>المبلغ *</label>
-          <NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} />
+          <SearchableSelect value={agentId} onChange={setAgentId} options={agents.map((a) => ({ value: a.id, label: a.name }))} placeholder="اختر..." disabled={!!initialAgentId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
-          <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
+          <DateInput value={date} onChange={setDate} defaultToday />
         </div>
         <div className="form-group full"><label>ملاحظات</label>
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
         </div>
-      </FieldGrid>
+      </div>
+
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
+
+      <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
+        الإجمالي: {total.toLocaleString()}
+      </div>
       <div className="form-footer">
         <button data-confirm-save="تأكيد صرف النقدية" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الصرف</button>
       </div>
@@ -131,84 +134,67 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
 /* ============================ MERCHANT CASH OUT ============================ */
 export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerchantId?: string; onDone?: () => void }) {
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const boxes = useCashBoxes();
 
-  const [form, setForm] = useState({
-    merchant_id: initialMerchantId || "",
-    company_id: "",
-    currency: "EGP",
-    cash_box_id: "",
-    amount: "",
-    date: new Date().toISOString().slice(0, 10),
-    note: "",
+  const [merchantId, setMerchantId] = useState(initialMerchantId || "");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
+    const r = newPaymentSplitRow();
+    r.source = "merchant"; r.method = "";
+    return [r];
   });
   const [saving, setSaving] = useState(false);
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const filteredBoxes = useMemo(() => boxes.filter((b) => b.currency === form.currency), [boxes, form.currency]);
+  const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
   const save = async () => {
-    const amount = Number(form.amount) || 0;
-    if (!form.merchant_id) return toast.error("اختر التاجر");
-    if (!form.company_id) return toast.error("اختر الشركة الصادرة");
-    if (!form.cash_box_id) return toast.error("اختر الخزينة");
-    if (amount <= 0) return toast.error("المبلغ يجب أن يكون أكبر من صفر");
-    const box = boxes.find((b) => b.id === form.cash_box_id);
-    if (!box) return toast.error("الخزينة غير موجودة");
-    if (Number(box.balance || 0) < amount) {
-      return toast.error(`رصيد الخزينة غير كافٍ. المتاح: ${Number(box.balance || 0).toLocaleString()} — المطلوب: ${amount.toLocaleString()}`);
-    }
-    const companyName = companies.find((c) => c.id === form.company_id)?.company_name || "";
-    const noteText = `صرف نقدية - ${companyName}${form.note ? " - " + form.note : ""}`;
+    if (!merchantId) return toast.error("اختر التاجر");
+    if (!date) return toast.error("التاريخ مطلوب");
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    const valid = filterValidSplits(splits);
 
     setSaving(true);
-    // 1) Negative collection on the merchant ledger.
-    const { error: cErr } = await supabase.from("merchant_cash_collections").insert({
-      merchant_id: form.merchant_id,
-      date: form.date,
-      amount: -amount,
-      note: noteText,
-    } as any);
-    if (cErr) { setSaving(false); return toast.error(cErr.message); }
-
-    // 2) Decrease cash box balance (same effect as the payment_splits trigger).
-    const newBal = Number(box.balance || 0) - amount;
-    const { error: bErr } = await supabase.from("cash_boxes").update({ balance: newBal }).eq("id", form.cash_box_id);
-    if (bErr) { setSaving(false); return toast.error(bErr.message); }
-
+    // Mirror existing CollectForm shape with NEGATIVE amount (cash out).
+    const rows = valid.map((r) => {
+      const methodLabel = methodsForSplit(r, merchants).find((x) => x.key === r.method)?.label || r.method;
+      const parts = ["صرف نقدية", methodLabel, note].filter(Boolean);
+      return {
+        merchant_id: merchantId,
+        date,
+        amount: -(Number(r.amount) || 0),
+        note: parts.join(" - "),
+      };
+    });
+    const { error } = await supabase.from("merchant_cash_collections").insert(rows);
     setSaving(false);
+    if (error) return toast.error(error.message);
     toast.success("تم تسجيل صرف النقدية للتاجر");
-    setForm((p) => ({ ...p, amount: "", note: "" }));
+    const fresh = newPaymentSplitRow(); fresh.source = "merchant"; fresh.method = "";
+    setSplits([fresh]); setNote("");
     onDone?.();
   };
 
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">💸 صرف نقدية للتاجر</div></div>
-      <FieldGrid>
+      <div className="form-grid">
         <div className="form-group"><label>التاجر *</label>
-          <SearchableSelect value={form.merchant_id} onChange={(v) => set("merchant_id", v)} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>العملة</label>
-          <SearchableSelect value={form.currency} onChange={(v) => { set("currency", v); set("cash_box_id", ""); }} options={CURRENCIES} />
-        </div>
-        <div className="form-group"><label>الخزينة *</label>
-          <SearchableSelect value={form.cash_box_id} onChange={(v) => set("cash_box_id", v)} options={filteredBoxes.map((b) => ({ value: b.id, label: `${b.name} (${Number(b.balance || 0).toLocaleString()} ${b.currency})` }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>المبلغ *</label>
-          <NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} />
+          <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} placeholder="اختر..." disabled={!!initialMerchantId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
-          <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
+          <DateInput value={date} onChange={setDate} defaultToday />
         </div>
         <div className="form-group full"><label>ملاحظات</label>
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
         </div>
-      </FieldGrid>
+      </div>
+
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" hideSource />
+
+      <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
+        الإجمالي: {total.toLocaleString()}
+      </div>
       <div className="form-footer">
         <button data-confirm-save="تأكيد صرف النقدية للتاجر" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ الصرف</button>
       </div>
@@ -219,81 +205,124 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
 /* ============================ COMPANY CASH SUPPLY ============================ */
 export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompanyId?: string; onDone?: () => void }) {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const boxes = useCashBoxes();
+  const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [form, setForm] = useState({
-    company_id: initialCompanyId || "",
-    currency: "EGP",
-    cash_box_id: "",
-    amount: "",
-    date: new Date().toISOString().slice(0, 10),
-    note: "",
-  });
+  const [companyId, setCompanyId] = useState(initialCompanyId || "");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const filteredBoxes = useMemo(() => boxes.filter((b) => b.currency === form.currency), [boxes, form.currency]);
+  const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
   const save = async () => {
-    const amount = Number(form.amount) || 0;
-    if (!form.company_id) return toast.error("اختر الشركة الصادرة");
-    if (!form.cash_box_id) return toast.error("اختر الخزينة");
-    if (amount <= 0) return toast.error("المبلغ يجب أن يكون أكبر من صفر");
-    const box = boxes.find((b) => b.id === form.cash_box_id);
-    if (!box) return toast.error("الخزينة غير موجودة");
-    const noteText = `توريد نقدية${form.note ? " - " + form.note : ""}`;
+    if (!companyId) return toast.error("اختر الشركة الصادرة");
+    if (!date) return toast.error("التاريخ مطلوب");
+    const err = validatePaymentSplits(splits);
+    if (err) return toast.error(err);
+    const valid = filterValidSplits(splits);
 
-    setSaving(true);
-    // 1) Negative payment row on the company ledger = supply received from company.
-    const { error: cErr } = await supabase.from("company_transactions").insert({
-      company_id: form.company_id,
-      date: form.date,
+    // Aggregate (cash supply = inflow → negative total_paid on company ledger).
+    let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
+    for (const r of valid) {
+      const a = Number(r.amount) || 0;
+      if (r.method === "company_instapay" || r.method === "merchant_instapay") instapay += a;
+      else if (r.method === "company_cash") cash += a;
+      else if (r.method === "merchant_wallet") merchantWallet += a;
+      else if (r.method === "merchant_physical") merchantPhysical += a;
+    }
+    const firstMerchant = valid.find((r) => r.source === "merchant")?.merchant_id || null;
+
+    const payload: any = {
+      company_id: companyId,
+      date,
       count: 0,
       price: 0,
       trip_value: 0,
-      cash_amount: form.currency === "EGP" ? -amount : 0,
-      usd_amount: form.currency === "USD" ? -amount : 0,
-      total_paid: -amount,
-      payment_currency: form.currency,
-      note: noteText,
+      instapay_amount: -instapay,
+      cash_amount: -cash,
+      merchant_cash_amount: -merchantWallet,
+      merchant_cash_net_amount: -merchantWallet,
+      merchant_cash_physical_amount: -merchantPhysical,
+      arabic_tourism_cash_amount: 0,
+      arabic_tourism_cash_net_amount: 0,
+      mobile_cash_amount: 0,
+      mobile_cash_net_amount: 0,
+      total_paid: -total,
+      usd_amount: 0,
+      payment_currency: "EGP",
+      merchant_id: firstMerchant,
+      note: note.trim() || "توريد نقدية",
       source_service_type: "company_cash_supply",
-    } as any);
-    if (cErr) { setSaving(false); return toast.error(cErr.message); }
+    };
 
-    // 2) Increase cash box balance.
-    const newBal = Number(box.balance || 0) + amount;
-    const { error: bErr } = await supabase.from("cash_boxes").update({ balance: newBal }).eq("id", form.cash_box_id);
-    if (bErr) { setSaving(false); return toast.error(bErr.message); }
+    setSaving(true);
+    const { data: txn, error: txnErr } = await supabase
+      .from("company_transactions").insert(payload).select("id").single();
+    if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
+
+    // payment_splits with POSITIVE amounts → trigger INCREASES cash boxes.
+    const rows = valid.map((r) => {
+      const a = Number(r.amount) || 0;
+      let methodLabel = "نقدي";
+      let cashBoxId: string | null = null;
+      if (r.method === "company_instapay") {
+        methodLabel = "إنستاباي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "company_cash") {
+        methodLabel = "نقدي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
+      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
+      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+      return {
+        transaction_id: txn.id,
+        method: methodLabel,
+        currency: r.currency,
+        cash_box_id: cashBoxId,
+        amount: a,
+        gross_amount: a,
+        merchant_commission_rate: 0,
+        merchant_commission_amount: 0,
+        net_amount: a,
+        exchange_rate: 1,
+        egp_equivalent: r.currency === "EGP" ? a : 0,
+      };
+    });
+    if (rows.length) {
+      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
+      if (spErr) { setSaving(false); return toast.error(spErr.message); }
+    }
 
     setSaving(false);
     toast.success("تم تسجيل توريد النقدية");
-    setForm((p) => ({ ...p, amount: "", note: "" }));
+    setSplits([newPaymentSplitRow()]); setNote("");
     onDone?.();
   };
 
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">💰 توريد نقدية من الشركة الصادرة</div></div>
-      <FieldGrid>
+      <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>العملة</label>
-          <SearchableSelect value={form.currency} onChange={(v) => { set("currency", v); set("cash_box_id", ""); }} options={CURRENCIES} />
-        </div>
-        <div className="form-group"><label>الخزينة *</label>
-          <SearchableSelect value={form.cash_box_id} onChange={(v) => set("cash_box_id", v)} options={filteredBoxes.map((b) => ({ value: b.id, label: `${b.name} (${Number(b.balance || 0).toLocaleString()} ${b.currency})` }))} placeholder="اختر..." />
-        </div>
-        <div className="form-group"><label>المبلغ *</label>
-          <NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} />
+          <SearchableSelect value={companyId} onChange={setCompanyId} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." disabled={!!initialCompanyId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
-          <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
+          <DateInput value={date} onChange={setDate} defaultToday />
         </div>
         <div className="form-group full"><label>ملاحظات</label>
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
         </div>
-      </FieldGrid>
+      </div>
+
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
+
+      <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
+        الإجمالي: {total.toLocaleString()}
+      </div>
       <div className="form-footer">
         <button data-confirm-save="تأكيد توريد النقدية" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التوريد</button>
       </div>
