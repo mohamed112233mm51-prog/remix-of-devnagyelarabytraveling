@@ -98,6 +98,25 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
     await load();
   };
 
+  const duplicate = async (r: PricingRule) => {
+    if (!perm.create) return toast.error("لا تملك صلاحية الإضافة");
+    try {
+      const { id, created_at, updated_at, agent_price, ...rest } = r as any;
+      const { data, error } = await supabase
+        .from("company_pricing_rules" as any)
+        .insert({ ...rest, company_id: companyId })
+        .select()
+        .single();
+      if (error) throw error;
+      await load();
+      toast.success("تم تكرار سطر التسعير بنجاح");
+      if (data) setDraft(data as any);
+    } catch (e) {
+      console.error("duplicate pricing rule failed", e);
+      toast.error("تعذر تكرار سطر التسعير");
+    }
+  };
+
   if (!perm.view) {
     return <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 24 }}>لا تملك صلاحية عرض ملف التسعير.</div></div>;
   }
@@ -154,6 +173,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                     <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
                     <td style={{ padding: 6, display: "flex", gap: 4 }}>
                       {perm.edit && <button type="button" className="action-btn" onClick={() => startEdit(r)} style={{ padding: "2px 6px" }}>تعديل</button>}
+                      {perm.create && <button type="button" className="action-btn" onClick={() => duplicate(r)} title="تكرار" style={{ padding: "2px 6px", color: "var(--green, #16a34a)" }}>📋 تكرار</button>}
                       {perm.delete && <button type="button" className="action-btn" onClick={() => remove(r.id)} style={{ padding: "2px 6px" }}>حذف</button>}
                     </td>
                   </tr>
