@@ -484,7 +484,7 @@ function InviteUserTab() {
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                       {actionList.map((a) => (
                         <label key={a.key} style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155" }}>
-                          <input type="checkbox" checked={isProfitPermissionKey(p.key) ? form.permissions[p.key] === true : !!cur[a.key]} onChange={(e) => toggleAction(p.key, a.key, e.target.checked)} />
+                          <input type="checkbox" checked={isProfitPermissionKey(p.key) ? (form.permissions as Record<string, any>)[p.key] === true : !!cur[a.key]} onChange={(e) => toggleAction(p.key, a.key, e.target.checked)} />
                           {a.label}
                         </label>
                       ))}
