@@ -4,6 +4,7 @@ import { useDropdownOptions, useLive, type IssuingCompany } from "@/lib/db";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { toast } from "sonner";
+import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 
@@ -94,9 +95,10 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       const oldAgentPrice = Number(dup.agent_price) || 0;
       const samePrice = oldCompanyPrice === newCompanyPrice && oldAgentPrice === newAgentPrice;
       const msg = samePrice
-        ? `تم تسعير هذه الخدمة من قبل بنفس العوامل المؤثرة.\nسعر الشركة: ${oldCompanyPrice}\nسعر الوكيل: ${oldAgentPrice}\n\nهل تريد المتابعة والحفظ؟`
-        : `تم تسعير هذه الخدمة من قبل بنفس العوامل المؤثرة ولكن بسعر مختلف.\nالسعر السابق للشركة: ${oldCompanyPrice}\nالسعر السابق للوكيل: ${oldAgentPrice}\nالسعر الجديد للشركة: ${newCompanyPrice}\nالسعر الجديد للوكيل: ${newAgentPrice}\n\nهل تريد المتابعة والحفظ؟`;
-      if (!confirm(msg)) return;
+        ? `تم تسعير هذه الخدمة من قبل.\nسعر الشركة: ${oldCompanyPrice}\nسعر الوكيل: ${oldAgentPrice}\nهذه الخدمة مسجلة مسبقاً بنفس العوامل المؤثرة وبنفس الأسعار.`
+        : `تم العثور على تسعير سابق لهذه الخدمة.\nالسعر السابق للشركة: ${oldCompanyPrice}\nالسعر السابق للوكيل: ${oldAgentPrice}\nالسعر الجديد للشركة: ${newCompanyPrice}\nالسعر الجديد للوكيل: ${newAgentPrice}\nهذه الخدمة مسجلة بنفس العوامل المؤثرة ولكن بأسعار مختلفة.`;
+      const ok = await confirmDialog(msg, { confirmLabel: "متابعة الحفظ", cancelLabel: "إلغاء" });
+      if (!ok) return;
     }
 
     // Trigger recomputes agent_price; we don't send it.
