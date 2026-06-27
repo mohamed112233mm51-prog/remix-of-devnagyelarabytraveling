@@ -506,12 +506,78 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 920, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
         <div className="card-header"><div className="card-title">✏️ تعديل بيانات الشركة</div></div>
-        <div className="tools-tabs" style={{ display: "flex", gap: 8, padding: "0 12px", borderBottom: "1px solid var(--border)" }}>
-          <div className={`tool-tab ${activeTab === "info" ? "active" : ""}`} onClick={() => setActiveTab("info")} style={{ cursor: "pointer", padding: "8px 12px" }}>📋 البيانات</div>
-          <div className={`tool-tab ${activeTab === "pricing" ? "active" : ""}`} onClick={() => setActiveTab("pricing")} style={{ cursor: "pointer", padding: "8px 12px" }}>💰 ملف التسعير</div>
+        <div style={{ padding: "12px 16px 0" }}>
+          <div
+            role="tablist"
+            aria-label="أقسام بيانات الشركة"
+            style={{
+              position: "relative",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 4,
+              padding: 4,
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              height: 46,
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: 4,
+                bottom: 4,
+                width: "calc(50% - 4px)",
+                right: activeTab === "info" ? 4 : "calc(50% + 0px)",
+                left: activeTab === "pricing" ? 4 : "auto",
+                background: "var(--primary)",
+                borderRadius: 10,
+                boxShadow: "0 2px 8px rgba(15,23,42,0.15)",
+                transition: "right 220ms ease-out, left 220ms ease-out",
+              }}
+            />
+            {([
+              { key: "info", label: "البيانات", Icon: Building2 },
+              { key: "pricing", label: "ملف التسعير", Icon: BadgeDollarSign },
+            ] as const).map(({ key, label, Icon }) => {
+              const active = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(key)}
+                  style={{
+                    position: "relative",
+                    zIndex: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    height: "100%",
+                    border: 0,
+                    background: "transparent",
+                    color: active ? "#fff" : "var(--muted, #64748b)",
+                    fontWeight: active ? 700 : 600,
+                    fontSize: 14,
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    transition: "color 180ms ease-out, background 180ms ease-out",
+                  }}
+                  onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "rgba(15,23,42,0.04)"; }}
+                  onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                >
+                  <Icon size={16} strokeWidth={2} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {activeTab === "info" && (<>
+        {activeTab === "info" && (<div key="tab-info" className="bk-fade-in">
         <div className="form-grid">
           <div className="form-group"><label>اسم الشركة</label><input value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
@@ -542,9 +608,9 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
           <button data-confirm-save="تأكيد حفظ التعديلات" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
         </div>
-        </>)}
+        </div>)}
 
-        {activeTab === "pricing" && <CompanyPricingTab companyId={company.id} />}
+        {activeTab === "pricing" && <div key="tab-pricing" className="bk-fade-in"><CompanyPricingTab companyId={company.id} /></div>}
       </div>
     </div>,
     document.body,
