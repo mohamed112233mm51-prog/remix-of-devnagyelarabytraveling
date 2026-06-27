@@ -143,6 +143,9 @@ function computeExecutionAgg(
 
 
 function Dashboard() {
+  const { permissions, isAdmin, isSuperAdmin } = useAuth();
+  const canNetProfit = isSuperAdmin || checkPerm(permissions, isAdmin, "net_profit", "view");
+  const canProfitSummary = isSuperAdmin || checkPerm(permissions, isAdmin, "profit_summary", "view");
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
   const approvals: any[] = [];
