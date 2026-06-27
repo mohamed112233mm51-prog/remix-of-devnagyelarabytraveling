@@ -15,7 +15,8 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
-import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 
 export const Route = createFileRoute("/submissions")({
@@ -148,7 +149,7 @@ function SubmissionsPage() {
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
-  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, SUBMISSION_COLUMNS));
+  const [visible, setVisible] = usePersistentColumnVisibility("submissions", SUBMISSION_COLUMNS);
   const visibleColumns = SUBMISSION_COLUMNS.filter((c) => visible[c.key] !== false);
 
   const filtered = useMemo(() => submissions.filter((s) => {

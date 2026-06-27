@@ -16,7 +16,8 @@ import { confirmDialog } from "@/lib/confirm";
 import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
 import { ExportButton } from "@/components/ExportButton";
 import * as CF from "@/components/ColumnFilter";
-import { ColumnVisibility, sanitizeVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -229,7 +230,7 @@ function ExecutionsPage() {
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
-  const [visible, setVisible] = useState<Record<string, boolean>>(() => sanitizeVisibility(undefined, EXECUTION_COLUMNS));
+  const [visible, setVisible] = usePersistentColumnVisibility("executions", EXECUTION_COLUMNS);
   const visibleColumns = EXECUTION_COLUMNS.filter((c) => visible[c.key] !== false);
 
   const filtered = useMemo(() => executions.filter((e) => {
