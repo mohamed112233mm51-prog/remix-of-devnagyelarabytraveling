@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
 type Period = "today" | "week" | "month" | "year" | "all";
 
@@ -22,7 +22,7 @@ async function getProfitAuthorization(userId: string) {
     .eq("id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message || "تعذر التحقق من صلاحيات الأرباح");
-  const permissions = ((profile as any)?.permissions ?? {}) as Record<string, any>;
+  const permissions = normalizePermissionsForLoad(((profile as any)?.permissions ?? {}) as Record<string, any>);
   const isSuperAdmin = !!(profile as any)?.is_super_admin;
   return {
     sb,
