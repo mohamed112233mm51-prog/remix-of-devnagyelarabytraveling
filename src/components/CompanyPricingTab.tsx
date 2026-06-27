@@ -98,6 +98,25 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
     await load();
   };
 
+  const duplicate = async (r: PricingRule) => {
+    if (!perm.create) return toast.error("لا تملك صلاحية الإضافة");
+    try {
+      const { id, created_at, updated_at, agent_price, ...rest } = r as any;
+      const { data, error } = await supabase
+        .from("company_pricing_rules" as any)
+        .insert({ ...rest, company_id: companyId })
+        .select()
+        .single();
+      if (error) throw error;
+      await load();
+      toast.success("تم تكرار سطر التسعير بنجاح");
+      if (data) setDraft(data as any);
+    } catch (e) {
+      console.error("duplicate pricing rule failed", e);
+      toast.error("تعذر تكرار سطر التسعير");
+    }
+  };
+
   if (!perm.view) {
     return <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 24 }}>لا تملك صلاحية عرض ملف التسعير.</div></div>;
   }
