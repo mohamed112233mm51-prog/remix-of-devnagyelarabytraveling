@@ -20,6 +20,33 @@ function hasExplicitViewPerm(perms: Record<string, any> | null | undefined, key:
   return !!(v && typeof v === "object" && (v.view === true || v.create === true || v.edit === true || v.delete === true || v.export === true));
 }
 
+async function getProfitAuthorization(userId: string) {
+  const sb = admin();
+  const { data: profile, error } = await sb
+    .from("profiles")
+    .select("permissions, is_super_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || "تعذر التحقق من صلاحيات الأرباح");
+  const permissions = ((profile as any)?.permissions ?? {}) as Record<string, any>;
+  const isSuperAdmin = !!(profile as any)?.is_super_admin;
+  return {
+    sb,
+    canNetProfit: isSuperAdmin || hasExplicitViewPerm(permissions, NET_PROFIT_PERMISSION_KEY),
+    canProfitSummary: isSuperAdmin || hasExplicitViewPerm(permissions, PROFIT_SUMMARY_PERMISSION_KEY),
+  };
+}
+
+async function loadProfitRows(sb: ReturnType<typeof admin>) {
+  const [{ data: executions, error: executionsError }, { data: expenses, error: expensesError }] = await Promise.all([
+    sb.from("executions").select("id, created_at, operation_status, services"),
+    sb.from("expenses").select("id, created_at, amount"),
+  ]);
+  if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
+  if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
+  return { executionRows: executions ?? [], expenseRows: expenses ?? [] };
+}
+
 function getPeriodRange(period: Period, ref: Date = new Date()) {
   const start = new Date(ref);
   let end = new Date(ref);
@@ -167,4 +194,57 @@ export const getDashboardProfitData = createServerFn({ method: "POST" })
       : null;
 
     return { canNetProfit, canProfitSummary, netProfit, profitSummary };
+  });
+
+export const getDashboardNetProfitData = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { period: Period }) => d)
+  .handler(async ({ context, data }) => {
+    const { sb, canNetProfit } = await getProfitAuthorization(context.userId);
+    if (!canNetProfit) {
+      return { canNetProfit, netProfit: null };
+    }
+
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const allExec = computeExecutionAgg(executionRows, () => true);
+    const expensesAll = expenseSum(expenseRows, () => true);
+    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+
+    const range = getPeriodRange(data.period);
+    const prevRange = getPreviousRange(data.period);
+    const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
+    const periodExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, range));
+    const periodProfit = periodExec.sales - periodExec.companyCost - periodExpenses;
+    let previousProfit: number | null = null;
+    if (prevRange) {
+      const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
+      const prevExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, prevRange));
+      previousProfit = prevExec.sales - prevExec.companyCost - prevExpenses;
+    }
+
+    return { canNetProfit, netProfit: { periodProfit, previousProfit, companyProfit } };
+  });
+
+export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { sb, canProfitSummary } = await getProfitAuthorization(context.userId);
+    if (!canProfitSummary) {
+      return { canProfitSummary, profitSummary: null };
+    }
+
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const allExec = computeExecutionAgg(executionRows, () => true);
+    const expensesAll = expenseSum(expenseRows, () => true);
+    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+
+    return {
+      canProfitSummary,
+      profitSummary: {
+        execSales: allExec.sales,
+        execCompanyCost: allExec.companyCost,
+        expensesAll,
+        companyProfit,
+      },
+    };
   });
