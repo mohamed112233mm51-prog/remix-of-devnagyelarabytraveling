@@ -23,6 +23,8 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { resolveAgentPrice } from "@/lib/pricingMatch";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -486,6 +488,8 @@ function ExecutionForm({
   passengerTypes: readonly string[];
   onDone: () => void;
 }) {
+  const { permissions, isSuperAdmin } = useAuth();
+  const canViewNetProfit = isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
   const [form, setForm] = useState({
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
@@ -848,7 +852,7 @@ function ExecutionForm({
         </div>
       </div>
 
-      {/* ملخص الربح */}
+      {canViewNetProfit && (
       <div style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ padding: 12, borderRadius: 10, background: "#eef2ff", border: "1px solid #c7d2fe" }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي تكاليف الشركات الصادرة</div>
@@ -863,6 +867,7 @@ function ExecutionForm({
           <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>{profit.toLocaleString("ar")}</div>
         </div>
       </div>
+      )}
 
 
       <div style={{ marginTop: 16, padding: 12, borderRadius: 10, background: form.operation_status === "منفذ" ? "#ecfdf5" : "#f8fafc", border: `1px solid ${form.operation_status === "منفذ" ? "#a7f3d0" : "#e2e8f0"}`, fontSize: 12, color: "#475569" }}>
