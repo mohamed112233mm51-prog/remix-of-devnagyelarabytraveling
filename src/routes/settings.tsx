@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
+import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { normalizeDropdownValue, refetchLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
@@ -50,8 +51,8 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "pricing",            label: "إدارة التسعير",            route: "/companies#pricing" },
   { key: "reports",            label: "التقارير",                 route: "/reports" },
   { key: "data_import",        label: "مركز استيراد البيانات",    route: "/data-import" },
-  { key: "net_profit",         label: "صافي الأرباح",             route: "/#net-profit" },
-  { key: "profit_summary",     label: "ملخص الأرباح",             route: "/#profit-summary" },
+  { key: NET_PROFIT_PERMISSION_KEY, label: "صافي الأرباح",         route: "/#net-profit" },
+  { key: PROFIT_SUMMARY_PERMISSION_KEY, label: "ملخص الأرباح",     route: "/#profit-summary" },
 ];
 
 const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: string }[] = [
@@ -626,7 +627,7 @@ function PermsTab() {
   const fn = useServerFn(listUsers);
   const qc = useQueryClient();
   const agents = useAgents();
-  const { data, isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: () => fn() });
+  const { data, isLoading, refetch } = useQuery({ queryKey: ["admin-users"], queryFn: () => fn() });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -725,7 +726,10 @@ function PermsTab() {
               agents={agents}
               isOpen={expandedId === u.id}
               onToggle={() => setExpandedId(expandedId === u.id ? null : u.id)}
-              onChanged={() => qc.invalidateQueries({ queryKey: ["admin-users"] })}
+              onChanged={async () => {
+                await qc.invalidateQueries({ queryKey: ["admin-users"] });
+                await refetch();
+              }}
             />
           ))}
         </div>
@@ -739,16 +743,39 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
   agents: { id: string; name: string }[];
   isOpen: boolean;
   onToggle: () => void;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const setRoleFn = useServerFn(setUserRole);
   const updFn = useServerFn(updateUserProfile);
+  const { user: currentAuthUser, refreshProfile } = useAuth();
+  const qc = useQueryClient();
+  const [draftPermissions, setDraftPermissions] = useState<Record<string, any>>(u.permissions || {});
+  const [draftSuperAdmin, setDraftSuperAdmin] = useState(!!u.is_super_admin);
   const pending = !u.last_sign_in_at;
 
+  useEffect(() => {
+    setDraftPermissions(u.permissions || {});
+    setDraftSuperAdmin(!!u.is_super_admin);
+  }, [u.id, u.permissions, u.is_super_admin]);
+
   const commit = async (sectionKey: string, next: Record<string, boolean>) => {
-    const merged = { ...(u.permissions || {}), [sectionKey]: next };
-    await updFn({ data: { id: u.id, permissions: merged } });
-    onChanged();
+    const previous = draftPermissions;
+    const merged = { ...(draftPermissions || {}), [sectionKey]: next };
+    setDraftPermissions(merged);
+    try {
+      const result: any = await updFn({ data: { id: u.id, permissions: merged } });
+      const savedPermissions = result?.profile?.permissions ?? merged;
+      setDraftPermissions(savedPermissions);
+      if (currentAuthUser?.id === u.id) {
+        await refreshProfile();
+        await qc.invalidateQueries({ queryKey: ["dashboard-profit"] });
+      }
+      await onChanged();
+      toast.success("تم حفظ الصلاحيات");
+    } catch (err: any) {
+      setDraftPermissions(previous);
+      toast.error(err?.message || "تعذر حفظ الصلاحيات");
+    }
   };
 
   const roleStyle = (r: string): React.CSSProperties => {
@@ -765,7 +792,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
       : { background: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA" };
 
   const grantedCount = PERMISSION_KEYS.reduce((sum, p) => {
-    const cur = normalizePerm(u.permissions?.[p.key]);
+    const cur = normalizePerm(draftPermissions?.[p.key]);
     return sum + ACTIONS.reduce((s, a) => s + (cur[a.key] ? 1 : 0), 0);
   }, 0);
   const totalPerms = PERMISSION_KEYS.length * ACTIONS.length;
@@ -857,12 +884,23 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
               <label style={{ fontSize: 12, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer", color: "#78350F", fontWeight: 700 }}>
                 <input
                   type="checkbox"
-                  checked={!!u.is_super_admin}
+                  checked={draftSuperAdmin}
                   onChange={async (e) => {
                     const nextVal = e.target.checked;
-                    await updFn({ data: { id: u.id, is_super_admin: nextVal } });
-                    toast.success(nextVal ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
-                    onChanged();
+                    const prev = draftSuperAdmin;
+                    setDraftSuperAdmin(nextVal);
+                    try {
+                      await updFn({ data: { id: u.id, is_super_admin: nextVal } });
+                      if (currentAuthUser?.id === u.id) {
+                        await refreshProfile();
+                        await qc.invalidateQueries({ queryKey: ["dashboard-profit"] });
+                      }
+                      toast.success(nextVal ? "تم تعيين صلاحية صاحب النظام" : "تم إلغاء صلاحية صاحب النظام");
+                      await onChanged();
+                    } catch (err: any) {
+                      setDraftSuperAdmin(prev);
+                      toast.error(err?.message || "تعذر تحديث صلاحية صاحب النظام");
+                    }
                   }}
                 />
                 تفعيل (يتجاوز جميع صلاحيات الإعدادات)
@@ -875,12 +913,12 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <SettingsIcon size={15} color="#0F1F44" />
               <strong style={{ fontSize: 13, color: "#0F172A" }}>صلاحيات الإعدادات</strong>
-              {u.is_super_admin && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", background: "#FEF3C7", padding: "1px 7px", borderRadius: 999, border: "1px solid #FDE68A" }}>متجاوزة بواسطة Super Admin</span>}
+              {draftSuperAdmin && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", background: "#FEF3C7", padding: "1px 7px", borderRadius: 999, border: "1px solid #FDE68A" }}>متجاوزة بواسطة Super Admin</span>}
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {(["view", ...SETTINGS_SUB_KEYS] as const).map((k) => {
                 const label = k === "view" ? "عرض الإعدادات" : SETTINGS_SUB_LABELS[k as SettingsSubKey];
-                const s = (u.permissions?.settings ?? {}) as Record<string, boolean>;
+                const s = (draftPermissions?.settings ?? {}) as Record<string, boolean>;
                 const checked = !!s[k];
                 return (
                   <label key={k} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155", padding: "6px 10px", background: checked ? "#EFF6FF" : "transparent", border: `1px solid ${checked ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8 }}>
@@ -900,17 +938,17 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
             </div>
           </div>
 
-          {u.is_super_admin && (
+          {draftSuperAdmin && (
             <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 10, padding: 10, marginBottom: 8, fontSize: 12, color: "#78350F", fontWeight: 700 }}>
               صلاحيات الأقسام موروثة تلقائيًا من صاحب النظام — جميع الأقسام مفعّلة بكل الإجراءات.
             </div>
           )}
           <div style={{ display: "grid", gap: 8 }}>
             {PERMISSION_KEYS.map((p) => {
-              const supa = !!u.is_super_admin;
+              const supa = draftSuperAdmin;
               const cur = supa
                 ? { view: true, create: true, edit: true, delete: true, export: true }
-                : normalizePerm(u.permissions?.[p.key]);
+                : normalizePerm(draftPermissions?.[p.key]);
               const allOn = ACTIONS.every((a) => cur[a.key]);
               const anyOn = ACTIONS.some((a) => cur[a.key]);
               return (

@@ -2,7 +2,7 @@ import { createContext, useContext, useCallback, useEffect, useState, type React
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { checkOwnerOrExplicitPerm, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/hooks/usePerm";
+import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 type Role = "admin" | "manager" | "user";
 
@@ -26,6 +26,13 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 const STARTUP_TIMEOUT_MS = 8000;
+
+function hasExplicitViewPerm(perms: Record<string, any>, isSuperAdmin: boolean, key: string) {
+  if (isSuperAdmin) return true;
+  const v = perms?.[key];
+  if (v === true) return true;
+  return !!(v && typeof v === "object" && (v.view === true || v.create === true || v.edit === true || v.delete === true || v.export === true));
+}
 
 function withStartupTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -55,8 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.debug("[permissions] loaded", {
         userId: uid,
         permissions: nextPerms,
-        hasNetProfitPermission: checkOwnerOrExplicitPerm(nextPerms, nextIsSuperAdmin, NET_PROFIT_PERMISSION_KEY, "view"),
-        hasProfitSummaryPermission: checkOwnerOrExplicitPerm(nextPerms, nextIsSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY, "view"),
+        hasNetProfitPermission: hasExplicitViewPerm(nextPerms, nextIsSuperAdmin, NET_PROFIT_PERMISSION_KEY),
+        hasProfitSummaryPermission: hasExplicitViewPerm(nextPerms, nextIsSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
       });
     }
   }, []);
