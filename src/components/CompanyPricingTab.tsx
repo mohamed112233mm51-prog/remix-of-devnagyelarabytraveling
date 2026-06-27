@@ -77,6 +77,28 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       commission_value: Number(draft.commission_value) || 0,
     };
     delete payload.id;
+
+    // Duplicate check on matching factors (empty matches empty only)
+    const matchFields: (keyof Row)[] = [
+      "service_type","agent_tier","departure_from","destination",
+      "airline","approval_company_id","status","passenger_type",
+    ];
+    const dup = rules.find((r) =>
+      r.id !== draft.id &&
+      matchFields.every((f) => ((r as any)[f] ?? null) === ((draft as any)[f] ?? null))
+    );
+    if (dup) {
+      const newCompanyPrice = Number(payload.company_price) || 0;
+      const newAgentPrice = computeAgentPrice(draft);
+      const oldCompanyPrice = Number(dup.company_price) || 0;
+      const oldAgentPrice = Number(dup.agent_price) || 0;
+      const samePrice = oldCompanyPrice === newCompanyPrice && oldAgentPrice === newAgentPrice;
+      const msg = samePrice
+        ? `تم تسعير هذه الخدمة من قبل بنفس العوامل المؤثرة.\nسعر الشركة: ${oldCompanyPrice}\nسعر الوكيل: ${oldAgentPrice}\n\nهل تريد المتابعة والحفظ؟`
+        : `تم تسعير هذه الخدمة من قبل بنفس العوامل المؤثرة ولكن بسعر مختلف.\nالسعر السابق للشركة: ${oldCompanyPrice}\nالسعر السابق للوكيل: ${oldAgentPrice}\nالسعر الجديد للشركة: ${newCompanyPrice}\nالسعر الجديد للوكيل: ${newAgentPrice}\n\nهل تريد المتابعة والحفظ؟`;
+      if (!confirm(msg)) return;
+    }
+
     // Trigger recomputes agent_price; we don't send it.
     if (draft.id) {
       const { error } = await supabase.from("company_pricing_rules" as any).update(payload).eq("id", draft.id);
