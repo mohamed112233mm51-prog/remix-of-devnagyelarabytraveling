@@ -134,15 +134,12 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
 /* ============================ MERCHANT CASH OUT ============================ */
 export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerchantId?: string; onDone?: () => void }) {
   const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
   const [merchantId, setMerchantId] = useState(initialMerchantId || "");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
-    const r = newPaymentSplitRow();
-    r.source = "merchant"; r.method = "";
-    return [r];
-  });
+  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
@@ -155,23 +152,64 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const valid = filterValidSplits(splits);
 
     setSaving(true);
-    // Mirror existing CollectForm shape with NEGATIVE amount (cash out).
+    // Same shape as agent cash-out: a transactions row + payment_splits
+    // (general second-line payments flow). agent_id is nullable; merchant_id
+    // tags the row so merchant ledgers/reports pick it up automatically.
+    const payload: any = {
+      agent_id: null,
+      merchant_id: merchantId,
+      date,
+      count: 0,
+      price: 0,
+      paid: -total,
+      total_paid: -total,
+      merchant_cash_physical_amount: -total,
+      payment_method: "نقدي",
+      note: note.trim() || "صرف نقدية للتاجر",
+      source_service_type: "merchant_cash_out",
+    };
+    const { data: txn, error: txnErr } = await supabase
+      .from("transactions").insert(payload).select("id").single();
+    if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
+
     const rows = valid.map((r) => {
-      const methodLabel = methodsForSplit(r, merchants).find((x) => x.key === r.method)?.label || r.method;
-      const parts = ["صرف نقدية", methodLabel, note].filter(Boolean);
+      const a = Number(r.amount) || 0;
+      let methodLabel = "نقدي";
+      let cashBoxId: string | null = null;
+      if (r.method === "company_instapay") {
+        methodLabel = "إنستاباي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "company_cash") {
+        methodLabel = "نقدي";
+        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+        cashBoxId = box?.id || null;
+      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
+      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
+      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+      const signed = -a;
       return {
-        merchant_id: merchantId,
-        date,
-        amount: -(Number(r.amount) || 0),
-        note: parts.join(" - "),
+        transaction_id: txn.id,
+        method: methodLabel,
+        currency: r.currency,
+        cash_box_id: cashBoxId,
+        amount: signed,
+        gross_amount: a,
+        merchant_commission_rate: 0,
+        merchant_commission_amount: 0,
+        net_amount: a,
+        exchange_rate: 1,
+        egp_equivalent: r.currency === "EGP" ? signed : 0,
       };
     });
-    const { error } = await supabase.from("merchant_cash_collections").insert(rows);
+    if (rows.length) {
+      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
+      if (spErr) { setSaving(false); return toast.error(spErr.message); }
+    }
+
     setSaving(false);
-    if (error) return toast.error(error.message);
     toast.success("تم تسجيل صرف النقدية للتاجر");
-    const fresh = newPaymentSplitRow(); fresh.source = "merchant"; fresh.method = "";
-    setSplits([fresh]); setNote("");
+    setSplits([newPaymentSplitRow()]); setNote("");
     onDone?.();
   };
 
@@ -190,7 +228,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
         </div>
       </div>
 
-      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" hideSource />
+      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
 
       <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
         الإجمالي: {total.toLocaleString()}
@@ -201,6 +239,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     </div>
   );
 }
+
 
 /* ============================ COMPANY CASH SUPPLY ============================ */
 export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompanyId?: string; onDone?: () => void }) {
