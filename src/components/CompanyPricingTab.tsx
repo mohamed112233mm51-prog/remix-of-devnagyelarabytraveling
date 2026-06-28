@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
+import { PriceLookup } from "@/components/PriceLookup";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
@@ -159,7 +160,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
         </div>
       </div>
+      <PriceLookup mode="company" companyId={companyId} onOpenRule={(r) => setDraft({ ...r })} />
       <div className="card-body">
+
         {loading ? (
           <div style={{ textAlign: "center", padding: 16 }}>جاري التحميل...</div>
         ) : (
