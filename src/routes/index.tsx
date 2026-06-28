@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { hasPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/dashboard.functions";
 import {
   fmtDL,
@@ -108,18 +108,20 @@ function pctDelta(curr: number, prev: number) {
 }
 
 function Dashboard() {
-  const { user, roles, permissions, isAdmin, isSuperAdmin } = useAuth();
-  // Profit permissions are independent for manager/user; admin and super_admin always see both profit cards.
-  const canViewNetProfit = isAdmin || isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
-  const canViewProfitSummary = isAdmin || isSuperAdmin || hasPermission(permissions, PROFIT_SUMMARY_PERMISSION_KEY);
+  const { user, roles, permissions, isSuperAdmin, profileLoaded } = useAuth();
+  const queryClient = useQueryClient();
+  // Profit cards are strict: super_admin/admin always see them; manager/user require an explicit true value.
+  const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
+  const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
   const netProfitFn = useServerFn(getDashboardNetProfitData);
   const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
-    admin: isAdmin,
+    roles,
     owner: isSuperAdmin,
     net: permissions?.[NET_PROFIT_PERMISSION_KEY] ?? null,
     summary: permissions?.[PROFIT_SUMMARY_PERMISSION_KEY] ?? null,
+    profileLoaded,
   });
   const { rows: agents } = useLive<Agent>("agents");
   const flights: any[] = [];
@@ -166,21 +168,37 @@ function Dashboard() {
     queryFn: () => profitSummaryFn(),
   });
 
+  const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
+  const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
+
+  useEffect(() => {
+    if (canViewNetProfit) return;
+    queryClient.removeQueries({ queryKey: ["dashboard-net-profit"] });
+  }, [canViewNetProfit, queryClient]);
+
+  useEffect(() => {
+    if (canViewProfitSummary) return;
+    queryClient.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+  }, [canViewProfitSummary, queryClient]);
+
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     console.debug("[dashboard:profit-permissions]", {
+      email: user?.email ?? null,
       userId: user?.id ?? null,
       role: roles,
-        isAdmin,
-      isSystemOwner: isSuperAdmin,
-      permissions,
-        net_profit_view: canViewNetProfit,
-        profit_summary_view: canViewProfitSummary,
+      is_super_admin: isSuperAdmin,
+      profileLoaded,
+      permissions_net_profit_view: permissions?.[NET_PROFIT_PERMISSION_KEY] ?? null,
+      permissions_profit_summary_view: permissions?.[PROFIT_SUMMARY_PERMISSION_KEY] ?? null,
+      decision_can_request_net_profit: canViewNetProfit,
+      decision_can_request_profit_summary: canViewProfitSummary,
+      server_can_net_profit: netProfitQuery.data?.canNetProfit ?? null,
+      server_can_profit_summary: profitSummaryQuery.data?.canProfitSummary ?? null,
+      final_render_net_profit_card: effectiveCanViewNetProfit,
+      final_render_profit_summary_section: effectiveCanViewProfitSummary,
     });
-  }, [user?.id, roles, isAdmin, isSuperAdmin, permissions, canViewNetProfit, canViewProfitSummary]);
-
-  const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
-  const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
+  }, [user?.email, user?.id, roles, isSuperAdmin, profileLoaded, permissions, canViewNetProfit, canViewProfitSummary, netProfitQuery.data?.canNetProfit, profitSummaryQuery.data?.canProfitSummary, effectiveCanViewNetProfit, effectiveCanViewProfitSummary]);
   const netProfitData = effectiveCanViewNetProfit ? netProfitQuery.data?.netProfit : null;
   const profitSummaryData = effectiveCanViewProfitSummary ? profitSummaryQuery.data?.profitSummary : null;
   const periodProfit = netProfitData?.periodProfit ?? 0;

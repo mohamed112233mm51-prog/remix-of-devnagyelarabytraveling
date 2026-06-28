@@ -24,7 +24,7 @@ import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { resolveAgentPrice } from "@/lib/pricingMatch";
 import { useAuth } from "@/hooks/useAuth";
-import { hasPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -488,8 +488,8 @@ function ExecutionForm({
   passengerTypes: readonly string[];
   onDone: () => void;
 }) {
-  const { permissions, isAdmin, isSuperAdmin } = useAuth();
-  const canViewNetProfit = isAdmin || isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
+  const { permissions, roles, isSuperAdmin, profileLoaded } = useAuth();
+  const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
   const [form, setForm] = useState({
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",

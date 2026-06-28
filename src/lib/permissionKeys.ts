@@ -55,6 +55,14 @@ export function hasPermission(
   return permissions?.[key] === true;
 }
 
+export function hasExplicitPermission(
+  permissions: Record<string, any> | null | undefined,
+  key: string | null | undefined,
+): boolean {
+  if (!key) return true;
+  return permissions?.[key] === true;
+}
+
 export function normalizePermissionsForLoad<T extends Record<string, any>>(permissions: T | null | undefined): Record<string, any> {
   const out = { ...(permissions ?? {}) };
   for (const key of PROFIT_PERMISSION_KEYS) {
@@ -76,5 +84,15 @@ export function hasProfitViewPermission(
   key: typeof PROFIT_PERMISSION_KEYS[number],
 ) {
   if (isAdminOrSuperAdmin) return true;
-  return hasPermission(permissions, key);
+  return hasExplicitPermission(permissions, key);
+}
+
+export function canViewProfitPermission(
+  permissions: Record<string, any> | null | undefined,
+  subject: { roles?: readonly string[]; isAdmin?: boolean; isSuperAdmin?: boolean },
+  key: typeof PROFIT_PERMISSION_KEYS[number],
+) {
+  const isAdminRole = subject.isAdmin === true || subject.roles?.includes("admin") === true;
+  if (subject.isSuperAdmin === true || isAdminRole) return true;
+  return hasExplicitPermission(permissions, key);
 }
