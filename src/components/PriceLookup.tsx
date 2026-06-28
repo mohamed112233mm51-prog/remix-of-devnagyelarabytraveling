@@ -41,8 +41,14 @@ export function PriceLookup(props: {
   onOpenRule?: (rule: PricingRule) => void;
   /** Notify parent of the currently filtered subset. */
   onFilteredChange?: (rules: PricingRule[]) => void;
+  /** Notify parent when any filter is active. */
+  onActiveChange?: (active: boolean) => void;
+  /** When changed, clears all filters. */
+  resetKey?: number;
+  /** Hide outer card chrome (when embedded in a Modal). */
+  bare?: boolean;
 }) {
-  const { mode, companyId: fixedCompanyId, agentTier, rules: externalRules, onOpenRule, onFilteredChange } = props;
+  const { mode, companyId: fixedCompanyId, agentTier, rules: externalRules, onOpenRule, onFilteredChange, onActiveChange, resetKey, bare } = props;
   const { rows: allCompanies } = useLive<IssuingCompany>("issuing_companies");
 
   // ----- Source rules -----
