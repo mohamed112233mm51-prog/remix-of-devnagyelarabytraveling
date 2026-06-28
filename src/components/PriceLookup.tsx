@@ -157,7 +157,7 @@ export function PriceLookup(props: {
   };
 
   const clearFilters = () => {
-    setFilters({ ...emptyFilters(), agent_tier: agentTier || "" });
+    setFilters(emptyFilters());
   };
 
 
