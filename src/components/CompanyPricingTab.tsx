@@ -134,7 +134,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       const { error } = await supabase.from("company_pricing_rules" as any).insert(payload);
       if (error) return toast.error(error.message);
     }
+    const wasNew = !draft.id;
     setDraft(null);
+    if (wasNew) clearAddBuffer();
     await load();
     toast.success("تم حفظ السعر");
   };
