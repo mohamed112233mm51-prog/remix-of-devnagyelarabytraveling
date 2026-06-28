@@ -537,7 +537,7 @@ function ExecutionForm({
       out.push({ kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 });
     }
     return out;
-  });
+  })());
   const [saving, setSaving] = useState(false);
 
   const companyServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "company");
