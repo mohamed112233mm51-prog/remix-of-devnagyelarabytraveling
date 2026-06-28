@@ -281,6 +281,12 @@ function MerchantForm() {
         <div className="form-group"><label>اسم التاجر</label><input value={form.merchant_name} onChange={(e) => set("merchant_name", e.target.value)} /></div>
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+        <div className="form-group"><label>الحالة</label>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="نشط">نشط</option>
+            <option value="غير نشط">غير نشط</option>
+          </select>
+        </div>
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طرق الدفع المتاحة</label>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
