@@ -195,9 +195,10 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
               <tbody>
                 {filteredRules.length === 0 && (
                   <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
-                    {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "لا توجد نتائج مطابقة للفلاتر"}
+                    {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
                   </td></tr>
                 )}
+
                 {filteredRules.map((r) => (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
