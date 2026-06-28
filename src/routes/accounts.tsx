@@ -384,6 +384,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
       tier: form.tier || "A",
+      status: form.status || "نشط",
       opening_debit: opDebit,
       opening_credit: opCredit,
       opening_date: opening.date || null,
