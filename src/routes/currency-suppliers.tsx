@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { Search, UserPlus, FileText, Coins, ChevronLeft } from "lucide-react";
+import { Search, UserPlus, FileText, Coins, ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 
 export const Route = createFileRoute("/currency-suppliers")({
@@ -119,21 +119,50 @@ function CurrencySuppliersPage() {
                     <td data-label="الهاتف">{s.phone || "—"}</td>
                     <td data-label="الحالة"><span className={`badge pill-badge ${s.status === "نشط" ? "badge-green" : "badge-red"}`}>{s.status}</span></td>
                     <td data-label="ملاحظات">{s.notes || "—"}</td>
-                    <td data-label="إجراءات" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button className="action-btn" onClick={() => navigate({ to: "/currency-supplier-statement/$supplierId", params: { supplierId: s.id } })}>
-                        <FileText size={13} /> كشف حساب
-                      </button>
-                      {perm.edit && <button className="action-btn" onClick={() => setEditRow(s)}>✏️ تعديل</button>}
-                      {perm.delete && (
-                        <button className="action-btn" onClick={async () => {
-                          const ok = await confirmDialog(`حذف المورد "${s.name}"؟ سيتم حذف جميع البيانات المرتبطة (حركات مالية، أسعار، عمليات) ولا يمكن التراجع.`, { confirmLabel: "حذف", cancelLabel: "إلغاء" });
-                          if (!ok) return;
-                          const { error } = await supabase.from("currency_suppliers" as any).delete().eq("id", s.id);
-                          if (error) return toast.error(error.message);
-                          toast.success("تم الحذف");
-                          refresh();
-                        }}>🗑 حذف</button>
-                      )}
+                    <td data-label="إجراءات">
+                      <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                        <button
+                          type="button"
+                          className="action-btn icon-only"
+                          onClick={() => navigate({ to: "/currency-supplier-statement/$supplierId", params: { supplierId: s.id } })}
+                          title="كشف حساب"
+                          aria-label="كشف حساب"
+                          style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6, color: "var(--primary, #0284C7)" }}
+                        >
+                          <FileText size={14} strokeWidth={2} />
+                        </button>
+                        {perm.edit && (
+                          <button
+                            type="button"
+                            className="action-btn icon-only"
+                            onClick={() => setEditRow(s)}
+                            title="تعديل المورد"
+                            aria-label="تعديل المورد"
+                            style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}
+                          >
+                            <Pencil size={14} strokeWidth={2} />
+                          </button>
+                        )}
+                        {perm.delete && (
+                          <button
+                            type="button"
+                            className="action-btn icon-only"
+                            onClick={async () => {
+                              const ok = await confirmDialog(`حذف المورد "${s.name}"؟ سيتم حذف جميع البيانات المرتبطة (حركات مالية، أسعار، عمليات) ولا يمكن التراجع.`, { confirmLabel: "حذف", cancelLabel: "إلغاء" });
+                              if (!ok) return;
+                              const { error } = await supabase.from("currency_suppliers" as any).delete().eq("id", s.id);
+                              if (error) return toast.error(error.message);
+                              toast.success("تم الحذف");
+                              refresh();
+                            }}
+                            title="حذف المورد"
+                            aria-label="حذف المورد"
+                            style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6, color: "var(--red, #dc2626)" }}
+                          >
+                            <Trash2 size={14} strokeWidth={2} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
