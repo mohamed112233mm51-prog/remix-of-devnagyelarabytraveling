@@ -740,7 +740,7 @@ function ExecutionForm({
                     <SearchableSelect
                       value={s.company_id || ""}
                       onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_id: v || null } : x))}
-                      options={companies.map((c) => ({ value: c.id, label: c.company_name }))}
+                      options={activeOptions(companies, s.company_id, (c) => c.company_name)}
                     />
                   </Field>
                   <Field label="نوع الخدمة">
