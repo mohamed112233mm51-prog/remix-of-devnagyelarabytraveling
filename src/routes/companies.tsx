@@ -57,6 +57,7 @@ function CompaniesPage() {
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
+  const [viewCompany, setViewCompany] = useState<IssuingCompany | null>(null);
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
