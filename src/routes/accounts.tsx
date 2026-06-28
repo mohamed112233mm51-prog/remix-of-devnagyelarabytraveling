@@ -230,7 +230,22 @@ function AccountsPage() {
               { label: "تاريخ الرصيد السابق", value: a.opening_date || "—" },
               { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
             ]}
+            headerActions={
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setShowAgentLookup((v) => !v)}
+              >
+                🔎 {showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
+              </button>
+            }
+            extraContent={
+              showAgentLookup ? (
+                <PriceLookup mode="agent" agentTier={a.tier || undefined} />
+              ) : null
+            }
           />
+
         );
       })()}
     </div>
