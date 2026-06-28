@@ -103,6 +103,9 @@ export default function Layout() {
   const allowed = (it: Item) => {
     if (it.permKey === "__settings__") return checkSettingsPerm(permissions, isSuperAdmin, "view");
     if (it.adminOnly) return isAdmin;
+    if (it.anyPerm && it.anyPerm.length > 0) {
+      return it.anyPerm.some((k) => checkPerm(permissions, isAdmin, k, "view"));
+    }
     return checkPerm(permissions, isAdmin, it.permKey ?? null, "view");
   };
 
