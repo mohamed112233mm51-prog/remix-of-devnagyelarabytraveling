@@ -33,7 +33,7 @@ function SafePageError() {
   return <div className="card" style={{ padding: 24 }}>تعذر تحميل الإعدادات مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 }
 
-type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "devtools";
+type Tab = "users" | "add" | "perms" | "general" | "backups" | "production" | "devtools" | "change_password";
 
 // Permissions list MUST mirror the actual navigable sections of the system
 // (see src/components/Layout.tsx NAV + src/hooks/usePerm.tsx ROUTE_PERM).
