@@ -13,6 +13,7 @@ import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/d
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { activeOptions } from "@/lib/activeFilter";
 import {
   PaymentSplits,
   newPaymentSplitRow,
