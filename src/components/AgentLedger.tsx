@@ -258,7 +258,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
             <div className="card-title">كشف حساب الوكيل</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
-              <button type="button" className="btn btn-gold" onClick={() => setPayOpen(true)}>+ إضافة دفعة من الوكيل</button>
+              
               {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} />}
             </div>
           </div>
