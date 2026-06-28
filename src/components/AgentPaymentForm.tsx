@@ -5,6 +5,7 @@ import { useLive, useDropdownOptions, type Agent, type Merchant } from "@/lib/db
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
