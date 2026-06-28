@@ -5,7 +5,8 @@ import { NumberInput } from "@/components/inputs/NumberInput";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
-import { usePerm } from "@/hooks/usePerm";
+import { checkPerm } from "@/hooks/usePerm";
+import { useAuth } from "@/hooks/useAuth";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
 import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
@@ -36,7 +37,17 @@ function computeAgentPrice(r: Pick<Row, "company_price" | "commission_type" | "c
 }
 
 export function CompanyPricingTab({ companyId }: { companyId: string }) {
-  const perm = usePerm("pricing");
+  const { permissions, isAdmin } = useAuth();
+  const canManage = checkPerm(permissions, isAdmin, "service_pricing_manage", "view");
+  const canSearch = checkPerm(permissions, isAdmin, "service_price_search", "view");
+  const perm = {
+    view: canManage || canSearch,
+    create: canManage,
+    edit: canManage,
+    delete: canManage,
+    export: canManage,
+    search: canSearch,
+  };
   const services = useDropdownOptions("service_type");
   const tiers = useDropdownOptions("agent_tier" as any);
   const departures = useDropdownOptions("departure_from" as any);

@@ -48,7 +48,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "currency_suppliers", label: "حسابات موردي العملة",      route: "/currency-suppliers" },
   
   { key: "expenses",           label: "المصروفات",                route: "/expenses" },
-  { key: "pricing",            label: "إدارة التسعير",            route: "/companies#pricing" },
+  
   { key: "service_pricing_manage", label: "أسعار الخدمات — تسعير خدمة", route: "/service-pricing#manage" },
   { key: "service_price_search",   label: "أسعار الخدمات — بحث سعر خدمة", route: "/service-pricing#lookup" },
   { key: "reports",            label: "التقارير",                 route: "/reports" },
