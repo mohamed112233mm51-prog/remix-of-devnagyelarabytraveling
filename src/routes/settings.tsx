@@ -1411,8 +1411,12 @@ function GeneralTab() {
           <DropdownListManager category="airline" title="شركات الطيران" icon={<Plane size={16} />} />
           <DropdownListManager category="airport" title="المطار" icon={<MapPin size={16} />} />
           <DropdownListManager category="service_type" title="نوع الخدمة" icon={<Wrench size={16} />} />
+          <DropdownListManager category="service_kind" title="تصنيف الخدمة" icon={<Wrench size={16} />} />
+          <DropdownListManager category="authority" title="جهات الموافقة" icon={<ListChecks size={16} />} />
           <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="execution_status" title="حالة التنفيذ" icon={<ListChecks size={16} />} />
           <DropdownListManager category="operation_status" title="حالة العملية" icon={<ListChecks size={16} />} />
+          <DropdownListManager category="submission_notes" title="ملاحظات التقديم" icon={<Inbox size={16} />} />
           <DropdownListManager category="passenger_type" title="نوع المسافر" icon={<Inbox size={16} />} />
           <DropdownListManager category="agent_tier" title="شرائح الوكلاء" icon={<ListChecks size={16} />} />
         </div>
