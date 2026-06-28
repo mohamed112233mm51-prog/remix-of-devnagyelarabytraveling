@@ -819,7 +819,7 @@ function Dashboard() {
           <Stat label="الإجمالي" value={fmtDL(expensesTotal)} tone="red" />
           <Stat label="ثابتة" value={fmtDL(expensesFixed)} />
           <Stat label="متغيرة" value={fmtDL(expensesVariable)} />
-          <Stat label="مخصومة" value={fmtDL(expensesDeducted)} />
+          
         </SectionCard>
 
         {effectiveCanViewProfitSummary && (
