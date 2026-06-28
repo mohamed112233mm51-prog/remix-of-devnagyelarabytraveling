@@ -172,17 +172,20 @@ function UsersTab() {
   const activeFn = useServerFn(setUserActive);
   const resendFn = useServerFn(resendInvite);
   const resetFn = useServerFn(sendPasswordReset);
+  const updateFn = useServerFn(updateUserProfile);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: () => fn() });
   const [confirmAction, setConfirmAction] = useState<null | {
     title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => Promise<void> | void;
   }>(null);
+  const [viewUser, setViewUser] = useState<any | null>(null);
 
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive" | "pending">("");
 
   if (isLoading) return <div className="card" style={{ padding: 24 }}>جارٍ التحميل...</div>;
+
 
   const allUsers = (data?.users ?? []) as any[];
   const allRoles = Array.from(new Set(allUsers.flatMap((u) => u.roles || []))).filter(Boolean);
