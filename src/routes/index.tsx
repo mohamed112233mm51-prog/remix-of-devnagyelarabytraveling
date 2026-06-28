@@ -483,13 +483,13 @@ function Dashboard() {
       cur.services.set(s, (cur.services.get(s) || 0) + 1);
       byCo.set(ct.company_id, cur);
     }
-    // also include approvals via issuing_company_id
-    for (const ap of approvals) {
-      if (!ap.issuing_company_id) continue;
-      const cur = byCo.get(ap.issuing_company_id) || { count: 0, services: new Map() };
+    // also include submissions via approval_company_id
+    for (const ap of submissions) {
+      if (!ap.approval_company_id) continue;
+      const cur = byCo.get(ap.approval_company_id) || { count: 0, services: new Map() };
       cur.count += 1;
       cur.services.set("موافقة أمنية", (cur.services.get("موافقة أمنية") || 0) + 1);
-      byCo.set(ap.issuing_company_id, cur);
+      byCo.set(ap.approval_company_id, cur);
     }
     const nameOf = new Map(companies.map((c) => [c.id, c.company_name]));
     return Array.from(byCo.entries())
@@ -500,36 +500,32 @@ function Dashboard() {
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
-  }, [cTxns, approvals, companies]);
+  }, [cTxns, submissions, companies]);
 
-  // 3. Service type distribution
+  // 3. Service type distribution — from real submissions + executions
   const serviceDist = useMemo(() => {
     const targets = ["تذاكر طيران", "موافقة أمنية"];
     const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0 };
-    for (const t of txns) {
-      const s = t.service_type || "";
-      if (targets.includes(s)) counts[s] += 1;
-    }
     for (const ct of cTxns) {
       const s = ct.service_type || "";
       if (targets.includes(s)) counts[s] += 1;
     }
-    counts["تذاكر طيران"] += flights.length;
-    counts["موافقة أمنية"] += approvals.length;
+    for (const ex of executedRows) counts["تذاكر طيران"] += 1;
+    for (const sub of submissions) counts["موافقة أمنية"] += 1;
     const total = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
     const palette: Record<string, string> = {
       "تذاكر طيران": NAVY,
       "موافقة أمنية": GOLD,
     };
     return targets.map((k) => ({ label: k, value: counts[k], pct: Math.round((counts[k] / total) * 100), color: palette[k] }));
-  }, [txns, cTxns, flights, approvals]);
+  }, [cTxns, executedRows, submissions]);
   const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
 
-  // 4. Travel authorities (جهة السفر) from flights
+  // 4. Travel authorities — from real submissions (approval_authority)
   const topAuthorities = useMemo(() => {
     const byAuth = new Map<string, number>();
-    for (const f of flights) {
-      const a = (f.authority || "").trim();
+    for (const f of submissions) {
+      const a = (f.approval_authority || "").trim();
       if (!a) continue;
       byAuth.set(a, (byAuth.get(a) || 0) + 1);
     }
@@ -538,11 +534,17 @@ function Dashboard() {
       .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [flights]);
+  }, [submissions]);
   const authMax = Math.max(...topAuthorities.map((a) => a.count), 1);
 
-  // Pending approvals
-  const pendingApprovals = approvals.filter((a) => a.status && !["مكتمل", "منتهي", "مرفوض"].includes(a.status)).slice(0, 5);
+  // Pending submissions — operation status not finalized
+  const pendingApprovals = submissions
+    .filter((a) => {
+      const op = (a.operation_status || "").trim();
+      return op && !["منفذ", "ملغي", "ملغى", "مكتمل"].includes(op);
+    })
+    .slice(0, 5);
+
 
   return (
     <div className="section active">
