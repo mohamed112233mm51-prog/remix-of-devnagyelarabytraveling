@@ -273,6 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     loading,
     profileLoaded,
+    profileError,
     roles,
     isAdmin: roles.includes("admin") || isSuperAdmin,
     isSuperAdmin,
