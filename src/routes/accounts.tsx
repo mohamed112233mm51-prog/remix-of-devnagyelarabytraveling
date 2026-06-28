@@ -266,6 +266,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     whatsapp: agent.whatsapp || "",
     governorate: agent.governorate || "",
     tier: a.tier || "A",
+    status: agent.status || "نشط",
     opening_debit: a.opening_debit ? String(a.opening_debit) : "",
     opening_credit: a.opening_credit ? String(a.opening_credit) : "",
     opening_date: a.opening_date || "",
@@ -284,6 +285,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       whatsapp: form.whatsapp.trim() || null,
       governorate: form.governorate || null,
       tier: form.tier || "A",
+      status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: form.opening_date || null,
@@ -317,6 +319,9 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           </div>
           <div className="form-group"><label>شريحة الوكيل</label>
             <SearchableSelect value={form.tier} onChange={(v) => set("tier", v)} options={(tierOptions.length ? tierOptions : ["A","B","C"]) as string[]} />
+          </div>
+          <div className="form-group"><label>الحالة</label>
+            <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
           </div>
         </div>
 
@@ -357,7 +362,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const tierOptions = useDropdownOptions("agent_tier" as any);
   const [form, setForm, clearForm] = usePersistentState(
     "form:agent:add",
-    { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" },
+    { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A", status: "نشط" },
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:agent:add:opening",
@@ -379,6 +384,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       whatsapp: form.whatsapp || null,
       governorate: form.governorate || null,
       tier: form.tier || "A",
+      status: form.status || "نشط",
       opening_debit: opDebit,
       opening_credit: opCredit,
       opening_date: opening.date || null,
@@ -409,6 +415,9 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="form-group"><label>شريحة الوكيل</label>
           <SearchableSelect value={form.tier} onChange={(v) => set("tier", v)} options={(tierOptions.length ? tierOptions : ["A","B","C"]) as string[]} />
+        </div>
+        <div className="form-group"><label>الحالة</label>
+          <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
         </div>
       </div>
 

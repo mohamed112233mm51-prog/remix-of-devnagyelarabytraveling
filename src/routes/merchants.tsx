@@ -162,10 +162,10 @@ function MerchantsPage() {
           <div className="card-body">
             <div className="table-wrap enterprise-table">
               <table className="mobile-cards">
-                <thead><tr><th>#</th><th>اسم التاجر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي الوارد</th><th className="num-col">إجمالي الصادر</th><th className="num-col">إجمالي النقدية المحصلة</th><th className="num-col">الرصيد</th><th>إجراءات</th></tr></thead>
+                <thead><tr><th>#</th><th>اسم التاجر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي الوارد</th><th className="num-col">إجمالي الصادر</th><th className="num-col">إجمالي النقدية المحصلة</th><th className="num-col">الرصيد</th><th>الحالة</th><th>إجراءات</th></tr></thead>
                 <tbody>
                   {merchants.length === 0 ? (
-                    <tr><td colSpan={9}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
+                    <tr><td colSpan={10}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
                     const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, converted: 0 };
                     const bal = t.incoming - t.outgoing - t.collected - t.converted;
@@ -179,6 +179,7 @@ function MerchantsPage() {
                         <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing + t.converted)}</td>
                         <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(t.collected)}</td>
                         <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
+                        <td data-label="الحالة"><span className={`badge pill-badge ${((m as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(m as any).status || "نشط"}</span></td>
                         <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditMerchant(m)}>✏️ تعديل</button> : null}</td>
                       </tr>
                     );
@@ -257,6 +258,7 @@ function MerchantForm() {
   const [form, setForm] = useState({
     merchant_name: "", phone: "", whatsapp: "",
     supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
+    status: "نشط",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
@@ -268,9 +270,10 @@ function MerchantForm() {
       supports_instapay: form.supports_instapay,
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
-    });
+      status: form.status || "نشط",
+    } as any);
     if (error) return toast.error(error.message);
-    setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true });
+    setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true, status: "نشط" });
   };
   return (
     <div className="card">
@@ -279,6 +282,12 @@ function MerchantForm() {
         <div className="form-group"><label>اسم التاجر</label><input value={form.merchant_name} onChange={(e) => set("merchant_name", e.target.value)} /></div>
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+        <div className="form-group"><label>الحالة</label>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="نشط">نشط</option>
+            <option value="غير نشط">غير نشط</option>
+          </select>
+        </div>
         <div className="form-group full">
           <label style={{ fontWeight: 700, marginBottom: 8 }}>طرق الدفع المتاحة</label>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -496,6 +505,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
     supports_instapay: merchant.supports_instapay ?? true,
     supports_cash_wallet: merchant.supports_cash_wallet ?? true,
     supports_physical_cash: merchant.supports_physical_cash ?? true,
+    status: (merchant as any).status || "نشط",
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
@@ -509,7 +519,8 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
       supports_instapay: form.supports_instapay,
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
-    }).eq("id", merchant.id);
+      status: form.status || "نشط",
+    } as any).eq("id", merchant.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     onClose();
@@ -523,6 +534,12 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
           <div className="form-group"><label>اسم التاجر</label><input value={form.merchant_name} onChange={(e) => set("merchant_name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+          <div className="form-group"><label>الحالة</label>
+            <select value={form.status} onChange={(e) => set("status", e.target.value)}>
+              <option value="نشط">نشط</option>
+              <option value="غير نشط">غير نشط</option>
+            </select>
+          </div>
           <div className="form-group full">
             <label style={{ fontWeight: 700, marginBottom: 8 }}>طرق الدفع المتاحة</label>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>

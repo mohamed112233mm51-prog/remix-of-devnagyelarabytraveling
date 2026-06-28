@@ -13,6 +13,7 @@ import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/d
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { activeOptions } from "@/lib/activeFilter";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -112,7 +113,7 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       <div className="card-header"><div className="card-title">💸 صرف نقدية للوكيل</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الوكيل *</label>
-          <SearchableSelect value={agentId} onChange={setAgentId} options={agents.map((a) => ({ value: a.id, label: a.name }))} placeholder="اختر..." disabled={!!initialAgentId} />
+          <SearchableSelect value={agentId} onChange={setAgentId} options={activeOptions(agents, agentId, (a) => a.name)} placeholder="اختر..." disabled={!!initialAgentId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
@@ -223,7 +224,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
       <div className="card-header"><div className="card-title">💸 صرف نقدية للتاجر</div></div>
       <div className="form-grid">
         <div className="form-group"><label>التاجر *</label>
-          <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} placeholder="اختر..." disabled={!!initialMerchantId} />
+          <SearchableSelect value={merchantId} onChange={setMerchantId} options={activeOptions(merchants, merchantId, (m) => m.merchant_name)} placeholder="اختر..." disabled={!!initialMerchantId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
@@ -354,7 +355,7 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       <div className="card-header"><div className="card-title">💰 توريد نقدية من الشركة الصادرة</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={companyId} onChange={setCompanyId} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." disabled={!!initialCompanyId} />
+          <SearchableSelect value={companyId} onChange={setCompanyId} options={activeOptions(companies, companyId, (c) => c.company_name)} placeholder="اختر..." disabled={!!initialCompanyId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />

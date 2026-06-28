@@ -6,6 +6,7 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { activeOptions } from "@/lib/activeFilter";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
@@ -239,7 +240,7 @@ export function AgentPaymentForm({
           <SearchableSelect
             value={form.agent_id}
             onChange={(v) => set("agent_id", v)}
-            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            options={activeOptions(agents, form.agent_id, (a) => a.name)}
             disabled={!!lockedAgentId}
             placeholder="اختر..."
           />
@@ -299,7 +300,7 @@ export function AgentPaymentForm({
                   <SearchableSelect
                     value={row.merchant_id}
                     onChange={(v) => updateSplit(row.uid, { merchant_id: v, method: "" })}
-                    options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))}
+                    options={activeOptions(merchants, row.merchant_id, (m) => m.merchant_name)}
                     placeholder="اختر..."
                   />
                 </div>

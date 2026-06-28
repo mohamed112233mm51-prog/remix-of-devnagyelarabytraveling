@@ -123,7 +123,14 @@ export function PaymentSplits({
                 <div className="form-group"><label>التاجر</label>
                   <select value={row.merchant_id} onChange={(e) => update(row.uid, { merchant_id: e.target.value, method: "" })}>
                     <option value="" disabled>اختر...</option>
-                    {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+                    {merchants
+                      .filter((m) => ((m as any).status || "نشط") === "نشط" || m.id === row.merchant_id)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.merchant_name}
+                          {((m as any).status || "نشط") !== "نشط" ? " (غير نشط)" : ""}
+                        </option>
+                      ))}
                   </select>
                 </div>
               )}

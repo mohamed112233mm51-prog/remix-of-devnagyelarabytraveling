@@ -26,6 +26,7 @@ import { resolveAgentPrice } from "@/lib/pricingMatch";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { activeOptions } from "@/lib/activeFilter";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -641,7 +642,7 @@ function ExecutionForm({
           <SearchableSelect
             value={form.agent_id}
             onChange={(v) => setForm({ ...form, agent_id: v })}
-            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            options={activeOptions(agents, form.agent_id, (a) => a.name)}
           />
         </Field>
         <Field label="حالة الموافقة">
@@ -739,7 +740,7 @@ function ExecutionForm({
                     <SearchableSelect
                       value={s.company_id || ""}
                       onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_id: v || null } : x))}
-                      options={companies.map((c) => ({ value: c.id, label: c.company_name }))}
+                      options={activeOptions(companies, s.company_id, (c) => c.company_name)}
                     />
                   </Field>
                   <Field label="نوع الخدمة">

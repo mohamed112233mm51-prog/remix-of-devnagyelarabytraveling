@@ -19,6 +19,7 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { activeOptions } from "@/lib/activeFilter";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -463,7 +464,7 @@ function SubmissionForm({
           <SearchableSelect
             value={form.agent_id}
             onChange={(v) => setForm({ ...form, agent_id: v })}
-            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            options={activeOptions(agents, form.agent_id, (a) => a.name)}
           />
         </Field>
         <Field label="الحالة">

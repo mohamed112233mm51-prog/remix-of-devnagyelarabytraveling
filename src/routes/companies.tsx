@@ -32,6 +32,7 @@ import { CompanySupplyForm } from "@/components/CashMovementForms";
 import { EntityProfileModal } from "@/components/EntityProfileModal";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 
@@ -170,11 +171,12 @@ function CompaniesPage() {
                     <tr>
                       <th>#</th><th>الشركة الصادرة</th><th>الهاتف</th><th>الواتساب</th>
                       <th className="num-col">إجمالي الخدمات</th><th className="num-col">المدفوع</th><th className="num-col">المتبقي</th>
+                      <th>الحالة</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr><td colSpan={7}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
+                      <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
                     ) : pageRows.map((c, i) => {
                       const idx = page * pageSize + i;
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
@@ -188,6 +190,7 @@ function CompaniesPage() {
                           <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
                           <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
+                          <td data-label="الحالة"><span className={`badge pill-badge ${((c as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(c as any).status || "نشط"}</span></td>
                         </tr>
                       );
                     })}
@@ -198,6 +201,7 @@ function CompaniesPage() {
                       <td className="num-col">{fmtDL(totalTrips)}</td>
                       <td className="num-col">{fmtDL(totalPaid)}</td>
                       <td className="num-col">{fmtDL(totalDue)}</td>
+                      <td></td>
                     </tr>
 
                   </tfoot>
@@ -499,6 +503,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     company_name: company.company_name || "",
     phone: company.phone || "",
     whatsapp: company.whatsapp || "",
+    status: company.status || "نشط",
     opening_debit: c.opening_debit ? String(c.opening_debit) : "",
     opening_credit: c.opening_credit ? String(c.opening_credit) : "",
     opening_date: c.opening_date || "",
@@ -516,6 +521,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
       company_name: form.company_name.trim(),
       phone: form.phone.trim() || null,
       whatsapp: form.whatsapp.trim() || null,
+      status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: form.opening_date || null,
@@ -598,6 +604,9 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           <div className="form-group"><label>اسم الشركة</label><input value={form.company_name} onChange={(e) => set("company_name", e.target.value)} /></div>
           <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+          <div className="form-group"><label>الحالة</label>
+            <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
+          </div>
         </div>
 
         <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
@@ -636,7 +645,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
 function CompanyForm({ onDone }: { onDone: () => void }) {
   const [form, setForm, clearForm] = usePersistentState(
     "form:company:add",
-    { company_name: "", phone: "", whatsapp: "" },
+    { company_name: "", phone: "", whatsapp: "", status: "نشط" },
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:company:add:opening",
@@ -653,6 +662,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
       company_name: form.company_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
+      status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: opening.date || null,
@@ -678,6 +688,9 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+        <div className="form-group"><label>الحالة</label>
+          <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
+        </div>
       </div>
 
       <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
@@ -844,7 +857,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       <div className="card-header"><div className="card-title">💳 صرف حركة مالية للشركة</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
+          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={activeOptions(companies, form.company_id, (c: IssuingCompany) => c.company_name)} placeholder="اختر..." />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
