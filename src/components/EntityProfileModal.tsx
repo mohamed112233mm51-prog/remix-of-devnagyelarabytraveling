@@ -51,14 +51,11 @@ export function EntityProfileModal({
         </div>
       }
       footer={
-        <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", width: "100%", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            {canEdit && onEdit && (
-              <button className="btn btn-gold" onClick={onEdit} type="button">✏️ {editLabel}</button>
-            )}
-            {headerActions}
-          </div>
-          <button className="action-btn" onClick={onClose} type="button">إغلاق</button>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", width: "100%", flexWrap: "wrap" }}>
+          {canEdit && onEdit && (
+            <button className="btn btn-gold" onClick={onEdit} type="button">✏️ {editLabel}</button>
+          )}
+          {headerActions}
         </div>
       }
     >
