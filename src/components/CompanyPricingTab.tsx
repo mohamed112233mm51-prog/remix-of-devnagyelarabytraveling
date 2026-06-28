@@ -256,6 +256,30 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           onDone={async () => { setShowImport(false); await load(); }}
         />
       )}
+
+      <Modal
+        open={showLookup}
+        onClose={() => setShowLookup(false)}
+        title="🔎 بحث سعر خدمة"
+        maxWidth={820}
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "space-between", width: "100%" }}>
+            <button type="button" className="action-btn" onClick={() => setResetKey((k) => k + 1)}>مسح الفلاتر</button>
+            <button type="button" className="btn btn-gold" onClick={() => setShowLookup(false)}>تطبيق وإغلاق</button>
+          </div>
+        }
+      >
+        <PriceLookup
+          mode="company"
+          companyId={companyId}
+          rules={rules}
+          onOpenRule={(r) => { setDraft({ ...r }); setShowLookup(false); }}
+          onFilteredChange={setFilteredRules}
+          onActiveChange={setFiltersActive}
+          resetKey={resetKey}
+          bare
+        />
+      </Modal>
     </div>
   );
 }
