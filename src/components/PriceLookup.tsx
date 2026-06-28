@@ -160,7 +160,7 @@ export function PriceLookup(props: {
   };
 
   const clearFilters = () => {
-    setFilters(emptyFilters());
+    clearStoredFilters();
   };
 
 
