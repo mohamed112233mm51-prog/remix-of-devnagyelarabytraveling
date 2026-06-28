@@ -19,6 +19,8 @@ import {
   PlusCircle,
   Upload,
   Coins,
+  Tag,
+  Search as SearchIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
