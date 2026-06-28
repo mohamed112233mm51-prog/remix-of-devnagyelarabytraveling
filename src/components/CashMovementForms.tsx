@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/db";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import {
   PaymentSplits,
   newPaymentSplitRow,
