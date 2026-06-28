@@ -30,7 +30,7 @@ import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { isDevEnv } from "@/lib/env";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
-type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null; hash?: string };
+type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null; hash?: string; anyPerm?: string[] };
 
 const NAV: { label: string; items: Item[] }[] = [
   {
