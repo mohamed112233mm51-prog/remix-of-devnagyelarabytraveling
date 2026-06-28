@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { PriceLookup } from "@/components/PriceLookup";
