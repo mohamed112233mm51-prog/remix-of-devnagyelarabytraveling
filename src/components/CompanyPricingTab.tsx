@@ -8,6 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
+import { Modal } from "@/components/Modal";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
@@ -53,6 +54,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [showLookup, setShowLookup] = useState(false);
+  const [filtersActive, setFiltersActive] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -157,18 +161,18 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div className="card-title">💰 ملف التسعير</div>
         <div style={{ display: "flex", gap: 6 }}>
-          {perm.create && <button type="button" className="btn btn-gold" onClick={startNew}>➕ إضافة سعر</button>}
+          <button type="button" className="action-btn" onClick={() => setShowLookup(true)}>🔎 بحث سعر خدمة</button>
           {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
+          {perm.create && <button type="button" className="btn btn-gold" onClick={startNew}>➕ إضافة سعر</button>}
         </div>
       </div>
-      <PriceLookup
-        mode="company"
-        companyId={companyId}
-        rules={rules}
-        onOpenRule={(r) => setDraft({ ...r })}
-        onFilteredChange={setFilteredRules}
-      />
       <div className="card-body">
+        {filtersActive && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", marginBottom: 8, background: "color-mix(in srgb, var(--gold, #b8860b) 10%, transparent)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}>
+            <span>تم تطبيق فلترة على الأسعار ({filteredRules.length} / {rules.length})</span>
+            <button type="button" className="action-btn" onClick={() => setResetKey((k) => k + 1)}>مسح الفلاتر</button>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: "center", padding: 16 }}>جاري التحميل...</div>
@@ -252,6 +256,30 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           onDone={async () => { setShowImport(false); await load(); }}
         />
       )}
+
+      <Modal
+        open={showLookup}
+        onClose={() => setShowLookup(false)}
+        title="🔎 بحث سعر خدمة"
+        maxWidth={820}
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "space-between", width: "100%" }}>
+            <button type="button" className="action-btn" onClick={() => setResetKey((k) => k + 1)}>مسح الفلاتر</button>
+            <button type="button" className="btn btn-gold" onClick={() => setShowLookup(false)}>تطبيق وإغلاق</button>
+          </div>
+        }
+      >
+        <PriceLookup
+          mode="company"
+          companyId={companyId}
+          rules={rules}
+          onOpenRule={(r) => { setDraft({ ...r }); setShowLookup(false); }}
+          onFilteredChange={setFilteredRules}
+          onActiveChange={setFiltersActive}
+          resetKey={resetKey}
+          bare
+        />
+      </Modal>
     </div>
   );
 }

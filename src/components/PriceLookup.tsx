@@ -41,8 +41,14 @@ export function PriceLookup(props: {
   onOpenRule?: (rule: PricingRule) => void;
   /** Notify parent of the currently filtered subset. */
   onFilteredChange?: (rules: PricingRule[]) => void;
+  /** Notify parent when any filter is active. */
+  onActiveChange?: (active: boolean) => void;
+  /** When changed, clears all filters. */
+  resetKey?: number;
+  /** Hide outer card chrome (when embedded in a Modal). */
+  bare?: boolean;
 }) {
-  const { mode, companyId: fixedCompanyId, agentTier, rules: externalRules, onOpenRule, onFilteredChange } = props;
+  const { mode, companyId: fixedCompanyId, agentTier, rules: externalRules, onOpenRule, onFilteredChange, onActiveChange, resetKey, bare } = props;
   const { rows: allCompanies } = useLive<IssuingCompany>("issuing_companies");
 
   // ----- Source rules -----
@@ -91,6 +97,19 @@ export function PriceLookup(props: {
 
   useEffect(() => { onFilteredChange?.(filtered); }, [filtered, onFilteredChange]);
 
+  const anyFilterSet = FIELDS.some((k) => {
+    if (k === "agent_tier" && agentTier) return false;
+    return !!filters[k];
+  });
+
+  useEffect(() => { onActiveChange?.(anyFilterSet); }, [anyFilterSet, onActiveChange]);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setFilters({ ...emptyFilters(), agent_tier: agentTier || "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
   const companyNameOf = (id?: string | null) =>
     id ? (allCompanies.find((c) => c.id === id)?.company_name || "—") : "—";
 
@@ -133,25 +152,31 @@ export function PriceLookup(props: {
     setFilters({ ...emptyFilters(), agent_tier: agentTier || "" });
   };
 
-  const anyFilterSet = FIELDS.some((k) => {
-    if (k === "agent_tier" && agentTier) return false;
-    return !!filters[k];
-  });
 
   return (
-    <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <div className="card-title">🔎 بحث سعر خدمة (فلترة تفاعلية)</div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>
-            {filtered.length} / {rules.length}
-          </span>
+    <div className={bare ? "" : "card"} style={bare ? { marginTop: 0 } : { marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+      {!bare && (
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div className="card-title">🔎 بحث سعر خدمة (فلترة تفاعلية)</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              {filtered.length} / {rules.length}
+            </span>
+            {anyFilterSet && (
+              <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
+            )}
+          </div>
+        </div>
+      )}
+      {bare && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>النتائج: {filtered.length} / {rules.length}</span>
           {anyFilterSet && (
             <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
           )}
         </div>
-      </div>
-      <div className="card-body">
+      )}
+      <div className={bare ? "" : "card-body"}>
         {!fixedCompanyId && mode === "agent" && (
           <div className="form-group" style={{ marginBottom: 8 }}>
             <label>الشركة *</label>
