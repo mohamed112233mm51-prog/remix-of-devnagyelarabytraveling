@@ -355,7 +355,7 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       <div className="card-header"><div className="card-title">💰 توريد نقدية من الشركة الصادرة</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={companyId} onChange={setCompanyId} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." disabled={!!initialCompanyId} />
+          <SearchableSelect value={companyId} onChange={setCompanyId} options={activeOptions(companies, companyId, (c) => c.company_name)} placeholder="اختر..." disabled={!!initialCompanyId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
