@@ -284,7 +284,16 @@ export function PriceLookup(props: {
                       <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
                       {mode === "company" && onOpenRule && (
                         <td style={{ padding: 6 }}>
-                          <button type="button" className="action-btn" style={{ padding: "2px 6px" }} onClick={() => onOpenRule(r)}>تعديل</button>
+                          <button
+                            type="button"
+                            className="action-btn icon-only"
+                            onClick={() => onOpenRule(r)}
+                            title="تعديل"
+                            aria-label="تعديل"
+                            style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}
+                          >
+                            <Pencil size={14} strokeWidth={2} />
+                          </button>
                         </td>
                       )}
                     </tr>
