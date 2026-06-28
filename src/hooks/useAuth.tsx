@@ -284,7 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPasswordDone: () => {
       setNeedsPassword(false);
       setBlocked(null);
-      if (session?.user?.id) loadProfile(session.user.id);
+      if (session?.user?.id) safeLoadProfile(session.user.id, loadProfile);
     },
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
