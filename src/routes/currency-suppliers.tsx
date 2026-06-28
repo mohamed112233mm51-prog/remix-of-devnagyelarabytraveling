@@ -148,7 +148,25 @@ function CurrencySuppliersPage() {
                             type="button"
                             className="action-btn icon-only"
                             onClick={async () => {
-                              const ok = await confirmDialog(`حذف المورد "${s.name}"؟ سيتم حذف جميع البيانات المرتبطة (حركات مالية، أسعار، عمليات) ولا يمكن التراجع.`, { confirmLabel: "حذف", cancelLabel: "إلغاء" });
+                              // Check for linked records before deletion
+                              const { count } = await supabase
+                                .from("currency_supplier_transactions" as any)
+                                .select("id", { count: "exact", head: true })
+                                .eq("supplier_id", s.id);
+                              const linked = (count || 0) > 0;
+                              if (linked) {
+                                const ok = await confirmDialog(
+                                  `هذا المورد "${s.name}" لديه بيانات مرتبطة. يفضل تعطيله بدلاً من حذفه للحفاظ على البيانات التاريخية.`,
+                                  { confirmLabel: "تعطيل المورد", cancelLabel: "إلغاء" },
+                                );
+                                if (!ok) return;
+                                const { error } = await supabase.from("currency_suppliers" as any).update({ status: "غير نشط" }).eq("id", s.id);
+                                if (error) return toast.error(error.message);
+                                toast.success("تم تعطيل المورد");
+                                refresh();
+                                return;
+                              }
+                              const ok = await confirmDialog(`حذف المورد "${s.name}"؟ لا توجد بيانات مرتبطة. لا يمكن التراجع.`, { confirmLabel: "حذف", cancelLabel: "إلغاء" });
                               if (!ok) return;
                               const { error } = await supabase.from("currency_suppliers" as any).delete().eq("id", s.id);
                               if (error) return toast.error(error.message);
