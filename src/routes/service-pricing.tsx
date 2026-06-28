@@ -25,6 +25,11 @@ function ServicePricingPage() {
 
   const initial: Tab | null = canManage ? "manage" : canSearch ? "lookup" : null;
   const [tab, setTab] = useState<Tab | null>(initial);
+  const hash = useRouterState({ select: (s) => s.location.hash });
+  useEffect(() => {
+    if (hash === "lookup" && canSearch) setTab("lookup");
+    else if (hash === "manage" && canManage) setTab("manage");
+  }, [hash, canManage, canSearch]);
 
   if (!canManage && !canSearch) {
     return (
