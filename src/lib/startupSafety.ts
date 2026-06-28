@@ -100,10 +100,11 @@ function handleChunkError(message: string) {
     sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));
   } catch {}
   try {
-    if ("caches" in window) {
-      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => window.location.reload());
+    const w = window as Window;
+    if (typeof caches !== "undefined") {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => w.location.reload());
     } else {
-      window.location.reload();
+      w.location.reload();
     }
   } catch { window.location.reload(); }
 }
