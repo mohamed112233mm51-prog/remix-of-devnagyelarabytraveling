@@ -217,7 +217,7 @@ export function PriceLookup(props: {
             <label>الشركة *</label>
             <select
               value={companyId}
-              onChange={(e) => { setCompanyId(e.target.value); setFilters(emptyFilters()); }}
+              onChange={(e) => setCompanyId(e.target.value)}
             >
               <option value="">—</option>
               {allCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
