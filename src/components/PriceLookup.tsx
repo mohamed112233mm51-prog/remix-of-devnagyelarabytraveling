@@ -155,15 +155,13 @@ export function PriceLookup(props: {
         {!fixedCompanyId && mode === "agent" && (
           <div className="form-group" style={{ marginBottom: 8 }}>
             <label>الشركة *</label>
-            <SearchableSelect
+            <select
               value={companyId}
-              onChange={(v) => { setCompanyId(v); setFilters(emptyFilters()); }}
-              options={allCompanies.map((c) => c.company_name)}
-              onSelect={(v) => {
-                const c = allCompanies.find((x) => x.company_name === v);
-                if (c) setCompanyId(c.id);
-              }}
-            />
+              onChange={(e) => { setCompanyId(e.target.value); setFilters(emptyFilters()); }}
+            >
+              <option value="">—</option>
+              {allCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+            </select>
           </div>
         )}
 
