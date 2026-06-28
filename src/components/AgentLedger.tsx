@@ -314,6 +314,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
             </div>
           </div>
         </div>
+        </>
       )}
 
       {editOpen && agent && <EditAgentModal agent={agent} onClose={() => setEditOpen(false)} />}
