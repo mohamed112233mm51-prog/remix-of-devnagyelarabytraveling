@@ -614,6 +614,8 @@ function ExecutionForm({
         services,
       });
       toast.success(form.operation_status === "منفذ" ? "تم التنفيذ واعتماد الحركات المالية" : "تم الحفظ");
+      clearForm();
+      clearServices();
       onDone();
     } catch (e: any) {
       toast.error(e?.message || "حدث خطأ أثناء الحفظ");
