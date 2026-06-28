@@ -139,13 +139,17 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("executions")
-        .select("id, created_at")
+        .select("id, created_at, operation_status")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as { id: string; created_at: string | null }[];
+      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null }[];
     },
   });
   const executionMetrics = executionMetricsQuery.data ?? [];
+  const executedRows = useMemo(
+    () => executionMetrics.filter((e) => (e.operation_status || "").trim() === "منفذ"),
+    [executionMetrics],
+  );
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
   const { rows: currencyTxns } = useLive<{ id: string; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
@@ -356,17 +360,17 @@ function Dashboard() {
     const end = new Date(start); end.setDate(end.getDate() + 1);
     const s = start.getTime(), e = end.getTime();
     const inToday = (d?: string | null) => { if (!d) return false; const t = new Date(d).getTime(); return t >= s && t < e; };
-    let collected = 0, value = 0, fc = 0, ac = 0;
+    let collected = 0, value = 0, execCount = 0, subCount = 0;
     for (const t of txns) {
       if (!inToday(t.created_at)) continue;
       collected += Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
       value += tripValue(t);
     }
-    for (const f of flights) if (inToday(f.created_at)) fc += 1;
-    for (const a of approvals) if (inToday(a.created_at)) ac += 1;
-    return { todayCollected: collected, todayValue: value, todayFlights: fc, todayApprovals: ac, now };
-  }, [txns, flights, approvals]);
-  const { todayCollected, todayValue, todayFlights, todayApprovals, now: today } = todayStats;
+    for (const x of executedRows) if (inToday(x.created_at)) execCount += 1;
+    for (const x of submissions) if (inToday(x.created_at)) subCount += 1;
+    return { todayCollected: collected, todayValue: value, todayExecutions: execCount, todaySubmissions: subCount, now };
+  }, [txns, executedRows, submissions]);
+  const { todayCollected, todayValue, todayExecutions, todaySubmissions, now: today } = todayStats;
 
   // ===== Period-aware chart — single pass binning =====
   const chart = useMemo(() => {
@@ -610,7 +614,7 @@ function Dashboard() {
       <div className="erp-section-title">المؤشرات الرئيسية</div>
       <div className="erp-hero-grid">
         <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
-        <HeroKpi label="عدد التنفيذات" value={executionMetrics.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
+        <HeroKpi label="عدد التنفيذات" value={executedRows.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
         <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
@@ -646,8 +650,8 @@ function Dashboard() {
             <span className="erp-chip">{today.toLocaleDateString("ar-EG")}</span>
           </div>
           <div className="erp-today-grid">
-            <TodayStat label="رحلات اليوم" value={fmtNum(todayFlights)} />
-            <TodayStat label="موافقات اليوم" value={fmtNum(todayApprovals)} />
+            <TodayStat label="تنفيذات اليوم" value={fmtNum(todayExecutions)} />
+            <TodayStat label="تقديمات اليوم" value={fmtNum(todaySubmissions)} />
             <TodayStat label="قيمة معاملات اليوم" value={fmtDL(todayValue)} />
             <TodayStat label="تحصيلات اليوم" value={fmtDL(todayCollected)} tone="green" />
           </div>
@@ -789,11 +793,10 @@ function Dashboard() {
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة الرحلات" value={fmtDL(agentsFlightsValue)} />
-          <Stat label="قيمة الموافقات" value={fmtDL(agentsApprovalsValue)} />
+          <Stat label="قيمة التنفيذات" value={fmtDL(agentsTripValue)} />
           <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
-          <Stat label="عدد الرحلات" value={fmtNum(flights.length)} />
-          <Stat label="تقديمات الموافقات" value={fmtNum(approvals.length)} />
+          <Stat label="عدد التنفيذات" value={fmtNum(executedRows.length)} />
+          <Stat label="عدد التقديمات" value={fmtNum(submissions.length)} />
         </SectionCard>
 
         <SectionCard title="الشركات الصادرة" icon={<Building2 size={16} />} accent="navy">
