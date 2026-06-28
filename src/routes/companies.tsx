@@ -499,6 +499,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     company_name: company.company_name || "",
     phone: company.phone || "",
     whatsapp: company.whatsapp || "",
+    status: company.status || "نشط",
     opening_debit: c.opening_debit ? String(c.opening_debit) : "",
     opening_credit: c.opening_credit ? String(c.opening_credit) : "",
     opening_date: c.opening_date || "",
