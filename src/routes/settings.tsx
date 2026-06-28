@@ -1388,6 +1388,7 @@ async function countDropdownUsage(category: DropdownCategory, value: string): Pr
     execution_status:  [{ table: "executions", column: "status" }],
     service_kind:      [{ table: "submissions", column: "services", op: "cs" }],
     submission_notes:  [{ table: "submissions", column: "notes", op: "ilike" }],
+    agent_tier:        [{ table: "agents", column: "agent_tier" }, { table: "company_pricing_rules", column: "agent_tier" }],
   };
   const refs = map[category] || [];
   let total = 0;
