@@ -152,7 +152,29 @@ function Dashboard() {
   );
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: currencyTxns } = useLive<{ id: string; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
+  const { rows: currencyTxns } = useLive<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any }>("currency_supplier_transactions");
+  const { rows: currencySuppliers } = useLive<{ id: string; status: string | null }>("currency_suppliers");
+
+  const currencySupplierStats = useMemo(() => {
+    const activeIds = new Set(
+      currencySuppliers.filter((s) => (s.status || "نشط") === "نشط").map((s) => s.id),
+    );
+    let purchases = 0;
+    let payments = 0;
+    for (const t of currencyTxns) {
+      if (!t.supplier_id || !activeIds.has(t.supplier_id)) continue;
+      if ((t.tx_type || "") !== "شراء عملة") continue;
+      purchases += Number(t.sold_amount || 0);
+      const splits = Array.isArray(t.payment_splits) ? t.payment_splits : [];
+      for (const s of splits) payments += Number((s && s.amount) || 0);
+    }
+    return {
+      count: activeIds.size,
+      purchases,
+      payments,
+      due: purchases - payments,
+    };
+  }, [currencyTxns, currencySuppliers]);
 
   // Heavy analytics use deferred period so KPI clicks feel instant
   const deferredPeriod = useDeferredValue(period);
