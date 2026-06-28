@@ -209,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         { event: "*", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
         () => {
-          loadProfile(uid);
+          safeLoadProfile(uid, loadProfile);
         },
       )
       .subscribe();
