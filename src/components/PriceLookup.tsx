@@ -4,6 +4,7 @@ import { useLive, type IssuingCompany } from "@/lib/db";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, X, Pencil } from "lucide-react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Mode = "company" | "agent";
 
