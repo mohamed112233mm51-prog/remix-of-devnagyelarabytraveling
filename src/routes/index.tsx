@@ -108,14 +108,15 @@ function pctDelta(curr: number, prev: number) {
 }
 
 function Dashboard() {
-  const { user, roles, permissions, isSuperAdmin } = useAuth();
-  // Profit permissions are independent — admin role alone is NOT enough; only owner/super-admin or the exact DB boolean key.
-  const canViewNetProfit = isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
-  const canViewProfitSummary = isSuperAdmin || hasPermission(permissions, PROFIT_SUMMARY_PERMISSION_KEY);
+  const { user, roles, permissions, isAdmin, isSuperAdmin } = useAuth();
+  // Profit permissions are independent for manager/user; admin and super_admin always see both profit cards.
+  const canViewNetProfit = isAdmin || isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
+  const canViewProfitSummary = isAdmin || isSuperAdmin || hasPermission(permissions, PROFIT_SUMMARY_PERMISSION_KEY);
   const netProfitFn = useServerFn(getDashboardNetProfitData);
   const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
+    admin: isAdmin,
     owner: isSuperAdmin,
     net: permissions?.[NET_PROFIT_PERMISSION_KEY] ?? null,
     summary: permissions?.[PROFIT_SUMMARY_PERMISSION_KEY] ?? null,
@@ -170,12 +171,13 @@ function Dashboard() {
     console.debug("[dashboard:profit-permissions]", {
       userId: user?.id ?? null,
       role: roles,
+        isAdmin,
       isSystemOwner: isSuperAdmin,
       permissions,
-      net_profit_view: hasPermission(permissions, NET_PROFIT_PERMISSION_KEY),
-      profit_summary_view: hasPermission(permissions, PROFIT_SUMMARY_PERMISSION_KEY),
+        net_profit_view: canViewNetProfit,
+        profit_summary_view: canViewProfitSummary,
     });
-  }, [user?.id, roles, isSuperAdmin, permissions]);
+  }, [user?.id, roles, isAdmin, isSuperAdmin, permissions, canViewNetProfit, canViewProfitSummary]);
 
   const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
   const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;

@@ -64,7 +64,7 @@ export function checkPerm(
 ): boolean {
   if (!section) return true;
   if ((section === NET_PROFIT_PERMISSION_KEY || section === PROFIT_SUMMARY_PERMISSION_KEY) && action === "view") {
-    return hasPermission(normalizePermissionsForLoad(perms ?? {}), section);
+    return hasProfitViewPermission(normalizePermissionsForLoad(perms ?? {}), isAdmin, section);
   }
   if (isAdmin) return true;
   const v = perms?.[section];
@@ -83,8 +83,8 @@ export function checkPerm(
 
 /**
  * Strict section check used for sensitive in-page permissions.
- * Unlike `checkPerm`, this never treats the `admin` role as a bypass; callers
- * must pass an explicit owner/super-admin flag separately.
+ * Strict section check used for sensitive in-page permissions. For profit
+ * permissions, `isSuperAdmin` may also be an admin-or-owner bypass flag.
  */
 export function checkOwnerOrExplicitPerm(
   perms: Record<string, any> | undefined | null,

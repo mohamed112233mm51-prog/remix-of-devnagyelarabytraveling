@@ -488,8 +488,8 @@ function ExecutionForm({
   passengerTypes: readonly string[];
   onDone: () => void;
 }) {
-  const { permissions, isSuperAdmin } = useAuth();
-  const canViewNetProfit = isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
+  const { permissions, isAdmin, isSuperAdmin } = useAuth();
+  const canViewNetProfit = isAdmin || isSuperAdmin || hasPermission(permissions, NET_PROFIT_PERMISSION_KEY);
   const [form, setForm] = useState({
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
