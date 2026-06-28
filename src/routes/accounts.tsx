@@ -35,6 +35,7 @@ function AccountsPage() {
   const [search, setSearch] = useState("");
   const [statementAgentId, setStatementAgentId] = useState<string>("");
   const [editAgent, setEditAgent] = useState<Agent | null>(null);
+  const [viewAgent, setViewAgent] = useState<Agent | null>(null);
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
