@@ -5,7 +5,8 @@ import { NumberInput } from "@/components/inputs/NumberInput";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
-import { usePerm } from "@/hooks/usePerm";
+import { checkPerm } from "@/hooks/usePerm";
+import { useAuth } from "@/hooks/useAuth";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
 import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
@@ -36,7 +37,17 @@ function computeAgentPrice(r: Pick<Row, "company_price" | "commission_type" | "c
 }
 
 export function CompanyPricingTab({ companyId }: { companyId: string }) {
-  const perm = usePerm("pricing");
+  const { permissions, isAdmin } = useAuth();
+  const canManage = checkPerm(permissions, isAdmin, "service_pricing_manage", "view");
+  const canSearch = checkPerm(permissions, isAdmin, "service_price_search", "view");
+  const perm = {
+    view: canManage || canSearch,
+    create: canManage,
+    edit: canManage,
+    delete: canManage,
+    export: canManage,
+    search: canSearch,
+  };
   const services = useDropdownOptions("service_type");
   const tiers = useDropdownOptions("agent_tier" as any);
   const departures = useDropdownOptions("departure_from" as any);
@@ -182,15 +193,17 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           <Wallet size={16} strokeWidth={2.2} /> ملف التسعير
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button
-            type="button"
-            className={`btn btn-outline${showLookup ? " active" : ""}`}
-            onClick={() => setShowLookup((prev) => !prev)}
-            title="بحث داخل ملف التسعير"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-          >
-            <Search size={14} strokeWidth={2} /> بحث سعر خدمة
-          </button>
+          {perm.search && (
+            <button
+              type="button"
+              className={`btn btn-outline${showLookup ? " active" : ""}`}
+              onClick={() => setShowLookup((prev) => !prev)}
+              title="بحث داخل ملف التسعير"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Search size={14} strokeWidth={2} /> بحث سعر خدمة
+            </button>
+          )}
           {perm.create && (
             <button
               type="button"

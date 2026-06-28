@@ -9,7 +9,8 @@ import {
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
-import { usePerm } from "@/hooks/usePerm";
+import { usePerm, checkPerm } from "@/hooks/usePerm";
+import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -498,6 +499,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
 function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClose: () => void }) {
   const c = company as any;
+  const { permissions, isAdmin } = useAuth();
+  const canManagePricing = checkPerm(permissions, isAdmin, "service_pricing_manage", "view");
+  const canSearchPricing = checkPerm(permissions, isAdmin, "service_price_search", "view");
+  const canSeePricing = canManagePricing || canSearchPricing;
   const [activeTab, setActiveTab] = useState<"info" | "pricing">("info");
   const [form, setForm] = useState({
     company_name: company.company_name || "",
@@ -549,7 +554,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
             aria-label="أقسام بيانات الشركة"
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: canSeePricing ? "1fr 1fr" : "1fr",
               gap: 4,
               padding: 4,
               background: "var(--card)",
@@ -560,7 +565,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           >
             {([
               { key: "info", label: "البيانات", Icon: Building2 },
-              { key: "pricing", label: "ملف التسعير", Icon: BadgeDollarSign },
+              ...(canSeePricing ? [{ key: "pricing" as const, label: "ملف التسعير", Icon: BadgeDollarSign }] : []),
             ] as const).map(({ key, label, Icon }) => {
               const active = activeTab === key;
               return (
@@ -635,7 +640,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
         </div>
         </div>)}
 
-        {activeTab === "pricing" && <div key="tab-pricing"><CompanyPricingTab companyId={company.id} /></div>}
+        {canSeePricing && activeTab === "pricing" && <div key="tab-pricing"><CompanyPricingTab companyId={company.id} /></div>}
       </div>
     </div>,
     document.body,
