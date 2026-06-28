@@ -373,7 +373,8 @@ function SubmissionForm({
   onDone: () => void;
 }) {
   const initialServices = Array.isArray(editing?.services) ? editing.services.filter((s): s is string => typeof s === "string") : [];
-  const [form, setForm] = useState({
+  const draftKey = `draft:submission:${editing?.id || "new"}`;
+  const [form, setForm, clearForm] = usePersistentState(`${draftKey}:form`, {
     service_type: initialServices[0] || "",
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
