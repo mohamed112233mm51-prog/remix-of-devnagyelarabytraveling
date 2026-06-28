@@ -853,7 +853,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       <div className="card-header"><div className="card-title">💳 صرف حركة مالية للشركة</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الشركة الصادرة *</label>
-          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={companies.map((c) => ({ value: c.id, label: c.company_name }))} placeholder="اختر..." />
+          <SearchableSelect value={form.company_id} onChange={(v) => set("company_id", v)} options={activeOptions(companies, form.company_id, (c) => c.company_name)} placeholder="اختر..." />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
