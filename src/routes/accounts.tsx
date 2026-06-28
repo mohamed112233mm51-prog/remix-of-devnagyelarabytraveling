@@ -362,7 +362,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   const tierOptions = useDropdownOptions("agent_tier" as any);
   const [form, setForm, clearForm] = usePersistentState(
     "form:agent:add",
-    { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" },
+    { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A", status: "نشط" },
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:agent:add:opening",
