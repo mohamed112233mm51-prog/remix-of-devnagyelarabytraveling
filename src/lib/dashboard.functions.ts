@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
+import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
 type Period = "today" | "week" | "month" | "year" | "all";
 
@@ -34,11 +34,11 @@ async function getProfitAuthorization(userId: string) {
   const profile = profileResult.data;
   const permissions = normalizePermissionsForLoad(((profile as any)?.permissions ?? {}) as Record<string, any>);
   const isSuperAdmin = !!(profile as any)?.is_super_admin;
-  const isAdminOrSuperAdmin = isSuperAdmin || !!roleResult.data;
+  const roles = roleResult.data ? ["admin"] : [];
   return {
     sb,
-    canNetProfit: hasProfitViewPermission(permissions, isAdminOrSuperAdmin, NET_PROFIT_PERMISSION_KEY),
-    canProfitSummary: hasProfitViewPermission(permissions, isAdminOrSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
+    canNetProfit: canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY),
+    canProfitSummary: canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY),
   };
 }
 

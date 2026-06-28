@@ -1,18 +1,13 @@
 export const NET_PROFIT_PERMISSION_KEY = "net_profit_view" as const;
 export const PROFIT_SUMMARY_PERMISSION_KEY = "profit_summary_view" as const;
 
-const LEGACY_NET_PROFIT_PERMISSION_KEY = "net_profit" as const;
-const LEGACY_PROFIT_SUMMARY_PERMISSION_KEY = "profit_summary" as const;
+const LEGACY_NET_PROFIT_PERMISSION_KEY = "net_profit";
+const LEGACY_PROFIT_SUMMARY_PERMISSION_KEY = "profit_summary";
 
 export const PROFIT_PERMISSION_KEYS = [
   NET_PROFIT_PERMISSION_KEY,
   PROFIT_SUMMARY_PERMISSION_KEY,
 ] as const;
-
-const LEGACY_PROFIT_PERMISSION_KEYS: Record<typeof PROFIT_PERMISSION_KEYS[number], string> = {
-  [NET_PROFIT_PERMISSION_KEY]: LEGACY_NET_PROFIT_PERMISSION_KEY,
-  [PROFIT_SUMMARY_PERMISSION_KEY]: LEGACY_PROFIT_SUMMARY_PERMISSION_KEY,
-};
 
 export type PermissionAction = "view" | "create" | "edit" | "delete" | "export";
 
@@ -35,14 +30,6 @@ export function normalizePermissionBranch(value: unknown): Record<PermissionActi
   return { view: false, create: false, edit: false, delete: false, export: false };
 }
 
-function permissionValueToViewBoolean(value: unknown): boolean {
-  if (value === true) return true;
-  if (value && typeof value === "object") {
-    return normalizePermissionBranch(value).view === true;
-  }
-  return false;
-}
-
 export function isProfitPermissionKey(key: string | null | undefined): key is typeof PROFIT_PERMISSION_KEYS[number] {
   return key === NET_PROFIT_PERMISSION_KEY || key === PROFIT_SUMMARY_PERMISSION_KEY;
 }
@@ -51,20 +38,28 @@ export function hasPermission(
   permissions: Record<string, any> | null | undefined,
   key: string | null | undefined,
 ): boolean {
-  if (!key) return true;
+  if (!key) return false;
+  return permissions?.[key] === true;
+}
+
+export function hasExplicitPermission(
+  permissions: Record<string, any> | null | undefined,
+  key: string | null | undefined,
+): boolean {
+  if (!key) return false;
   return permissions?.[key] === true;
 }
 
 export function normalizePermissionsForLoad<T extends Record<string, any>>(permissions: T | null | undefined): Record<string, any> {
   const out = { ...(permissions ?? {}) };
+  // Profit permissions are intentionally strict: only the new keys with a
+  // literal boolean true grant access. Missing keys, legacy keys, objects like
+  // { view: true }, undefined, null, or any non-true value are denied.
   for (const key of PROFIT_PERMISSION_KEYS) {
-    const legacyKey = LEGACY_PROFIT_PERMISSION_KEYS[key];
-    const hasNewKey = Object.prototype.hasOwnProperty.call(out, key);
-    out[key] = hasNewKey
-      ? permissionValueToViewBoolean(out[key])
-      : permissionValueToViewBoolean(out[legacyKey]);
-    delete out[legacyKey];
+    out[key] = out[key] === true;
   }
+  delete out[LEGACY_NET_PROFIT_PERMISSION_KEY];
+  delete out[LEGACY_PROFIT_SUMMARY_PERMISSION_KEY];
   return out;
 }
 
@@ -76,5 +71,15 @@ export function hasProfitViewPermission(
   key: typeof PROFIT_PERMISSION_KEYS[number],
 ) {
   if (isAdminOrSuperAdmin) return true;
-  return hasPermission(permissions, key);
+  return hasExplicitPermission(permissions, key);
+}
+
+export function canViewProfitPermission(
+  permissions: Record<string, any> | null | undefined,
+  subject: { roles?: readonly string[]; isAdmin?: boolean; isSuperAdmin?: boolean },
+  key: typeof PROFIT_PERMISSION_KEYS[number],
+) {
+  const isAdminRole = subject.isAdmin === true || subject.roles?.includes("admin") === true;
+  if (subject.isSuperAdmin === true || isAdminRole) return true;
+  return hasExplicitPermission(permissions, key);
 }
