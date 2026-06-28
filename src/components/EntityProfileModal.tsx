@@ -41,6 +41,8 @@ export function EntityProfileModal({
       open={open}
       onClose={onClose}
       maxWidth={720}
+      closeOnBackdrop
+      hideCloseButton
       title={
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ color: "var(--text2)", fontWeight: 600 }}>{titlePrefix}:</span>

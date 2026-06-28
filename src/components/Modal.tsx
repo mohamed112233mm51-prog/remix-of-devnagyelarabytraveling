@@ -16,7 +16,8 @@ export function Modal({
   children,
   footer,
   maxWidth = 640,
-  closeOnBackdrop: _closeOnBackdrop = false,
+  closeOnBackdrop = false,
+  hideCloseButton = false,
   zIndex,
   overlayClassName,
 }: {
@@ -26,8 +27,10 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   maxWidth?: number;
-  /** @deprecated Backdrop click never closes the modal — close only via the × button. */
+  /** When true, clicking the backdrop closes the modal. Default false. */
   closeOnBackdrop?: boolean;
+  /** When true, hides the × close button in the header. Default false. */
+  hideCloseButton?: boolean;
   zIndex?: number;
   overlayClassName?: string;
 }) {
@@ -51,14 +54,19 @@ export function Modal({
       className={`modal-overlay open${overlayClassName ? ` ${overlayClassName}` : ""}`}
       style={zIndex ? { zIndex } : undefined}
       onClick={(e) => {
-        // Backdrop click never closes — close only via the × button.
+        if (closeOnBackdrop && e.target === e.currentTarget) {
+          onClose();
+          return;
+        }
         e.stopPropagation();
       }}
     >
-      <div className="modal-box" style={{ maxWidth }}>
+      <div className="modal-box" style={{ maxWidth }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">{title}</div>
-          <button className="modal-close" onClick={onClose} aria-label="إغلاق" title="إغلاق">×</button>
+          {!hideCloseButton && (
+            <button className="modal-close" onClick={onClose} aria-label="إغلاق" title="إغلاق">×</button>
+          )}
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
