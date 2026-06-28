@@ -3,32 +3,39 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // Tables to include in every backup (full app state).
-// Order matters for restore: parents-first ish; but since we wipe & insert per table
-// without FK constraints, order is informational only.
+// Order is PARENT -> CHILD (FK-safe for inserts).
+// Restore wipes in reverse (child -> parent) then inserts in this order.
 export const BACKUP_TABLES = [
-  "agents",
-  "company_pricing_rules",
+  // Independent / reference
+  "profiles",
+  "user_roles",
+  "app_settings",
+  "system_dropdown_options",
+  // Master entities (no FKs to operational tables)
   "issuing_companies",
+  "agents",
   "merchants",
   "investors",
   "currency_suppliers",
-  "currency_supplier_transactions",
-  "usd_treasury_transactions",
   "cash_boxes",
-  "payment_splits",
+  // Depends on issuing_companies/agents
+  "company_pricing_rules",
+  "expenses",
+  // Workflow
   "submissions",
   "executions",
+  // Financial movements
   "transactions",
   "company_transactions",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
   "merchant_cash_collections",
   "investor_transactions",
-  "expenses",
   "expense_deductions",
+  // Depends on transactions/cash_boxes
+  "payment_splits",
+  // Logs / misc
   "import_batches",
-  "system_dropdown_options",
-  "app_settings",
-  "profiles",
-  "user_roles",
   "activity_logs",
 ] as const;
 
