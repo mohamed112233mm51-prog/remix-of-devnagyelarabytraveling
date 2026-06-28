@@ -54,6 +54,12 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   const [filteredRules, setFilteredRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
+  // Buffer that persists the in-progress "add new" draft across modal close/reopen.
+  // Only used for new (no id) drafts. Cleared on successful save or explicit reset.
+  const [addBuffer, setAddBuffer, clearAddBuffer] = usePersistentState<Row | null>(
+    `form:pricing:add:${companyId}`,
+    null,
+  );
   const [showImport, setShowImport] = useState(false);
   const [showLookup, setShowLookup] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
