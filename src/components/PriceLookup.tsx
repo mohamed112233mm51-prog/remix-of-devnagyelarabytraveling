@@ -54,7 +54,12 @@ export function PriceLookup(props: {
   const { rows: allCompanies } = useLive<IssuingCompany>("issuing_companies");
 
   // ----- Source rules -----
-  const [companyId, setCompanyId] = useState<string>(fixedCompanyId || "");
+  // Persist the agent-mode company pick so reopening the lookup restores the
+  // previous selection (and therefore the previous filters under that key).
+  const [companyId, setCompanyId, clearStoredCompanyId] = usePersistentState<string>(
+    `pricelookup:${mode}:companyId`,
+    fixedCompanyId || "",
+  );
   const [internalRules, setInternalRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
 
