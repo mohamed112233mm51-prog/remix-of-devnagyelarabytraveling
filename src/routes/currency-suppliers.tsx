@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 // useLive does not yet support this table; we fetch directly.
 import { toast } from "sonner";
+import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -125,7 +126,8 @@ function CurrencySuppliersPage() {
                       {perm.edit && <button className="action-btn" onClick={() => setEditRow(s)}>✏️ تعديل</button>}
                       {perm.delete && (
                         <button className="action-btn" onClick={async () => {
-                          if (!confirm(`حذف المورد "${s.name}"؟ سيتم حذف جميع حركاته.`)) return;
+                          const ok = await confirmDialog(`حذف المورد "${s.name}"؟ سيتم حذف جميع البيانات المرتبطة (حركات مالية، أسعار، عمليات) ولا يمكن التراجع.`, { confirmLabel: "حذف", cancelLabel: "إلغاء" });
+                          if (!ok) return;
                           const { error } = await supabase.from("currency_suppliers" as any).delete().eq("id", s.id);
                           if (error) return toast.error(error.message);
                           toast.success("تم الحذف");
