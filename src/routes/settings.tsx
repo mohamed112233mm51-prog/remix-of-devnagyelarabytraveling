@@ -1345,6 +1345,7 @@ function GeneralTab() {
           <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
           <DropdownListManager category="operation_status" title="حالة العملية" icon={<ListChecks size={16} />} />
           <DropdownListManager category="passenger_type" title="نوع المسافر" icon={<Inbox size={16} />} />
+          <DropdownListManager category="agent_tier" title="شرائح الوكلاء" icon={<ListChecks size={16} />} />
         </div>
       </div>
 
@@ -1387,6 +1388,7 @@ async function countDropdownUsage(category: DropdownCategory, value: string): Pr
     execution_status:  [{ table: "executions", column: "status" }],
     service_kind:      [{ table: "submissions", column: "services", op: "cs" }],
     submission_notes:  [{ table: "submissions", column: "notes", op: "ilike" }],
+    agent_tier:        [{ table: "agents", column: "agent_tier" }, { table: "company_pricing_rules", column: "agent_tier" }],
   };
   const refs = map[category] || [];
   let total = 0;
