@@ -6,6 +6,7 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { activeOptions } from "@/lib/activeFilter";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
