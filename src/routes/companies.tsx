@@ -201,6 +201,7 @@ function CompaniesPage() {
                       <td className="num-col">{fmtDL(totalTrips)}</td>
                       <td className="num-col">{fmtDL(totalPaid)}</td>
                       <td className="num-col">{fmtDL(totalDue)}</td>
+                      <td></td>
                     </tr>
 
                   </tfoot>
