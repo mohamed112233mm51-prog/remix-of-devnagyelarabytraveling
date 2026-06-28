@@ -534,8 +534,10 @@ function ExecutionForm({
       }
     }
     if (out.length === 0) {
+      out.push({ kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 });
       out.push({ kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 });
     }
+
     return out;
   })());
   const [saving, setSaving] = useState(false);
