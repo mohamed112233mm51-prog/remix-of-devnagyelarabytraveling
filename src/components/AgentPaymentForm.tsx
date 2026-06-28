@@ -227,6 +227,7 @@ export function AgentPaymentForm({
 
     setSaving(false);
     toast.success("تم تسجيل الدفعة");
+    resetDraft();
     onDone();
   };
 
