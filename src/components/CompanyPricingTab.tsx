@@ -8,7 +8,6 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
-import { Modal } from "@/components/Modal";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
@@ -161,12 +160,26 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div className="card-title">💰 ملف التسعير</div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" className="action-btn" onClick={() => setShowLookup(true)}>🔎 بحث سعر خدمة</button>
+          <button type="button" className="action-btn" onClick={() => setShowLookup((prev) => !prev)}>🔎 بحث سعر خدمة</button>
           {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
           {perm.create && <button type="button" className="btn btn-gold" onClick={startNew}>➕ إضافة سعر</button>}
         </div>
       </div>
       <div className="card-body">
+        {showLookup && (
+          <div style={{ marginBottom: 10, padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)" }}>
+            <PriceLookup
+              mode="company"
+              companyId={companyId}
+              rules={rules}
+              onFilteredChange={setFilteredRules}
+              onActiveChange={setFiltersActive}
+              resetKey={resetKey}
+              bare
+            />
+          </div>
+        )}
+
         {filtersActive && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", marginBottom: 8, background: "color-mix(in srgb, var(--gold, #b8860b) 10%, transparent)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}>
             <span>تم تطبيق فلترة على الأسعار ({filteredRules.length} / {rules.length})</span>
@@ -261,29 +274,6 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
         />
       )}
 
-      <Modal
-        open={showLookup}
-        onClose={() => setShowLookup(false)}
-        title="🔎 بحث سعر خدمة"
-        maxWidth={820}
-        footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "space-between", width: "100%" }}>
-            <button type="button" className="action-btn" onClick={() => setResetKey((k) => k + 1)}>مسح الفلاتر</button>
-            <button type="button" className="btn btn-gold" onClick={() => setShowLookup(false)}>تطبيق وإغلاق</button>
-          </div>
-        }
-      >
-        <PriceLookup
-          mode="company"
-          companyId={companyId}
-          rules={rules}
-          onOpenRule={(r) => { setDraft({ ...r }); setShowLookup(false); }}
-          onFilteredChange={setFilteredRules}
-          onActiveChange={setFiltersActive}
-          resetKey={resetKey}
-          bare
-        />
-      </Modal>
     </div>
   );
 }
