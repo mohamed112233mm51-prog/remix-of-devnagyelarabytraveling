@@ -168,25 +168,12 @@ function SplashScreen(_props: { stage?: string; warning?: string }) {
 }
 
 function AuthGate() {
-  const { session, loading, profileLoaded, needsPassword, blocked, setPasswordDone } = useAuth();
+  const { session, loading, profileLoaded, profileError, needsPassword, blocked, setPasswordDone, refreshProfile } = useAuth();
   const brandingReady = useBrandingReady();
-  const [startupWarning, setStartupWarning] = useState<string | null>(null);
   useGlobalKeyboardNav();
   useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
-  useEffect(() => {
-    if (brandingReady && !loading && (!session || profileLoaded || needsPassword || blocked)) {
-      setStartupWarning(null);
-      return;
-    }
-    const stage = !brandingReady ? "Branding" : loading ? "Auth" : session && !profileLoaded ? "Profile / Permissions" : "Router";
-    const timer = window.setTimeout(() => {
-      console.warn(`[startup] ${stage} exceeded 8000ms`);
-      setStartupWarning(`تأخر تحميل ${stage}. تم فتح التطبيق بالقيم المتاحة بدل استمرار شاشة التحميل.`);
-    }, 8000);
-    return () => window.clearTimeout(timer);
-  }, [brandingReady, loading, session, profileLoaded, needsPassword, blocked]);
 
   // Public route: invite acceptance must work without admin login
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
@@ -207,22 +194,30 @@ function AuthGate() {
     return <Outlet />;
   }
 
-  if (!brandingReady && !startupWarning) return <SplashScreen stage="Branding" />;
-  if (loading && !startupWarning) return <SplashScreen stage="Auth" />;
+  if (!brandingReady) return <SplashScreen stage="Branding" />;
+  if (loading) return <SplashScreen stage="Auth" />;
   if (!session) return <Login />;
   if (needsPassword) return <SetPassword onDone={setPasswordDone} />;
   if (blocked) return <Login />;
-  if (!profileLoaded && !startupWarning) return <SplashScreen stage="Profile / Permissions" />;
-  return (<>{startupWarning && <StartupWarningBanner message={startupWarning} />}<RouteGuard><Layout /></RouteGuard></>);
+  if (profileError && !profileLoaded) return <ProfileErrorScreen message={profileError} onRetry={refreshProfile} />;
+  if (!profileLoaded) return <SplashScreen stage="Profile / Permissions" />;
+  return (<RouteGuard><Layout /></RouteGuard>);
 }
 
-function StartupWarningBanner({ message }: { message: string }) {
+function ProfileErrorScreen({ message, onRetry }: { message: string; onRetry: () => void | Promise<void> }) {
   return (
-    <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10000, padding: "8px 14px", borderRadius: 10, background: "#fffbeb", border: "1px solid #f59e0b", color: "#78350f", fontSize: 12, fontWeight: 800, boxShadow: "0 8px 24px rgba(0,0,0,.12)", direction: "rtl" }}>
-      {message}
+    <div dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "var(--surface, #f5f7fb)" }}>
+      <div style={{ background: "#fff", padding: 28, borderRadius: 14, maxWidth: 460, width: "100%", textAlign: "center", border: "1px solid var(--border, #e5e7eb)", boxShadow: "0 8px 30px rgba(0,0,0,.06)" }}>
+        <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: "#0f172a" }}>تعذر تحميل بياناتك</h2>
+        <p style={{ margin: "0 0 16px", color: "#6b7280", fontSize: 13, lineHeight: 1.7 }}>{message}</p>
+        <button onClick={() => onRetry()} style={{ padding: "10px 18px", borderRadius: 10, background: "var(--primary, #0F1B3D)", color: "#fff", border: 0, fontWeight: 700, cursor: "pointer", fontSize: 13 }} type="button">
+          إعادة المحاولة
+        </button>
+      </div>
     </div>
   );
 }
+
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
