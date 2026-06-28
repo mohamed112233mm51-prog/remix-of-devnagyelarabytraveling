@@ -11,6 +11,7 @@ type AuthCtx = {
   user: User | null;
   loading: boolean;
   profileLoaded: boolean;
+  profileError: string | null;
   roles: Role[];
   isAdmin: boolean;
   isSuperAdmin: boolean;
