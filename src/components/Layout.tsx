@@ -20,7 +20,6 @@ import {
   Upload,
   Coins,
   Tag,
-  Search as SearchIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
@@ -30,7 +29,7 @@ import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { isDevEnv } from "@/lib/env";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
-type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null; hash?: string };
+type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null; hash?: string; anyPerm?: string[] };
 
 const NAV: { label: string; items: Item[] }[] = [
   {
@@ -63,8 +62,7 @@ const NAV: { label: string; items: Item[] }[] = [
   {
     label: "أسعار الخدمات",
     items: [
-      { to: "/service-pricing", hash: "manage", icon: Tag, label: "تسعير خدمة", section: "أسعار الخدمات", permKey: "service_pricing_manage" },
-      { to: "/service-pricing", hash: "lookup", icon: SearchIcon, label: "بحث سعر خدمة", section: "أسعار الخدمات", permKey: "service_price_search" },
+      { to: "/service-pricing", icon: Tag, label: "أسعار الخدمات", section: "أسعار الخدمات", permKey: null, anyPerm: ["service_pricing_manage", "service_price_search"] },
     ],
   },
   {
@@ -104,6 +102,9 @@ export default function Layout() {
   const allowed = (it: Item) => {
     if (it.permKey === "__settings__") return checkSettingsPerm(permissions, isSuperAdmin, "view");
     if (it.adminOnly) return isAdmin;
+    if (it.anyPerm && it.anyPerm.length > 0) {
+      return it.anyPerm.some((k) => checkPerm(permissions, isAdmin, k, "view"));
+    }
     return checkPerm(permissions, isAdmin, it.permKey ?? null, "view");
   };
 
