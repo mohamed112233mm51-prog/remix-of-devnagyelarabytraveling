@@ -172,17 +172,20 @@ function UsersTab() {
   const activeFn = useServerFn(setUserActive);
   const resendFn = useServerFn(resendInvite);
   const resetFn = useServerFn(sendPasswordReset);
+  const updateFn = useServerFn(updateUserProfile);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: () => fn() });
   const [confirmAction, setConfirmAction] = useState<null | {
     title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => Promise<void> | void;
   }>(null);
+  const [viewUser, setViewUser] = useState<any | null>(null);
 
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive" | "pending">("");
 
   if (isLoading) return <div className="card" style={{ padding: 24 }}>جارٍ التحميل...</div>;
+
 
   const allUsers = (data?.users ?? []) as any[];
   const allRoles = Array.from(new Set(allUsers.flatMap((u) => u.roles || []))).filter(Boolean);
@@ -260,7 +263,7 @@ function UsersTab() {
             {filteredUsers.map((u: any) => {
               const pending = !u.last_sign_in_at;
               return (
-                <tr key={u.id}>
+                <tr key={u.id} onClick={() => setViewUser(u)} style={{ cursor: "pointer" }}>
                   <td style={{ ...td, fontWeight: 600, color: "#0F172A" }}>{u.full_name}</td>
                   <td style={{ ...td, color: "#475569" }}>{u.email}</td>
                   <td style={td}>
@@ -275,16 +278,16 @@ function UsersTab() {
                       : <span style={pill("#FEE2E2", "#991B1B", "#FECACA")}>● معطل</span>}
                   </td>
                   <td style={{ ...td, color: "#475569", fontSize: 12 }}>{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString("ar-EG") : "—"}</td>
-                  <td style={{ ...td }}>
+                  <td style={{ ...td }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {pending && (
-                        <button onClick={async () => { await resendFn({ data: { email: u.email, origin: window.location.origin } }); toast.success("تم إعادة إرسال الدعوة"); }} style={iconBtn} title="إعادة الدعوة">
+                        <button onClick={async (e) => { e.stopPropagation(); await resendFn({ data: { email: u.email, origin: window.location.origin } }); toast.success("تم إعادة إرسال الدعوة"); }} style={iconBtn} title="إعادة الدعوة">
                           <Mail size={13} /> إعادة الدعوة
                         </button>
                       )}
                       {!pending && (
                         <button
-                          onClick={() => setConfirmAction({
+                          onClick={(e) => { e.stopPropagation(); setConfirmAction({
                             title: "إرسال رابط إعادة تعيين كلمة المرور",
                             message: `سيتم إرسال رابط إعادة تعيين كلمة المرور إلى:\n${u.email}`,
                             confirmLabel: "إرسال الرابط",
@@ -292,7 +295,7 @@ function UsersTab() {
                               await resetFn({ data: { email: u.email, origin: window.location.origin } });
                               toast.success("تم إرسال رابط إعادة تعيين كلمة المرور");
                             },
-                          })}
+                          }); }}
                           style={iconBtn}
                           title="إعادة تعيين كلمة المرور"
                         >
@@ -300,7 +303,8 @@ function UsersTab() {
                         </button>
                       )}
                       <button
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           await activeFn({ data: { id: u.id, is_active: !u.is_active } });
                           qc.invalidateQueries({ queryKey: ["admin-users"] });
                         }}
@@ -310,7 +314,7 @@ function UsersTab() {
                         <Power size={13} /> {u.is_active ? "تعطيل" : "تفعيل"}
                       </button>
                       <button
-                        onClick={() => setConfirmAction({
+                        onClick={(e) => { e.stopPropagation(); setConfirmAction({
                           title: "حذف المستخدم",
                           message: `هل أنت متأكد من حذف المستخدم:\n${u.full_name} (${u.email})؟\nلا يمكن التراجع عن هذا الإجراء.`,
                           confirmLabel: "حذف",
@@ -320,7 +324,7 @@ function UsersTab() {
                             toast.success("تم الحذف");
                             qc.invalidateQueries({ queryKey: ["admin-users"] });
                           },
-                        })}
+                        }); }}
                         style={iconBtnDanger}
                         title="حذف"
                       >
@@ -331,6 +335,7 @@ function UsersTab() {
                 </tr>
               );
             })}
+
           </tbody>
         </table>
       </div>
@@ -348,9 +353,69 @@ function UsersTab() {
           }}
         />
       )}
+      {viewUser && (
+        <UserProfileModal
+          user={viewUser}
+          onClose={() => setViewUser(null)}
+          onSave={async (name) => {
+            await updateFn({ data: { id: viewUser.id, full_name: name } });
+            toast.success("تم تحديث اسم المستخدم بنجاح");
+            await qc.invalidateQueries({ queryKey: ["admin-users"] });
+            setViewUser(null);
+          }}
+        />
+      )}
     </div>
   );
 }
+
+function UserProfileModal({ user, onClose, onSave }: { user: any; onClose: () => void; onSave: (name: string) => Promise<void> }) {
+  const [name, setName] = useState<string>(user.full_name || "");
+  const [busy, setBusy] = useState(false);
+  const pending = !user.last_sign_in_at;
+  const statusLabel = pending ? "بانتظار التفعيل" : user.is_active ? "نشط" : "معطل";
+  const roles = (user.roles || []).join("، ") || "—";
+  const save = async () => {
+    const v = name.trim();
+    if (!v) return toast.error("الاسم مطلوب");
+    if (v === (user.full_name || "")) return onClose();
+    setBusy(true);
+    try { await onSave(v); } catch (e: any) { toast.error(e?.message || "فشل التحديث"); }
+    finally { setBusy(false); }
+  };
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 560, width: "100%", margin: 0 }}>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <UserCog size={18} /> ملف المستخدم
+          </div>
+          <button type="button" className="action-btn" onClick={onClose} title="إغلاق" aria-label="إغلاق"><XIcon size={14} /></button>
+        </div>
+        <div className="card-body" style={{ display: "grid", gap: 12 }}>
+          <div className="form-group">
+            <label>الاسم</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم المستخدم" />
+          </div>
+          <div className="form-grid">
+            <div className="form-group"><label>البريد الإلكتروني</label><input value={user.email || "—"} readOnly disabled /></div>
+            <div className="form-group"><label>الدور</label><input value={roles} readOnly disabled /></div>
+            <div className="form-group"><label>الحالة</label><input value={statusLabel} readOnly disabled /></div>
+            <div className="form-group"><label>آخر دخول</label><input value={user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString("ar-EG") : "—"} readOnly disabled /></div>
+          </div>
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-gold" onClick={save} disabled={busy}>
+            <Save size={14} /> {busy ? "جارٍ الحفظ..." : "حفظ الاسم"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 
 function InviteUserTab() {
   const fn = useServerFn(inviteUser);
