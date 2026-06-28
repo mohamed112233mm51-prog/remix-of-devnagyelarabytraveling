@@ -391,39 +391,40 @@ export async function exportStatementToPDF(data: StatementExportData) {
   const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.title)}</title>
 <style>
-@page { size: ${pageSize}; margin: 10mm; }
+@page { size: ${pageSize}; margin: 12mm; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
 html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
-.page{width:100%;margin:0;padding:0}
-.brand-bar{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#C9A84C 0%,#B8923A 50%,#A8822E 100%);color:#1F1A0A;padding:12px 16px;border-radius:8px;margin-bottom:12px;border-top:3px solid #0F1B3D;border-bottom:3px solid #0F1B3D;width:100%}
-.brand-bar .logo{width:50px;height:50px;object-fit:contain;background:#fff;border-radius:6px;padding:3px;flex-shrink:0}
-.brand-bar .meta{flex:1;text-align:right;min-width:0}
-.brand-bar .co-name{font-size:16px;font-weight:800;letter-spacing:.2px;color:#1F1A0A}
-.brand-bar .report-title{font-size:12px;color:#0F1B3D;margin-top:3px;font-weight:700}
-.brand-bar .meta-line{font-size:10px;opacity:.85;margin-top:2px;color:#3a2f10}
+.page{width:100%;margin:0;padding:0;background:#fff}
+.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
+.header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
+.header .meta{flex:1;text-align:right;min-width:0}
+.header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px}
+.header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
+.header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
+.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:12px;width:100%}
 .sum-box{border:1px solid #e5e7eb;border-right:3px solid #C9A84C;border-radius:6px;padding:6px 10px;background:#fffaf0}
 .sum-box .label{font-size:11px;color:#666}
 .sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
 .table-wrap{width:100%}
 table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
-th,td{border:1px solid #e5d4a1;padding:5px 6px;text-align:center;word-wrap:break-word;overflow-wrap:break-word}
-thead{background:linear-gradient(180deg,#D4B25A 0%,#B8923A 100%);color:#1F1A0A}
-thead th{border-color:#A8822E;font-weight:800}
+th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;word-wrap:break-word;overflow-wrap:break-word}
+thead{background:#faf5e6;color:#0F1B3D}
+thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
 tbody tr{page-break-inside:avoid}
-tbody tr:nth-child(even){background:#fdf8ec}
+tbody tr:nth-child(even){background:#fafafa}
 tfoot td{font-weight:700;background:#fffaf0}
 .foot{margin-top:10px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:6px}
 @media print{
   html,body{width:100%}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
-  .brand-bar,thead th,.sum-box,tbody tr:nth-child(even){-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .brand-bar{break-inside:avoid}
+  thead th,.sum-box,tbody tr:nth-child(even),.gold-divider{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .header,.gold-divider{break-inside:avoid}
 }
 </style></head><body>
 <div class="page">
-<div class="brand-bar">
+<div class="header">
   ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
   <div class="meta">
     <div class="co-name">${esc(companyName)}</div>
@@ -431,6 +432,7 @@ tfoot td{font-weight:700;background:#fffaf0}
     <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
 </div>
+<div class="gold-divider"></div>
 ${summaryHtml}
 <div class="table-wrap"><table><thead><tr>${data.columns.map((c) => `<th>${esc(c.header)}</th>`).join("")}</tr></thead>
 <tbody>${data.rows
