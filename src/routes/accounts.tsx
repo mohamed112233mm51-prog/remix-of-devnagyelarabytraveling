@@ -228,6 +228,7 @@ function AccountsPage() {
           />
         );
       })()}
+    </div>
   );
 }
 
