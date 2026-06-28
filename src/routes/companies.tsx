@@ -169,12 +169,12 @@ function CompaniesPage() {
                   <thead>
                     <tr>
                       <th>#</th><th>الشركة الصادرة</th><th>الهاتف</th><th>الواتساب</th>
-                      <th className="num-col">إجمالي الخدمات</th><th className="num-col">المدفوع</th><th className="num-col">المتبقي</th><th>إجراءات</th>
+                      <th className="num-col">إجمالي الخدمات</th><th className="num-col">المدفوع</th><th className="num-col">المتبقي</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
+                      <tr><td colSpan={7}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
                     ) : pageRows.map((c, i) => {
                       const idx = page * pageSize + i;
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
@@ -188,9 +188,6 @@ function CompaniesPage() {
                           <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
                           <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
-                          <td data-label="إجراءات" onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {perm.edit && <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditCompany(c); }}>✏️ تعديل</button>}
-                          </td>
                         </tr>
                       );
                     })}
@@ -201,8 +198,8 @@ function CompaniesPage() {
                       <td className="num-col">{fmtDL(totalTrips)}</td>
                       <td className="num-col">{fmtDL(totalPaid)}</td>
                       <td className="num-col">{fmtDL(totalDue)}</td>
-                      <td></td>
                     </tr>
+
                   </tfoot>
                 </table>
               </div>

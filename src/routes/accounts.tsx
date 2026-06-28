@@ -149,12 +149,12 @@ function AccountsPage() {
                   <thead>
                     <tr>
                       <th>#</th><th>اسم الوكيل</th><th>الرقم القومي</th><th>الهاتف</th><th>الواتساب</th><th>المحافظة</th>
-                      <th className="num-col">قيمة الرحلات</th><th className="num-col">المدفوعات</th><th className="num-col">الصافي</th><th>الحالة</th><th>إجراءات</th>
+                      <th className="num-col">قيمة الرحلات</th><th className="num-col">المدفوعات</th><th className="num-col">الصافي</th><th>الحالة</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr><td colSpan={11}><div className="empty"><div className="empty-icon">👥</div><div className="empty-text">أضف وكلاء من تبويب "وكيل جديد"</div></div></td></tr>
+                      <tr><td colSpan={10}><div className="empty"><div className="empty-icon">👥</div><div className="empty-text">أضف وكلاء من تبويب "وكيل جديد"</div></div></td></tr>
                     ) : pageRows.map((a, i) => {
                       const idx = page * pageSize + i;
                       const s = stats.get(a.id) || { trips: 0, paid: 0 };
@@ -170,7 +170,6 @@ function AccountsPage() {
                           <td className="num-col" data-label="المدفوعات">{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="الصافي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(s.trips - s.paid)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
-                          <td data-label="إجراءات" onClick={(e) => e.stopPropagation()}>{perm.edit ? <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditAgent(a); }}>✏️ تعديل</button> : null}</td>
                         </tr>
                       );
                     })}
@@ -181,8 +180,9 @@ function AccountsPage() {
                       <td className="num-col">{fmtDL(totalTrips)}</td>
                       <td className="num-col">{fmtDL(totalPaid)}</td>
                       <td className="num-col">{fmtDL(totalDue)}</td>
-                      <td colSpan={2}></td>
+                      <td></td>
                     </tr>
+
                   </tfoot>
                 </table>
               </div>
