@@ -92,6 +92,8 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
     clearAddBuffer();
     setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
   };
+
+  const save = async () => {
     if (!draft) return;
     if (!draft.service_type) return toast.error("اختر الخدمة");
     if (!draft.agent_tier) return toast.error("اختر شريحة الوكيل");
