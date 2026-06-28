@@ -179,7 +179,7 @@ function CompaniesPage() {
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
                       const due = s.trips - s.paid;
                       return (
-                        <tr key={c.id}>
+                        <tr key={c.id} onClick={() => setViewCompany(c)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
@@ -187,8 +187,8 @@ function CompaniesPage() {
                           <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
                           <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
-                          <td data-label="إجراءات" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {perm.edit && <button className="action-btn" onClick={() => setEditCompany(c)}>✏️ تعديل</button>}
+                          <td data-label="إجراءات" onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {perm.edit && <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditCompany(c); }}>✏️ تعديل</button>}
                           </td>
                         </tr>
                       );
