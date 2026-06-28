@@ -1345,6 +1345,7 @@ function GeneralTab() {
           <DropdownListManager category="submission_status" title="حالة الموافقة" icon={<ListChecks size={16} />} />
           <DropdownListManager category="operation_status" title="حالة العملية" icon={<ListChecks size={16} />} />
           <DropdownListManager category="passenger_type" title="نوع المسافر" icon={<Inbox size={16} />} />
+          <DropdownListManager category="agent_tier" title="شرائح الوكلاء" icon={<ListChecks size={16} />} />
         </div>
       </div>
 
