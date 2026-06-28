@@ -86,9 +86,8 @@ export function PriceLookup(props: {
 
   // Tier is applied at the source level above; do not also set it as a UI filter.
 
-  useEffect(() => {
-    if (agentTier) setFilters((f) => ({ ...f, agent_tier: agentTier }));
-  }, [agentTier]);
+  // (tier handling moved to source-rule filtering above)
+
 
   const setFilter = (k: FilterKey, v: string) =>
     setFilters((f) => ({ ...f, [k]: v }));
