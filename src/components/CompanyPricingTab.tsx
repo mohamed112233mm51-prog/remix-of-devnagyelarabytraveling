@@ -385,9 +385,12 @@ function DraftEditor(props: {
   const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
   const agentPrice = computeAgentPrice(draft);
   return (
-    <div onClick={props.onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10010, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
-        <div className="card-header"><div className="card-title">{draft.id ? "تعديل سعر" : "إضافة سعر"}</div></div>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10010, padding: 16 }}>
+      <div className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="card-title">{draft.id ? "تعديل سعر" : "إضافة سعر"}</div>
+          <button type="button" className="action-btn icon-only" onClick={props.onCancel} title="إغلاق" aria-label="إغلاق" style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>×</button>
+        </div>
         <div className="form-grid">
           <div className="form-group"><label>الخدمة *</label>
             <SearchableSelect value={draft.service_type} onChange={(v) => upd({ service_type: v })} options={props.services as string[]} />
