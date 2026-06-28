@@ -353,9 +353,69 @@ function UsersTab() {
           }}
         />
       )}
+      {viewUser && (
+        <UserProfileModal
+          user={viewUser}
+          onClose={() => setViewUser(null)}
+          onSave={async (name) => {
+            await updateFn({ data: { id: viewUser.id, full_name: name } });
+            toast.success("تم تحديث اسم المستخدم بنجاح");
+            await qc.invalidateQueries({ queryKey: ["admin-users"] });
+            setViewUser(null);
+          }}
+        />
+      )}
     </div>
   );
 }
+
+function UserProfileModal({ user, onClose, onSave }: { user: any; onClose: () => void; onSave: (name: string) => Promise<void> }) {
+  const [name, setName] = useState<string>(user.full_name || "");
+  const [busy, setBusy] = useState(false);
+  const pending = !user.last_sign_in_at;
+  const statusLabel = pending ? "بانتظار التفعيل" : user.is_active ? "نشط" : "معطل";
+  const roles = (user.roles || []).join("، ") || "—";
+  const save = async () => {
+    const v = name.trim();
+    if (!v) return toast.error("الاسم مطلوب");
+    if (v === (user.full_name || "")) return onClose();
+    setBusy(true);
+    try { await onSave(v); } catch (e: any) { toast.error(e?.message || "فشل التحديث"); }
+    finally { setBusy(false); }
+  };
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 560, width: "100%", margin: 0 }}>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <UserCog size={18} /> ملف المستخدم
+          </div>
+          <button type="button" className="action-btn" onClick={onClose} title="إغلاق" aria-label="إغلاق"><XIcon size={14} /></button>
+        </div>
+        <div className="card-body" style={{ display: "grid", gap: 12 }}>
+          <div className="form-group">
+            <label>الاسم</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم المستخدم" />
+          </div>
+          <div className="form-grid">
+            <div className="form-group"><label>البريد الإلكتروني</label><input value={user.email || "—"} readOnly disabled /></div>
+            <div className="form-group"><label>الدور</label><input value={roles} readOnly disabled /></div>
+            <div className="form-group"><label>الحالة</label><input value={statusLabel} readOnly disabled /></div>
+            <div className="form-group"><label>آخر دخول</label><input value={user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString("ar-EG") : "—"} readOnly disabled /></div>
+          </div>
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-gold" onClick={save} disabled={busy}>
+            <Save size={14} /> {busy ? "جارٍ الحفظ..." : "حفظ الاسم"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 
 function InviteUserTab() {
   const fn = useServerFn(inviteUser);
