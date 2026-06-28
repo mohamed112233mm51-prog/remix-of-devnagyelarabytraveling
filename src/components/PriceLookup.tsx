@@ -72,12 +72,20 @@ export function PriceLookup(props: {
     return () => { cancelled = true; };
   }, [companyId, externalRules]);
 
-  const rules: PricingRule[] = externalRules ?? internalRules;
+  const rawRules: PricingRule[] = externalRules ?? internalRules;
+  // Agent mode with a locked tier: include only rules for that tier OR generic rules with no tier.
+  const rules: PricingRule[] = useMemo(() => {
+    if (mode === "agent" && agentTier) {
+      return rawRules.filter((r) => !r.agent_tier || String(r.agent_tier) === String(agentTier));
+    }
+    return rawRules;
+  }, [rawRules, mode, agentTier]);
 
   // ----- Filters -----
   const [filters, setFilters] = useState<Filters>(emptyFilters());
 
-  // If a tier is pre-known, lock it into the filter so options cascade by tier.
+  // Tier is applied at the source level above; do not also set it as a UI filter.
+
   useEffect(() => {
     if (agentTier) setFilters((f) => ({ ...f, agent_tier: agentTier }));
   }, [agentTier]);
