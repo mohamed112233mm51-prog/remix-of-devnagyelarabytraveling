@@ -797,7 +797,7 @@ function Dashboard() {
         </SectionCard>
 
         <SectionCard title="الشركات الصادرة" icon={<Building2 size={16} />} accent="navy">
-          <Stat label="عدد الشركات" value={fmtNum(companies.length)} />
+          <Stat label="عدد الشركات" value={fmtNum(companies.filter((c: any) => (c.status || "نشط") === "نشط").length)} />
           <Stat label="إجمالي الخدمات" value={fmtDL(companyServices)} />
           <Stat label="المدفوعات" value={fmtDL(companyPaid)} tone="green" />
           <Stat label="المتبقي" value={fmtDL(companyDue)} tone="red" />
