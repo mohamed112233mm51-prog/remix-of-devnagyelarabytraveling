@@ -641,7 +641,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
 function CompanyForm({ onDone }: { onDone: () => void }) {
   const [form, setForm, clearForm] = usePersistentState(
     "form:company:add",
-    { company_name: "", phone: "", whatsapp: "" },
+    { company_name: "", phone: "", whatsapp: "", status: "نشط" },
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:company:add:opening",
