@@ -88,10 +88,8 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   }, [draft, setAddBuffer]);
 
   const closeDraft = () => setDraft(null);
-  const resetDraft = () => {
-    clearAddBuffer();
-    setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
-  };
+
+
 
   const save = async () => {
     if (!draft) return;
