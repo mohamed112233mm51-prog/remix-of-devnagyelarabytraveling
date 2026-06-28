@@ -10,6 +10,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 import { AgentLedger } from "@/components/AgentLedger";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
@@ -354,10 +355,17 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
 
 function AgentForm({ onDone }: { onDone: () => void }) {
   const tierOptions = useDropdownOptions("agent_tier" as any);
-  const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" });
-  const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
+  const [form, setForm, clearForm] = usePersistentState(
+    "form:agent:add",
+    { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" },
+  );
+  const [opening, setOpening, clearOpening] = usePersistentState(
+    "form:agent:add:opening",
+    { debit: "", credit: "", date: "", note: "" },
+  );
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
+  const resetAll = () => { clearForm(); clearOpening(); };
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
@@ -385,6 +393,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         note: opening.note.trim() || null,
       });
     }
+    resetAll();
     onDone();
   };
   return (
@@ -423,7 +432,10 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button></div>
+      <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="action-btn" onClick={resetAll}>إعادة تعيين</button>
+        <button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button>
+      </div>
     </div>
   );
 }

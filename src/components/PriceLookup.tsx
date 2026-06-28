@@ -4,6 +4,7 @@ import { useLive, type IssuingCompany } from "@/lib/db";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, X, Pencil } from "lucide-react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Mode = "company" | "agent";
 
@@ -83,7 +84,8 @@ export function PriceLookup(props: {
   }, [rawRules, mode, agentTier]);
 
   // ----- Filters -----
-  const [filters, setFilters] = useState<Filters>(emptyFilters());
+  const persistKey = `pricelookup:${mode}:${fixedCompanyId || companyId || "any"}:${agentTier || "any"}`;
+  const [filters, setFilters, clearStoredFilters] = usePersistentState<Filters>(persistKey, emptyFilters());
 
   // Tier is applied at the source level above; do not also set it as a UI filter.
 
@@ -158,7 +160,7 @@ export function PriceLookup(props: {
   };
 
   const clearFilters = () => {
-    setFilters(emptyFilters());
+    clearStoredFilters();
   };
 
 

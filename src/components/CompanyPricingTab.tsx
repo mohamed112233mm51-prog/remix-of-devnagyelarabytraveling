@@ -9,6 +9,7 @@ import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
 import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
@@ -53,6 +54,12 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   const [filteredRules, setFilteredRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
+  // Buffer that persists the in-progress "add new" draft across modal close/reopen.
+  // Only used for new (no id) drafts. Cleared on successful save or explicit reset.
+  const [addBuffer, setAddBuffer, clearAddBuffer] = usePersistentState<Row | null>(
+    `form:pricing:add:${companyId}`,
+    null,
+  );
   const [showImport, setShowImport] = useState(false);
   const [showLookup, setShowLookup] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
@@ -71,8 +78,20 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [companyId]);
 
-  const startNew = () => setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
+  const startNew = () => setDraft(addBuffer ?? EMPTY(companyId, services[0] || "", tiers[0] || "A"));
   const startEdit = (r: PricingRule) => setDraft({ ...r });
+
+  // Mirror the in-progress new draft into the buffer so closing the modal
+  // doesn't lose it. Editing existing rows is not buffered.
+  useEffect(() => {
+    if (draft && !draft.id) setAddBuffer(draft);
+  }, [draft, setAddBuffer]);
+
+  const closeDraft = () => setDraft(null);
+  const resetDraft = () => {
+    clearAddBuffer();
+    setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
+  };
 
   const save = async () => {
     if (!draft) return;
@@ -115,7 +134,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       const { error } = await supabase.from("company_pricing_rules" as any).insert(payload);
       if (error) return toast.error(error.message);
     }
+    const wasNew = !draft.id;
     setDraft(null);
+    if (wasNew) clearAddBuffer();
     await load();
     toast.success("تم حفظ السعر");
   };
@@ -317,7 +338,8 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
         <DraftEditor
           draft={draft}
           setDraft={setDraft}
-          onCancel={() => setDraft(null)}
+          onCancel={closeDraft}
+          onReset={!draft.id ? resetDraft : undefined}
           onSave={save}
           services={services}
           tiers={tiers.length ? tiers : ["A","B","C"]}
@@ -346,8 +368,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
 
 function DraftEditor(props: {
   draft: Row;
-  setDraft: (r: Row) => void;
+  setDraft: (r: Row | null) => void;
   onCancel: () => void;
+  onReset?: () => void;
   onSave: () => void;
   services: readonly string[];
   tiers: readonly string[];
@@ -410,7 +433,10 @@ function DraftEditor(props: {
           </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
-          <button type="button" className="action-btn" onClick={props.onCancel}>إلغاء</button>
+          {props.onReset && (
+            <button type="button" className="action-btn" onClick={props.onReset}>إعادة تعيين</button>
+          )}
+          <button type="button" className="action-btn" onClick={props.onCancel}>إغلاق</button>
           <button type="button" className="btn btn-gold" onClick={props.onSave}>💾 حفظ</button>
         </div>
       </div>

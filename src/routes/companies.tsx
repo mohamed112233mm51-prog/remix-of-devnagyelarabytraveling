@@ -14,6 +14,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 
 import {
@@ -636,10 +637,17 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
 }
 
 function CompanyForm({ onDone }: { onDone: () => void }) {
-  const [form, setForm] = useState({ company_name: "", phone: "", whatsapp: "" });
-  const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
+  const [form, setForm, clearForm] = usePersistentState(
+    "form:company:add",
+    { company_name: "", phone: "", whatsapp: "" },
+  );
+  const [opening, setOpening, clearOpening] = usePersistentState(
+    "form:company:add:opening",
+    { debit: "", credit: "", date: "", note: "" },
+  );
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
+  const resetAll = () => { clearForm(); clearOpening(); };
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء إدخال اسم الشركة");
     const debit = Number(opening.debit) || 0;
@@ -661,6 +669,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         note: opening.note.trim() || null,
       });
     }
+    resetAll();
     onDone();
   };
   return (
@@ -694,7 +703,10 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الشركة" className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button></div>
+      <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="action-btn" onClick={resetAll}>إعادة تعيين</button>
+        <button data-confirm-save="تأكيد حفظ الشركة" className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button>
+      </div>
     </div>
   );
 }
