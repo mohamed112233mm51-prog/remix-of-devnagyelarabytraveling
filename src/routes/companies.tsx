@@ -9,7 +9,8 @@ import {
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
-import { usePerm } from "@/hooks/usePerm";
+import { usePerm, checkPerm } from "@/hooks/usePerm";
+import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
