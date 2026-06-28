@@ -61,6 +61,13 @@ const NAV: { label: string; items: Item[] }[] = [
     ],
   },
   {
+    label: "أسعار الخدمات",
+    items: [
+      { to: "/service-pricing", icon: Tag, label: "تسعير خدمة", section: "أسعار الخدمات", permKey: "service_pricing_manage" },
+      { to: "/service-pricing", icon: SearchIcon, label: "بحث سعر خدمة", section: "أسعار الخدمات", permKey: "service_price_search" },
+    ],
+  },
+  {
     label: "التقارير",
     items: [{ to: "/reports", icon: BarChart3, label: "التقارير", section: "التقارير", permKey: "reports" }],
   },
