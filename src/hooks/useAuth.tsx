@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u: any = s.user;
         if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
         setProfileLoaded(false);
-        setTimeout(() => loadProfile(s.user.id), 0);
+        setTimeout(() => safeLoadProfile(s.user.id, loadProfile), 0);
       } else {
         setRoles([]);
         setPermissions({});
