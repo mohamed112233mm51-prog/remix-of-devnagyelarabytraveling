@@ -432,7 +432,10 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button></div>
+      <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="action-btn" onClick={resetAll}>إعادة تعيين</button>
+        <button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button>
+      </div>
     </div>
   );
 }
