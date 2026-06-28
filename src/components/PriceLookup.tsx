@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+// SearchableSelect not needed here — native selects suffice for cascading filters.
 import { useLive, type IssuingCompany } from "@/lib/db";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { supabase } from "@/integrations/supabase/client";
