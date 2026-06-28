@@ -84,7 +84,8 @@ export function PriceLookup(props: {
   }, [rawRules, mode, agentTier]);
 
   // ----- Filters -----
-  const [filters, setFilters] = useState<Filters>(emptyFilters());
+  const persistKey = `pricelookup:${mode}:${fixedCompanyId || companyId || "any"}:${agentTier || "any"}`;
+  const [filters, setFilters, clearStoredFilters] = usePersistentState<Filters>(persistKey, emptyFilters());
 
   // Tier is applied at the source level above; do not also set it as a UI filter.
 
