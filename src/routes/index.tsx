@@ -650,8 +650,8 @@ function Dashboard() {
             <span className="erp-chip">{today.toLocaleDateString("ar-EG")}</span>
           </div>
           <div className="erp-today-grid">
-            <TodayStat label="رحلات اليوم" value={fmtNum(todayFlights)} />
-            <TodayStat label="موافقات اليوم" value={fmtNum(todayApprovals)} />
+            <TodayStat label="تنفيذات اليوم" value={fmtNum(todayExecutions)} />
+            <TodayStat label="تقديمات اليوم" value={fmtNum(todaySubmissions)} />
             <TodayStat label="قيمة معاملات اليوم" value={fmtDL(todayValue)} />
             <TodayStat label="تحصيلات اليوم" value={fmtDL(todayCollected)} tone="green" />
           </div>
