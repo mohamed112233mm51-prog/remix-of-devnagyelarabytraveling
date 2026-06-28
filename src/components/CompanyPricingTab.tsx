@@ -9,6 +9,7 @@ import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
 import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
