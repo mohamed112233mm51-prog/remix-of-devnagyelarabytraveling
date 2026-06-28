@@ -499,8 +499,8 @@ function ExecutionForm({
     passport: editing?.passport || "",
     birth_place: editing?.birth_place || "",
     agent_id: editing?.agent_id || "",
-    status: editing?.status || (approvalStatuses[0] ?? "بطيء"),
-    operation_status: editing?.operation_status || (operationStatuses[0] ?? "قيد التنفيذ"),
+    status: editing?.status || "",
+    operation_status: editing?.operation_status || "",
     departure_from: editing?.departure_from || "",
     destination: editing?.destination || "",
     airline: editing?.airline || "",
@@ -647,7 +647,7 @@ function ExecutionForm({
             value={form.status}
             onChange={(v) => setForm({ ...form, status: v })}
             options={withSelected(approvalStatuses, form.status)}
-            allowClear={false}
+            placeholder="اختر الحالة..."
           />
         </Field>
         <Field label="حالة العملية">
@@ -655,7 +655,7 @@ function ExecutionForm({
             value={form.operation_status}
             onChange={(v) => setForm({ ...form, operation_status: v })}
             options={withSelected(operationStatuses, form.operation_status)}
-            allowClear={false}
+            placeholder="اختر حالة العملية..."
           />
         </Field>
 

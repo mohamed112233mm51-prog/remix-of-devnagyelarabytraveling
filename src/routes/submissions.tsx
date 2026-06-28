@@ -382,7 +382,7 @@ function SubmissionForm({
     passport: editing?.passport || "",
     birth_place: editing?.birth_place || "",
     agent_id: editing?.agent_id || "",
-    status: editing?.status || (statuses[0] ?? "قيد المتابعة"),
+    status: editing?.status || "",
     departure_from: editing?.departure_from || "",
     submit_date: editing?.submit_date || new Date().toISOString().slice(0, 10),
     issue_date: editing?.issue_date || "",
@@ -471,7 +471,7 @@ function SubmissionForm({
             value={form.status}
             onChange={(v) => setForm({ ...form, status: v })}
             options={withSelected(statuses, form.status)}
-            allowClear={false}
+            placeholder="اختر الحالة..."
           />
         </Field>
         <Field label="الجهة (جهة المغادرة)">
