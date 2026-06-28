@@ -161,7 +161,13 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
         </div>
       </div>
-      <PriceLookup mode="company" companyId={companyId} onOpenRule={(r) => setDraft({ ...r })} />
+      <PriceLookup
+        mode="company"
+        companyId={companyId}
+        rules={rules}
+        onOpenRule={(r) => setDraft({ ...r })}
+        onFilteredChange={setFilteredRules}
+      />
       <div className="card-body">
 
         {loading ? (
