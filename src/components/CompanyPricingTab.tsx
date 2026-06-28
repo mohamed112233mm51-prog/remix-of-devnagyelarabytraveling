@@ -184,9 +184,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <button
             type="button"
-            className={`action-btn${showLookup ? " active" : ""}`}
+            className={`btn btn-outline${showLookup ? " active" : ""}`}
             onClick={() => setShowLookup((prev) => !prev)}
-            title="بحث سعر خدمة"
+            title="بحث داخل ملف التسعير"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <Search size={14} strokeWidth={2} /> بحث سعر خدمة
@@ -194,9 +194,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           {perm.create && (
             <button
               type="button"
-              className="action-btn"
+              className="btn btn-outline"
               onClick={() => setShowImport(true)}
-              title="استيراد من شركة أخرى"
+              title="استيراد ملف التسعير من شركة أخرى"
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
               <Download size={14} strokeWidth={2} /> استيراد من شركة أخرى
@@ -207,7 +207,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
               type="button"
               className="btn btn-gold"
               onClick={startNew}
-              title="إضافة سعر"
+              title="إضافة سعر جديد"
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
               <Plus size={14} strokeWidth={2.4} /> إضافة سعر
