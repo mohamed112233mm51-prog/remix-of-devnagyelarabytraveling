@@ -844,6 +844,14 @@ function Dashboard() {
           
         </SectionCard>
 
+        <SectionCard title="موردو العملة" icon={<Landmark size={16} />} accent="navy">
+          <Stat label="عدد الموردين" value={fmtNum(currencySupplierStats.count)} />
+          <Stat label="إجمالي المشتريات" value={fmtDL(currencySupplierStats.purchases)} />
+          <Stat label="إجمالي المدفوعات" value={fmtDL(currencySupplierStats.payments)} tone="green" />
+          <Stat label="الرصيد المستحق" value={fmtDL(currencySupplierStats.due)} tone="red" highlight />
+        </SectionCard>
+
+
         {effectiveCanViewProfitSummary && (
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
           <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(profitExecSales)} tone="green" />
