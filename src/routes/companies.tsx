@@ -28,6 +28,7 @@ import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, Banknote, BadgeDollarSign } from "lucide-react";
 import { CompanySupplyForm } from "@/components/CashMovementForms";
+import { EntityProfileModal } from "@/components/EntityProfileModal";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -56,6 +57,7 @@ function CompaniesPage() {
   const [statementCompanyId, setStatementCompanyId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
+  const [viewCompany, setViewCompany] = useState<IssuingCompany | null>(null);
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
@@ -177,7 +179,7 @@ function CompaniesPage() {
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
                       const due = s.trips - s.paid;
                       return (
-                        <tr key={c.id}>
+                        <tr key={c.id} onClick={() => setViewCompany(c)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
@@ -185,8 +187,8 @@ function CompaniesPage() {
                           <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
                           <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
-                          <td data-label="إجراءات" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {perm.edit && <button className="action-btn" onClick={() => setEditCompany(c)}>✏️ تعديل</button>}
+                          <td data-label="إجراءات" onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {perm.edit && <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditCompany(c); }}>✏️ تعديل</button>}
                           </td>
                         </tr>
                       );
@@ -217,6 +219,37 @@ function CompaniesPage() {
       {editCompany && perm.edit && (
         <EditCompanyModal company={editCompany} onClose={() => setEditCompany(null)} />
       )}
+
+      {viewCompany && (() => {
+        const c = viewCompany as any;
+        const s = stats.get(viewCompany.id) || { trips: 0, paid: 0 };
+        const due = s.trips - s.paid;
+        return (
+          <EntityProfileModal
+            open={!!viewCompany}
+            onClose={() => setViewCompany(null)}
+            titlePrefix="ملف الشركة"
+            name={viewCompany.company_name}
+            canEdit={perm.edit}
+            editLabel="تعديل بيانات الشركة"
+            onEdit={() => { setEditCompany(viewCompany); setViewCompany(null); }}
+            kpis={[
+              { label: "إجمالي الخدمات", value: fmtDL(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
+              { label: "المتبقي", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+            ]}
+            fields={[
+              { label: "اسم الشركة", value: viewCompany.company_name },
+              { label: "الهاتف", value: viewCompany.phone },
+              { label: "الواتساب", value: (viewCompany as any).whatsapp },
+              { label: "رصيد سابق مدين", value: c.opening_debit ? fmtDL(Number(c.opening_debit)) : "—" },
+              { label: "رصيد سابق دائن", value: c.opening_credit ? fmtDL(Number(c.opening_credit)) : "—" },
+              { label: "تاريخ الرصيد السابق", value: c.opening_date || "—" },
+              { label: "ملاحظات الرصيد السابق", value: c.opening_note || "—" },
+            ]}
+          />
+        );
+      })()}
     </div>
   );
 }

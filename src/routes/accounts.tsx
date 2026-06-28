@@ -18,6 +18,7 @@ import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft, Banknote } from "lucide-react";
 import { AgentCashOutForm } from "@/components/CashMovementForms";
+import { EntityProfileModal } from "@/components/EntityProfileModal";
 
 export const Route = createFileRoute("/accounts")({
   component: () => <AppErrorBoundary><AccountsPage /></AppErrorBoundary>,
@@ -34,6 +35,7 @@ function AccountsPage() {
   const [search, setSearch] = useState("");
   const [statementAgentId, setStatementAgentId] = useState<string>("");
   const [editAgent, setEditAgent] = useState<Agent | null>(null);
+  const [viewAgent, setViewAgent] = useState<Agent | null>(null);
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
@@ -152,7 +154,7 @@ function AccountsPage() {
                       const idx = page * pageSize + i;
                       const s = stats.get(a.id) || { trips: 0, paid: 0 };
                       return (
-                        <tr key={a.id}>
+                        <tr key={a.id} onClick={() => setViewAgent(a)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الاسم">{a.name}</td>
                           <td data-label="الرقم القومي">{a.national_id || "—"}</td>
@@ -163,7 +165,7 @@ function AccountsPage() {
                           <td className="num-col" data-label="المدفوعات">{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="الصافي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(s.trips - s.paid)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
-                          <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditAgent(a)}>✏️ تعديل</button> : null}</td>
+                          <td data-label="إجراءات" onClick={(e) => e.stopPropagation()}>{perm.edit ? <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditAgent(a); }}>✏️ تعديل</button> : null}</td>
                         </tr>
                       );
                     })}
@@ -191,6 +193,41 @@ function AccountsPage() {
       {tab === "statement" && <AppErrorBoundary name="AgentLedger"><AgentLedger initialAgentId={statementAgentId} canExport={perm.export} /></AppErrorBoundary>}
 
       {editAgent && perm.edit && <EditAgentModal agent={editAgent} onClose={() => setEditAgent(null)} />}
+
+      {viewAgent && (() => {
+        const a = viewAgent as any;
+        const s = stats.get(viewAgent.id) || { trips: 0, paid: 0 };
+        const due = s.trips - s.paid;
+        return (
+          <EntityProfileModal
+            open={!!viewAgent}
+            onClose={() => setViewAgent(null)}
+            titlePrefix="ملف الوكيل"
+            name={viewAgent.name}
+            status={{ label: viewAgent.status || "—", tone: badgeFor(viewAgent.status) }}
+            canEdit={perm.edit}
+            editLabel="تعديل بيانات الوكيل"
+            onEdit={() => { setEditAgent(viewAgent); setViewAgent(null); }}
+            kpis={[
+              { label: "قيمة الرحلات", value: fmtDL(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
+              { label: "الصافي المستحق", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+            ]}
+            fields={[
+              { label: "اسم الوكيل", value: viewAgent.name },
+              { label: "الرقم القومي", value: viewAgent.national_id },
+              { label: "الهاتف", value: viewAgent.phone },
+              { label: "الواتساب", value: viewAgent.whatsapp },
+              { label: "المحافظة", value: viewAgent.governorate },
+              { label: "شريحة الوكيل", value: a.tier || "—" },
+              { label: "رصيد سابق مدين", value: a.opening_debit ? fmtDL(Number(a.opening_debit)) : "—" },
+              { label: "رصيد سابق دائن", value: a.opening_credit ? fmtDL(Number(a.opening_credit)) : "—" },
+              { label: "تاريخ الرصيد السابق", value: a.opening_date || "—" },
+              { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
+            ]}
+          />
+        );
+      })()}
     </div>
   );
 }
