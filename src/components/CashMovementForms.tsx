@@ -252,11 +252,13 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [companyId, setCompanyId] = useState(initialCompanyId || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
+  const draftKey = `draft:company-supply:${initialCompanyId || "new"}`;
+  const [companyId, setCompanyId, clearCompanyId] = usePersistentState<string>(`${draftKey}:companyId`, initialCompanyId || "");
+  const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
+  const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
+  const resetDraft = () => { clearCompanyId(); clearDate(); clearNote(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
