@@ -240,7 +240,7 @@ export function AgentPaymentForm({
           <SearchableSelect
             value={form.agent_id}
             onChange={(v) => set("agent_id", v)}
-            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            options={activeOptions(agents, form.agent_id, (a) => a.name)}
             disabled={!!lockedAgentId}
             placeholder="اختر..."
           />
