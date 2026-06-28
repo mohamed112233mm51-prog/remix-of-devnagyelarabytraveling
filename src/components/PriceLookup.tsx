@@ -113,7 +113,8 @@ export function PriceLookup(props: {
 
   useEffect(() => {
     if (resetKey === undefined) return;
-    setFilters({ ...emptyFilters(), agent_tier: agentTier || "" });
+    setFilters(emptyFilters());
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
