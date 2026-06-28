@@ -128,6 +128,8 @@ export function EntityProfileModal({
           </div>
         ))}
       </div>
+      {extraContent && <div style={{ marginTop: 14 }}>{extraContent}</div>}
     </Modal>
+
   );
 }
