@@ -3749,3 +3749,78 @@ function ProductionWizardCard() {
     </div>
   );
 }
+
+function ChangePasswordTab() {
+  const { user } = useAuth();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!current) return toast.error("كلمة السر الحالية مطلوبة");
+    if (!next) return toast.error("كلمة السر الجديدة مطلوبة");
+    if (!confirm) return toast.error("تأكيد كلمة السر مطلوب");
+    if (next.length < 8) return toast.error("كلمة السر الجديدة يجب ألا تقل عن 8 أحرف");
+    if (next !== confirm) return toast.error("كلمة السر الجديدة غير مطابقة للتأكيد");
+    if (next === current) return toast.error("كلمة السر الجديدة يجب أن تختلف عن الحالية");
+    const email = user?.email;
+    if (!email) return toast.error("تعذر التحقق من هوية المستخدم");
+    setBusy(true);
+    try {
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({ email, password: current });
+      if (reauthErr) {
+        toast.error("كلمة السر الحالية غير صحيحة");
+        return;
+      }
+      const { error: updErr } = await supabase.auth.updateUser({ password: next });
+      if (updErr) {
+        toast.error(updErr.message || "حدث خطأ أثناء تغيير كلمة السر");
+        return;
+      }
+      toast.success("تم تغيير كلمة السر بنجاح");
+      setCurrent(""); setNext(""); setConfirm("");
+    } catch (err: any) {
+      toast.error(err?.message || "حدث خطأ أثناء تغيير كلمة السر");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const lbl: React.CSSProperties = { display: "block", fontSize: 13, marginBottom: 6, color: "#334155", fontWeight: 600 };
+  const inp: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #E5E7EB", fontSize: 14, background: "#fff" };
+
+  return (
+    <div className="card" style={{ padding: 24, maxWidth: 520 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, display: "grid", placeItems: "center", background: "linear-gradient(135deg,#0F1F44,#1E3A8A)", color: "#F5D27A" }}>
+          <KeyRound size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تغيير كلمة السر</div>
+          <div style={{ fontSize: 12, color: "#64748B" }}>قم بتحديث كلمة السر الخاصة بحسابك</div>
+        </div>
+      </div>
+      <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+        <div>
+          <label style={lbl}>كلمة السر الحالية</label>
+          <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>كلمة السر الجديدة</label>
+          <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>تأكيد كلمة السر الجديدة</label>
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" style={inp} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+          <button type="submit" disabled={busy} className="btn btn-gold" style={{ minWidth: 160 }}>
+            {busy ? "جارٍ الحفظ..." : "حفظ كلمة السر"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
