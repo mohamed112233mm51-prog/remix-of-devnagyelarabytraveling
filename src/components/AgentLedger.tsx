@@ -11,7 +11,7 @@ import {
 } from "@/lib/db";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
-import { PriceLookup } from "@/components/PriceLookup";
+
 
 
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
@@ -250,7 +250,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
         <div className="card"><div className="card-body"><div className="empty"><div className="empty-text">اختر وكيلاً أولاً لعرض كشف الحساب</div></div></div></div>
       ) : (
         <>
-          <PriceLookup mode="agent" agentTier={(agent as any).tier || undefined} />
+
+
 
         <div className="card">
           <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

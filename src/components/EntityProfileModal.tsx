@@ -19,6 +19,8 @@ export function EntityProfileModal({
   editLabel,
   canEdit,
   onEdit,
+  headerActions,
+  extraContent,
 }: {
   open: boolean;
   onClose: () => void;
@@ -30,6 +32,9 @@ export function EntityProfileModal({
   editLabel: string;
   canEdit?: boolean;
   onEdit?: () => void;
+  headerActions?: ReactNode;
+  extraContent?: ReactNode;
+
 }) {
   return (
     <Modal
@@ -46,14 +51,18 @@ export function EntityProfileModal({
         </div>
       }
       footer={
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", width: "100%" }}>
-          <button className="action-btn" onClick={onClose} type="button">إغلاق</button>
-          {canEdit && onEdit && (
-            <button className="btn btn-gold" onClick={onEdit} type="button">✏️ {editLabel}</button>
-          )}
+        <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", width: "100%", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{headerActions}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="action-btn" onClick={onClose} type="button">إغلاق</button>
+            {canEdit && onEdit && (
+              <button className="btn btn-gold" onClick={onEdit} type="button">✏️ {editLabel}</button>
+            )}
+          </div>
         </div>
       }
     >
+
       {kpis && kpis.length > 0 && (
         <div
           style={{
@@ -119,6 +128,8 @@ export function EntityProfileModal({
           </div>
         ))}
       </div>
+      {extraContent && <div style={{ marginTop: 14 }}>{extraContent}</div>}
     </Modal>
+
   );
 }

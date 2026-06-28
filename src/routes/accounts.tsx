@@ -19,6 +19,8 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft, Banknote } from "lucide-react";
 import { AgentCashOutForm } from "@/components/CashMovementForms";
 import { EntityProfileModal } from "@/components/EntityProfileModal";
+import { PriceLookup } from "@/components/PriceLookup";
+
 
 export const Route = createFileRoute("/accounts")({
   component: () => <AppErrorBoundary><AccountsPage /></AppErrorBoundary>,
@@ -36,6 +38,8 @@ function AccountsPage() {
   const [statementAgentId, setStatementAgentId] = useState<string>("");
   const [editAgent, setEditAgent] = useState<Agent | null>(null);
   const [viewAgent, setViewAgent] = useState<Agent | null>(null);
+  const [showAgentLookup, setShowAgentLookup] = useState(false);
+
 
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
@@ -201,8 +205,9 @@ function AccountsPage() {
         return (
           <EntityProfileModal
             open={!!viewAgent}
-            onClose={() => setViewAgent(null)}
+            onClose={() => { setViewAgent(null); setShowAgentLookup(false); }}
             titlePrefix="ملف الوكيل"
+
             name={viewAgent.name}
             status={{ label: viewAgent.status || "—", tone: badgeFor(viewAgent.status) }}
             canEdit={perm.edit}
@@ -225,7 +230,22 @@ function AccountsPage() {
               { label: "تاريخ الرصيد السابق", value: a.opening_date || "—" },
               { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
             ]}
+            headerActions={
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setShowAgentLookup((v) => !v)}
+              >
+                🔎 {showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
+              </button>
+            }
+            extraContent={
+              showAgentLookup ? (
+                <PriceLookup mode="agent" agentTier={a.tier || undefined} />
+              ) : null
+            }
           />
+
         );
       })()}
     </div>
