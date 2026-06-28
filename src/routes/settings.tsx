@@ -1945,19 +1945,30 @@ function BackupsTab() {
       if (!r?.path || !r?.logId) {
         throw new Error("لم يتم إنشاء سجل في قائمة النسخ الاحتياطية");
       }
-      // Force a real refetch (not just invalidate) so the new row shows immediately
-      const refetched = await refetch();
-      const found = (refetched.data?.logs ?? []).some((l: any) => l.id === r.logId)
-        || (refetched.data?.backups ?? []).some((b: any) => b.path === r.path);
-      console.log("[import-backup] refetch found new row:", found);
-      if (!found) {
-        toast.error("تم رفع الملف ولكن لم يظهر في القائمة. حاول تحديث الصفحة.");
+      await refetch();
+
+      const failed: Array<{ table: string; error: string }> = r.failed ?? [];
+      const inserted: number = r.inserted ?? 0;
+      const tablesProcessed: number = r.tablesProcessed ?? 0;
+
+      if (failed.length > 0) {
+        const detail = failed.slice(0, 5).map((f) => `• ${f.table}: ${f.error}`).join("\n");
+        toast.error(
+          `فشل استيراد بعض الجداول (${failed.length}):\n${detail}` +
+          (failed.length > 5 ? `\n…و${failed.length - 5} أخرى` : ""),
+          { duration: 12000 }
+        );
         return;
       }
+      if (inserted === 0) {
+        toast.warning("لم يتم استيراد أي بيانات. يرجى التحقق من ملف النسخة الاحتياطية.");
+        return;
+      }
+      const baseMsg = `تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}`;
       if (r?.versionMismatch) {
-        toast.warning("تم استيراد النسخة الاحتياطية بنجاح، ولكنها مأخوذة من إصدار مختلف من النظام. قد تحتاج قاعدة البيانات إلى التحديث قبل الاستعادة.");
+        toast.warning(baseMsg + "\nملاحظة: النسخة من إصدار مختلف، قد تحتاج لتحديث قاعدة البيانات.", { duration: 12000 });
       } else {
-        toast.success("تم استيراد النسخة الاحتياطية بنجاح");
+        toast.success(baseMsg, { duration: 10000 });
       }
     } catch (e: any) {
       console.error("[import-backup] failed:", e);
