@@ -158,11 +158,41 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   return (
     <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title">💰 ملف التسعير</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" className="action-btn" onClick={() => setShowLookup((prev) => !prev)}>🔎 بحث سعر خدمة</button>
-          {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
-          {perm.create && <button type="button" className="btn btn-gold" onClick={startNew}>➕ إضافة سعر</button>}
+        <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Wallet size={16} strokeWidth={2.2} /> ملف التسعير
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button
+            type="button"
+            className={`action-btn${showLookup ? " active" : ""}`}
+            onClick={() => setShowLookup((prev) => !prev)}
+            title="بحث سعر خدمة"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <Search size={14} strokeWidth={2} /> بحث سعر خدمة
+          </button>
+          {perm.create && (
+            <button
+              type="button"
+              className="action-btn"
+              onClick={() => setShowImport(true)}
+              title="استيراد من شركة أخرى"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Download size={14} strokeWidth={2} /> استيراد من شركة أخرى
+            </button>
+          )}
+          {perm.create && (
+            <button
+              type="button"
+              className="btn btn-gold"
+              onClick={startNew}
+              title="إضافة سعر"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Plus size={14} strokeWidth={2.4} /> إضافة سعر
+            </button>
+          )}
         </div>
       </div>
       <div className="card-body">
