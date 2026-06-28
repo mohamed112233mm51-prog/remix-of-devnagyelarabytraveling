@@ -684,6 +684,9 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
         <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+        <div className="form-group"><label>الحالة</label>
+          <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
+        </div>
       </div>
 
       <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
