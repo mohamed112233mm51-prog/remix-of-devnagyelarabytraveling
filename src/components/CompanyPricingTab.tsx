@@ -338,7 +338,8 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
         <DraftEditor
           draft={draft}
           setDraft={setDraft}
-          onCancel={() => setDraft(null)}
+          onCancel={closeDraft}
+          onReset={!draft.id ? resetDraft : undefined}
           onSave={save}
           services={services}
           tiers={tiers.length ? tiers : ["A","B","C"]}
