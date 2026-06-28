@@ -391,10 +391,10 @@ export async function exportStatementToPDF(data: StatementExportData) {
   const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.title)}</title>
 <style>
-@page { size: ${pageSize}; margin: 12mm; }
+@page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
 html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
-.page{width:100%;margin:0;padding:0;background:#fff}
+.page{width:100%;margin:0;padding:12mm;background:#fff}
 .header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
 .header .meta{flex:1;text-align:right;min-width:0}
