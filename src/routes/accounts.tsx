@@ -285,6 +285,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       whatsapp: form.whatsapp.trim() || null,
       governorate: form.governorate || null,
       tier: form.tier || "A",
+      status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: form.opening_date || null,
