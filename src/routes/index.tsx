@@ -788,7 +788,7 @@ function Dashboard() {
       <div className="erp-section-title">تفاصيل الأقسام</div>
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
-          <Stat label="عدد الوكلاء" value={fmtNum(agents.length)} />
+          <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
           <Stat label="قيمة الرحلات" value={fmtDL(agentsFlightsValue)} />
           <Stat label="قيمة الموافقات" value={fmtDL(agentsApprovalsValue)} />
           <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
