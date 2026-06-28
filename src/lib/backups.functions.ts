@@ -129,9 +129,11 @@ export const runRetentionNow = createServerFn({ method: "POST" })
     return await applyRetention();
   });
 
-// Import an externally-supplied backup file (json or json.gz) into the same
-// storage bucket used by automatic backups, and register a backup_logs row so
-// the existing list / preview / restore UI can act on it unchanged.
+// Import an externally-supplied backup file (json or json.gz). Validates the
+// file, registers it under "imported/" in storage + backup_logs, takes an
+// emergency backup, and ACTUALLY restores the data into the database.
+// Returns a detailed summary so the UI can show real counts (not a fake
+// success toast).
 export const importBackup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { filename: string; base64: string; isGzipped: boolean }) => d)
@@ -139,9 +141,12 @@ export const importBackup = createServerFn({ method: "POST" })
     await ensureAdmin(context.userId);
     const { gzipSync, gunzipSync } = await import("node:zlib");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { backupFilePath, logBackupRow } = await import("./backups.server");
+    const {
+      backupFilePath, logBackupRow, restoreFromPayload,
+      buildBackupPayload, uploadBackup, BACKUP_TABLES,
+    } = await import("./backups.server");
 
-    // Decode the uploaded file
+    // 1) Decode the uploaded file
     const raw = Buffer.from(data.base64, "base64");
     let jsonBuf: Buffer;
     let gzBuf: Buffer;
@@ -157,27 +162,39 @@ export const importBackup = createServerFn({ method: "POST" })
       throw new Error("تعذر قراءة الملف: " + (e?.message ?? "ملف تالف"));
     }
 
-    // Validate JSON structure
+    // 2) Validate JSON shape
     let payload: any;
     try {
       payload = JSON.parse(jsonBuf.toString("utf8"));
     } catch {
-      throw new Error("ملف النسخة الاحتياطية غير صالح.");
+      throw new Error("ملف النسخة الاحتياطية غير صالح (ليس JSON).");
     }
     const hasShape =
       payload &&
       typeof payload === "object" &&
-      payload.meta &&
-      typeof payload.meta === "object" &&
-      payload.data &&
-      typeof payload.data === "object" &&
+      payload.meta && typeof payload.meta === "object" &&
+      payload.data && typeof payload.data === "object" &&
       payload.meta.version != null &&
       payload.meta.type != null &&
       payload.meta.created_at != null;
     if (!hasShape) throw new Error("ملف النسخة الاحتياطية غير صالح.");
 
-    // Upload to the same bucket under an "imported/" folder (same path scheme
-    // as the existing backup files so listBackups picks it up automatically).
+    // 3) Confirm at least one known table has rows
+    const knownTables = new Set<string>(BACKUP_TABLES as readonly string[]);
+    let totalRowsInFile = 0;
+    const tablesWithData: string[] = [];
+    for (const [t, rows] of Object.entries(payload.data as Record<string, any[]>)) {
+      if (!knownTables.has(t)) continue;
+      if (Array.isArray(rows) && rows.length > 0) {
+        tablesWithData.push(t);
+        totalRowsInFile += rows.length;
+      }
+    }
+    if (totalRowsInFile === 0) {
+      throw new Error("ملف النسخة الاحتياطية لا يحتوي على بيانات صالحة للاستيراد");
+    }
+
+    // 4) Upload to storage (traceability) under imported/
     const path = backupFilePath("imported" as any);
     const blob = new Blob([new Uint8Array(gzBuf)], { type: "application/gzip" });
     const up = await supabaseAdmin.storage
@@ -185,7 +202,6 @@ export const importBackup = createServerFn({ method: "POST" })
       .upload(path, blob, { contentType: "application/gzip", upsert: false });
     if (up.error) throw new Error("فشل رفع الملف: " + up.error.message);
 
-    // Long-lived signed URL for convenience
     let fileUrl: string | null = null;
     try {
       const { data: signed } = await supabaseAdmin.storage
@@ -195,7 +211,6 @@ export const importBackup = createServerFn({ method: "POST" })
     } catch {}
 
     const backupName = `imported-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-    console.log("[importBackup] storage upload ok:", { path, size: gzBuf.byteLength });
     const logId = await logBackupRow({
       backup_type: "imported" as any,
       backup_name: backupName,
@@ -206,16 +221,57 @@ export const importBackup = createServerFn({ method: "POST" })
       created_by: context.userId,
       completed_at: new Date().toISOString(),
     } as any);
-    console.log("[importBackup] backup_logs insert result:", { logId });
     if (!logId) {
-      // Roll back the storage upload so we don't leave orphan files when the
-      // DB record couldn't be created.
       try { await supabaseAdmin.storage.from("system-backups").remove([path]); } catch {}
       throw new Error("تم رفع الملف ولكن فشل تسجيله في قائمة النسخ الاحتياطية.");
     }
 
+    // 5) Emergency backup BEFORE touching live data
+    let emergencyPath: string | null = null;
+    try {
+      const emergency = await buildBackupPayload("emergency");
+      const upEmerg = await uploadBackup("emergency", emergency);
+      emergencyPath = upEmerg.path;
+      await logBackupRow({
+        backup_type: "emergency",
+        file_path: upEmerg.path,
+        file_size: upEmerg.size,
+        status: "success",
+        created_by: context.userId,
+      });
+    } catch (e: any) {
+      throw new Error("تعذر إنشاء نسخة طوارئ قبل الاستيراد: " + (e?.message ?? e));
+    }
+
+    // 6) Restore for real
+    const summary = await restoreFromPayload(payload);
+    const failed: Array<{ table: string; error: string }> = [];
+    let inserted = 0;
+    let tablesProcessed = 0;
+    for (const [t, v] of Object.entries(summary)) {
+      tablesProcessed++;
+      if (v.error) failed.push({ table: t, error: v.error });
+      else inserted += v.restored ?? 0;
+    }
+
+    await logBackupRow({
+      backup_type: "restore",
+      file_path: path,
+      status: failed.length > 0 ? "failed" : "success",
+      failure_reason: failed.length > 0 ? failed.map((f) => `${f.table}: ${f.error}`).join("; ") : null,
+      restore_date: new Date().toISOString(),
+      restored_by: context.userId,
+      created_by: context.userId,
+    });
+
     const versionMismatch = payload.meta.version !== 1;
-    return { path, logId, size: gzBuf.byteLength, versionMismatch, meta: payload.meta };
+    return {
+      path, logId, size: gzBuf.byteLength, versionMismatch, meta: payload.meta,
+      summary, inserted, tablesProcessed,
+      tablesWithData: tablesWithData.length,
+      failed, emergencyPath,
+    };
   });
+
 
 
