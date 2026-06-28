@@ -6,6 +6,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { useLive, type Agent, type IssuingCompany, type Merchant, type Investor } from "@/lib/db";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { confirmDialog } from "@/lib/confirm";
 import { IMPORT_SPECS, getSpec, type ImportSpec } from "@/lib/dataImport/specs";
 import { parseFile, type ParsedFile } from "@/lib/dataImport/parse";
 import { suggestMapping } from "@/lib/dataImport/mapper";
@@ -117,7 +118,7 @@ function DataImportPage() {
       toast.error("لا تملك صلاحية تنفيذ الاستيراد");
       return;
     }
-    if (!confirm(`تأكيد استيراد البيانات إلى "${spec.label}"؟ سيتم إضافتها كسجلات حقيقية داخل النظام.`)) return;
+    if (!(await confirmDialog(`تأكيد استيراد البيانات إلى "${spec.label}"؟ سيتم إضافتها كسجلات حقيقية داخل النظام.`, { confirmLabel: "استيراد", cancelLabel: "إلغاء" }))) return;
     setImporting(true);
     setProgress(0);
     let insertedIds: string[] = [];
@@ -207,7 +208,7 @@ function DataImportPage() {
       toast.error("لا تملك صلاحية التراجع عن الاستيراد");
       return;
     }
-    if (!confirm(`تأكيد التراجع عن استيراد ${b.rows_inserted} سجل؟`)) return;
+    if (!(await confirmDialog(`تأكيد التراجع عن استيراد ${b.rows_inserted} سجل؟`, { confirmLabel: "تراجع", cancelLabel: "إلغاء" }))) return;
     try {
       await undoBatch(b.id, b.target_table, Array.isArray(b.inserted_ids) ? b.inserted_ids : []);
       try {

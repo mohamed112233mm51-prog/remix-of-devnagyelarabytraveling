@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtNum, type Merchant } from "@/lib/db";
 import { toast } from "sonner";
+import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
@@ -283,7 +284,8 @@ function CurrencySupplierStatementPage() {
                     {perm.delete && (
                       <td data-label="إجراءات">
                         <button className="action-btn" onClick={async () => {
-                          if (!confirm("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.")) return;
+                          const ok = await confirmDialog("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.", { confirmLabel: "حذف", cancelLabel: "إلغاء" });
+                          if (!ok) return;
                           await reverseTransaction(r, boxes);
                           const { error } = await supabase.from("currency_supplier_transactions" as any).delete().eq("id", r.id);
                           if (error) return toast.error(error.message);
