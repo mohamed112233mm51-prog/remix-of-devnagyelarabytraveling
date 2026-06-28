@@ -464,7 +464,7 @@ function SubmissionForm({
           <SearchableSelect
             value={form.agent_id}
             onChange={(v) => setForm({ ...form, agent_id: v })}
-            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            options={activeOptions(agents, form.agent_id, (a) => a.name)}
           />
         </Field>
         <Field label="الحالة">
