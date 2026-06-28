@@ -517,6 +517,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
       company_name: form.company_name.trim(),
       phone: form.phone.trim() || null,
       whatsapp: form.whatsapp.trim() || null,
+      status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: form.opening_date || null,
