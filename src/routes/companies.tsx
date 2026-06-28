@@ -640,7 +640,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
         </div>
         </div>)}
 
-        {activeTab === "pricing" && <div key="tab-pricing"><CompanyPricingTab companyId={company.id} /></div>}
+        {canSeePricing && activeTab === "pricing" && <div key="tab-pricing"><CompanyPricingTab companyId={company.id} /></div>}
       </div>
     </div>,
     document.body,
