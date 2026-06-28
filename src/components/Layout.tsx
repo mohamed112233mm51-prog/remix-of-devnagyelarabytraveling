@@ -19,6 +19,8 @@ import {
   PlusCircle,
   Upload,
   Coins,
+  Tag,
+  Search as SearchIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
@@ -28,7 +30,7 @@ import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { isDevEnv } from "@/lib/env";
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
-type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null };
+type Item = { to: string; icon: IconType; label: string; section: string; adminOnly?: boolean; permKey?: string | null; hash?: string };
 
 const NAV: { label: string; items: Item[] }[] = [
   {
@@ -56,6 +58,13 @@ const NAV: { label: string; items: Item[] }[] = [
     label: "المصروفات",
     items: [
       { to: "/expenses", icon: Wallet, label: "المصروفات", section: "المصروفات", permKey: "expenses" },
+    ],
+  },
+  {
+    label: "أسعار الخدمات",
+    items: [
+      { to: "/service-pricing", hash: "manage", icon: Tag, label: "تسعير خدمة", section: "أسعار الخدمات", permKey: "service_pricing_manage" },
+      { to: "/service-pricing", hash: "lookup", icon: SearchIcon, label: "بحث سعر خدمة", section: "أسعار الخدمات", permKey: "service_price_search" },
     ],
   },
   {
@@ -173,8 +182,9 @@ export default function Layout() {
                   const Icon = it.icon;
                   return (
                     <Link
-                      key={it.to}
+                      key={`${it.to}#${it.hash || ""}-${it.label}`}
                       to={it.to}
+                      hash={it.hash}
                       className={`nav-item ${active ? "active" : ""}`}
                     >
                       <span className="nav-icon"><Icon size={17} strokeWidth={1.9} /></span>

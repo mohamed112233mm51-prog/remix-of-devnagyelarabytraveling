@@ -18,6 +18,8 @@ export const SECTION_KEYS = [
   "expenses",
   "reports",
   "data_import",
+  "service_pricing_manage",
+  "service_price_search",
   NET_PROFIT_PERMISSION_KEY,
   PROFIT_SUMMARY_PERMISSION_KEY,
 ] as const;

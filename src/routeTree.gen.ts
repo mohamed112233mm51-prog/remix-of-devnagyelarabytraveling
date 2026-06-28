@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubmissionsRouteImport } from './routes/submissions'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ServicePricingRouteImport } from './routes/service-pricing'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as MerchantsRouteImport } from './routes/merchants'
@@ -35,6 +36,11 @@ const SubmissionsRoute = SubmissionsRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicePricingRoute = ServicePricingRouteImport.update({
+  id: '/service-pricing',
+  path: '/service-pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/service-pricing': typeof ServicePricingRoute
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/service-pricing': typeof ServicePricingRoute
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/merchants': typeof MerchantsRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/service-pricing': typeof ServicePricingRoute
   '/settings': typeof SettingsRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/merchants'
     | '/reports'
     | '/reset-password'
+    | '/service-pricing'
     | '/settings'
     | '/submissions'
     | '/agent-statement/$agentId'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/merchants'
     | '/reports'
     | '/reset-password'
+    | '/service-pricing'
     | '/settings'
     | '/submissions'
     | '/agent-statement/$agentId'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/merchants'
     | '/reports'
     | '/reset-password'
+    | '/service-pricing'
     | '/settings'
     | '/submissions'
     | '/agent-statement/$agentId'
@@ -245,6 +257,7 @@ export interface RootRouteChildren {
   MerchantsRoute: typeof MerchantsRoute
   ReportsRoute: typeof ReportsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ServicePricingRoute: typeof ServicePricingRoute
   SettingsRoute: typeof SettingsRoute
   SubmissionsRoute: typeof SubmissionsRoute
   AgentStatementAgentIdRoute: typeof AgentStatementAgentIdRoute
@@ -266,6 +279,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service-pricing': {
+      id: '/service-pricing'
+      path: '/service-pricing'
+      fullPath: '/service-pricing'
+      preLoaderRoute: typeof ServicePricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -389,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   MerchantsRoute: MerchantsRoute,
   ReportsRoute: ReportsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ServicePricingRoute: ServicePricingRoute,
   SettingsRoute: SettingsRoute,
   SubmissionsRoute: SubmissionsRoute,
   AgentStatementAgentIdRoute: AgentStatementAgentIdRoute,
