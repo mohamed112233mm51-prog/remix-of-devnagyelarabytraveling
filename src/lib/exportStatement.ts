@@ -395,14 +395,13 @@ export async function exportStatementToPDF(data: StatementExportData) {
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
 html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
 .page{width:100%;margin:0;padding:12mm;background:#fff}
-.pdf-header-wrap{box-sizing:border-box;width:100%;margin:0 auto 12px;padding:0 10px;background:#fff;border:2px solid #C9A84C;border-radius:0 0 16px 16px;overflow:visible}
 .header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
 .header .meta{flex:1;text-align:right;min-width:0}
 .header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px}
 .header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
 .header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
-.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:0;width:100%}
+.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:12px;width:100%}
 .sum-box{border:1px solid #e5e7eb;border-right:3px solid #C9A84C;border-radius:6px;padding:6px 10px;background:#fffaf0}
 .sum-box .label{font-size:11px;color:#666}
@@ -421,21 +420,19 @@ tfoot td{font-weight:700;background:#fffaf0}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
   thead th,.sum-box,tbody tr:nth-child(even),.gold-divider{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .pdf-header-wrap{break-inside:avoid}
+  .header,.gold-divider{break-inside:avoid}
 }
 </style></head><body>
 <div class="page">
-<div class="pdf-header-wrap">
-  <div class="header">
-    ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
-    <div class="meta">
-      <div class="co-name">${esc(companyName)}</div>
-      <div class="report-title">${esc(data.title)}</div>
-      <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
-    </div>
+<div class="header">
+  ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
+  <div class="meta">
+    <div class="co-name">${esc(companyName)}</div>
+    <div class="report-title">${esc(data.title)}</div>
+    <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
-  <div class="gold-divider"></div>
 </div>
+<div class="gold-divider"></div>
 ${summaryHtml}
 <div class="table-wrap"><table><thead><tr>${data.columns.map((c) => `<th>${esc(c.header)}</th>`).join("")}</tr></thead>
 <tbody>${data.rows
