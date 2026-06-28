@@ -171,6 +171,7 @@ function CompaniesPage() {
                     <tr>
                       <th>#</th><th>الشركة الصادرة</th><th>الهاتف</th><th>الواتساب</th>
                       <th className="num-col">إجمالي الخدمات</th><th className="num-col">المدفوع</th><th className="num-col">المتبقي</th>
+                      <th>الحالة</th>
                     </tr>
                   </thead>
                   <tbody>
