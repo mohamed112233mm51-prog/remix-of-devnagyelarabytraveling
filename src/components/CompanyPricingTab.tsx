@@ -8,6 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
+import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
@@ -158,11 +159,41 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   return (
     <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <div className="card-title">💰 ملف التسعير</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" className="action-btn" onClick={() => setShowLookup((prev) => !prev)}>🔎 بحث سعر خدمة</button>
-          {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
-          {perm.create && <button type="button" className="btn btn-gold" onClick={startNew}>➕ إضافة سعر</button>}
+        <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Wallet size={16} strokeWidth={2.2} /> ملف التسعير
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button
+            type="button"
+            className={`action-btn${showLookup ? " active" : ""}`}
+            onClick={() => setShowLookup((prev) => !prev)}
+            title="بحث سعر خدمة"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <Search size={14} strokeWidth={2} /> بحث سعر خدمة
+          </button>
+          {perm.create && (
+            <button
+              type="button"
+              className="action-btn"
+              onClick={() => setShowImport(true)}
+              title="استيراد من شركة أخرى"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Download size={14} strokeWidth={2} /> استيراد من شركة أخرى
+            </button>
+          )}
+          {perm.create && (
+            <button
+              type="button"
+              className="btn btn-gold"
+              onClick={startNew}
+              title="إضافة سعر"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Plus size={14} strokeWidth={2.4} /> إضافة سعر
+            </button>
+          )}
         </div>
       </div>
       <div className="card-body">
@@ -233,10 +264,45 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                       <td style={{ padding: 6 }}>{r.commission_type === "fixed" ? "مبلغ" : "نسبة"}</td>
                       <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}</td>
                       <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
-                      <td style={{ padding: 6, display: "flex", gap: 4 }}>
-                        {perm.edit && <button type="button" className="action-btn" onClick={() => startEdit(r)} style={{ padding: "2px 6px" }}>تعديل</button>}
-                        {perm.create && <button type="button" className="action-btn" onClick={() => duplicate(r)} title="تكرار" style={{ padding: "2px 6px", color: "var(--green, #16a34a)" }}>📋 تكرار</button>}
-                        {perm.delete && <button type="button" className="action-btn" onClick={() => remove(r.id)} style={{ padding: "2px 6px" }}>حذف</button>}
+                      <td style={{ padding: 6 }}>
+                        <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                          {perm.edit && (
+                            <button
+                              type="button"
+                              className="action-btn icon-only"
+                              onClick={() => startEdit(r)}
+                              title="تعديل"
+                              aria-label="تعديل"
+                              style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}
+                            >
+                              <Pencil size={14} strokeWidth={2} />
+                            </button>
+                          )}
+                          {perm.create && (
+                            <button
+                              type="button"
+                              className="action-btn icon-only"
+                              onClick={() => duplicate(r)}
+                              title="تكرار"
+                              aria-label="تكرار"
+                              style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6, color: "var(--green, #16a34a)" }}
+                            >
+                              <CopyPlus size={14} strokeWidth={2} />
+                            </button>
+                          )}
+                          {perm.delete && (
+                            <button
+                              type="button"
+                              className="action-btn icon-only"
+                              onClick={() => remove(r.id)}
+                              title="حذف"
+                              aria-label="حذف"
+                              style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6, color: "var(--red, #dc2626)" }}
+                            >
+                              <Trash2 size={14} strokeWidth={2} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ));
