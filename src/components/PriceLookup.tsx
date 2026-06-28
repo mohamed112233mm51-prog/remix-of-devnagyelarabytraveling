@@ -97,6 +97,19 @@ export function PriceLookup(props: {
 
   useEffect(() => { onFilteredChange?.(filtered); }, [filtered, onFilteredChange]);
 
+  const anyFilterSet = FIELDS.some((k) => {
+    if (k === "agent_tier" && agentTier) return false;
+    return !!filters[k];
+  });
+
+  useEffect(() => { onActiveChange?.(anyFilterSet); }, [anyFilterSet, onActiveChange]);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setFilters({ ...emptyFilters(), agent_tier: agentTier || "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
   const companyNameOf = (id?: string | null) =>
     id ? (allCompanies.find((c) => c.id === id)?.company_name || "—") : "—";
 
