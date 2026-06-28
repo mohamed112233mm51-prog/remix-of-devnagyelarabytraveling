@@ -10,6 +10,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 import { AgentLedger } from "@/components/AgentLedger";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
