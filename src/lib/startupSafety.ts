@@ -88,6 +88,27 @@ async function manageServiceWorker() {
   } catch {}
 }
 
+const RELOAD_FLAG = "__chunk_reload_at__";
+function isChunkLoadError(msg: string) {
+  return /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError|error loading dynamically imported module/i.test(msg);
+}
+function handleChunkError(message: string) {
+  if (!isChunkLoadError(message)) return;
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_FLAG) || "0");
+    if (Date.now() - last < 10000) return;
+    sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));
+  } catch {}
+  try {
+    const w = window as Window;
+    if (typeof caches !== "undefined") {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => w.location.reload());
+    } else {
+      w.location.reload();
+    }
+  } catch { window.location.reload(); }
+}
+
 export function installStartupSafety() {
   if (typeof window === "undefined") return;
   if (installed) return;
@@ -96,6 +117,13 @@ export function installStartupSafety() {
   cleanLocalState();
   cleanHistoryState();
   void manageServiceWorker();
+  window.addEventListener("vite:preloadError", (e: Event) => {
+    e.preventDefault();
+    const msg = ((e as unknown as { payload?: { message?: string } }).payload?.message) || "Failed to fetch dynamically imported module";
+    handleChunkError(msg);
+  });
+  window.addEventListener("error", (e) => handleChunkError(e?.message || ""));
+  window.addEventListener("unhandledrejection", (e) => handleChunkError(String((e as PromiseRejectionEvent).reason?.message || (e as PromiseRejectionEvent).reason || "")));
 }
 
 installStartupSafety();
