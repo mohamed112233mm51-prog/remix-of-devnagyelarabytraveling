@@ -214,7 +214,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
 
     setSaving(false);
     toast.success("تم تسجيل صرف النقدية للتاجر");
-    setSplits([newPaymentSplitRow()]); setNote("");
+    resetDraft();
     onDone?.();
   };
 
