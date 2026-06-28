@@ -139,13 +139,17 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("executions")
-        .select("id, created_at")
+        .select("id, created_at, operation_status")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as { id: string; created_at: string | null }[];
+      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null }[];
     },
   });
   const executionMetrics = executionMetricsQuery.data ?? [];
+  const executedRows = useMemo(
+    () => executionMetrics.filter((e) => (e.operation_status || "").trim() === "منفذ"),
+    [executionMetrics],
+  );
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
   const { rows: currencyTxns } = useLive<{ id: string; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; exchange_rate: number | null; tx_date: string; created_at: string }>("currency_supplier_transactions");
