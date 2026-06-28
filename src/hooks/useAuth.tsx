@@ -67,21 +67,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.info("[startup] Profile/Permissions loading start");
     try {
       const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
-        await withStartupTimeout(Promise.all([
+        await Promise.all([
           supabase.from("user_roles").select("role").eq("user_id", uid),
           supabase
             .from("profiles")
             .select("is_active, invite_accepted, permissions, is_super_admin")
             .eq("id", uid)
             .maybeSingle(),
-        ]), "Profile/Permissions");
+        ]);
       if (roleError || profileError) {
-        toast.error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
-        setRoles([]);
-        setPermissions({});
-        setIsSuperAdmin(false);
-        setBlocked(null);
-        return;
+        throw new Error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
       }
       const nextRoles = (roleRows ?? []).map((r: any) => r.role);
       const nextPerms = (((profile as any)?.permissions as Record<string, any>) ?? {});
@@ -93,16 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       else if ((profile as any).is_active === false) setBlocked("disabled");
       else if ((profile as any).invite_accepted === false) setBlocked("disabled");
       else setBlocked(null);
+      setProfileLoaded(true);
       console.info("[startup] Profile/Permissions loading complete");
     } catch (error: any) {
-      console.warn("[startup] Profile/Permissions failed or timed out", error);
-      toast.error(error?.message || "تعذر تحميل صلاحيات المستخدم");
-      setRoles([]);
-      setPermissions({});
-      setIsSuperAdmin(false);
-      setBlocked(null);
-    } finally {
-      setProfileLoaded(true);
+      console.warn("[startup] Profile/Permissions failed", error);
+      // Do NOT set profileLoaded=true on real errors — that would render an Unauthorized screen.
+      // Leave profileLoaded=false so the UI shows the retry state via __root.
+      throw error;
     }
   }, [applyPermissions]);
 
