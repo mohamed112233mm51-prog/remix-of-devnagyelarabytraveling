@@ -300,7 +300,7 @@ export function AgentPaymentForm({
                   <SearchableSelect
                     value={row.merchant_id}
                     onChange={(v) => updateSplit(row.uid, { merchant_id: v, method: "" })}
-                    options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))}
+                    options={activeOptions(merchants, row.merchant_id, (m) => m.merchant_name)}
                     placeholder="اختر..."
                   />
                 </div>
