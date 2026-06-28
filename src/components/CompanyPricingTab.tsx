@@ -368,8 +368,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
 
 function DraftEditor(props: {
   draft: Row;
-  setDraft: (r: Row) => void;
+  setDraft: (r: Row | null) => void;
   onCancel: () => void;
+  onReset?: () => void;
   onSave: () => void;
   services: readonly string[];
   tiers: readonly string[];
