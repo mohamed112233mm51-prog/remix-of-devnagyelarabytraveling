@@ -90,9 +90,11 @@ function SettingsPage() {
     { id: "general", label: "إعدادات عامة", icon: <SlidersHorizontal size={15} strokeWidth={2} />, perm: "company_manage" },
     // قائمة "قوائم النظام" تم دمجها في تبويب "إعدادات عامة → القوائم المنسدلة" — مصدر واحد لجميع القوائم.
     { id: "backups", label: "النسخ الاحتياطي", icon: <DatabaseBackup size={15} strokeWidth={2} />, perm: "backups_manage" },
+    { id: "change_password", label: "تغيير كلمة السر", icon: <KeyRound size={15} strokeWidth={2} />, perm: "change_password" },
     { id: "production", label: "تنظيف للإنتاج", icon: <Sparkles size={15} strokeWidth={2} />, perm: "system_tools" },
     ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "system_tools" as SettingsSubKey }] : []),
   ];
+
   const tabs = allTabs.filter((t) => can(t.perm));
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "users");
 
