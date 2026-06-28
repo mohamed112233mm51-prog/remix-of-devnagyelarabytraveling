@@ -793,11 +793,10 @@ function Dashboard() {
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة الرحلات" value={fmtDL(agentsFlightsValue)} />
-          <Stat label="قيمة الموافقات" value={fmtDL(agentsApprovalsValue)} />
+          <Stat label="قيمة التنفيذات" value={fmtDL(agentsFlightsValue + agentsApprovalsValue + agentsOtherValue)} />
           <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
-          <Stat label="عدد الرحلات" value={fmtNum(flights.length)} />
-          <Stat label="تقديمات الموافقات" value={fmtNum(approvals.length)} />
+          <Stat label="عدد التنفيذات" value={fmtNum(executedRows.length)} />
+          <Stat label="عدد التقديمات" value={fmtNum(submissions.length)} />
         </SectionCard>
 
         <SectionCard title="الشركات الصادرة" icon={<Building2 size={16} />} accent="navy">
