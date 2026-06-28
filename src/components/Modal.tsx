@@ -51,7 +51,8 @@ export function Modal({
       className={`modal-overlay open${overlayClassName ? ` ${overlayClassName}` : ""}`}
       style={zIndex ? { zIndex } : undefined}
       onClick={(e) => {
-        if (closeOnBackdrop && e.target === e.currentTarget) onClose();
+        // Backdrop click never closes — close only via the × button.
+        e.stopPropagation();
       }}
     >
       <div className="modal-box" style={{ maxWidth }}>
