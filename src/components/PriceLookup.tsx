@@ -54,7 +54,12 @@ export function PriceLookup(props: {
   const { rows: allCompanies } = useLive<IssuingCompany>("issuing_companies");
 
   // ----- Source rules -----
-  const [companyId, setCompanyId] = useState<string>(fixedCompanyId || "");
+  // Persist the agent-mode company pick so reopening the lookup restores the
+  // previous selection (and therefore the previous filters under that key).
+  const [companyId, setCompanyId, clearStoredCompanyId] = usePersistentState<string>(
+    `pricelookup:${mode}:companyId`,
+    fixedCompanyId || "",
+  );
   const [internalRules, setInternalRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -161,6 +166,7 @@ export function PriceLookup(props: {
 
   const clearFilters = () => {
     clearStoredFilters();
+    if (!fixedCompanyId) clearStoredCompanyId();
   };
 
 
@@ -211,7 +217,7 @@ export function PriceLookup(props: {
             <label>الشركة *</label>
             <select
               value={companyId}
-              onChange={(e) => { setCompanyId(e.target.value); setFilters(emptyFilters()); }}
+              onChange={(e) => setCompanyId(e.target.value)}
             >
               <option value="">—</option>
               {allCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
