@@ -49,6 +49,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   );
 
   const [rules, setRules] = useState<PricingRule[]>([]);
+  const [filteredRules, setFilteredRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -160,7 +161,13 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           {perm.create && <button type="button" className="action-btn" onClick={() => setShowImport(true)}>📥 استيراد من شركة أخرى</button>}
         </div>
       </div>
-      <PriceLookup mode="company" companyId={companyId} onOpenRule={(r) => setDraft({ ...r })} />
+      <PriceLookup
+        mode="company"
+        companyId={companyId}
+        rules={rules}
+        onOpenRule={(r) => setDraft({ ...r })}
+        onFilteredChange={setFilteredRules}
+      />
       <div className="card-body">
 
         {loading ? (
@@ -186,10 +193,12 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {rules.length === 0 && (
-                  <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>لا توجد قواعد تسعير بعد</td></tr>
+                {filteredRules.length === 0 && (
+                  <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
+                    {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "لا توجد نتائج مطابقة للفلاتر"}
+                  </td></tr>
                 )}
-                {rules.map((r) => (
+                {filteredRules.map((r) => (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
                     <td style={{ padding: 6 }}>{r.departure_from || "—"}</td>
