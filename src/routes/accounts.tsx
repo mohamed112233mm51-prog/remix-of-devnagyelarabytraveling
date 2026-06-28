@@ -234,9 +234,9 @@ function AccountsPage() {
             headerActions={
               <button
                 type="button"
-                className={`action-btn${showAgentLookup ? " active" : ""}`}
+                className={`btn btn-outline${showAgentLookup ? " active" : ""}`}
                 onClick={() => setShowAgentLookup((v) => !v)}
-                title={showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
+                title="بحث داخل أسعار خدمات الوكيل"
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
                 <Search size={14} strokeWidth={2} />
