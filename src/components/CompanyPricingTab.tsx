@@ -339,7 +339,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           draft={draft}
           setDraft={setDraft}
           onCancel={closeDraft}
-          onReset={!draft.id ? resetDraft : undefined}
+          
           onSave={save}
           services={services}
           tiers={tiers.length ? tiers : ["A","B","C"]}
