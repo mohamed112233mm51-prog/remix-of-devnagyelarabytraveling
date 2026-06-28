@@ -224,7 +224,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
       <div className="card-header"><div className="card-title">💸 صرف نقدية للتاجر</div></div>
       <div className="form-grid">
         <div className="form-group"><label>التاجر *</label>
-          <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} placeholder="اختر..." disabled={!!initialMerchantId} />
+          <SearchableSelect value={merchantId} onChange={setMerchantId} options={activeOptions(merchants, merchantId, (m) => m.merchant_name)} placeholder="اختر..." disabled={!!initialMerchantId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
