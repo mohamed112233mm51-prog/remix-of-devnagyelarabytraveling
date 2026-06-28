@@ -504,6 +504,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
     supports_instapay: merchant.supports_instapay ?? true,
     supports_cash_wallet: merchant.supports_cash_wallet ?? true,
     supports_physical_cash: merchant.supports_physical_cash ?? true,
+    status: (merchant as any).status || "نشط",
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
@@ -517,7 +518,8 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
       supports_instapay: form.supports_instapay,
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
-    }).eq("id", merchant.id);
+      status: form.status || "نشط",
+    } as any).eq("id", merchant.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     onClose();
