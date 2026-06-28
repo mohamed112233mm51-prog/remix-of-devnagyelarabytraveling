@@ -19,6 +19,8 @@ export function EntityProfileModal({
   editLabel,
   canEdit,
   onEdit,
+  headerActions,
+  extraContent,
 }: {
   open: boolean;
   onClose: () => void;
@@ -30,6 +32,9 @@ export function EntityProfileModal({
   editLabel: string;
   canEdit?: boolean;
   onEdit?: () => void;
+  headerActions?: ReactNode;
+  extraContent?: ReactNode;
+
 }) {
   return (
     <Modal
