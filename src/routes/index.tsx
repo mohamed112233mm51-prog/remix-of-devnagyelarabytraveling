@@ -817,10 +817,9 @@ function Dashboard() {
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة التنفيذات" value={fmtDL(agentsTripValue)} />
+          <Stat label="قيمة الخدمات" value={fmtDL(agentsTripValue)} />
           <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
-          <Stat label="عدد التنفيذات" value={fmtNum(executedRows.length)} />
-          <Stat label="عدد التقديمات" value={fmtNum(submissions.length)} />
+          <Stat label="المستحق" value={fmtDL(agentsDue)} tone="red" highlight />
         </SectionCard>
 
         <SectionCard title="الشركات الصادرة" icon={<Building2 size={16} />} accent="navy">
@@ -840,11 +839,12 @@ function Dashboard() {
 
 
         <SectionCard title="المصروفات" icon={<Wallet size={16} />} accent="navy">
-          <Stat label="الإجمالي" value={fmtDL(expensesTotal)} tone="red" />
+          <Stat label="الإجمالي" value={fmtDL(expensesFixed + expensesVariable)} tone="red" />
           <Stat label="ثابتة" value={fmtDL(expensesFixed)} />
           <Stat label="متغيرة" value={fmtDL(expensesVariable)} />
-          
+
         </SectionCard>
+
 
         <SectionCard title="موردو العملة" icon={<Landmark size={16} />} accent="navy">
           <Stat label="عدد الموردين" value={fmtNum(currencySupplierStats.count)} />
