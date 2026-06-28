@@ -154,19 +154,29 @@ export function PriceLookup(props: {
 
 
   return (
-    <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <div className="card-title">🔎 بحث سعر خدمة (فلترة تفاعلية)</div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>
-            {filtered.length} / {rules.length}
-          </span>
+    <div className={bare ? "" : "card"} style={bare ? { marginTop: 0 } : { marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
+      {!bare && (
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div className="card-title">🔎 بحث سعر خدمة (فلترة تفاعلية)</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              {filtered.length} / {rules.length}
+            </span>
+            {anyFilterSet && (
+              <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
+            )}
+          </div>
+        </div>
+      )}
+      {bare && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>النتائج: {filtered.length} / {rules.length}</span>
           {anyFilterSet && (
             <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
           )}
         </div>
-      </div>
-      <div className="card-body">
+      )}
+      <div className={bare ? "" : "card-body"}>
         {!fixedCompanyId && mode === "agent" && (
           <div className="form-group" style={{ marginBottom: 8 }}>
             <label>الشركة *</label>
