@@ -156,15 +156,23 @@ function LookupPanel() {
 
   const agentOptions = useMemo(
     () =>
-      agents.map((a) => ({
-        value: a.id,
-        label: `${a.name}${(a as any).tier ? ` — شريحة ${(a as any).tier}` : ""}`,
-      })),
-    [agents],
+      agents
+        .filter((a: any) => ((a.status || "نشط") === "نشط") || a.id === agentId)
+        .map((a) => ({
+          value: a.id,
+          label: `${a.name}${(a as any).tier ? ` — شريحة ${(a as any).tier}` : ""}${((a as any).status || "نشط") !== "نشط" ? " (غير نشط)" : ""}`,
+        })),
+    [agents, agentId],
   );
   const companyOptions = useMemo(
-    () => companies.map((c) => ({ value: c.id, label: c.company_name })),
-    [companies],
+    () =>
+      companies
+        .filter((c: any) => ((c.status || "نشط") === "نشط") || c.id === companyId)
+        .map((c) => ({
+          value: c.id,
+          label: ((c as any).status || "نشط") === "نشط" ? c.company_name : `${c.company_name} (غير نشطة)`,
+        })),
+    [companies, companyId],
   );
 
   return (
