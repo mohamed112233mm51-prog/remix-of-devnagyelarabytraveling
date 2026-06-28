@@ -113,7 +113,7 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       <div className="card-header"><div className="card-title">💸 صرف نقدية للوكيل</div></div>
       <div className="form-grid">
         <div className="form-group"><label>الوكيل *</label>
-          <SearchableSelect value={agentId} onChange={setAgentId} options={agents.map((a) => ({ value: a.id, label: a.name }))} placeholder="اختر..." disabled={!!initialAgentId} />
+          <SearchableSelect value={agentId} onChange={setAgentId} options={activeOptions(agents, agentId, (a) => a.name)} placeholder="اختر..." disabled={!!initialAgentId} />
         </div>
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
