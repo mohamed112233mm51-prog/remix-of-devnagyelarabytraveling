@@ -219,6 +219,37 @@ function CompaniesPage() {
       {editCompany && perm.edit && (
         <EditCompanyModal company={editCompany} onClose={() => setEditCompany(null)} />
       )}
+
+      {viewCompany && (() => {
+        const c = viewCompany as any;
+        const s = stats.get(viewCompany.id) || { trips: 0, paid: 0 };
+        const due = s.trips - s.paid;
+        return (
+          <EntityProfileModal
+            open={!!viewCompany}
+            onClose={() => setViewCompany(null)}
+            titlePrefix="ملف الشركة"
+            name={viewCompany.company_name}
+            canEdit={perm.edit}
+            editLabel="تعديل بيانات الشركة"
+            onEdit={() => { setEditCompany(viewCompany); setViewCompany(null); }}
+            kpis={[
+              { label: "إجمالي الخدمات", value: fmtDL(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
+              { label: "المتبقي", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+            ]}
+            fields={[
+              { label: "اسم الشركة", value: viewCompany.company_name },
+              { label: "الهاتف", value: viewCompany.phone },
+              { label: "الواتساب", value: (viewCompany as any).whatsapp },
+              { label: "رصيد سابق مدين", value: c.opening_debit ? fmtDL(Number(c.opening_debit)) : "—" },
+              { label: "رصيد سابق دائن", value: c.opening_credit ? fmtDL(Number(c.opening_credit)) : "—" },
+              { label: "تاريخ الرصيد السابق", value: c.opening_date || "—" },
+              { label: "ملاحظات الرصيد السابق", value: c.opening_note || "—" },
+            ]}
+          />
+        );
+      })()}
     </div>
   );
 }
