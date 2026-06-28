@@ -14,6 +14,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 
 import {
