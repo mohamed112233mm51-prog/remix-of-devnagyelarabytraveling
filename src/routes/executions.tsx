@@ -25,6 +25,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { resolveAgentPrice } from "@/lib/pricingMatch";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
