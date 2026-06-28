@@ -3,32 +3,39 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // Tables to include in every backup (full app state).
-// Order matters for restore: parents-first ish; but since we wipe & insert per table
-// without FK constraints, order is informational only.
+// Order is PARENT -> CHILD (FK-safe for inserts).
+// Restore wipes in reverse (child -> parent) then inserts in this order.
 export const BACKUP_TABLES = [
-  "agents",
-  "company_pricing_rules",
+  // Independent / reference
+  "profiles",
+  "user_roles",
+  "app_settings",
+  "system_dropdown_options",
+  // Master entities (no FKs to operational tables)
   "issuing_companies",
+  "agents",
   "merchants",
   "investors",
   "currency_suppliers",
-  "currency_supplier_transactions",
-  "usd_treasury_transactions",
   "cash_boxes",
-  "payment_splits",
+  // Depends on issuing_companies/agents
+  "company_pricing_rules",
+  "expenses",
+  // Workflow
   "submissions",
   "executions",
+  // Financial movements
   "transactions",
   "company_transactions",
+  "currency_supplier_transactions",
+  "usd_treasury_transactions",
   "merchant_cash_collections",
   "investor_transactions",
-  "expenses",
   "expense_deductions",
+  // Depends on transactions/cash_boxes
+  "payment_splits",
+  // Logs / misc
   "import_batches",
-  "system_dropdown_options",
-  "app_settings",
-  "profiles",
-  "user_roles",
   "activity_logs",
 ] as const;
 
@@ -161,17 +168,24 @@ const UPSERT_CONFLICT_KEY: Record<string, string> = {
 // Caller MUST be admin (enforced upstream).
 export async function restoreFromPayload(payload: BackupPayload) {
   const summary: Record<string, { restored: number; mode: "upsert" | "wipe-insert"; error?: string }> = {};
+
+  // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
+  const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
+  for (const t of wipeOrder) {
+    try {
+      const del = await (supabaseAdmin.from as any)(t).delete().not("id", "is", null);
+      if (del.error) throw new Error(`wipe: ${del.error.message}`);
+    } catch (e: any) {
+      summary[t] = { restored: 0, mode: "wipe-insert", error: e?.message ?? String(e) };
+    }
+  }
+
+  // PHASE 2: insert / upsert in FORWARD FK order (parents first)
   for (const t of BACKUP_TABLES) {
+    if (summary[t]?.error) continue; // wipe failed
     const rows = payload.data[t] ?? [];
     const isReference = REFERENCE_TABLES_NO_WIPE.has(t);
     try {
-      if (!isReference) {
-        // Wipe table. Using a non-null id filter ensures DELETE has a where.
-        const del = await (supabaseAdmin.from as any)(t).delete().not("id", "is", null);
-        if (del.error) throw new Error(`wipe: ${del.error.message}`);
-      }
-
-      // Insert / upsert in chunks
       const CHUNK = 500;
       let written = 0;
       for (let i = 0; i < rows.length; i += CHUNK) {
