@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLive, type IssuingCompany } from "@/lib/db";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { supabase } from "@/integrations/supabase/client";
+import { Search, X, Pencil } from "lucide-react";
 
 type Mode = "company" | "agent";
 
@@ -165,13 +166,23 @@ export function PriceLookup(props: {
     <div className={bare ? "" : "card"} style={bare ? { marginTop: 0 } : { marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
       {!bare && (
         <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div className="card-title">🔎 بحث سعر خدمة (فلترة تفاعلية)</div>
+          <div className="card-title" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Search size={16} strokeWidth={2.2} /> بحث سعر خدمة (فلترة تفاعلية)
+          </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>
               {filtered.length} / {rules.length}
             </span>
             {anyFilterSet && (
-              <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={clearFilters}
+                title="مسح الفلاتر"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <X size={14} strokeWidth={2} /> مسح الفلاتر
+              </button>
             )}
           </div>
         </div>
@@ -180,7 +191,15 @@ export function PriceLookup(props: {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>النتائج: {filtered.length} / {rules.length}</span>
           {anyFilterSet && (
-            <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
+            <button
+              type="button"
+              className="action-btn"
+              onClick={clearFilters}
+              title="مسح الفلاتر"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <X size={14} strokeWidth={2} /> مسح الفلاتر
+            </button>
           )}
         </div>
       )}
@@ -265,7 +284,16 @@ export function PriceLookup(props: {
                       <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
                       {mode === "company" && onOpenRule && (
                         <td style={{ padding: 6 }}>
-                          <button type="button" className="action-btn" style={{ padding: "2px 6px" }} onClick={() => onOpenRule(r)}>تعديل</button>
+                          <button
+                            type="button"
+                            className="action-btn icon-only"
+                            onClick={() => onOpenRule(r)}
+                            title="تعديل"
+                            aria-label="تعديل"
+                            style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}
+                          >
+                            <Pencil size={14} strokeWidth={2} />
+                          </button>
                         </td>
                       )}
                     </tr>

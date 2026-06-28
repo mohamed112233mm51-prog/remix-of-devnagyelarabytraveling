@@ -233,10 +233,13 @@ function AccountsPage() {
             headerActions={
               <button
                 type="button"
-                className="action-btn"
+                className={`action-btn${showAgentLookup ? " active" : ""}`}
                 onClick={() => setShowAgentLookup((v) => !v)}
+                title={showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                🔎 {showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
+                <Search size={14} strokeWidth={2} />
+                {showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
               </button>
             }
             extraContent={
