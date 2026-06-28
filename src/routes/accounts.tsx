@@ -193,7 +193,41 @@ function AccountsPage() {
       {tab === "statement" && <AppErrorBoundary name="AgentLedger"><AgentLedger initialAgentId={statementAgentId} canExport={perm.export} /></AppErrorBoundary>}
 
       {editAgent && perm.edit && <EditAgentModal agent={editAgent} onClose={() => setEditAgent(null)} />}
-    </div>
+
+      {viewAgent && (() => {
+        const a = viewAgent as any;
+        const s = stats.get(viewAgent.id) || { trips: 0, paid: 0 };
+        const due = s.trips - s.paid;
+        return (
+          <EntityProfileModal
+            open={!!viewAgent}
+            onClose={() => setViewAgent(null)}
+            titlePrefix="ملف الوكيل"
+            name={viewAgent.name}
+            status={{ label: viewAgent.status || "—", tone: badgeFor(viewAgent.status) }}
+            canEdit={perm.edit}
+            editLabel="تعديل بيانات الوكيل"
+            onEdit={() => { setEditAgent(viewAgent); setViewAgent(null); }}
+            kpis={[
+              { label: "قيمة الرحلات", value: fmtDL(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
+              { label: "الصافي المستحق", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+            ]}
+            fields={[
+              { label: "اسم الوكيل", value: viewAgent.name },
+              { label: "الرقم القومي", value: viewAgent.national_id },
+              { label: "الهاتف", value: viewAgent.phone },
+              { label: "الواتساب", value: viewAgent.whatsapp },
+              { label: "المحافظة", value: viewAgent.governorate },
+              { label: "شريحة الوكيل", value: a.tier || "—" },
+              { label: "رصيد سابق مدين", value: a.opening_debit ? fmtDL(Number(a.opening_debit)) : "—" },
+              { label: "رصيد سابق دائن", value: a.opening_credit ? fmtDL(Number(a.opening_credit)) : "—" },
+              { label: "تاريخ الرصيد السابق", value: a.opening_date || "—" },
+              { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
+            ]}
+          />
+        );
+      })()}
   );
 }
 
