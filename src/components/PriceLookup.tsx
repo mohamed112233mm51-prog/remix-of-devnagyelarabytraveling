@@ -166,13 +166,23 @@ export function PriceLookup(props: {
     <div className={bare ? "" : "card"} style={bare ? { marginTop: 0 } : { marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
       {!bare && (
         <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div className="card-title">🔎 بحث سعر خدمة (فلترة تفاعلية)</div>
+          <div className="card-title" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Search size={16} strokeWidth={2.2} /> بحث سعر خدمة (فلترة تفاعلية)
+          </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>
               {filtered.length} / {rules.length}
             </span>
             {anyFilterSet && (
-              <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={clearFilters}
+                title="مسح الفلاتر"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <X size={14} strokeWidth={2} /> مسح الفلاتر
+              </button>
             )}
           </div>
         </div>
@@ -181,7 +191,15 @@ export function PriceLookup(props: {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>النتائج: {filtered.length} / {rules.length}</span>
           {anyFilterSet && (
-            <button type="button" className="action-btn" onClick={clearFilters}>مسح الفلاتر</button>
+            <button
+              type="button"
+              className="action-btn"
+              onClick={clearFilters}
+              title="مسح الفلاتر"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <X size={14} strokeWidth={2} /> مسح الفلاتر
+            </button>
           )}
         </div>
       )}
