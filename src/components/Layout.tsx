@@ -182,8 +182,9 @@ export default function Layout() {
                   const Icon = it.icon;
                   return (
                     <Link
-                      key={it.to}
+                      key={`${it.to}#${it.hash || ""}-${it.label}`}
                       to={it.to}
+                      hash={it.hash}
                       className={`nav-item ${active ? "active" : ""}`}
                     >
                       <span className="nav-icon"><Icon size={17} strokeWidth={1.9} /></span>
