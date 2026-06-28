@@ -193,15 +193,17 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           <Wallet size={16} strokeWidth={2.2} /> ملف التسعير
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button
-            type="button"
-            className={`btn btn-outline${showLookup ? " active" : ""}`}
-            onClick={() => setShowLookup((prev) => !prev)}
-            title="بحث داخل ملف التسعير"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-          >
-            <Search size={14} strokeWidth={2} /> بحث سعر خدمة
-          </button>
+          {perm.search && (
+            <button
+              type="button"
+              className={`btn btn-outline${showLookup ? " active" : ""}`}
+              onClick={() => setShowLookup((prev) => !prev)}
+              title="بحث داخل ملف التسعير"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Search size={14} strokeWidth={2} /> بحث سعر خدمة
+            </button>
+          )}
           {perm.create && (
             <button
               type="button"
