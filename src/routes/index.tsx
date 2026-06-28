@@ -804,7 +804,7 @@ function Dashboard() {
         </SectionCard>
 
         <SectionCard title="تاجر الكاش" icon={<HandCoins size={16} />} accent="navy">
-          <Stat label="عدد التجار" value={fmtNum(merchants.length)} />
+          <Stat label="عدد التجار" value={fmtNum(merchants.filter((m: any) => (m.status || "نشط") === "نشط").length)} />
           <Stat label="الوارد (صافي)" value={fmtDL(merchantIncomingNet)} tone="green" />
           <Stat label="الصادر" value={fmtDL(merchantOutgoing)} tone="red" />
           <Stat label="نسبة التاجر 1%" value={fmtDL(merchantFee)} />
