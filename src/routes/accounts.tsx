@@ -18,6 +18,7 @@ import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { Plane, Wallet, AlertCircle, Search, UserPlus, CreditCard, FileText, Users, ChevronLeft, Banknote } from "lucide-react";
 import { AgentCashOutForm } from "@/components/CashMovementForms";
+import { EntityProfileModal } from "@/components/EntityProfileModal";
 
 export const Route = createFileRoute("/accounts")({
   component: () => <AppErrorBoundary><AccountsPage /></AppErrorBoundary>,
