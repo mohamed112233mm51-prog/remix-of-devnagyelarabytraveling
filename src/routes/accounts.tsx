@@ -416,6 +416,9 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         <div className="form-group"><label>شريحة الوكيل</label>
           <SearchableSelect value={form.tier} onChange={(v) => set("tier", v)} options={(tierOptions.length ? tierOptions : ["A","B","C"]) as string[]} />
         </div>
+        <div className="form-group"><label>الحالة</label>
+          <SearchableSelect value={form.status} onChange={(v) => set("status", v)} options={["نشط", "غير نشط"]} allowClear={false} />
+        </div>
       </div>
 
       <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
