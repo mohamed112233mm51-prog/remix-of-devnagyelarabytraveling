@@ -345,7 +345,7 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
 
     setSaving(false);
     toast.success("تم تسجيل توريد النقدية");
-    setSplits([newPaymentSplitRow()]); setNote("");
+    resetDraft();
     onDone?.();
   };
 
