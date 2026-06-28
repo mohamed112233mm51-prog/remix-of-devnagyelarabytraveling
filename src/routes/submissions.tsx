@@ -471,7 +471,7 @@ function SubmissionForm({
             value={form.status}
             onChange={(v) => setForm({ ...form, status: v })}
             options={withSelected(statuses, form.status)}
-            allowClear={false}
+            placeholder="اختر الحالة..."
           />
         </Field>
         <Field label="الجهة (جهة المغادرة)">
