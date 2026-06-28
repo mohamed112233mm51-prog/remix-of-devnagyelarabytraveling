@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { Search, UserPlus, FileText, Coins, ChevronLeft } from "lucide-react";
+import { Search, UserPlus, FileText, Coins, ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 
 export const Route = createFileRoute("/currency-suppliers")({
