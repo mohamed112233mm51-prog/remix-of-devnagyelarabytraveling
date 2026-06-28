@@ -183,6 +183,9 @@ export function PriceLookup(props: {
           </div>
         ) : loading ? (
           <div style={{ textAlign: "center", padding: 12 }}>جاري التحميل...</div>
+        ) : onFilteredChange ? (
+          // Parent owns the data table; we are filters-only. No separate results table.
+          null
         ) : rules.length === 0 ? (
           <div className="empty" style={{ padding: 16, textAlign: "center", color: "var(--muted)" }}>
             لا توجد قواعد تسعير لهذه الشركة
@@ -239,6 +242,7 @@ export function PriceLookup(props: {
             </table>
           </div>
         )}
+
       </div>
     </div>
   );
