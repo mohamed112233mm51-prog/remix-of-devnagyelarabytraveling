@@ -30,11 +30,13 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [agentId, setAgentId] = useState(initialAgentId || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
+  const draftKey = `draft:agent-cash-out:${initialAgentId || "new"}`;
+  const [agentId, setAgentId, clearAgentId] = usePersistentState<string>(`${draftKey}:agentId`, initialAgentId || "");
+  const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
+  const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
+  const resetDraft = () => { clearAgentId(); clearDate(); clearNote(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
