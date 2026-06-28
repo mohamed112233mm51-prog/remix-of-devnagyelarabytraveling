@@ -360,17 +360,17 @@ function Dashboard() {
     const end = new Date(start); end.setDate(end.getDate() + 1);
     const s = start.getTime(), e = end.getTime();
     const inToday = (d?: string | null) => { if (!d) return false; const t = new Date(d).getTime(); return t >= s && t < e; };
-    let collected = 0, value = 0, fc = 0, ac = 0;
+    let collected = 0, value = 0, execCount = 0, subCount = 0;
     for (const t of txns) {
       if (!inToday(t.created_at)) continue;
       collected += Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
       value += tripValue(t);
     }
-    for (const f of flights) if (inToday(f.created_at)) fc += 1;
-    for (const a of approvals) if (inToday(a.created_at)) ac += 1;
-    return { todayCollected: collected, todayValue: value, todayFlights: fc, todayApprovals: ac, now };
-  }, [txns, flights, approvals]);
-  const { todayCollected, todayValue, todayFlights, todayApprovals, now: today } = todayStats;
+    for (const x of executedRows) if (inToday(x.created_at)) execCount += 1;
+    for (const x of submissions) if (inToday(x.created_at)) subCount += 1;
+    return { todayCollected: collected, todayValue: value, todayExecutions: execCount, todaySubmissions: subCount, now };
+  }, [txns, executedRows, submissions]);
+  const { todayCollected, todayValue, todayExecutions, todaySubmissions, now: today } = todayStats;
 
   // ===== Period-aware chart — single pass binning =====
   const chart = useMemo(() => {
