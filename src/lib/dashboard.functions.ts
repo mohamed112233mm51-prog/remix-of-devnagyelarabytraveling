@@ -16,18 +16,29 @@ function admin() {
 
 async function getProfitAuthorization(userId: string) {
   const sb = admin();
-  const { data: profile, error } = await sb
-    .from("profiles")
-    .select("permissions, is_super_admin")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw new Error(error.message || "تعذر التحقق من صلاحيات الأرباح");
+  const [profileResult, roleResult] = await Promise.all([
+    sb
+      .from("profiles")
+      .select("permissions, is_super_admin")
+      .eq("id", userId)
+      .maybeSingle(),
+    sb
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle(),
+  ]);
+  if (profileResult.error) throw new Error(profileResult.error.message || "تعذر التحقق من صلاحيات الأرباح");
+  if (roleResult.error) throw new Error(roleResult.error.message || "تعذر التحقق من دور المستخدم");
+  const profile = profileResult.data;
   const permissions = normalizePermissionsForLoad(((profile as any)?.permissions ?? {}) as Record<string, any>);
   const isSuperAdmin = !!(profile as any)?.is_super_admin;
+  const isAdminOrSuperAdmin = isSuperAdmin || !!roleResult.data;
   return {
     sb,
-    canNetProfit: hasProfitViewPermission(permissions, isSuperAdmin, NET_PROFIT_PERMISSION_KEY),
-    canProfitSummary: hasProfitViewPermission(permissions, isSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
+    canNetProfit: hasProfitViewPermission(permissions, isAdminOrSuperAdmin, NET_PROFIT_PERMISSION_KEY),
+    canProfitSummary: hasProfitViewPermission(permissions, isAdminOrSuperAdmin, PROFIT_SUMMARY_PERMISSION_KEY),
   };
 }
 

@@ -72,9 +72,9 @@ export const normalizePermissionsForSave = normalizePermissionsForLoad;
 
 export function hasProfitViewPermission(
   permissions: Record<string, any> | null | undefined,
-  isSuperAdmin: boolean,
+  isAdminOrSuperAdmin: boolean,
   key: typeof PROFIT_PERMISSION_KEYS[number],
 ) {
-  if (isSuperAdmin) return true;
+  if (isAdminOrSuperAdmin) return true;
   return hasPermission(permissions, key);
 }
