@@ -11,6 +11,7 @@ import {
 } from "@/lib/db";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
+import { PriceLookup } from "@/components/PriceLookup";
 
 
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
