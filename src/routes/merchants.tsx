@@ -257,6 +257,7 @@ function MerchantForm() {
   const [form, setForm] = useState({
     merchant_name: "", phone: "", whatsapp: "",
     supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
+    status: "نشط",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
@@ -268,9 +269,10 @@ function MerchantForm() {
       supports_instapay: form.supports_instapay,
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
-    });
+      status: form.status || "نشط",
+    } as any);
     if (error) return toast.error(error.message);
-    setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true });
+    setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true, status: "نشط" });
   };
   return (
     <div className="card">
