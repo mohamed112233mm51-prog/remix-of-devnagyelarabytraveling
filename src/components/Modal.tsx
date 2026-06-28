@@ -58,7 +58,7 @@ export function Modal({
       <div className="modal-box" style={{ maxWidth }}>
         <div className="modal-header">
           <div className="modal-title">{title}</div>
-          <button className="modal-close" onClick={onClose} aria-label="إغلاق">×</button>
+          <button className="modal-close" onClick={onClose} aria-label="إغلاق" title="إغلاق">×</button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
