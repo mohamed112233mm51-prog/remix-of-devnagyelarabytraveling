@@ -658,6 +658,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
       company_name: form.company_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
+      status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
       opening_date: opening.date || null,
