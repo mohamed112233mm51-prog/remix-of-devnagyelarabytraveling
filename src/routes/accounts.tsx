@@ -205,8 +205,9 @@ function AccountsPage() {
         return (
           <EntityProfileModal
             open={!!viewAgent}
-            onClose={() => setViewAgent(null)}
+            onClose={() => { setViewAgent(null); setShowAgentLookup(false); }}
             titlePrefix="ملف الوكيل"
+
             name={viewAgent.name}
             status={{ label: viewAgent.status || "—", tone: badgeFor(viewAgent.status) }}
             canEdit={perm.edit}
