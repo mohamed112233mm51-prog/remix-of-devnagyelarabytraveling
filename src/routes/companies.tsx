@@ -176,7 +176,7 @@ function CompaniesPage() {
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr><td colSpan={7}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
+                      <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
                     ) : pageRows.map((c, i) => {
                       const idx = page * pageSize + i;
                       const s = stats.get(c.id) || { trips: 0, paid: 0 };
