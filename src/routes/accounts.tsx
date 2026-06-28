@@ -154,7 +154,7 @@ function AccountsPage() {
                       const idx = page * pageSize + i;
                       const s = stats.get(a.id) || { trips: 0, paid: 0 };
                       return (
-                        <tr key={a.id}>
+                        <tr key={a.id} onClick={() => setViewAgent(a)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الاسم">{a.name}</td>
                           <td data-label="الرقم القومي">{a.national_id || "—"}</td>
@@ -165,7 +165,7 @@ function AccountsPage() {
                           <td className="num-col" data-label="المدفوعات">{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="الصافي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(s.trips - s.paid)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
-                          <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditAgent(a)}>✏️ تعديل</button> : null}</td>
+                          <td data-label="إجراءات" onClick={(e) => e.stopPropagation()}>{perm.edit ? <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditAgent(a); }}>✏️ تعديل</button> : null}</td>
                         </tr>
                       );
                     })}
