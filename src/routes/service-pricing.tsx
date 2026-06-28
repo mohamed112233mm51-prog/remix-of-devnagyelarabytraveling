@@ -92,8 +92,14 @@ function ManagePanel() {
   const [companyId, setCompanyId] = useState<string>("");
 
   const companyOptions = useMemo(
-    () => companies.map((c) => ({ value: c.id, label: c.company_name })),
-    [companies],
+    () =>
+      companies
+        .filter((c: any) => ((c.status || "نشط") === "نشط") || c.id === companyId)
+        .map((c) => ({
+          value: c.id,
+          label: ((c as any).status || "نشط") === "نشط" ? c.company_name : `${c.company_name} (غير نشطة)`,
+        })),
+    [companies, companyId],
   );
 
   return (
