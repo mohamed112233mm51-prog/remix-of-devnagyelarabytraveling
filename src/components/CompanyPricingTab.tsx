@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import type { PricingRule } from "@/lib/pricingMatch";
+import { PriceLookup } from "@/components/PriceLookup";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
 
