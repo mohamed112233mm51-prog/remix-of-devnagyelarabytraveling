@@ -124,8 +124,6 @@ function Dashboard() {
     profileLoaded,
   });
   const { rows: agents } = useLive<Agent>("agents");
-  const flights: any[] = [];
-  const approvals: any[] = [];
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
@@ -133,6 +131,7 @@ function Dashboard() {
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const { rows: submissions } = useLive<Submission>("submissions");
+
   const executionMetricsQuery = useQuery({
     queryKey: ["dashboard-execution-metrics"],
     staleTime: 15_000,
