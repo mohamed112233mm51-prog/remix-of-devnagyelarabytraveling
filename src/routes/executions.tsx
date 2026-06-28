@@ -647,7 +647,7 @@ function ExecutionForm({
             value={form.status}
             onChange={(v) => setForm({ ...form, status: v })}
             options={withSelected(approvalStatuses, form.status)}
-            allowClear={false}
+            placeholder="اختر الحالة..."
           />
         </Field>
         <Field label="حالة العملية">
@@ -655,7 +655,7 @@ function ExecutionForm({
             value={form.operation_status}
             onChange={(v) => setForm({ ...form, operation_status: v })}
             options={withSelected(operationStatuses, form.operation_status)}
-            allowClear={false}
+            placeholder="اختر حالة العملية..."
           />
         </Field>
 
