@@ -266,6 +266,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     whatsapp: agent.whatsapp || "",
     governorate: agent.governorate || "",
     tier: a.tier || "A",
+    status: agent.status || "نشط",
     opening_debit: a.opening_debit ? String(a.opening_debit) : "",
     opening_credit: a.opening_credit ? String(a.opening_credit) : "",
     opening_date: a.opening_date || "",
