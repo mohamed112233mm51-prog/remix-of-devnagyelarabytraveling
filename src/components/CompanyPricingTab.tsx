@@ -433,10 +433,6 @@ function DraftEditor(props: {
           </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
-          {props.onReset && (
-            <button type="button" className="action-btn" onClick={props.onReset}>إعادة تعيين</button>
-          )}
-          <button type="button" className="action-btn" onClick={props.onCancel}>إغلاق</button>
           <button type="button" className="btn btn-gold" onClick={props.onSave}>💾 حفظ</button>
         </div>
       </div>
