@@ -179,6 +179,7 @@ function MerchantsPage() {
                         <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing + t.converted)}</td>
                         <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(t.collected)}</td>
                         <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
+                        <td data-label="الحالة"><span className={`badge pill-badge ${((m as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(m as any).status || "نشط"}</span></td>
                         <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditMerchant(m)}>✏️ تعديل</button> : null}</td>
                       </tr>
                     );
