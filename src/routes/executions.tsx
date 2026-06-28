@@ -491,7 +491,8 @@ function ExecutionForm({
 }) {
   const { permissions, roles, isSuperAdmin, profileLoaded } = useAuth();
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
-  const [form, setForm] = useState({
+  const draftKey = `draft:execution:${editing?.id || "new"}`;
+  const [form, setForm, clearForm] = usePersistentState(`${draftKey}:form`, {
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
     dob: toDisplayDate(editing?.dob) || "",
@@ -511,7 +512,7 @@ function ExecutionForm({
     approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     submission_id: editing?.submission_id || null as string | null,
   });
-  const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
+  const [services, setServices, clearServices] = usePersistentState<ExecutionServiceItem[]>(`${draftKey}:services`, (() => {
     const raw = editing?.services;
     const src: any[] = Array.isArray(raw) ? raw : [];
     // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع — مع حماية ضد القيم الفاسدة.
