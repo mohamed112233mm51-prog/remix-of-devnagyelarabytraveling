@@ -355,8 +355,8 @@ function Dashboard() {
       if (!inR(x.created_at)) continue;
       expSum += Number(x.amount || 0);
     }
-    for (const f of flights) if (inR(f.created_at)) flightsCount += 1;
-    for (const a of approvals) if (inR(a.created_at)) approvalsCount += 1;
+    for (const x of executedRows) if (inR(x.created_at)) flightsCount += 1;
+    for (const a of submissions) if (inR(a.created_at)) approvalsCount += 1;
     return {
       collected,
       expenses: expSum,
@@ -368,8 +368,9 @@ function Dashboard() {
 
   const periodRange = useMemo(() => getPeriodRange(period), [period]);
   const prevRange = useMemo(() => getPreviousRange(period), [period]);
-  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
-  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, flights, approvals]);
+  const periodAgg = useMemo(() => computeAgg(periodRange), [periodRange, txns, cTxns, expenses, expenseDeductions, executedRows, submissions]);
+  const prevAgg = useMemo(() => (prevRange ? computeAgg(prevRange) : null), [prevRange, txns, cTxns, expenses, expenseDeductions, executedRows, submissions]);
+
 
 
   const periodLabel = PERIOD_LABELS[period];
