@@ -32,6 +32,7 @@ export const SETTINGS_SUB_KEYS = [
   "company_manage",
   "system_tools",
   "import_data",
+  "change_password",
 ] as const;
 export type SettingsSubKey = typeof SETTINGS_SUB_KEYS[number];
 
@@ -42,7 +43,9 @@ export const SETTINGS_SUB_LABELS: Record<SettingsSubKey, string> = {
   company_manage: "إعدادات الشركة",
   system_tools: "أدوات النظام",
   import_data: "مركز البيانات / الاستيراد",
+  change_password: "تغيير كلمة السر",
 };
+
 
 // Map route path -> permission section key (null = always allowed)
 export const ROUTE_PERM: Record<string, string | null> = {
