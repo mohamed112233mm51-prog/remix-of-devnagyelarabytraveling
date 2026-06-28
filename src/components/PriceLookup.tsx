@@ -152,10 +152,6 @@ export function PriceLookup(props: {
     setFilters({ ...emptyFilters(), agent_tier: agentTier || "" });
   };
 
-  const anyFilterSet = FIELDS.some((k) => {
-    if (k === "agent_tier" && agentTier) return false;
-    return !!filters[k];
-  });
 
   return (
     <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
