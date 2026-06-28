@@ -54,6 +54,9 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [showLookup, setShowLookup] = useState(false);
+  const [filtersActive, setFiltersActive] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
