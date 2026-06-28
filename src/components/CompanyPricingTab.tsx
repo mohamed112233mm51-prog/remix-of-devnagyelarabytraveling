@@ -78,10 +78,20 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [companyId]);
 
-  const startNew = () => setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
+  const startNew = () => setDraft(addBuffer ?? EMPTY(companyId, services[0] || "", tiers[0] || "A"));
   const startEdit = (r: PricingRule) => setDraft({ ...r });
 
-  const save = async () => {
+  // Mirror the in-progress new draft into the buffer so closing the modal
+  // doesn't lose it. Editing existing rows is not buffered.
+  useEffect(() => {
+    if (draft && !draft.id) setAddBuffer(draft);
+  }, [draft, setAddBuffer]);
+
+  const closeDraft = () => setDraft(null);
+  const resetDraft = () => {
+    clearAddBuffer();
+    setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
+  };
     if (!draft) return;
     if (!draft.service_type) return toast.error("اختر الخدمة");
     if (!draft.agent_tier) return toast.error("اختر شريحة الوكيل");
