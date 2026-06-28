@@ -32,6 +32,7 @@ import { CompanySupplyForm } from "@/components/CashMovementForms";
 import { EntityProfileModal } from "@/components/EntityProfileModal";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 
