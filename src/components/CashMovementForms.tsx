@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/db";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -29,11 +30,13 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [agentId, setAgentId] = useState(initialAgentId || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
+  const draftKey = `draft:agent-cash-out:${initialAgentId || "new"}`;
+  const [agentId, setAgentId, clearAgentId] = usePersistentState<string>(`${draftKey}:agentId`, initialAgentId || "");
+  const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
+  const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
+  const resetDraft = () => { clearAgentId(); clearDate(); clearNote(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -100,7 +103,7 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
 
     setSaving(false);
     toast.success("تم تسجيل صرف النقدية");
-    setSplits([newPaymentSplitRow()]); setNote("");
+    resetDraft();
     onDone?.();
   };
 
@@ -136,11 +139,13 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [merchantId, setMerchantId] = useState(initialMerchantId || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
+  const draftKey = `draft:merchant-cash-out:${initialMerchantId || "new"}`;
+  const [merchantId, setMerchantId, clearMerchantId] = usePersistentState<string>(`${draftKey}:merchantId`, initialMerchantId || "");
+  const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
+  const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
+  const resetDraft = () => { clearMerchantId(); clearDate(); clearNote(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -209,7 +214,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
 
     setSaving(false);
     toast.success("تم تسجيل صرف النقدية للتاجر");
-    setSplits([newPaymentSplitRow()]); setNote("");
+    resetDraft();
     onDone?.();
   };
 
@@ -247,11 +252,13 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
 
-  const [companyId, setCompanyId] = useState(initialCompanyId || "");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [note, setNote] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
+  const draftKey = `draft:company-supply:${initialCompanyId || "new"}`;
+  const [companyId, setCompanyId, clearCompanyId] = usePersistentState<string>(`${draftKey}:companyId`, initialCompanyId || "");
+  const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
+  const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
+  const resetDraft = () => { clearCompanyId(); clearDate(); clearNote(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -338,7 +345,7 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
 
     setSaving(false);
     toast.success("تم تسجيل توريد النقدية");
-    setSplits([newPaymentSplitRow()]); setNote("");
+    resetDraft();
     onDone?.();
   };
 

@@ -5,6 +5,7 @@ import { useLive, useDropdownOptions, type Agent, type Merchant } from "@/lib/db
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
@@ -56,7 +57,8 @@ export function AgentPaymentForm({
   const SERVICE_TYPES = useDropdownOptions("service_type");
   const DESTINATIONS = useDropdownOptions("destination");
 
-  const [form, setForm] = useState({
+  const draftKey = `draft:agent-payment:${lockedAgentId || "new"}`;
+  const [form, setForm, clearForm] = usePersistentState(`${draftKey}:form`, {
     agent_id: lockedAgentId || "",
     date: new Date().toISOString().slice(0, 10),
     service_type: "",
@@ -65,8 +67,9 @@ export function AgentPaymentForm({
     price: "",
     note: "",
   });
-  const [splits, setSplits] = useState<SplitRow[]>([newRow()]);
+  const [splits, setSplits, clearSplits] = usePersistentState<SplitRow[]>(`${draftKey}:splits`, [newRow()]);
   const [saving, setSaving] = useState(false);
+  const resetDraft = () => { clearForm(); clearSplits(); };
 
   useEffect(() => {
     if (lockedAgentId) setForm((p) => ({ ...p, agent_id: lockedAgentId }));
@@ -224,6 +227,7 @@ export function AgentPaymentForm({
 
     setSaving(false);
     toast.success("تم تسجيل الدفعة");
+    resetDraft();
     onDone();
   };
 

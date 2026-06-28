@@ -18,6 +18,7 @@ import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 export const Route = createFileRoute("/submissions")({
   component: () => <AppErrorBoundary><SubmissionsPage /></AppErrorBoundary>,
@@ -372,7 +373,8 @@ function SubmissionForm({
   onDone: () => void;
 }) {
   const initialServices = Array.isArray(editing?.services) ? editing.services.filter((s): s is string => typeof s === "string") : [];
-  const [form, setForm] = useState({
+  const draftKey = `draft:submission:${editing?.id || "new"}`;
+  const [form, setForm, clearForm] = usePersistentState(`${draftKey}:form`, {
     service_type: initialServices[0] || "",
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
@@ -429,6 +431,7 @@ function SubmissionForm({
         if (error) throw error;
         toast.success("تم إضافة التقديم");
       }
+      clearForm();
       onDone();
     } catch (e: any) {
       toast.error(e?.message || "حدث خطأ أثناء الحفظ");

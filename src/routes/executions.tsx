@@ -25,6 +25,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { resolveAgentPrice } from "@/lib/pricingMatch";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
+import { usePersistentState } from "@/hooks/usePersistentState";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -490,7 +491,8 @@ function ExecutionForm({
 }) {
   const { permissions, roles, isSuperAdmin, profileLoaded } = useAuth();
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
-  const [form, setForm] = useState({
+  const draftKey = `draft:execution:${editing?.id || "new"}`;
+  const [form, setForm, clearForm] = usePersistentState(`${draftKey}:form`, {
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
     dob: toDisplayDate(editing?.dob) || "",
@@ -510,7 +512,7 @@ function ExecutionForm({
     approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     submission_id: editing?.submission_id || null as string | null,
   });
-  const [services, setServices] = useState<ExecutionServiceItem[]>(() => {
+  const [services, setServices, clearServices] = usePersistentState<ExecutionServiceItem[]>(`${draftKey}:services`, (() => {
     const raw = editing?.services;
     const src: any[] = Array.isArray(raw) ? raw : [];
     // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع — مع حماية ضد القيم الفاسدة.
@@ -535,7 +537,7 @@ function ExecutionForm({
       out.push({ kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 });
     }
     return out;
-  });
+  })());
   const [saving, setSaving] = useState(false);
 
   const companyServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "company");
@@ -612,6 +614,8 @@ function ExecutionForm({
         services,
       });
       toast.success(form.operation_status === "منفذ" ? "تم التنفيذ واعتماد الحركات المالية" : "تم الحفظ");
+      clearForm();
+      clearServices();
       onDone();
     } catch (e: any) {
       toast.error(e?.message || "حدث خطأ أثناء الحفظ");
