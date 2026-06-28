@@ -150,8 +150,10 @@ function SettingsPage() {
       {tab === "general" && can("company_manage") && <GeneralTab />}
       {/* تبويب "قوائم النظام" تم حذفه — القوائم تُدار حصراً من "إعدادات عامة". */}
       {tab === "backups" && can("backups_manage") && <BackupsTab />}
+      {tab === "change_password" && can("change_password") && <ChangePasswordTab />}
       {tab === "production" && can("system_tools") && <ProductionCleanupTab />}
       {tab === "devtools" && can("system_tools") && !isProdEnv() && <DevToolsTab />}
+
     </div>
   );
 }
