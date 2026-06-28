@@ -354,10 +354,17 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
 
 function AgentForm({ onDone }: { onDone: () => void }) {
   const tierOptions = useDropdownOptions("agent_tier" as any);
-  const [form, setForm] = useState({ name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" });
-  const [opening, setOpening] = useState({ debit: "", credit: "", date: "", note: "" });
+  const [form, setForm, clearForm] = usePersistentState(
+    "form:agent:add",
+    { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A" },
+  );
+  const [opening, setOpening, clearOpening] = usePersistentState(
+    "form:agent:add:opening",
+    { debit: "", credit: "", date: "", note: "" },
+  );
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
+  const resetAll = () => { clearForm(); clearOpening(); };
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
@@ -385,6 +392,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         note: opening.note.trim() || null,
       });
     }
+    resetAll();
     onDone();
   };
   return (
