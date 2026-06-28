@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const u: any = data.session.user;
           if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
           setProfileLoaded(false);
-          loadProfile(data.session.user.id);
+          safeLoadProfile(data.session.user.id, loadProfile);
         }
       })
       .catch((error) => {
