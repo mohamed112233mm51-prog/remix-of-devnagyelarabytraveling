@@ -190,6 +190,7 @@ function CompaniesPage() {
                           <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
                           <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
                           <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
+                          <td data-label="الحالة"><span className={`badge pill-badge ${((c as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(c as any).status || "نشط"}</span></td>
                         </tr>
                       );
                     })}
