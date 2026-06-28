@@ -16,7 +16,7 @@ export function Modal({
   children,
   footer,
   maxWidth = 640,
-  closeOnBackdrop = true,
+  closeOnBackdrop: _closeOnBackdrop = false,
   zIndex,
   overlayClassName,
 }: {
@@ -26,6 +26,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   maxWidth?: number;
+  /** @deprecated Backdrop click never closes the modal — close only via the × button. */
   closeOnBackdrop?: boolean;
   zIndex?: number;
   overlayClassName?: string;
@@ -37,16 +38,11 @@ export function Modal({
     const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollbarW > 0) document.body.style.paddingRight = `${scrollbarW}px`;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
       document.body.style.paddingRight = prevPaddingRight;
-      window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === "undefined") return null;
 
