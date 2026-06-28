@@ -704,7 +704,6 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button type="button" className="action-btn" onClick={resetAll}>إعادة تعيين</button>
         <button data-confirm-save="تأكيد حفظ الشركة" className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button>
       </div>
     </div>

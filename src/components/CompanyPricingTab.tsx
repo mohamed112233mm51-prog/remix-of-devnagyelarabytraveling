@@ -88,10 +88,8 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   }, [draft, setAddBuffer]);
 
   const closeDraft = () => setDraft(null);
-  const resetDraft = () => {
-    clearAddBuffer();
-    setDraft(EMPTY(companyId, services[0] || "", tiers[0] || "A"));
-  };
+
+
 
   const save = async () => {
     if (!draft) return;
@@ -339,7 +337,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
           draft={draft}
           setDraft={setDraft}
           onCancel={closeDraft}
-          onReset={!draft.id ? resetDraft : undefined}
+          
           onSave={save}
           services={services}
           tiers={tiers.length ? tiers : ["A","B","C"]}
@@ -370,7 +368,7 @@ function DraftEditor(props: {
   draft: Row;
   setDraft: (r: Row | null) => void;
   onCancel: () => void;
-  onReset?: () => void;
+  
   onSave: () => void;
   services: readonly string[];
   tiers: readonly string[];
@@ -385,9 +383,12 @@ function DraftEditor(props: {
   const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
   const agentPrice = computeAgentPrice(draft);
   return (
-    <div onClick={props.onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10010, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
-        <div className="card-header"><div className="card-title">{draft.id ? "تعديل سعر" : "إضافة سعر"}</div></div>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10010, padding: 16 }}>
+      <div className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="card-title">{draft.id ? "تعديل سعر" : "إضافة سعر"}</div>
+          <button type="button" className="action-btn icon-only" onClick={props.onCancel} title="إغلاق" aria-label="إغلاق" style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>×</button>
+        </div>
         <div className="form-grid">
           <div className="form-group"><label>الخدمة *</label>
             <SearchableSelect value={draft.service_type} onChange={(v) => upd({ service_type: v })} options={props.services as string[]} />
@@ -433,10 +434,6 @@ function DraftEditor(props: {
           </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
-          {props.onReset && (
-            <button type="button" className="action-btn" onClick={props.onReset}>إعادة تعيين</button>
-          )}
-          <button type="button" className="action-btn" onClick={props.onCancel}>إغلاق</button>
           <button type="button" className="btn btn-gold" onClick={props.onSave}>💾 حفظ</button>
         </div>
       </div>
