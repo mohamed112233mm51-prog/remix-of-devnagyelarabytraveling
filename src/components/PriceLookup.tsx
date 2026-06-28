@@ -166,6 +166,7 @@ export function PriceLookup(props: {
 
   const clearFilters = () => {
     clearStoredFilters();
+    if (!fixedCompanyId) clearStoredCompanyId();
   };
 
 
