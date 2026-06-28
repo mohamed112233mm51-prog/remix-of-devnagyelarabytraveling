@@ -109,8 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const uid = session?.user?.id;
     if (!uid) return;
     setProfileLoaded(false);
-    await loadProfile(uid);
-  }, [loadProfile, session?.user?.id]);
+    await safeLoadProfile(uid, loadProfile);
+  }, [loadProfile, safeLoadProfile, session?.user?.id]);
 
   useEffect(() => {
     console.info("[startup] Auth bootstrap start");
