@@ -6,7 +6,8 @@ import { badgeFor, fmtDL, tripValue, txnTotalPaid, useLive, useDropdownOptions, 
 
 import { syncAgentOpeningBalance } from "@/lib/openingBalance";
 import { toast } from "sonner";
-import { usePerm } from "@/hooks/usePerm";
+import { usePerm, checkPerm } from "@/hooks/usePerm";
+import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -31,6 +32,8 @@ type Tab = "list" | "add" | "txn" | "cashout" | "statement";
 
 function AccountsPage() {
   const perm = usePerm("accounts");
+  const { permissions, isAdmin } = useAuth();
+  const canSearchPricing = checkPerm(permissions, isAdmin, "service_price_search", "view");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
@@ -232,19 +235,21 @@ function AccountsPage() {
               { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
             ]}
             headerActions={
-              <button
-                type="button"
-                className={`btn btn-outline${showAgentLookup ? " active" : ""}`}
-                onClick={() => setShowAgentLookup((v) => !v)}
-                title="بحث داخل أسعار خدمات الوكيل"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-              >
-                <Search size={14} strokeWidth={2} />
-                {showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
-              </button>
+              canSearchPricing ? (
+                <button
+                  type="button"
+                  className={`btn btn-outline${showAgentLookup ? " active" : ""}`}
+                  onClick={() => setShowAgentLookup((v) => !v)}
+                  title="بحث داخل أسعار خدمات الوكيل"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <Search size={14} strokeWidth={2} />
+                  {showAgentLookup ? "إخفاء بحث سعر خدمة" : "بحث سعر خدمة"}
+                </button>
+              ) : null
             }
             extraContent={
-              showAgentLookup ? (
+              canSearchPricing && showAgentLookup ? (
                 <PriceLookup mode="agent" agentTier={a.tier || undefined} />
               ) : null
             }
