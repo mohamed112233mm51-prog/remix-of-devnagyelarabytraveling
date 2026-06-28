@@ -370,7 +370,7 @@ function DraftEditor(props: {
   draft: Row;
   setDraft: (r: Row | null) => void;
   onCancel: () => void;
-  onReset?: () => void;
+  
   onSave: () => void;
   services: readonly string[];
   tiers: readonly string[];
