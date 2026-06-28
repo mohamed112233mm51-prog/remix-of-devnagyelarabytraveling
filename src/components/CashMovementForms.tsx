@@ -103,7 +103,7 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
 
     setSaving(false);
     toast.success("تم تسجيل صرف النقدية");
-    setSplits([newPaymentSplitRow()]); setNote("");
+    resetDraft();
     onDone?.();
   };
 
