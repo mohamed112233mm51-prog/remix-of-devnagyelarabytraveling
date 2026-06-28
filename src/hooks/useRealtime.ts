@@ -18,14 +18,21 @@ export type RealtimeStatus = "connecting" | "connected" | "disconnected";
 
 const SUPABASE_URL =
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+const SUPABASE_KEY =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ??
+  "";
 const PING_URL = SUPABASE_URL
   ? `${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/health`
-  : "/favicon.ico";
+  : "";
 
 const statusListeners = new Set<(s: RealtimeStatus) => void>();
 let currentStatus: RealtimeStatus = "connecting";
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let started = false;
+let consecutiveFailures = 0;
+const FAILURE_THRESHOLD = 2;
+const POLL_MS = 30000;
 
 function setStatus(s: RealtimeStatus) {
   if (currentStatus === s) return;
@@ -33,27 +40,41 @@ function setStatus(s: RealtimeStatus) {
   statusListeners.forEach((fn) => fn(s));
 }
 
+// Allow other parts of the app (successful queries, realtime channels) to
+// report that the backend is reachable, suppressing false "disconnected".
+export function reportBackendReachable() {
+  consecutiveFailures = 0;
+  setStatus("connected");
+}
+
 async function pingOnce(): Promise<void> {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    setStatus("disconnected");
+  if (!PING_URL) {
+    setStatus("connected");
     return;
   }
-  // Only show "connecting" if we don't already have a known state recently
-  if (currentStatus === "connecting") {
-    // keep
-  }
   const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), 3000);
+  const timeout = setTimeout(() => ctrl.abort(), 5000);
   try {
-    await fetch(PING_URL, {
+    const res = await fetch(PING_URL, {
       method: "GET",
-      mode: "no-cors",
       cache: "no-store",
       signal: ctrl.signal,
+      headers: SUPABASE_KEY ? { apikey: SUPABASE_KEY } : undefined,
     });
-    setStatus("connected");
+    // Any HTTP response (even 4xx) proves the backend is reachable.
+    if (res.status > 0) {
+      consecutiveFailures = 0;
+      setStatus("connected");
+      return;
+    }
+    throw new Error("no response");
   } catch {
-    setStatus("disconnected");
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= FAILURE_THRESHOLD) {
+      setStatus("disconnected");
+    } else if (currentStatus !== "connected") {
+      setStatus("connecting");
+    }
   } finally {
     clearTimeout(timeout);
   }
@@ -65,12 +86,15 @@ function ensureMonitor() {
   void pingOnce();
   pollTimer = setInterval(() => {
     void pingOnce();
-  }, 10000);
+  }, POLL_MS);
   window.addEventListener("online", () => {
+    consecutiveFailures = 0;
     setStatus("connecting");
     void pingOnce();
   });
-  window.addEventListener("offline", () => setStatus("disconnected"));
+  // navigator.onLine is unreliable — verify with a real ping rather than
+  // immediately flipping to "disconnected".
+  window.addEventListener("offline", () => void pingOnce());
   window.addEventListener("focus", () => void pingOnce());
 }
 
