@@ -431,6 +431,7 @@ function SubmissionForm({
         if (error) throw error;
         toast.success("تم إضافة التقديم");
       }
+      clearForm();
       onDone();
     } catch (e: any) {
       toast.error(e?.message || "حدث خطأ أثناء الحفظ");
