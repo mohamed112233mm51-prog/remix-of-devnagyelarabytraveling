@@ -263,7 +263,7 @@ function UsersTab() {
             {filteredUsers.map((u: any) => {
               const pending = !u.last_sign_in_at;
               return (
-                <tr key={u.id}>
+                <tr key={u.id} onClick={() => setViewUser(u)} style={{ cursor: "pointer" }}>
                   <td style={{ ...td, fontWeight: 600, color: "#0F172A" }}>{u.full_name}</td>
                   <td style={{ ...td, color: "#475569" }}>{u.email}</td>
                   <td style={td}>
@@ -278,16 +278,16 @@ function UsersTab() {
                       : <span style={pill("#FEE2E2", "#991B1B", "#FECACA")}>● معطل</span>}
                   </td>
                   <td style={{ ...td, color: "#475569", fontSize: 12 }}>{u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString("ar-EG") : "—"}</td>
-                  <td style={{ ...td }}>
+                  <td style={{ ...td }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {pending && (
-                        <button onClick={async () => { await resendFn({ data: { email: u.email, origin: window.location.origin } }); toast.success("تم إعادة إرسال الدعوة"); }} style={iconBtn} title="إعادة الدعوة">
+                        <button onClick={async (e) => { e.stopPropagation(); await resendFn({ data: { email: u.email, origin: window.location.origin } }); toast.success("تم إعادة إرسال الدعوة"); }} style={iconBtn} title="إعادة الدعوة">
                           <Mail size={13} /> إعادة الدعوة
                         </button>
                       )}
                       {!pending && (
                         <button
-                          onClick={() => setConfirmAction({
+                          onClick={(e) => { e.stopPropagation(); setConfirmAction({
                             title: "إرسال رابط إعادة تعيين كلمة المرور",
                             message: `سيتم إرسال رابط إعادة تعيين كلمة المرور إلى:\n${u.email}`,
                             confirmLabel: "إرسال الرابط",
@@ -295,7 +295,7 @@ function UsersTab() {
                               await resetFn({ data: { email: u.email, origin: window.location.origin } });
                               toast.success("تم إرسال رابط إعادة تعيين كلمة المرور");
                             },
-                          })}
+                          }); }}
                           style={iconBtn}
                           title="إعادة تعيين كلمة المرور"
                         >
@@ -303,7 +303,8 @@ function UsersTab() {
                         </button>
                       )}
                       <button
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           await activeFn({ data: { id: u.id, is_active: !u.is_active } });
                           qc.invalidateQueries({ queryKey: ["admin-users"] });
                         }}
@@ -313,7 +314,7 @@ function UsersTab() {
                         <Power size={13} /> {u.is_active ? "تعطيل" : "تفعيل"}
                       </button>
                       <button
-                        onClick={() => setConfirmAction({
+                        onClick={(e) => { e.stopPropagation(); setConfirmAction({
                           title: "حذف المستخدم",
                           message: `هل أنت متأكد من حذف المستخدم:\n${u.full_name} (${u.email})؟\nلا يمكن التراجع عن هذا الإجراء.`,
                           confirmLabel: "حذف",
@@ -323,7 +324,7 @@ function UsersTab() {
                             toast.success("تم الحذف");
                             qc.invalidateQueries({ queryKey: ["admin-users"] });
                           },
-                        })}
+                        }); }}
                         style={iconBtnDanger}
                         title="حذف"
                       >
@@ -334,6 +335,7 @@ function UsersTab() {
                 </tr>
               );
             })}
+
           </tbody>
         </table>
       </div>
