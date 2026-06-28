@@ -554,7 +554,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
             aria-label="أقسام بيانات الشركة"
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: canSeePricing ? "1fr 1fr" : "1fr",
               gap: 4,
               padding: 4,
               background: "var(--card)",
@@ -565,7 +565,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           >
             {([
               { key: "info", label: "البيانات", Icon: Building2 },
-              { key: "pricing", label: "ملف التسعير", Icon: BadgeDollarSign },
+              ...(canSeePricing ? [{ key: "pricing" as const, label: "ملف التسعير", Icon: BadgeDollarSign }] : []),
             ] as const).map(({ key, label, Icon }) => {
               const active = activeTab === key;
               return (
