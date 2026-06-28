@@ -197,33 +197,37 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredRules.length === 0 && (
-                  <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
-                    {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
-                  </td></tr>
-                )}
-
-                {filteredRules.map((r) => (
-                  <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
-                    <td style={{ padding: 6 }}>{r.departure_from || "—"}</td>
-                    <td style={{ padding: 6 }}>{r.destination || "—"}</td>
-                    <td style={{ padding: 6 }}>{r.airline || "—"}</td>
-                    <td style={{ padding: 6 }}>{approvalCompanies.find((c) => c.id === r.approval_company_id)?.company_name || "—"}</td>
-                    <td style={{ padding: 6 }}>{r.status || "—"}</td>
-                    <td style={{ padding: 6 }}>{r.passenger_type || "—"}</td>
-                    <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)}</td>
-                    <td style={{ padding: 6 }}>{r.agent_tier}</td>
-                    <td style={{ padding: 6 }}>{r.commission_type === "fixed" ? "مبلغ" : "نسبة"}</td>
-                    <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}</td>
-                    <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
-                    <td style={{ padding: 6, display: "flex", gap: 4 }}>
-                      {perm.edit && <button type="button" className="action-btn" onClick={() => startEdit(r)} style={{ padding: "2px 6px" }}>تعديل</button>}
-                      {perm.create && <button type="button" className="action-btn" onClick={() => duplicate(r)} title="تكرار" style={{ padding: "2px 6px", color: "var(--green, #16a34a)" }}>📋 تكرار</button>}
-                      {perm.delete && <button type="button" className="action-btn" onClick={() => remove(r.id)} style={{ padding: "2px 6px" }}>حذف</button>}
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  const displayRules = filtersActive ? filteredRules : rules;
+                  if (displayRules.length === 0) {
+                    return (
+                      <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
+                        {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
+                      </td></tr>
+                    );
+                  }
+                  return displayRules.map((r) => (
+                    <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
+                      <td style={{ padding: 6 }}>{r.departure_from || "—"}</td>
+                      <td style={{ padding: 6 }}>{r.destination || "—"}</td>
+                      <td style={{ padding: 6 }}>{r.airline || "—"}</td>
+                      <td style={{ padding: 6 }}>{approvalCompanies.find((c) => c.id === r.approval_company_id)?.company_name || "—"}</td>
+                      <td style={{ padding: 6 }}>{r.status || "—"}</td>
+                      <td style={{ padding: 6 }}>{r.passenger_type || "—"}</td>
+                      <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)}</td>
+                      <td style={{ padding: 6 }}>{r.agent_tier}</td>
+                      <td style={{ padding: 6 }}>{r.commission_type === "fixed" ? "مبلغ" : "نسبة"}</td>
+                      <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}</td>
+                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
+                      <td style={{ padding: 6, display: "flex", gap: 4 }}>
+                        {perm.edit && <button type="button" className="action-btn" onClick={() => startEdit(r)} style={{ padding: "2px 6px" }}>تعديل</button>}
+                        {perm.create && <button type="button" className="action-btn" onClick={() => duplicate(r)} title="تكرار" style={{ padding: "2px 6px", color: "var(--green, #16a34a)" }}>📋 تكرار</button>}
+                        {perm.delete && <button type="button" className="action-btn" onClick={() => remove(r.id)} style={{ padding: "2px 6px" }}>حذف</button>}
+                      </td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
