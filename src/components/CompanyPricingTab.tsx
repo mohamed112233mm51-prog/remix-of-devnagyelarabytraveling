@@ -49,6 +49,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   );
 
   const [rules, setRules] = useState<PricingRule[]>([]);
+  const [filteredRules, setFilteredRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
   const [showImport, setShowImport] = useState(false);
