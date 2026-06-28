@@ -498,6 +498,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
 function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClose: () => void }) {
   const c = company as any;
+  const { permissions, isAdmin } = useAuth();
+  const canManagePricing = checkPerm(permissions, isAdmin, "service_pricing_manage", "view");
+  const canSearchPricing = checkPerm(permissions, isAdmin, "service_price_search", "view");
+  const canSeePricing = canManagePricing || canSearchPricing;
   const [activeTab, setActiveTab] = useState<"info" | "pricing">("info");
   const [form, setForm] = useState({
     company_name: company.company_name || "",
