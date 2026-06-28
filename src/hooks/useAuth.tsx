@@ -47,6 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  const safeLoadProfile = useCallback(async (uid: string, loader: (uid: string) => Promise<void>) => {
+    try { setProfileError(null); await loader(uid); }
+    catch (e: any) { setProfileError(e?.message || "تعذر تحميل صلاحيات المستخدم"); }
+  }, []);
 
   const applyPermissions = useCallback((uid: string, nextPerms: Record<string, any>, nextIsSuperAdmin: boolean) => {
     const effectivePerms = normalizePermissionsForLoad(nextPerms);
