@@ -175,6 +175,8 @@ function ExpensesPage() {
 function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => void } = {}) {
   const balances = useSourceBalances();
   const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: cashBoxes } = useLive<{ id: string; name: string; currency: string }>("cash_boxes");
+
 
   const [form, setForm] = useState({
     expense_name: initial?.expense_name || "",
@@ -309,6 +311,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     // Insert one record per split into the appropriate ledger
     const deductionRows: any[] = [];
     const collectionRows: any[] = [];
+    const splitRows: any[] = [];
     for (const r of valid) {
       const a = Number(r.amount) || 0;
       if (r.method === "company_instapay" || r.method === "company_cash") {
@@ -319,6 +322,25 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           status: "مكتمل",
           funding_source: r.method === "company_instapay" ? "insta_company" : "cash_company",
           currency: r.currency || "EGP",
+        });
+        // Also post to payment_splits so cash_boxes.balance stays authoritative.
+        const boxName = r.method === "company_instapay" ? "خزينة إنستا الشركة" : "خزينة نقدي الشركة";
+        const box = cashBoxes.find((b) => b.name === boxName && b.currency === (r.currency || "EGP"));
+        splitRows.push({
+          transaction_id: null,
+          method: r.method === "company_instapay" ? "إنستاباي" : "نقدي",
+          currency: r.currency || "EGP",
+          cash_box_id: box?.id || null,
+          amount: a,
+          direction: "out",
+          source_table: "expenses",
+          source_id: expenseRow.id,
+          gross_amount: a,
+          merchant_commission_rate: 0,
+          merchant_commission_amount: 0,
+          net_amount: a,
+          exchange_rate: 1,
+          egp_equivalent: (r.currency || "EGP") === "EGP" ? a : 0,
         });
       } else if (r.source === "merchant" && r.merchant_id) {
         // No 1% commission on expenses: deduct full amount from merchant balance.
@@ -336,10 +358,15 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       const { error: e2 } = await supabase.from("expense_deductions").insert(deductionRows);
       if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل بعض الخصومات: " + e2.message);
     }
+    if (splitRows.length) {
+      const { error: eSp } = await supabase.from("payment_splits").insert(splitRows);
+      if (eSp) toast.error("تم حفظ المصروف لكن تعذر تحديث رصيد الخزنة: " + eSp.message);
+    }
     if (collectionRows.length) {
       const { error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows);
       if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
     }
+
 
     toast.success("تم حفظ المصروف وخصمه من مصادر الدفع");
     setForm({
