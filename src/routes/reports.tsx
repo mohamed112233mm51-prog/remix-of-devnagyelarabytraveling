@@ -541,7 +541,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     { header: "إجمالي المدفوع", key: "paid" },
     { header: "صافي المستحق", key: "due" },
     { header: "عدد التنفيذات", key: "flights" },
-    { header: "عدد الموافقات", key: "approvals" },
+    { header: "عدد التقديمات", key: "approvals" },
   ];
   const rows = data.map((r) => ({
     ...r,
@@ -581,7 +581,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
           { label: "إجمالي التحصيلات", value: fmtDL(totalCollections), tone: "green" },
           { label: "إجمالي قيمة الخدمات", value: fmtDL(totalValue), tone: "gold" },
           { label: "عدد التنفيذات", value: fmtNum(fFlights.length) },
-          { label: "عدد الموافقات", value: fmtNum(fApp.length) },
+          { label: "عدد التقديمات", value: fmtNum(fApp.length) },
         ]} />
 
         <ChartsGrid>
@@ -656,7 +656,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
                   <td data-label="القيمة">{fmtDL(r.total)}</td>
                   <td data-label="المدفوع">{fmtDL(r.paid)}</td>
                   <td data-label="المستحق">{fmtDL(r.due)}</td>
-                  <td data-label="رحلات">{fmtNum(r.flights)}</td>
+                  <td data-label="تنفيذات">{fmtNum(r.flights)}</td>
                   <td data-label="موافقات">{fmtNum(r.approvals)}</td>
                 </tr>
               ))}
