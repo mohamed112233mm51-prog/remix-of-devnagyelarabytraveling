@@ -537,10 +537,10 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
 
   const cols = [
     { header: "اسم الوكيل", key: "name" },
-    { header: "إجمالي قيمة الرحلات", key: "total" },
+    { header: "إجمالي قيمة التنفيذات", key: "total" },
     { header: "إجمالي المدفوع", key: "paid" },
     { header: "صافي المستحق", key: "due" },
-    { header: "عدد الرحلات", key: "flights" },
+    { header: "عدد التنفيذات", key: "flights" },
     { header: "عدد الموافقات", key: "approvals" },
   ];
   const rows = data.map((r) => ({
@@ -580,7 +580,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
         <KpiRow items={[
           { label: "إجمالي التحصيلات", value: fmtDL(totalCollections), tone: "green" },
           { label: "إجمالي قيمة الخدمات", value: fmtDL(totalValue), tone: "gold" },
-          { label: "عدد الرحلات", value: fmtNum(fFlights.length) },
+          { label: "عدد التنفيذات", value: fmtNum(fFlights.length) },
           { label: "عدد الموافقات", value: fmtNum(fApp.length) },
         ]} />
 
@@ -601,17 +601,17 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
             </AreaChart>
           </ChartCard>
 
-          <ChartCard title="الرحلات حسب الوجهة" subtitle="عدد الرحلات لكل وجهة" isEmpty={flightsByDestination.length === 0}>
+          <ChartCard title="التنفيذات حسب الوجهة" subtitle="عدد التنفيذات لكل وجهة" isEmpty={flightsByDestination.length === 0}>
             <BarChart data={flightsByDestination} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
               <XAxis dataKey="name" tick={axisTick} interval={0} angle={-15} textAnchor="end" height={60} />
               <YAxis tick={axisTick} allowDecimals={false} width={40} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} formatter={(v: number) => [fmtCount(v), "عدد الرحلات"]} />
-              <Bar dataKey="value" name="عدد الرحلات" fill={COLORS.positive} radius={[8, 8, 0, 0]} maxBarSize={48} />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} formatter={(v: number) => [fmtCount(v), "عدد التنفيذات"]} />
+              <Bar dataKey="value" name="عدد التنفيذات" fill={COLORS.positive} radius={[8, 8, 0, 0]} maxBarSize={48} />
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="الموافقات الأمنية حسب الحالة" subtitle="توزيع الموافقات على الحالات" isEmpty={approvalsByStatus.length === 0}>
+          <ChartCard title="التقديمات حسب الحالة" subtitle="توزيع التقديمات على الحالات" isEmpty={approvalsByStatus.length === 0}>
             <PieChart>
               <Tooltip
                 contentStyle={tooltipStyle}
@@ -696,7 +696,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     { header: "إجمالي الخدمات", key: "total" },
     { header: "إجمالي المدفوع", key: "paid" },
     { header: "صافي المستحق", key: "due" },
-    { header: "عدد الحركات/الموافقات", key: "count" },
+    { header: "عدد الحركات/التقديمات", key: "count" },
   ];
   const rows = data.map((r) => ({
     ...r,
@@ -1066,18 +1066,18 @@ function FlightsReport({ inRange, data: rd }: SectionProps) {
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">✈️ تقرير الرحلات</div></div>
+      <div className="card-header"><div className="card-title">✈️ تقرير التنفيذات</div></div>
       <div className="card-body">
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الرحلات", columns: cols, rows, fileName: "flights-report" })}
-          onPdf={() => exportStatementToPDF({ title: "تقرير الرحلات", columns: cols, rows })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير التنفيذات", columns: cols, rows, fileName: "flights-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير التنفيذات", columns: cols, rows })}
         />
         <div className="table-wrap">
           <table className="mobile-cards">
             <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <EmptyOrLoading loading={loading} label="لا توجد رحلات" colSpan={cols.length} />
+                <EmptyOrLoading loading={loading} label="لا توجد تنفيذات" colSpan={cols.length} />
               ) : rows.map((r, i) => (
                 <tr key={i}>
                   <td className="bold" data-label="المسافر">{r.passenger}</td>
@@ -1135,11 +1135,11 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">📋 تقرير الموافقات الأمنية</div></div>
+      <div className="card-header"><div className="card-title">📋 تقرير التقديمات</div></div>
       <div className="card-body">
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الموافقات الأمنية", columns: cols, rows, fileName: "approvals-report" })}
-          onPdf={() => exportStatementToPDF({ title: "تقرير الموافقات الأمنية", columns: cols, rows })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير التقديمات", columns: cols, rows, fileName: "approvals-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير التقديمات", columns: cols, rows })}
         />
         <div className="table-wrap">
           <table className="mobile-cards">
