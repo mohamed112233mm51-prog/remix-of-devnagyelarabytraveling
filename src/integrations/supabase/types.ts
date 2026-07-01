@@ -853,6 +853,7 @@ export type Database = {
           cash_box_id: string | null
           created_at: string
           currency: string
+          direction: string
           egp_equivalent: number
           exchange_rate: number | null
           gross_amount: number
@@ -861,13 +862,16 @@ export type Database = {
           merchant_commission_rate: number
           method: string
           net_amount: number
-          transaction_id: string
+          source_id: string | null
+          source_table: string | null
+          transaction_id: string | null
         }
         Insert: {
           amount?: number
           cash_box_id?: string | null
           created_at?: string
           currency: string
+          direction?: string
           egp_equivalent?: number
           exchange_rate?: number | null
           gross_amount?: number
@@ -876,13 +880,16 @@ export type Database = {
           merchant_commission_rate?: number
           method: string
           net_amount?: number
-          transaction_id: string
+          source_id?: string | null
+          source_table?: string | null
+          transaction_id?: string | null
         }
         Update: {
           amount?: number
           cash_box_id?: string | null
           created_at?: string
           currency?: string
+          direction?: string
           egp_equivalent?: number
           exchange_rate?: number | null
           gross_amount?: number
@@ -891,7 +898,9 @@ export type Database = {
           merchant_commission_rate?: number
           method?: string
           net_amount?: number
-          transaction_id?: string
+          source_id?: string | null
+          source_table?: string | null
+          transaction_id?: string | null
         }
         Relationships: [
           {
