@@ -175,6 +175,8 @@ function ExpensesPage() {
 function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => void } = {}) {
   const balances = useSourceBalances();
   const { rows: merchants } = useLive<Merchant>("merchants");
+  const { rows: cashBoxes } = useLive<{ id: string; name: string; currency: string }>("cash_boxes");
+
 
   const [form, setForm] = useState({
     expense_name: initial?.expense_name || "",
