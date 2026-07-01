@@ -1738,8 +1738,8 @@ function DevToolsTab() {
     issuing_companies: "الشركات المصدرة",
     merchants: "التجار",
     investors: "المستثمرين",
-    flights: "الرحلات",
-    approvals: "الموافقات الأمنية",
+    flights: "التنفيذات (قديم)",
+    approvals: "التقديمات (قديم)",
     transactions: "المعاملات/المدفوعات",
     company_transactions: "معاملات الشركات",
     merchant_cash_collections: "تحصيلات التجار",
@@ -2549,8 +2549,8 @@ function BackupsTab() {
 }
 
 const TABLE_LABELS_AR: Record<string, string> = {
-  flights: "الرحلات",
-  approvals: "الموافقات",
+  flights: "التنفيذات (قديم)",
+  approvals: "التقديمات (قديم)",
   transactions: "الحركات",
   agents: "الوكلاء",
   merchants: "التجار",
@@ -3399,8 +3399,8 @@ function DemoDataCleanupCard() {
     issuing_companies: "الشركات المصدرة",
     merchants: "التجار",
     investors: "المستثمرين",
-    flights: "الرحلات",
-    approvals: "الموافقات الأمنية",
+    flights: "التنفيذات (قديم)",
+    approvals: "التقديمات (قديم)",
     transactions: "المعاملات/المدفوعات",
     company_transactions: "معاملات الشركات",
     merchant_cash_collections: "تحصيلات التجار",
