@@ -17,13 +17,19 @@ import {
   merchantCashNet,
   type Transaction,
   type CompanyTransaction,
-  type InvestorTransaction,
   type ExpenseDeduction,
   type UsdTreasuryTransaction,
   type MerchantCashCollection,
   type Merchant,
 } from "@/lib/db";
 import type { PaymentSplitRow } from "@/components/PaymentSplits";
+
+type CashBoxRow = {
+  id: string;
+  name: string;
+  currency: string;
+  balance: number | string | null;
+};
 
 export type SourceBalances = {
   insta_company: number;
@@ -33,61 +39,37 @@ export type SourceBalances = {
 };
 
 /**
- * Live per-source balances, recomputed from raw movements (never trust a
- * stored aggregate). Mirrors the existing logic in expenses.tsx so all
- * forms see the same numbers.
+ * Canonical per-source balances.
+ *
+ * EGP company pools and USD treasury are read DIRECTLY from `cash_boxes.balance`,
+ * which is maintained by the `payment_splits` trigger. This makes the balance
+ * a single source of truth across dashboard / reports / validation.
+ *
+ * Merchant balances have no cash_box row, so we still aggregate them from
+ * transactions + collections + USD conversions.
  */
 export function useSourceBalances(): SourceBalances {
+  const { rows: cashBoxes } = useLive<CashBoxRow>("cash_boxes");
   const { rows: agentTxns } = useLive<Transaction>("transactions");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: investorTxns } = useLive<InvestorTransaction>("investor_transactions");
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  // Kept for consumers that expect the hook to also react to these deps.
+  void deductions;
 
   return useMemo(() => {
-    let instaIn = 0, cashIn = 0;
-    for (const t of agentTxns) {
-      instaIn += Number(t.instapay_amount || 0);
-      cashIn += Number(t.cash_amount || 0);
-    }
-    let instaOut = 0, cashOut = 0;
-    for (const t of cTxns) {
-      instaOut += Number(t.instapay_amount || 0);
-      cashOut += Number(t.cash_amount || 0);
-    }
-    let investorIn = 0, investorOut = 0;
-    for (const t of investorTxns) {
-      if (t.transaction_type === "توريد نقدية") investorIn += Number(t.amount || 0);
-      else if (t.transaction_type === "صرف نقدية") investorOut += Number(t.amount || 0);
-    }
-    let usdConvEgp = 0, usdBalance = 0;
-    for (const r of usdRows) {
-      if (r.type === "conversion") {
-        usdConvEgp += Number(r.egp_amount || 0);
-      }
-      const amt = Number(r.usd_amount || 0);
-      usdBalance += r.type === "company_payment" ? -amt : amt;
-    }
-    let instaExp = 0, cashExp = 0;
-    for (const d of deductions) {
-      const a = Number(d.amount || 0);
-      if (d.funding_source === "insta_company") instaExp += a;
-      else if (d.funding_source === "cash_company") cashExp += a;
-      else if (!d.funding_source) cashExp += a;
-    }
-    // USD treasury conversions can come from either insta_company or
-    // cash_company; subtract from the right pool.
-    let instaConv = 0, cashConv = 0;
-    for (const r of usdRows) {
-      if (r.type !== "conversion") continue;
-      const a = Number(r.egp_amount || 0);
-      if (r.source_type === "insta_company") instaConv += a;
-      else if (r.source_type === "cash_company") cashConv += a;
-    }
-    // (cashConv falls under usdConvEgp already; track separately for insta)
-    void cashConv; void usdConvEgp;
+    const boxByKey = (name: string, currency: string) =>
+      cashBoxes.find((b) => b.name === name && b.currency === currency);
 
+    const insta = boxByKey("خزينة إنستا الشركة", "EGP");
+    const cash = boxByKey("خزينة نقدي الشركة", "EGP");
+    const usd = boxByKey("الخزينة الرئيسية - دولار", "USD");
+
+    const num = (v: unknown) => Math.round(Number(v || 0));
+    const num2 = (v: unknown) => Math.round(Number(v || 0) * 100) / 100;
+
+    // Merchant balances (no cash_box mapping — aggregate raw movements)
     const merchantBalance = new Map<string, number>();
     for (const t of agentTxns) {
       if (!t.merchant_id) continue;
@@ -105,8 +87,6 @@ export function useSourceBalances(): SourceBalances {
         (merchantBalance.get(c.merchant_id) || 0) - Number(c.amount || 0),
       );
     }
-    // USD conversions sourced from a merchant wallet/physical also reduce
-    // the merchant's balance.
     for (const r of usdRows) {
       if (r.type !== "conversion" || !r.merchant_id) continue;
       if (r.source_type === "merchant_wallet" || r.source_type === "merchant_physical") {
@@ -118,13 +98,14 @@ export function useSourceBalances(): SourceBalances {
     }
 
     return {
-      insta_company: Math.round(instaIn - instaOut - instaExp - instaConv),
-      cash_company: Math.round(cashIn + investorIn - investorOut - cashOut - cashExp - (usdConvEgp - instaConv)),
-      usd_treasury: Math.round(usdBalance * 100) / 100,
+      insta_company: num(insta?.balance),
+      cash_company: num(cash?.balance),
+      usd_treasury: num2(usd?.balance),
       merchantBalance,
     };
-  }, [agentTxns, cTxns, investorTxns, deductions, usdRows, collections]);
+  }, [cashBoxes, agentTxns, cTxns, usdRows, collections]);
 }
+
 
 function methodSourceLabel(method: string, merchantName?: string): string {
   switch (method) {
