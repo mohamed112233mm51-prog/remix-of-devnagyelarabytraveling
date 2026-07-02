@@ -16,6 +16,9 @@ import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { syncCashBoxOpeningBalance } from "@/lib/openingBalance";
+import { toast } from "sonner";
+import { createPortal } from "react-dom";
 import {
   ResponsiveContainer,
   LineChart,
