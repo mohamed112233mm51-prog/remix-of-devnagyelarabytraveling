@@ -29,6 +29,8 @@ export interface ExecutionPostingInput {
   destination: string | null;
   airline: string | null;
   passengerName: string | null;
+  /** ملاحظات التنفيذ — تُنسخ كما هي إلى حركات الوكيل والشركة. */
+  executionNotes?: string | null;
   services: ExecutionServiceItem[];
 }
 
