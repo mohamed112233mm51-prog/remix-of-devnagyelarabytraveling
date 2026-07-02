@@ -347,15 +347,17 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           egpEquivalent: (r.currency || "EGP") === "EGP" ? a : 0,
         });
       } else if (r.source === "merchant" && r.merchant_id) {
-        const methodLabel = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || "تاجر";
         collectionRows.push({
           expense_id: expenseRow.id,
           merchant_id: r.merchant_id,
           date: form.date,
           amount: a,
-          note: `مصروف (${methodLabel}): ${form.expense_name}`,
+          // بدون توليد تلقائي — ننقل بيان/ملاحظات المستخدم كما هي
+          note: form.notes.trim() ? form.notes.trim() : null,
+          statement: form.statement.trim() ? form.statement.trim() : null,
         });
       }
+
     }
     if (deductionRows.length) {
       const { error: e2 } = await supabase.from("expense_deductions").insert(deductionRows);
