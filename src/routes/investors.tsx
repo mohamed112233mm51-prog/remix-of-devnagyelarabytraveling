@@ -236,7 +236,7 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
                     <td data-label="نوع الحركة">{t.transaction_type}</td>
                     <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
                     <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
-                    <td data-label="البيان">{(t as any).statement || "—"}</td>
+                    <td data-label="البيان">{(t as any).statement || ""}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
                 );
@@ -280,6 +280,7 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
       { header: "نوع الحركة", key: "type" },
       { header: "المبلغ", key: "amount" },
       { header: "وسيلة الدفع", key: "method" },
+      { header: "البيان", key: "statement" },
       { header: "ملاحظات", key: "note" },
     ],
     rows: filtered.map((t, i) => {
@@ -291,6 +292,7 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
         amount: fmtDL(amount),
         amount__excel: amount,
         method: t.payment_method || "—",
+        statement: (t as any).statement || "",
         note: t.note || "—",
       };
     }),
@@ -342,7 +344,7 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
                     <td className="bold" data-label="نوع الحركة">{t.transaction_type}</td>
                     <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
                     <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
-                    <td data-label="البيان">{(t as any).statement || "—"}</td>
+                    <td data-label="البيان">{(t as any).statement || ""}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
                 );

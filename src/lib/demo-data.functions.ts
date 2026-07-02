@@ -7,7 +7,6 @@ import {
   AUTHORITIES as FALLBACK_AUTHORITIES,
   DESTINATIONS as FALLBACK_DESTINATIONS,
   SERVICE_TYPES as FALLBACK_SERVICE_TYPES,
-  buildTravelStatement,
 } from "./db";
 
 // Approval/flight status options — must match the values used by the UI dropdowns
@@ -399,7 +398,7 @@ export const generateDemoData = createServerFn({ method: "POST" })
           instapay_amount: instapay,
           merchant_id: Math.random() > 0.4 && merchantIds.length ? pick(merchantIds) : null,
           service_type: pickOrNull(dd.service_type),
-          travel_statement: buildTravelStatement(destination, date, null) || null,
+          travel_statement: null,
           note: "بيانات تجريبية",
           is_demo: true,
         };

@@ -151,8 +151,6 @@ export function AgentPaymentForm({
         : firstMethodKey === "merchant_wallet" ? "تاجر الكاش"
         : "كاش نقدي تاجر";
 
-    const description = form.service_type || "دفعة من الوكيل";
-
     const payload: any = {
       agent_id: form.agent_id,
       date: form.date,

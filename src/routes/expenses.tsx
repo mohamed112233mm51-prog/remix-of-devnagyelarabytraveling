@@ -273,13 +273,6 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     if (balanceErr) return toast.error(balanceErr);
 
 
-    // Build a human-readable summary for back-compat columns
-    const summary = valid
-      .map((r) => {
-        const label = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || r.method;
-        return `${label}: ${fmtDL(Number(r.amount) || 0)}`;
-      })
-      .join(" | ");
     const firstMethodKey = valid[0].method;
     const firstMerchantId = valid.find((r) => r.source === "merchant")?.merchant_id || null;
 
@@ -552,7 +545,7 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
                   </td>
                   <td data-label="التاريخ">{e.date}</td>
                   <td data-label="وسائل الدفع" style={{ fontSize: 12, lineHeight: 1.6 }}>{paymentsCell(e)}</td>
-                  <td data-label="البيان">{(e as any).statement || "—"}</td>
+                  <td data-label="البيان">{(e as any).statement || ""}</td>
                   <td data-label="ملاحظات">{e.notes || "—"}</td>
                   <td data-label="إجراءات">
                     <button className="btn" onClick={() => setEdit(e)}>تعديل</button>
