@@ -18,6 +18,7 @@ import {
   filterValidSplits,
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 
