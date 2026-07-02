@@ -224,9 +224,11 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     subtitle: agent?.name || "",
     fileName: `كشف-حساب-${agent?.name || "الوكيل"}`,
     summary: [
-      { label: "إجمالي قيمة الخدمات", value: fmtDL(totalServices) },
-      { label: "إجمالي المدفوعات", value: fmtDL(totalPayments) },
-      { label: "الصافي", value: fmtDL(Math.abs(net)) },
+      ...byCurrency.flatMap((b) => [
+        { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
+        { label: `إجمالي دائن (${b.currency})`, value: fmtCurrency(b.credit, b.currency) },
+        { label: `الصافي (${b.currency})`, value: fmtCurrency(Math.abs(b.net), b.currency) },
+      ]),
       { label: "حالة الحساب", value: accountStatus },
     ],
     columns: ([
@@ -242,10 +244,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     rows: displayRows.map((e, i) => ({
       n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
       count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
-      sv: fmtDL(e.serviceValue), sv__excel: e.serviceValue,
-      debit: e.debit > 0 ? fmtDL(e.debit) : "—", debit__excel: e.debit,
-      credit: e.credit > 0 ? fmtDL(e.credit) : "—", credit__excel: e.credit,
-      balance: fmtDL(e.balance), balance__excel: e.balance,
+      sv: fmtCurrency(e.serviceValue, e.currency), sv__excel: e.serviceValue,
+      debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
+      credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
+      balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
       method: e.methodLabel, note: e.note,
     })),
   });
