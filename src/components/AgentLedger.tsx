@@ -281,7 +281,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
             <div className="card-title">كشف حساب الوكيل</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
-              
+              <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
               {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} />}
             </div>
           </div>
@@ -290,50 +290,42 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
               <table className="mobile-cards">
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <Th filterKey="date">التاريخ</Th>
-                    <Th filterKey="description">البيان</Th>
-                    <Th filterKey="service" options={serviceOptions}>نوع الخدمة</Th>
-                    <Th filterKey="destination" options={destOptions}>وجهة السفر</Th>
-                    <Th filterKey="count">العدد</Th>
-                    <Th filterKey="price">السعر</Th>
-                    <Th filterKey="serviceValue">قيمة الرحلة</Th>
-                    <Th filterKey="debit">مدين</Th>
-                    <Th filterKey="credit">دائن</Th>
-                    <Th filterKey="balance">الرصيد الحالي</Th>
-                    <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>
-                    <Th filterKey="note">ملاحظات</Th>
+                    {isVisible("n") && <th>#</th>}
+                    {isVisible("date") && <Th filterKey="date">التاريخ</Th>}
+                    {isVisible("description") && <Th filterKey="description">البيان</Th>}
+                    {isVisible("service") && <Th filterKey="service" options={serviceOptions}>نوع الخدمة</Th>}
+                    {isVisible("destination") && <Th filterKey="destination" options={destOptions}>وجهة السفر</Th>}
+                    {isVisible("count") && <Th filterKey="count">العدد</Th>}
+                    {isVisible("price") && <Th filterKey="price">السعر</Th>}
+                    {isVisible("serviceValue") && <Th filterKey="serviceValue">قيمة الرحلة</Th>}
+                    {isVisible("debit") && <Th filterKey="debit">مدين</Th>}
+                    {isVisible("credit") && <Th filterKey="credit">دائن</Th>}
+                    {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
+                    {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
+                    {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
                   </tr>
                 </thead>
                 <tbody>
                   {displayRows.length === 0 ? (
-                    <tr><td colSpan={13}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
+                    <tr><td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
                   ) : displayRows.map((e, i) => (
                     <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
-                      <td data-label="#">{i + 1}</td>
-                      <td data-label="التاريخ">{e.date}</td>
-                      <td data-label="البيان" className="bold">{e.description}</td>
-                      <td data-label="نوع الخدمة">{e.service}</td>
-                      <td data-label="وجهة السفر">{e.destination}</td>
-                      <td data-label="العدد">{e.count || "—"}</td>
-                      <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>
-                      <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>
-                      <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>
-                      <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>
-                      <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>
-                      <td data-label="وسيلة الدفع">{e.methodLabel}</td>
-                      <td data-label="ملاحظات">{e.note}</td>
+                      {isVisible("n") && <td data-label="#">{i + 1}</td>}
+                      {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
+                      {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
+                      {isVisible("service") && <td data-label="نوع الخدمة">{e.service}</td>}
+                      {isVisible("destination") && <td data-label="وجهة السفر">{e.destination}</td>}
+                      {isVisible("count") && <td data-label="العدد">{e.count || "—"}</td>}
+                      {isVisible("price") && <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>}
+                      {isVisible("serviceValue") && <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>}
+                      {isVisible("debit") && <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>}
+                      {isVisible("credit") && <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>}
+                      {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>}
+                      {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
+                      {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                     </tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={8}>الإجمالي</td>
-                    <td>{fmtDL(totalServices)}</td>
-                    <td>{fmtDL(totalPayments)}</td>
-                    <td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(net))} — {accountStatus}</td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
           </div>
