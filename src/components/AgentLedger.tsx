@@ -202,6 +202,23 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const accountStatus = net > 0 ? "مدين عليه" : net < 0 ? "دائن له" : "متوازن";
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
 
+  // Per-currency totals for the footer (final balance per currency).
+  const byCurrency = useMemo(() => {
+    const debits = new Map<string, number>();
+    const credits = new Map<string, number>();
+    for (const e of ledger) {
+      const c = e.currency || "EGP";
+      debits.set(c, (debits.get(c) || 0) + e.debit);
+      credits.set(c, (credits.get(c) || 0) + e.credit);
+    }
+    const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
+    return currencies.map((c) => {
+      const d = debits.get(c) || 0;
+      const cr = credits.get(c) || 0;
+      return { currency: c, debit: d, credit: cr, net: d - cr };
+    });
+  }, [ledger]);
+
   const buildExportData = () => ({
     title: "كشف حساب الوكيل",
     subtitle: agent?.name || "",
