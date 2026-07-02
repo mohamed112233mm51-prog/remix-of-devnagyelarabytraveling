@@ -305,6 +305,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const company = safeCompanies.find((c) => c.id === companyId);
   const myTxnsAll = useMemo(
     () => safeTxns
+      .filter((t) => !(t as any).cancelled_at)
       .filter((t) => !companyId || t.company_id === companyId)
       .slice()
       .sort((a, b) =>
