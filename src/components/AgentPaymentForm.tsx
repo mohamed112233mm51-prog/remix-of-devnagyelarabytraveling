@@ -204,9 +204,9 @@ export function AgentPaymentForm({
         methodLabel = "نقدي";
         const box = cashBoxes.find((bb) => bb.currency === r.currency && bb.name.includes("نقدي") && bb.name.includes("الشركة"));
         cashBoxId = box?.id || null;
-      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
-      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+      } else if (r.method === "merchant_instapay") methodLabel = "انستا";
+      else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";
+      else if (r.method === "merchant_physical") methodLabel = "نقدي";
       return {
         method: methodLabel,
         currency: r.currency,
