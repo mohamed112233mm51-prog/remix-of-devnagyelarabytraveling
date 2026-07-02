@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ const COMPANY_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "balance", label: "الرصيد الحالي" },
   { key: "method", label: "وسيلة الدفع" },
   { key: "note", label: "ملاحظات" },
+  { key: "actions", label: "إجراءات" },
 ];
 import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -305,6 +307,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const company = safeCompanies.find((c) => c.id === companyId);
   const myTxnsAll = useMemo(
     () => safeTxns
+      .filter((t) => !(t as any).cancelled_at)
       .filter((t) => !companyId || t.company_id === companyId)
       .slice()
       .sort((a, b) =>
@@ -519,6 +522,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                 {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
                 {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
                 {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
+                {isVisible("actions") && <th>إجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -539,6 +543,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                   {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                   {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
+                  {isVisible("actions") && (
+                    <td data-label="إجراءات">
+                      <CancelTransactionButton table="company_transactions" id={e.id} cancelled={false} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

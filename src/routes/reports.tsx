@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { useMemo, useState } from "react";
 import {
   fmtDL,
@@ -1310,11 +1311,13 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
 
   // All-time sorted asc to build running balance, then filter for display
   const allSorted = useMemo(() => {
-    return [...usdTreasury].sort((a, b) => {
-      const da = (a.date || "") + " " + (a.created_at || "");
-      const db = (b.date || "") + " " + (b.created_at || "");
-      return da.localeCompare(db);
-    });
+    return [...usdTreasury]
+      .filter((r) => !(r as any).cancelled_at)
+      .sort((a, b) => {
+        const da = (a.date || "") + " " + (a.created_at || "");
+        const db = (b.date || "") + " " + (b.created_at || "");
+        return da.localeCompare(db);
+      });
   }, [usdTreasury]);
 
   const withBalance = useMemo(() => {
@@ -1378,6 +1381,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
     { header: "الخدمة / المسافر", key: "service" },
     { header: "بيان الحركة", key: "note" },
     { header: "الرصيد الدولاري بعد الحركة", key: "balance" },
+    { header: "إجراءات", key: "actions" },
   ];
 
   const rows = filtered.map((x) => {
@@ -1460,6 +1464,9 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
                   <td data-label="الخدمة">{r.service}</td>
                   <td data-label="بيان">{r.note}</td>
                   <td data-label="الرصيد">{r.balance}</td>
+                  <td data-label="إجراءات">
+                    <CancelTransactionButton table="usd_treasury_transactions" id={filtered[i]?.row.id || ""} cancelled={false} />
+                  </td>
                 </tr>
               ))}
             </tbody>

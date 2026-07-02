@@ -13,6 +13,7 @@ import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -28,6 +29,7 @@ const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "balance", label: "الرصيد الحالي" },
   { key: "method", label: "وسيلة الدفع" },
   { key: "note", label: "ملاحظات" },
+  { key: "actions", label: "إجراءات" },
 ];
 
 
@@ -64,7 +66,7 @@ function paymentMethodLabel(t: Transaction): string {
 }
 
 function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
-  const safeTxns = Array.isArray(txns) ? txns.filter(Boolean) : [];
+  const safeTxns = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
   return [...safeTxns]
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
     .map((t) => {
@@ -334,6 +336,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                     {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
                     {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
                     {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
+                    {isVisible("actions") && <th>إجراءات</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -354,6 +357,11 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                       {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
+                      {isVisible("actions") && (
+                        <td data-label="إجراءات">
+                          <CancelTransactionButton table="transactions" id={e.id} cancelled={false} />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

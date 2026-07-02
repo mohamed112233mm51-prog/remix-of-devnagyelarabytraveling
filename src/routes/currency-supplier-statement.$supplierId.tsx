@@ -18,6 +18,7 @@ import {
   filterValidSplits,
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
@@ -134,6 +135,7 @@ function CurrencySupplierStatementPage() {
         sold_currency: normalizeCurrency(t.sold_currency),
       }))
       .filter((t) => {
+        if ((t as any).cancelled_at) return false;
         if (from && t.tx_date < from) return false;
         if (to && t.tx_date > to) return false;
         if (typeFilter && t.tx_type !== typeFilter) return false;
@@ -325,15 +327,18 @@ function CurrencySupplierStatementPage() {
                     {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.foreignCurrency)}</td>}
                     {perm.delete && isVisible("actions") && (
                       <td data-label="إجراءات">
-                        <button className="action-btn" onClick={async () => {
-                          const ok = await confirmDialog("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.", { confirmLabel: "حذف", cancelLabel: "إلغاء" });
-                          if (!ok) return;
-                          await reverseTransaction(r, boxes);
-                          const { error } = await supabase.from("currency_supplier_transactions" as any).delete().eq("id", r.id);
-                          if (error) return toast.error(error.message);
-                          toast.success("تم حذف الحركة");
-                          refresh();
-                        }}>🗑</button>
+                        <div style={{ display: "inline-flex", gap: 6 }}>
+                          <CancelTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
+                          <button className="action-btn" onClick={async () => {
+                            const ok = await confirmDialog("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.", { confirmLabel: "حذف", cancelLabel: "إلغاء" });
+                            if (!ok) return;
+                            await reverseTransaction(r, boxes);
+                            const { error } = await supabase.from("currency_supplier_transactions" as any).delete().eq("id", r.id);
+                            if (error) return toast.error(error.message);
+                            toast.success("تم حذف الحركة");
+                            refresh();
+                          }}>🗑</button>
+                        </div>
                       </td>
                     )}
                   </tr>
