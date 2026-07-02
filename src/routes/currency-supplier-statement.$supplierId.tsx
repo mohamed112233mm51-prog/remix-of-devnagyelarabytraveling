@@ -95,6 +95,10 @@ function CurrencySupplierStatementPage() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
 
+  const [visible, setVisible] = usePersistentColumnVisibility("currency-supplier-statement", CS_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+
+
   useEffect(() => {
     let cancel = false;
     (async () => {
