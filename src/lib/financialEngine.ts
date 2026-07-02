@@ -24,7 +24,7 @@
  * ========================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLive } from "@/lib/db";
 
