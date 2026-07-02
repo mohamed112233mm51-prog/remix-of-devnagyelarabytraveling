@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Ban, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { CircleSlash, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
@@ -153,18 +153,15 @@ export function CancelTransactionButton({
 
   if (cancelled) {
     return (
-      <span
-        className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium select-none"
-        style={{
-          background: "color-mix(in oklab, var(--text) 6%, transparent)",
-          borderColor: "var(--border)",
-          color: "var(--muted-foreground, #64748b)",
-        }}
-        title="هذه الحركة ملغاة"
+      <button
+        type="button"
+        disabled
+        aria-label="تم إلغاء الحركة"
+        title="تم إلغاء الحركة"
+        className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground/50 cursor-not-allowed"
       >
-        <Ban size={12} />
-        ملغاة
-      </span>
+        <CircleSlash size={16} />
+      </button>
     );
   }
 
@@ -175,18 +172,11 @@ export function CancelTransactionButton({
         onClick={() => setOpen(true)}
         title="إلغاء الحركة المالية"
         aria-label="إلغاء الحركة المالية"
-        className="inline-flex items-center justify-center gap-1.5 rounded-md h-8 px-3 text-xs font-medium text-white shadow-sm transition-all duration-150 hover:scale-[1.03] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 whitespace-nowrap"
-        style={{
-          background: "var(--red, #dc2626)",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "var(--red-dark, #b91c1c)")
-        }
-        onMouseLeave={(e) => (e.currentTarget.style.background = "var(--red, #dc2626)")}
+        className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground transition-all duration-150 hover:scale-110 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
       >
-        <Ban size={14} />
-        <span className="hidden sm:inline">إلغاء</span>
+        <CircleSlash size={16} />
       </button>
+
 
 
       <Modal
