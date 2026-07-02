@@ -1,29 +1,64 @@
-// Cash movement forms — reuse the system's existing payment-splits flow.
-// Each form exposes ONLY entity / date / notes, then the standard
-// <PaymentSplits/> widget handles cashbox / amount / currency / method.
-//
-// Persistence mirrors the existing forms, with signs inverted where the
-// movement is an outflow (agent/merchant cash out) or an inflow without
-// trip (company cash supply). No new financial logic is introduced.
+// Cash movement forms — يستخدمون الآن Financial Engine (postMovement) لضمان
+// أن كل حركة مالية تمر عبر نقطة كتابة واحدة موحّدة تنعكس تلقائياً على:
+// كشف الجهة + رصيد الجهة + رصيد الخزنة + الداشبورد + التقارير.
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/db";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
+import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import {
   PaymentSplits,
   newPaymentSplitRow,
   validatePaymentSplits,
   filterValidSplits,
-  
+
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+
+/**
+ * تحويل PaymentSplitRow (من الـ UI) إلى MovementSplit (للـ Engine)
+ * — مركز واحد للـ method labels وربط cash_box_id.
+ */
+function mapSplitsForEngine(
+  rows: PaymentSplitRow[],
+  cashBoxes: CashBox[],
+  direction: "in" | "out",
+): MovementSplit[] {
+  return rows.map((r) => {
+    const a = Number(r.amount) || 0;
+    let methodLabel = "نقدي";
+    let cashBoxId: string | null = null;
+    if (r.method === "company_instapay") {
+      methodLabel = "إنستاباي";
+      const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+      cashBoxId = box?.id || null;
+    } else if (r.method === "company_cash") {
+      methodLabel = "نقدي";
+      const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+      cashBoxId = box?.id || null;
+    } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
+    else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
+    else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+    return {
+      method: methodLabel,
+      currency: r.currency as "EGP" | "USD" | "LYD",
+      cashBoxId,
+      amount: a,
+      direction,
+      grossAmount: a,
+      netAmount: a,
+      exchangeRate: 1,
+      egpEquivalent: r.currency === "EGP" ? a : 0,
+    };
+  });
+}
+
 
 /* ============================ AGENT CASH OUT ============================ */
 export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: string; onDone?: () => void }) {
@@ -49,66 +84,23 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
     const valid = filterValidSplits(splits);
 
     setSaving(true);
-    // Reverse-payment on agent ledger (negative paid).
-    const payload: any = {
-      agent_id: agentId,
+    const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
+    const res = await postMovement({
+      partyType: "agent",
+      partyId: agentId,
+      kind: "payment",
       date,
-      count: 0,
-      price: 0,
-      paid: -total,
-      total_paid: -total,
-      cash_amount: -total,
-      payment_method: "نقدي",
       note: note.trim() || "صرف نقدية للوكيل",
-      source_service_type: "agent_cash_out",
-    };
-    const { data: txn, error: txnErr } = await supabase
-      .from("transactions").insert(payload).select("id").single();
-    if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
-
-    // payment_splits → existing trigger decreases cash boxes for company rows.
-    const rows = valid.map((r) => {
-      const a = Number(r.amount) || 0;
-      let methodLabel = "نقدي";
-      let cashBoxId: string | null = null;
-      if (r.method === "company_instapay") {
-        methodLabel = "إنستاباي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "company_cash") {
-        methodLabel = "نقدي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
-      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
-      return {
-        transaction_id: txn.id,
-        method: methodLabel,
-        currency: r.currency,
-        cash_box_id: cashBoxId,
-        amount: a,
-        direction: "out",
-        source_table: "transactions",
-        source_id: txn.id,
-        gross_amount: a,
-        merchant_commission_rate: 0,
-        merchant_commission_amount: 0,
-        net_amount: a,
-        exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? a : 0,
-      };
+      splits: engineSplits,
     });
-    if (rows.length) {
-      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
-      if (spErr) { setSaving(false); return toast.error(spErr.message); }
-    }
-
     setSaving(false);
+    if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
+
     toast.success("تم تسجيل صرف النقدية");
     resetDraft();
     onDone?.();
   };
+
 
   return (
     <div className="card">
@@ -160,68 +152,23 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const valid = filterValidSplits(splits);
 
     setSaving(true);
-    // Same shape as agent cash-out: a transactions row + payment_splits
-    // (general second-line payments flow). agent_id is nullable; merchant_id
-    // tags the row so merchant ledgers/reports pick it up automatically.
-    const payload: any = {
-      agent_id: null,
-      merchant_id: merchantId,
+    const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
+    const res = await postMovement({
+      partyType: "merchant",
+      partyId: merchantId,
+      kind: "payment",
       date,
-      count: 0,
-      price: 0,
-      paid: -total,
-      total_paid: -total,
-      merchant_cash_physical_amount: -total,
-      payment_method: "نقدي",
       note: note.trim() || "صرف نقدية للتاجر",
-      source_service_type: "merchant_cash_out",
-    };
-    const { data: txn, error: txnErr } = await supabase
-      .from("transactions").insert(payload).select("id").single();
-    if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
-
-    const rows = valid.map((r) => {
-      const a = Number(r.amount) || 0;
-      let methodLabel = "نقدي";
-      let cashBoxId: string | null = null;
-      if (r.method === "company_instapay") {
-        methodLabel = "إنستاباي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "company_cash") {
-        methodLabel = "نقدي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
-      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
-      return {
-        transaction_id: txn.id,
-        method: methodLabel,
-        currency: r.currency,
-        cash_box_id: cashBoxId,
-        amount: a,
-        direction: "out",
-        source_table: "transactions",
-        source_id: txn.id,
-        gross_amount: a,
-        merchant_commission_rate: 0,
-        merchant_commission_amount: 0,
-        net_amount: a,
-        exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? a : 0,
-      };
+      splits: engineSplits,
     });
-    if (rows.length) {
-      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
-      if (spErr) { setSaving(false); return toast.error(spErr.message); }
-    }
-
     setSaving(false);
+    if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
+
     toast.success("تم تسجيل صرف النقدية للتاجر");
     resetDraft();
     onDone?.();
   };
+
 
   return (
     <div className="card">
@@ -274,7 +221,7 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
 
-    // Aggregate (cash supply = inflow → negative total_paid on company ledger).
+    // Aggregate for company_transactions metadata row (kept for ledger display).
     let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
     for (const r of valid) {
       const a = Number(r.amount) || 0;
@@ -285,77 +232,56 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
     }
     const firstMerchant = valid.find((r) => r.source === "merchant")?.merchant_id || null;
 
-    const payload: any = {
-      company_id: companyId,
-      date,
-      count: 0,
-      price: 0,
-      trip_value: 0,
-      instapay_amount: -instapay,
-      cash_amount: -cash,
-      merchant_cash_amount: -merchantWallet,
-      merchant_cash_net_amount: -merchantWallet,
-      merchant_cash_physical_amount: -merchantPhysical,
-      arabic_tourism_cash_amount: 0,
-      arabic_tourism_cash_net_amount: 0,
-      mobile_cash_amount: 0,
-      mobile_cash_net_amount: 0,
-      total_paid: -total,
-      usd_amount: 0,
-      payment_currency: "EGP",
-      merchant_id: firstMerchant,
-      note: note.trim() || "توريد نقدية",
-      source_service_type: "company_cash_supply",
-    };
-
     setSaving(true);
+    // 1) Metadata parent row on company_transactions (negative = cash inflow).
+    const { supabase } = await import("@/integrations/supabase/client");
     const { data: txn, error: txnErr } = await supabase
-      .from("company_transactions").insert(payload).select("id").single();
-    if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
-
-    // payment_splits with POSITIVE amounts → trigger INCREASES cash boxes.
-    const rows = valid.map((r) => {
-      const a = Number(r.amount) || 0;
-      let methodLabel = "نقدي";
-      let cashBoxId: string | null = null;
-      if (r.method === "company_instapay") {
-        methodLabel = "إنستاباي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "company_cash") {
-        methodLabel = "نقدي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
-      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
-      return {
-        transaction_id: txn.id,
-        method: methodLabel,
-        currency: r.currency,
-        cash_box_id: cashBoxId,
-        amount: a,
-        direction: "in",
-        source_table: "company_transactions",
-        source_id: txn.id,
-        gross_amount: a,
-        merchant_commission_rate: 0,
-        merchant_commission_amount: 0,
-        net_amount: a,
-        exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? a : 0,
-      };
-    });
-    if (rows.length) {
-      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
-      if (spErr) { setSaving(false); return toast.error(spErr.message); }
+      .from("company_transactions")
+      .insert({
+        company_id: companyId,
+        date,
+        count: 0,
+        price: 0,
+        trip_value: 0,
+        instapay_amount: -instapay,
+        cash_amount: -cash,
+        merchant_cash_amount: -merchantWallet,
+        merchant_cash_net_amount: -merchantWallet,
+        merchant_cash_physical_amount: -merchantPhysical,
+        total_paid: -total,
+        payment_currency: "EGP",
+        merchant_id: firstMerchant,
+        note: note.trim() || "توريد نقدية",
+        source_service_type: "company_cash_supply",
+      } as any)
+      .select("id")
+      .single();
+    if (txnErr || !txn) {
+      setSaving(false);
+      return toast.error(txnErr?.message || "تعذر حفظ الحركة");
     }
 
+    // 2) Financial movement via Engine (direction: in → increases cash boxes).
+    const engineSplits = mapSplitsForEngine(valid, cashBoxes, "in");
+    const res = await postMovement({
+      partyType: "company",
+      partyId: companyId,
+      kind: "receipt",
+      date,
+      note: note.trim() || "توريد نقدية",
+      splits: engineSplits,
+      sourceTable: "company_transactions",
+      sourceId: txn.id,
+      transactionId: txn.id,
+    });
     setSaving(false);
+    if (!res.ok) return toast.error(res.error || "تعذر حفظ سطور الدفع");
+
     toast.success("تم تسجيل توريد النقدية");
     resetDraft();
     onDone?.();
   };
+
 
   return (
     <div className="card">
