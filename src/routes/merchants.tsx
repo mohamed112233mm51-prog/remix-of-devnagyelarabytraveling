@@ -757,6 +757,7 @@ function MerchantStatementTab({
                   { value: "incoming", label: "وارد من وكيل" },
                   { value: "outgoing", label: "صادر لشركة" },
                   { value: "collection", label: "تحصيل نقدي" },
+                  { value: "cashout", label: "صرف نقدية" },
                   { value: "conversion", label: "تحويل لـ USD" },
                 ]}
                 allowClear={false}
