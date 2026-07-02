@@ -584,11 +584,12 @@ type StatementMovement = {
 };
 
 function MerchantStatementTab({
-  merchants, incomingTxns, outgoingTxns, collections, conversions, agents, companies,
+  merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, agents, companies,
 }: {
   merchants: Merchant[];
   incomingTxns: Transaction[];
   outgoingTxns: CompanyTransaction[];
+  cashMoveTxns: Transaction[];
   collections: MerchantCashCollection[];
   conversions: UsdTreasuryTransaction[];
   agents: Agent[];
