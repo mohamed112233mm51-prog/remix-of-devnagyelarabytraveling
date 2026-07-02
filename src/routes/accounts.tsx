@@ -294,6 +294,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
       opening_date: form.opening_date || null,
       opening_note: form.opening_note.trim() || null,
     } as any;
@@ -304,6 +305,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     if (!ok) return;
     await syncAgentOpeningBalance(agent.id, {
       debit, credit,
+      currency: form.opening_currency || "EGP",
       date: form.opening_date || null,
       note: form.opening_note.trim() || null,
     });
