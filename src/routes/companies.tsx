@@ -954,7 +954,6 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
 
       sourceTable: "company_transactions",
       sourceId: txnRow.id,
-      transactionId: txnRow.id,
     });
     if (!engineRes.ok) {
       setSaving(false);

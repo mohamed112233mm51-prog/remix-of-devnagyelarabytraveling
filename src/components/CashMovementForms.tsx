@@ -315,7 +315,6 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       splits: engineSplits,
       sourceTable: "company_transactions",
       sourceId: txn.id,
-      transactionId: txn.id,
     });
     if (!res.ok) {
       setSaving(false);
