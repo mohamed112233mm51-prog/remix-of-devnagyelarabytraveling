@@ -1056,9 +1056,13 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
           <div className="form-group"><label>التاريخ</label>
             <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
           </div>
+          <div className="form-group full"><label>البيان</label>
+            <input value={form.statement} onChange={(e) => set("statement", e.target.value)} />
+          </div>
           <div className="form-group full"><label>ملاحظات</label>
             <input value={form.note} onChange={(e) => set("note", e.target.value)} />
           </div>
+
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
