@@ -14,6 +14,7 @@ import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
