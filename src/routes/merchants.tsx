@@ -763,6 +763,7 @@ function MerchantStatementTab({
         <div className="card-header">
           <div className="card-title"><FileText size={18} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} /> كشف حساب التاجر</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <ColumnVisibility columns={MERCHANT_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
             <ExportButton disabled={withRunning.length === 0} getData={buildExport} />
           </div>
         </div>
