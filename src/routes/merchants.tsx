@@ -466,9 +466,9 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
     //    so the movement appears in unified financial logs (no cash_box impact
     //    because collections drain a merchant wallet, not a company treasury).
     const methodLabelFor = (m: string): string => {
-      if (m === "merchant_instapay") return "إنستاباي تاجر";
-      if (m === "merchant_wallet") return "تاجر الكاش تاجر";
-      if (m === "merchant_physical") return "نقدي تاجر";
+      if (m === "merchant_instapay") return "انستا";
+      if (m === "merchant_wallet") return "فودافون كاش";
+      if (m === "merchant_physical") return "نقدي";
       return "نقدي";
     };
     for (let i = 0; i < valid.length; i++) {
