@@ -70,9 +70,11 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
   const [agentId, setAgentId, clearAgentId] = usePersistentState<string>(`${draftKey}:agentId`, initialAgentId || "");
   const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
   const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [statement, setStatement, clearStatement] = usePersistentState<string>(`${draftKey}:statement`, "");
   const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const resetDraft = () => { clearAgentId(); clearDate(); clearNote(); clearSplits(); };
+  const resetDraft = () => { clearAgentId(); clearDate(); clearNote(); clearStatement(); clearSplits(); };
+
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
