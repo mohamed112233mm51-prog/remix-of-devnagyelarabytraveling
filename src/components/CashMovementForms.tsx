@@ -314,9 +314,13 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={statement} onChange={(e) => setStatement(e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
