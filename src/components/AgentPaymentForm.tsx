@@ -173,9 +173,12 @@ export function AgentPaymentForm({
       total_paid: totalNet,
       paid: totalNet,
       merchant_id: firstMerchant,
-      note: form.note.trim() || description,
+      // لا نستخدم أي fallback نصي — يبقى فارغاً إن لم يكتب المستخدم شيئاً
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
       source_service_type: "payment",
     };
+
 
     setSaving(true);
     const { data: txnRow, error: txnErr } = await supabase
