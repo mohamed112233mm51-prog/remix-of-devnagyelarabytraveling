@@ -86,8 +86,6 @@ function MerchantsPage() {
     };
     for (const t of txns) {
       if (!t.merchant_id) continue;
-      // Cash payments to merchant posted via Financial Engine keep merchant_cash_* = 0
-      // and only carry a signed `paid` — count them ONLY in paidOut (not incoming).
       if (t.source_service_type === "merchant_cash_out") {
         get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
         continue;
@@ -96,6 +94,13 @@ function MerchantsPage() {
         get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
         continue;
       }
+      if (t.source_service_type === "merchant_cash_out_to_agent") {
+        get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
+        continue;
+      }
+      // Skip parent agent-cashout rows that our merchant counterpart mirrors —
+      // the merchant side is already recorded above under merchant_cash_out_to_agent.
+      if (t.agent_id && merchantAgentOutSourceIds.has(t.id)) continue;
       get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
     }
     for (const t of cTxns) {
