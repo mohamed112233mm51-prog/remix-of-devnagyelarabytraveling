@@ -326,6 +326,13 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                      الإجمالي — مدين: {fmtDL(totalServices)} · دائن: {fmtDL(totalPayments)} · الصافي: {fmtDL(Math.abs(net))} ({accountStatus})
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
