@@ -771,7 +771,8 @@ type StatementMovement = {
   gross: number;
   commission: number;
   net: number;
-  delta: number; // signed effect on merchant balance
+  delta: number; // signed effect on merchant balance (EGP)
+  currency: string; // "EGP" by default; opening rows carry the user-chosen currency
 };
 
 
