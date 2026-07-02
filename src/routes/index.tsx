@@ -503,7 +503,7 @@ function Dashboard() {
       .slice(0, 5);
   }, [cTxns, submissions, companies]);
 
-  // 3. Service type distribution — aggregated from real services arrays on submissions + executions
+  // 3. Service type distribution — executions only (real executed work)
   const serviceDist = useMemo(() => {
     const counts = new Map<string, number>();
     const bump = (label: string, n = 1) => {
@@ -522,8 +522,7 @@ function Dashboard() {
         bump(label, count);
       }
     };
-    for (const sub of submissions) extract((sub as any).services);
-    for (const ex of executionMetrics) extract((ex as any).services);
+    for (const ex of executedRows) extract((ex as any).services);
     const palette = [NAVY, GOLD, "#0EA5E9", "#10B981", "#EF4444", "#8B5CF6", "#F59E0B", "#14B8A6"];
     const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
     const total = entries.reduce((s, [, n]) => s + n, 0) || 1;
@@ -533,10 +532,10 @@ function Dashboard() {
       pct: Math.round((value / total) * 100),
       color: palette[i % palette.length],
     }));
-  }, [submissions, executionMetrics]);
+  }, [executedRows]);
   const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
 
-  // 4. Travel authorities — real submissions + executions (via submission_id link)
+  // 4. Travel authorities — executions only; submission used only as reference for the authority field
   const topAuthorities = useMemo(() => {
     const authOfSub = new Map<string, string>();
     for (const s of submissions) {
@@ -544,13 +543,9 @@ function Dashboard() {
       if (a) authOfSub.set(s.id, a);
     }
     const byAuth = new Map<string, number>();
-    for (const s of submissions) {
-      const a = ((s as any).approval_authority || "").trim();
-      if (!a) continue;
-      byAuth.set(a, (byAuth.get(a) || 0) + 1);
-    }
-    for (const ex of executionMetrics) {
-      const a = ex.submission_id ? authOfSub.get(ex.submission_id) : null;
+    for (const ex of executedRows) {
+      const direct = ((ex as any).approval_authority || "").trim();
+      const a = direct || (ex.submission_id ? authOfSub.get(ex.submission_id) || "" : "");
       if (!a) continue;
       byAuth.set(a, (byAuth.get(a) || 0) + 1);
     }
@@ -559,8 +554,9 @@ function Dashboard() {
       .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [submissions, executionMetrics]);
+  }, [executedRows, submissions]);
   const authMax = Math.max(...topAuthorities.map((a) => a.count), 1);
+
 
 
   // Pending submissions — operation status not finalized
