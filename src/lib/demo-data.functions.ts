@@ -7,7 +7,6 @@ import {
   AUTHORITIES as FALLBACK_AUTHORITIES,
   DESTINATIONS as FALLBACK_DESTINATIONS,
   SERVICE_TYPES as FALLBACK_SERVICE_TYPES,
-  buildTravelStatement,
 } from "./db";
 
 // Approval/flight status options — must match the values used by the UI dropdowns
