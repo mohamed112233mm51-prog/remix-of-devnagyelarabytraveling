@@ -29,6 +29,7 @@ import {
   filterValidSplits,
   methodsForSplit,
 } from "@/components/PaymentSplits";
+import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
