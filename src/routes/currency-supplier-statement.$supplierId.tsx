@@ -278,7 +278,7 @@ function CurrencySupplierStatementPage() {
           <label>العملة</label>
           <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
             <option value="">الكل</option>
-            {ALL_FILTER_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {ALL_FILTER_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>)}
           </select>
         </div>
         {(from || to || typeFilter || currencyFilter) && (
