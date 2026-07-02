@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -378,16 +379,18 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const byCurrency = useMemo(() => {
     const debits = new Map<string, number>();
     const credits = new Map<string, number>();
+    const counts = new Map<string, number>();
     for (const e of allEntries) {
       const c = e.currency || "EGP";
       debits.set(c, (debits.get(c) || 0) + e.debit);
       credits.set(c, (credits.get(c) || 0) + e.credit);
+      counts.set(c, (counts.get(c) || 0) + 1);
     }
     const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
     return currencies.map((c) => {
       const d = debits.get(c) || 0;
       const cr = credits.get(c) || 0;
-      return { currency: c, debit: d, credit: cr, net: d - cr };
+      return { currency: c, debit: d, credit: cr, net: d - cr, count: counts.get(c) || 0 };
     });
   }, [allEntries]);
 
@@ -551,24 +554,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                 </tr>
               ))}
             </tbody>
-            <tfoot className="totals-foot">
-              {byCurrency.map((b) => (
-                <tr key={`totals-${b.currency}`}>
-                  <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
-                    الإجمالي ({b.currency}) — مدين: {fmtCurrency(b.debit, b.currency)} · دائن: {fmtCurrency(b.credit, b.currency)} · الصافي: {fmtCurrency(Math.abs(b.net), b.currency)} ({b.net > 0 ? "مدين عليه" : b.net < 0 ? "دائن له" : "متوازن"})
-                  </td>
-                </tr>
-              ))}
-              {byCurrency.length === 0 && (
-                <tr>
-                  <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
-                    الإجمالي — مدين: {fmtDL(0)} · دائن: {fmtDL(0)} · الصافي: {fmtDL(0)} ({accountStatus})
-                  </td>
-                </tr>
-              )}
-            </tfoot>
           </table>
         </div>
+        <CurrencyTotalsCards totals={byCurrency} />
       </div>
     </div>
   );
