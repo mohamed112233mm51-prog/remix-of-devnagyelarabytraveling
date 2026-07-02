@@ -393,8 +393,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
-    methodLabel: e.paymentMethod + (e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""),
-  })), [allWithBalance, merchants]);
+    methodLabel: e.paymentMethod,
+  })), [allWithBalance]);
 
   const serviceOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.service).filter(Boolean))).sort(), [rowsWithMethodLabel]);
   const destOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.destination).filter(Boolean))).sort(), [rowsWithMethodLabel]);
@@ -935,9 +935,9 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         methodLabel = "نقدي";
         const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
         cashBoxId = box?.id || null;
-      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
-      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+      } else if (r.method === "merchant_instapay") methodLabel = "انستا";
+      else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";
+      else if (r.method === "merchant_physical") methodLabel = "نقدي";
       return {
         method: methodLabel,
         currency: r.currency as any,
