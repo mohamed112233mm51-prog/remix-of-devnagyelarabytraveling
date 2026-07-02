@@ -93,8 +93,8 @@ function MerchantsPage() {
     totalPaidOut += v.paidOut;
     totalConverted += v.converted;
   }
-  // balance = الوارد من الوكلاء + التحصيل من التجار − الصرف للتجار − الصادر للشركات − التحويلات
-  const balance = totalIncoming + totalCollected - totalPaidOut - totalOutgoing - totalConverted;
+  // balance = الوارد من الوكلاء + الصرف للتاجر − التحصيل من التاجر − الصادر للشركات − التحويلات
+  const balance = totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted;
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
   const companyName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
