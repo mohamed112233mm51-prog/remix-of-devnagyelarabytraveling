@@ -255,7 +255,8 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
     const selectedCurrency = singleCurrencyOrError(valid);
-    if (!selectedCurrency) return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
+    const currencyErr = validateSingleCurrency(valid);
+    if (currencyErr) return toast.error(currencyErr);
 
     // Aggregate for company_transactions metadata row (kept for ledger display).
     let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
