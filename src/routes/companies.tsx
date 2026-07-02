@@ -816,7 +816,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       .from("company_transactions").insert(payload).select("id").single();
     if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
 
-    const splitRecords = validSplits.map((r) => {
+    const engineSplits: MovementSplit[] = validSplits.map((r) => {
       const a = Number(r.amount) || 0;
       let methodLabel = "نقدي";
       let cashBoxId: string | null = null;
@@ -831,28 +831,33 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
       else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
       else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
-
       return {
-        transaction_id: txnRow.id,
         method: methodLabel,
-        currency: r.currency,
-        cash_box_id: cashBoxId,
+        currency: r.currency as any,
+        cashBoxId,
         amount: a,
         direction: "out",
-        source_table: "company_transactions",
-        source_id: txnRow.id,
-        gross_amount: a,
-        merchant_commission_rate: 0,
-        merchant_commission_amount: 0,
-        net_amount: a,
-        exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? a : 0,
+        grossAmount: a,
+        commissionRate: 0,
+        commissionAmount: 0,
+        netAmount: a,
+        exchangeRate: 1,
+        egpEquivalent: r.currency === "EGP" ? a : 0,
       };
     });
-    if (splitRecords.length) {
-      const { error: spErr } = await supabase.from("payment_splits").insert(splitRecords);
-      if (spErr) console.warn("payment_splits insert error:", spErr.message);
-    }
+    const engineRes = await postMovement({
+      partyType: "company",
+      partyId: form.company_id,
+      kind: "payment",
+      date: form.date,
+      note: form.note.trim() || undefined,
+      splits: engineSplits,
+      sourceTable: "company_transactions",
+      sourceId: txnRow.id,
+      transactionId: txnRow.id,
+    });
+    if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
+
 
     setSaving(false);
     toast.success("تم تسجيل الحركة");
