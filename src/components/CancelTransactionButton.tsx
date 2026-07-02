@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Ban, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { CircleSlash, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
