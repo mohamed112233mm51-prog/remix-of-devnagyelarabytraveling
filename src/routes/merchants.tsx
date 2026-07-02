@@ -23,6 +23,19 @@ import {
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
+  { key: "n", label: "#" },
+  { key: "date", label: "التاريخ" },
+  { key: "type", label: "نوع الحركة" },
+  { key: "statement", label: "البيان" },
+  { key: "gross", label: "المبلغ" },
+  { key: "commission", label: "النسبة" },
+  { key: "net", label: "الصافي" },
+  { key: "balance", label: "الرصيد الحالي" },
+];
 import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/merchants")({
@@ -702,6 +715,10 @@ function MerchantStatementTab({
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
 
+  const [visible, setVisible] = usePersistentColumnVisibility("merchant-statement", MERCHANT_STATEMENT_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+  const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
+
   const buildExport = () => ({
     title: "كشف حساب التاجر",
     subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
@@ -715,7 +732,7 @@ function MerchantStatementTab({
       { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
       { label: "صافي الرصيد", value: fmtDL(finalBalance) },
     ],
-    columns: [
+    columns: ([
       { header: "#", key: "n" },
       { header: "التاريخ", key: "date" },
       { header: "نوع الحركة", key: "type" },
@@ -724,7 +741,7 @@ function MerchantStatementTab({
       { header: "النسبة", key: "commission" },
       { header: "الصافي", key: "net" },
       { header: "الرصيد الحالي", key: "balance" },
-    ],
+    ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: withRunning.map((m, i) => ({
       n: i + 1, date: m.date, type: m.type, statement: m.statement,
       gross: fmtDL(m.gross), gross__excel: m.gross,
@@ -746,6 +763,7 @@ function MerchantStatementTab({
         <div className="card-header">
           <div className="card-title"><FileText size={18} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} /> كشف حساب التاجر</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <ColumnVisibility columns={MERCHANT_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
             <ExportButton disabled={withRunning.length === 0} getData={buildExport} />
           </div>
         </div>
@@ -829,29 +847,38 @@ function MerchantStatementTab({
         <div className="card-body">
           <div className="table-wrap enterprise-table">
             <table className="mobile-cards">
-              <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th className="num-col">المبلغ</th><th className="num-col">النسبة</th><th className="num-col">الصافي</th><th className="num-col">الرصيد الحالي</th></tr></thead>
+              <thead><tr>
+                {isVisible("n") && <th>#</th>}
+                {isVisible("date") && <th>التاريخ</th>}
+                {isVisible("type") && <th>نوع الحركة</th>}
+                {isVisible("statement") && <th>البيان</th>}
+                {isVisible("gross") && <th className="num-col">المبلغ</th>}
+                {isVisible("commission") && <th className="num-col">النسبة</th>}
+                {isVisible("net") && <th className="num-col">الصافي</th>}
+                {isVisible("balance") && <th className="num-col">الرصيد الحالي</th>}
+              </tr></thead>
               <tbody>
                 {withRunning.length === 0 ? (
-                  <tr><td colSpan={8}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
+                  <tr><td colSpan={visibleCount}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
                 ) : pageMovements.map((m, i) => {
                   const idx = page * pageSize + i;
                   const color = m.type === "وارد من وكيل" ? "#15803D" : "#B91C1C";
                   return (
                     <tr key={m.id}>
-                      <td data-label="#">{idx + 1}</td>
-                      <td data-label="التاريخ">{m.date}</td>
-                      <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>
-                      <td data-label="البيان">{m.statement}</td>
-                      <td className="num-col" data-label="المبلغ">{fmtDL(m.gross)}</td>
-                      <td className="num-col" data-label="النسبة">{fmtDL(m.commission)}</td>
-                      <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtDL(Math.abs(m.delta))}</td>
-                      <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(m.balance)}</td>
+                      {isVisible("n") && <td data-label="#">{idx + 1}</td>}
+                      {isVisible("date") && <td data-label="التاريخ">{m.date}</td>}
+                      {isVisible("type") && <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>}
+                      {isVisible("statement") && <td data-label="البيان">{m.statement}</td>}
+                      {isVisible("gross") && <td className="num-col" data-label="المبلغ">{fmtDL(m.gross)}</td>}
+                      {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtDL(m.commission)}</td>}
+                      {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtDL(Math.abs(m.delta))}</td>}
+                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(m.balance)}</td>}
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
+                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجمالي — المبلغ: {fmtDL(filtered.reduce((s, m) => s + m.gross, 0))} · النسبة: {fmtDL(totalCommission)} · الصافي: {fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)} · الرصيد: {fmtDL(finalBalance)}</td></tr>
               </tfoot>
             </table>
           </div>

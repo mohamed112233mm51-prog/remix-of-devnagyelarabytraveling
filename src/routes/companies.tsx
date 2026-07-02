@@ -34,6 +34,24 @@ import { CompanySupplyForm } from "@/components/CashMovementForms";
 import { EntityProfileModal } from "@/components/EntityProfileModal";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const COMPANY_STATEMENT_COLUMNS: ColumnDef[] = [
+  { key: "n", label: "#" },
+  { key: "date", label: "التاريخ" },
+  { key: "description", label: "البيان" },
+  { key: "service", label: "نوع الخدمة" },
+  { key: "destination", label: "وجهة السفر" },
+  { key: "count", label: "العدد" },
+  { key: "price", label: "السعر" },
+  { key: "serviceValue", label: "قيمة الرحلة" },
+  { key: "debit", label: "مدين" },
+  { key: "credit", label: "دائن" },
+  { key: "balance", label: "الرصيد الحالي" },
+  { key: "method", label: "وسيلة الدفع" },
+  { key: "note", label: "ملاحظات" },
+];
 import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
@@ -366,6 +384,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
+  const [visible, setVisible] = usePersistentColumnVisibility("company-statement", COMPANY_STATEMENT_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+
   const displayRows = useMemo(() => rowsWithMethodLabel.filter((e) => {
     if (!CF.matchDateRange(e.date, safeFilters.date)) return false;
     if (!CF.matchText(e.description, safeFilters.description)) return false;
@@ -393,14 +414,16 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       { label: "الصافي", value: fmtDL(Math.abs(balance)) },
       { label: "حالة الحساب", value: accountStatus },
     ],
-    columns: [
+    columns: ([
       { header: "#", key: "n" }, { header: "التاريخ", key: "date" }, { header: "البيان", key: "description" },
       { header: "نوع الخدمة", key: "service" }, { header: "وجهة السفر", key: "destination" },
       { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
-      { header: "قيمة الرحلة", key: "sv" },
+      { header: "قيمة الرحلة", key: "serviceValue", exportKey: "sv" },
       { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
       { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" },
-    ],
+    ] as Array<{ header: string; key: string; exportKey?: string }>)
+      .filter((c) => isVisible(c.key))
+      .map((c) => ({ header: c.header, key: c.exportKey || c.key })),
     rows: displayRows.map((e, i) => ({
       n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
       count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
@@ -432,6 +455,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
         <div className="card-title">كشف حساب الشركة الصادرة</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
+          <ColumnVisibility columns={COMPANY_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
           {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} />}
         </div>
       </div>
@@ -446,48 +470,47 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
           <table className="mobile-cards">
             <thead>
               <tr>
-                <th>#</th>
-                <Th filterKey="date">التاريخ</Th>
-                <Th filterKey="description">البيان</Th>
-                <Th filterKey="service" options={serviceOptions}>نوع الخدمة</Th>
-                <Th filterKey="destination" options={destOptions}>وجهة السفر</Th>
-                <Th filterKey="count">العدد</Th>
-                <Th filterKey="price">السعر</Th>
-                <Th filterKey="serviceValue">قيمة الرحلة</Th>
-                <Th filterKey="debit">مدين</Th>
-                <Th filterKey="credit">دائن</Th>
-                <Th filterKey="balance">الرصيد الحالي</Th>
-                <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>
-                <Th filterKey="note">ملاحظات</Th>
+                {isVisible("n") && <th>#</th>}
+                {isVisible("date") && <Th filterKey="date">التاريخ</Th>}
+                {isVisible("description") && <Th filterKey="description">البيان</Th>}
+                {isVisible("service") && <Th filterKey="service" options={serviceOptions}>نوع الخدمة</Th>}
+                {isVisible("destination") && <Th filterKey="destination" options={destOptions}>وجهة السفر</Th>}
+                {isVisible("count") && <Th filterKey="count">العدد</Th>}
+                {isVisible("price") && <Th filterKey="price">السعر</Th>}
+                {isVisible("serviceValue") && <Th filterKey="serviceValue">قيمة الرحلة</Th>}
+                {isVisible("debit") && <Th filterKey="debit">مدين</Th>}
+                {isVisible("credit") && <Th filterKey="credit">دائن</Th>}
+                {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
+                {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
+                {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
               </tr>
             </thead>
             <tbody>
               {displayRows.length === 0 ? (
-                <tr><td colSpan={13}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
+                <tr><td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
               ) : displayRows.map((e, i) => (
                 <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
-                  <td data-label="#">{i + 1}</td>
-                  <td data-label="التاريخ">{e.date}</td>
-                  <td data-label="البيان" className="bold">{e.description}</td>
-                  <td data-label="نوع الخدمة">{e.service}</td>
-                  <td data-label="وجهة السفر">{e.destination}</td>
-                  <td data-label="العدد">{e.count || "—"}</td>
-                  <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>
-                  <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>
-                  <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>
-                  <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>
-                  <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>
-                  <td data-label="وسيلة الدفع">{e.methodLabel}</td>
-                  <td data-label="ملاحظات">{e.note}</td>
+                  {isVisible("n") && <td data-label="#">{i + 1}</td>}
+                  {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
+                  {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
+                  {isVisible("service") && <td data-label="نوع الخدمة">{e.service}</td>}
+                  {isVisible("destination") && <td data-label="وجهة السفر">{e.destination}</td>}
+                  {isVisible("count") && <td data-label="العدد">{e.count || "—"}</td>}
+                  {isVisible("price") && <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>}
+                  {isVisible("serviceValue") && <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>}
+                  {isVisible("debit") && <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>}
+                  {isVisible("credit") && <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>}
+                  {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>}
+                  {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
+                  {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                 </tr>
               ))}
             </tbody>
             <tfoot className="totals-foot">
               <tr>
-                <td colSpan={8}>الإجمالي</td>
-                <td>{fmtDL(totalServices)}</td>
-                <td>{fmtDL(totalPaid)}</td>
-                <td colSpan={3} style={{ fontWeight: 800 }}>{fmtDL(Math.abs(balance))} — {accountStatus}</td>
+                <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                  الإجمالي — مدين: {fmtDL(totalServices)} · دائن: {fmtDL(totalPaid)} · الصافي: {fmtDL(Math.abs(balance))} ({accountStatus})
+                </td>
               </tr>
             </tfoot>
           </table>

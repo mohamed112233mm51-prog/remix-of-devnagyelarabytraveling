@@ -18,6 +18,20 @@ import {
   filterValidSplits,
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const CS_COLUMNS: ColumnDef[] = [
+  { key: "date", label: "التاريخ" },
+  { key: "type", label: "نوع الحركة" },
+  { key: "cur", label: "العملة" },
+  { key: "amt", label: "المبلغ" },
+  { key: "rate", label: "سعر الصرف" },
+  { key: "egp", label: "القيمة بالجنيه" },
+  { key: "desc", label: "البيان" },
+  { key: "balance", label: "الرصيد" },
+  { key: "actions", label: "إجراءات" },
+];
 
 
 export const Route = createFileRoute("/currency-supplier-statement/$supplierId")({
@@ -80,6 +94,10 @@ function CurrencySupplierStatementPage() {
   const [to, setTo] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
+
+  const [visible, setVisible] = usePersistentColumnVisibility("currency-supplier-statement", CS_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+
 
   useEffect(() => {
     let cancel = false;
@@ -146,7 +164,7 @@ function CurrencySupplierStatementPage() {
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
     subtitle: currencyFilter ? `العملة: ${currencyFilter}` : undefined,
     summary: summary.map((s) => ({ label: s.currency, value: `${fmtNum(s.net)}` })),
-    columns: [
+    columns: ([
       { header: "التاريخ", key: "date" },
       { header: "نوع الحركة", key: "type" },
       { header: "العملة", key: "cur" },
@@ -155,7 +173,7 @@ function CurrencySupplierStatementPage() {
       { header: "القيمة بالجنيه", key: "egp" },
       { header: "البيان", key: "desc" },
       ...(currencyFilter ? [{ header: `الرصيد (${currencyFilter})`, key: "balance" }] : []),
-    ],
+    ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: rowsWithBalance.map((r) => ({
       date: r.tx_date,
       type: r.tx_type,
@@ -212,6 +230,7 @@ function CurrencySupplierStatementPage() {
             </button>
           </>
         )}
+        <ColumnVisibility columns={CS_COLUMNS.filter((c) => c.key !== "balance" || currencyFilter).filter((c) => c.key !== "actions" || perm.delete)} visible={visible} onChange={setVisible} />
         {perm.export && <ExportButton getData={exportData} />}
       </div>
 
@@ -255,33 +274,33 @@ function CurrencySupplierStatementPage() {
             <table className="mobile-cards">
               <thead>
                 <tr>
-                  <th>التاريخ</th>
-                  <th>نوع الحركة</th>
-                  <th>العملة</th>
-                  <th className="num-col">المبلغ</th>
-                  <th className="num-col">سعر الصرف</th>
-                  <th className="num-col">القيمة بالجنيه</th>
-                  <th>البيان</th>
-                  {currencyFilter && <th className="num-col">الرصيد ({currencyFilter})</th>}
-                  {perm.delete && <th>إجراءات</th>}
+                  {isVisible("date") && <th>التاريخ</th>}
+                  {isVisible("type") && <th>نوع الحركة</th>}
+                  {isVisible("cur") && <th>العملة</th>}
+                  {isVisible("amt") && <th className="num-col">المبلغ</th>}
+                  {isVisible("rate") && <th className="num-col">سعر الصرف</th>}
+                  {isVisible("egp") && <th className="num-col">القيمة بالجنيه</th>}
+                  {isVisible("desc") && <th>البيان</th>}
+                  {currencyFilter && isVisible("balance") && <th className="num-col">الرصيد ({currencyFilter})</th>}
+                  {perm.delete && isVisible("actions") && <th>إجراءات</th>}
                 </tr>
               </thead>
               <tbody>
                 {rowsWithBalance.length === 0 ? (
-                  <tr><td colSpan={currencyFilter ? 9 : 8}><div className="empty"><div className="empty-text">لا توجد حركات</div></div></td></tr>
+                  <tr><td colSpan={CS_COLUMNS.length}><div className="empty"><div className="empty-text">لا توجد حركات</div></div></td></tr>
                 ) : rowsWithBalance.map((r) => (
                   <tr key={r.id}>
-                    <td data-label="التاريخ">{r.tx_date}</td>
-                    <td data-label="النوع">
+                    {isVisible("date") && <td data-label="التاريخ">{r.tx_date}</td>}
+                    {isVisible("type") && <td data-label="النوع">
                       <span className={`badge pill-badge ${r.tx_type === "شراء عملة" ? "badge-green" : "badge-blue"}`}>{r.tx_type}</span>
-                    </td>
-                    <td data-label="العملة">{r.foreignCurrency}</td>
-                    <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>
-                    <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>
-                    <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>
-                    <td data-label="البيان">{r.description || "—"}</td>
-                    {currencyFilter && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(r.balance || 0))}</td>}
-                    {perm.delete && (
+                    </td>}
+                    {isVisible("cur") && <td data-label="العملة">{r.foreignCurrency}</td>}
+                    {isVisible("amt") && <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>}
+                    {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
+                    {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
+                    {isVisible("desc") && <td data-label="البيان">{r.description || "—"}</td>}
+                    {currencyFilter && isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(r.balance || 0))}</td>}
+                    {perm.delete && isVisible("actions") && (
                       <td data-label="إجراءات">
                         <button className="action-btn" onClick={async () => {
                           const ok = await confirmDialog("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.", { confirmLabel: "حذف", cancelLabel: "إلغاء" });
