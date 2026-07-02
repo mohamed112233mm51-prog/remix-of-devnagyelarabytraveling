@@ -125,14 +125,23 @@ function CurrencySupplierStatementPage() {
   const refresh = () => setReload((n) => n + 1);
 
   const filtered = useMemo(() => {
-    return txns.filter((t) => {
-      if (from && t.tx_date < from) return false;
-      if (to && t.tx_date > to) return false;
-      if (typeFilter && t.tx_type !== typeFilter) return false;
-      if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
-      return true;
-    });
+    // Normalize legacy Arabic currency values to canonical codes so old rows
+    // group correctly with new ones.
+    return txns
+      .map((t) => ({
+        ...t,
+        bought_currency: normalizeCurrency(t.bought_currency),
+        sold_currency: normalizeCurrency(t.sold_currency),
+      }))
+      .filter((t) => {
+        if (from && t.tx_date < from) return false;
+        if (to && t.tx_date > to) return false;
+        if (typeFilter && t.tx_type !== typeFilter) return false;
+        if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
+        return true;
+      });
   }, [txns, from, to, typeFilter, currencyFilter]);
+
 
   const summary = useMemo(() => {
     const map = new Map<string, number>();
