@@ -241,7 +241,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           expense_type: form.expense_type,
           amount: totalAmount,
           date: form.date,
-          notes: form.notes || null,
+          notes: form.notes.trim() ? form.notes.trim() : null,
+          statement: form.statement.trim() ? form.statement.trim() : null,
+
           auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
           auto_deduct_day:
             form.expense_type === "ثابت" && form.auto_deduct_enabled
