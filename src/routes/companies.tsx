@@ -521,6 +521,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                 {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
                 {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
                 {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
+                {isVisible("actions") && <th>إجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -541,6 +542,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                   {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                   {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
+                  {isVisible("actions") && (
+                    <td data-label="إجراءات">
+                      <CancelTransactionButton table="company_transactions" id={e.id} cancelled={false} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
