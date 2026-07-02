@@ -1,25 +1,21 @@
-// Cash movement forms — reuse the system's existing payment-splits flow.
-// Each form exposes ONLY entity / date / notes, then the standard
-// <PaymentSplits/> widget handles cashbox / amount / currency / method.
-//
-// Persistence mirrors the existing forms, with signs inverted where the
-// movement is an outflow (agent/merchant cash out) or an inflow without
-// trip (company cash supply). No new financial logic is introduced.
+// Cash movement forms — يستخدمون الآن Financial Engine (postMovement) لضمان
+// أن كل حركة مالية تمر عبر نقطة كتابة واحدة موحّدة تنعكس تلقائياً على:
+// كشف الجهة + رصيد الجهة + رصيد الخزنة + الداشبورد + التقارير.
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useLive, type Agent, type Merchant, type IssuingCompany } from "@/lib/db";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
+import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import {
   PaymentSplits,
   newPaymentSplitRow,
   validatePaymentSplits,
   filterValidSplits,
-  
+
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
 
