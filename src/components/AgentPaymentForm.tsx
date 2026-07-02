@@ -280,9 +280,13 @@ export function AgentPaymentForm({
         <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
           <input type="number" value={tripValueNum || ""} disabled readOnly />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={form.statement} onChange={(e) => set("statement", e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <div className="card-header" style={{ marginTop: 8 }}>
