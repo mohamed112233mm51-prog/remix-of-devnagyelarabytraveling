@@ -107,8 +107,12 @@ function MerchantsPage() {
 
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
   const outgoingTxns = useMemo(
-    () => cTxns.filter((t) => !merchantCompanyOutSourceIds.has(t.id) && merchantCompanyOutflowAmount(t) > 0),
-    [cTxns, merchantCompanyOutSourceIds],
+    () => cTxns.filter((t) => merchantCompanyOutflowAmount(t) > 0),
+    [cTxns],
+  );
+  const statementOutgoingTxns = useMemo(
+    () => outgoingTxns.filter((t) => !merchantCompanyOutSourceIds.has(t.id)),
+    [outgoingTxns, merchantCompanyOutSourceIds],
   );
   const cashMoveTxns = useMemo(
     () => txns.filter((t) => t.merchant_id && (t.source_service_type === "merchant_cash_out" || t.source_service_type === "merchant_cash_out_to_company")),
@@ -290,7 +294,7 @@ function MerchantsPage() {
         <MerchantStatementTab
           merchants={merchants}
           incomingTxns={incomingTxns}
-          outgoingTxns={outgoingTxns}
+          outgoingTxns={statementOutgoingTxns}
           cashMoveTxns={cashMoveTxns}
           collections={collections}
           conversions={usdRows}
