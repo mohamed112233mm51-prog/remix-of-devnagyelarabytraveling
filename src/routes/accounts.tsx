@@ -274,6 +274,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     status: agent.status || "نشط",
     opening_debit: a.opening_debit ? String(a.opening_debit) : "",
     opening_credit: a.opening_credit ? String(a.opening_credit) : "",
+    opening_currency: a.opening_currency || "EGP",
     opening_date: a.opening_date || "",
     opening_note: a.opening_note || "",
   });
