@@ -392,9 +392,11 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       amount: "",
       date: new Date().toISOString().slice(0, 10),
       notes: "",
+      statement: "",
       auto_deduct_enabled: false,
       auto_deduct_day: "1",
     });
+
     setSplits([newPaymentSplitRow()]);
     onDone?.();
   };
