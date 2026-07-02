@@ -339,11 +339,20 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
-                      الإجمالي — مدين: {fmtDL(totalServices)} · دائن: {fmtDL(totalPayments)} · الصافي: {fmtDL(Math.abs(net))} ({accountStatus})
-                    </td>
-                  </tr>
+                  {byCurrency.map((b) => (
+                    <tr key={`totals-${b.currency}`}>
+                      <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                        الإجمالي ({b.currency}) — مدين: {fmtCurrency(b.debit, b.currency)} · دائن: {fmtCurrency(b.credit, b.currency)} · الصافي: {fmtCurrency(Math.abs(b.net), b.currency)} ({b.net > 0 ? "مدين عليه" : b.net < 0 ? "دائن له" : "متوازن"})
+                      </td>
+                    </tr>
+                  ))}
+                  {byCurrency.length === 0 && (
+                    <tr>
+                      <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                        الإجمالي — مدين: {fmtDL(0)} · دائن: {fmtDL(0)} · الصافي: {fmtDL(0)} ({accountStatus})
+                      </td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>
