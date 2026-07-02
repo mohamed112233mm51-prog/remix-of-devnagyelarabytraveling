@@ -98,9 +98,6 @@ function MerchantsPage() {
         get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
         continue;
       }
-      // Skip parent agent-cashout rows that our merchant counterpart mirrors —
-      // the merchant side is already recorded above under merchant_cash_out_to_agent.
-      if (t.agent_id && merchantAgentOutSourceIds.has(t.id)) continue;
       get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
     }
     for (const t of cTxns) {
