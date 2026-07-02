@@ -18,6 +18,20 @@ import {
   filterValidSplits,
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const CS_COLUMNS: ColumnDef[] = [
+  { key: "date", label: "التاريخ" },
+  { key: "type", label: "نوع الحركة" },
+  { key: "cur", label: "العملة" },
+  { key: "amt", label: "المبلغ" },
+  { key: "rate", label: "سعر الصرف" },
+  { key: "egp", label: "القيمة بالجنيه" },
+  { key: "desc", label: "البيان" },
+  { key: "balance", label: "الرصيد" },
+  { key: "actions", label: "إجراءات" },
+];
 
 
 export const Route = createFileRoute("/currency-supplier-statement/$supplierId")({
