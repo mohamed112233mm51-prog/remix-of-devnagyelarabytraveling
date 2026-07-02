@@ -24,27 +24,58 @@ const TABLE_LABEL: Record<CancellableTable, string> = {
   payment_splits: "تقسيم دفع",
 };
 
-function pickAmount(row: any): number | null {
-  if (!row) return null;
-  const keys = ["amount", "amount_usd", "amount_egp", "value", "total"];
-  for (const k of keys) if (typeof row[k] === "number") return row[k];
-  return null;
-}
-function pickCurrency(row: any): string {
-  return row?.currency || row?.currency_code || "";
+function pickAmountAndCurrency(
+  table: CancellableTable,
+  row: any,
+): { amount: number | null; currency: string } {
+  if (!row) return { amount: null, currency: "" };
+  const n = (v: any) => (typeof v === "number" && !isNaN(v) ? v : 0);
+  switch (table) {
+    case "transactions":
+    case "company_transactions": {
+      const paid =
+        n(row.total_paid) ||
+        n(row.paid) ||
+        n(row.cash_amount) +
+          n(row.instapay_amount) +
+          n(row.mobile_cash_amount) +
+          n(row.merchant_cash_amount) +
+          n(row.arabic_tourism_cash_amount) +
+          n(row.usd_amount);
+      return {
+        amount: paid || null,
+        currency: row.payment_currency || row.currency || "EGP",
+      };
+    }
+    case "currency_supplier_transactions": {
+      if (n(row.bought_amount))
+        return { amount: n(row.bought_amount), currency: row.bought_currency || "" };
+      return { amount: n(row.sold_amount) || null, currency: row.sold_currency || "" };
+    }
+    case "usd_treasury_transactions":
+      return {
+        amount: n(row.usd_amount) || n(row.egp_amount) || null,
+        currency: n(row.usd_amount) ? "USD" : "EGP",
+      };
+    case "expense_deductions":
+      return {
+        amount: n(row.amount) || n(row.usd_amount) || null,
+        currency: row.currency || (n(row.usd_amount) ? "USD" : ""),
+      };
+    case "merchant_cash_collections":
+      return { amount: n(row.amount) || null, currency: row.opening_currency || "" };
+    case "payment_splits":
+      return {
+        amount: n(row.net_amount) || n(row.gross_amount) || n(row.amount) || null,
+        currency: row.currency || "",
+      };
+  }
 }
 function pickDate(row: any): string {
   return row?.date || row?.deduction_date || row?.created_at?.slice(0, 10) || "";
 }
 function pickCounterparty(row: any): string {
-  return (
-    row?.description ||
-    row?.notes ||
-    row?.reason ||
-    row?.counterparty ||
-    row?.entity_name ||
-    ""
-  );
+  return row?.description || row?.notes || row?.reason || "";
 }
 
 export function CancelTransactionButton({
