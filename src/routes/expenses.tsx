@@ -533,7 +533,7 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
       <div className="card-body">
         <div className="table-wrap">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
             <tbody>
               {expenses.length === 0 ? (
                 <tr><td colSpan={8}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
