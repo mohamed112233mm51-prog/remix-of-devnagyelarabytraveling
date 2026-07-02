@@ -714,7 +714,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:company:add:opening",
-    { debit: "", credit: "", date: "", note: "" },
+    { debit: "", credit: "", currency: "EGP", date: "", note: "" },
   );
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
