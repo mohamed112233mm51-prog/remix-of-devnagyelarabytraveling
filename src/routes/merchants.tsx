@@ -598,7 +598,7 @@ function MerchantStatementTab({
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "conversion">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "cashout" | "conversion">("all");
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
