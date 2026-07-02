@@ -800,27 +800,29 @@ function MerchantStatementTab({
       if (t.merchant_id !== merchantId) continue;
       const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
       list.push({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: net, currency: "EGP",
+        gross, commission: gross - net, net, delta: net, currency: cur,
       });
     }
     for (const t of outgoingTxns) {
       if (t.merchant_id !== merchantId) continue;
       const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: -net, currency: "EGP",
+        gross, commission: gross - net, net, delta: -net, currency: cur,
       });
     }
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
       const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
-      const rowCurrency = isOpening ? String((c as any).opening_currency || "EGP") : "EGP";
+      const rowCurrency = normalizeCurrency(isOpening ? (c as any).opening_currency : (c as any).currency);
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
         type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
@@ -833,11 +835,12 @@ function MerchantStatementTab({
       if (t.merchant_id !== merchantId) continue;
       const amt = Math.abs(Number(t.paid || 0));
       if (amt <= 0) continue;
+      const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
         type: "صرف نقدية للتاجر",
         statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: amt, currency: "EGP",
+        gross: amt, commission: 0, net: amt, delta: amt, currency: cur,
       });
     }
     for (const r of conversions) {
