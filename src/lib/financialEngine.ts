@@ -166,9 +166,12 @@ export async function postMovement(
         paid: signed,
         total_paid: signed,
         payment_method: firstMethodArabic(validSplits[0].method),
-        note: input.note?.trim() || defaultNoteFor(input.kind, input.partyType),
+        // لا نولّد ملاحظات تلقائياً — يظل الحقل فارغاً حتى يكتب المستخدم شيئاً
+        note: input.note?.trim() ? input.note.trim() : null,
+        statement: input.statement?.trim() ? input.statement.trim() : null,
         source_service_type: sourceServiceType(input.kind, input.partyType),
       };
+
       const { data: txn, error: txnErr } = await supabase
         .from("transactions")
         .insert(parentPayload)
