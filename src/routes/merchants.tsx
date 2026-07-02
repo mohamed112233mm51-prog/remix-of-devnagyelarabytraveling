@@ -1040,10 +1040,10 @@ function MerchantStatementTab({
                       {isVisible("date") && <td data-label="التاريخ">{m.date}</td>}
                       {isVisible("type") && <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>}
                       {isVisible("statement") && <td data-label="البيان">{m.statement}</td>}
-                      {isVisible("gross") && <td className="num-col" data-label="المبلغ">{fmtDL(m.gross)}</td>}
-                      {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtDL(m.commission)}</td>}
-                      {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtDL(Math.abs(m.delta))}</td>}
-                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(m.balance)}</td>}
+                      {isVisible("gross") && <td className="num-col" data-label="المبلغ">{fmtCurrency(m.gross, m.currency)}</td>}
+                      {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtCurrency(m.commission, m.currency)}</td>}
+                      {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtCurrency(Math.abs(m.delta), m.currency)}</td>}
+                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{m.countsInEgp ? fmtDL(m.balance) : "—"}</td>}
                     </tr>
                   );
                 })}
