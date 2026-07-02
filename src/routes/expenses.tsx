@@ -413,7 +413,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           <NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>التاريخ</label><DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday /></div>
-        <div className="form-group full"><label>البيان / ملاحظات</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+        <div className="form-group full"><label>البيان</label><input value={form.statement} onChange={(e) => set("statement", e.target.value)} /></div>
+        <div className="form-group full"><label>ملاحظات</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+
 
         {form.expense_type === "ثابت" && (
           <>
