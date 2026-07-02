@@ -797,7 +797,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD" | "رصيد سابق";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "صرف نقدية لوكيل" | "تحويل لـ USD" | "رصيد سابق";
   statement: string;
   gross: number;
   commission: number;
