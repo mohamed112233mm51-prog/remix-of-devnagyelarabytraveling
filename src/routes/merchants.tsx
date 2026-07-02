@@ -705,8 +705,9 @@ function MerchantStatementTab({
     fileName: `كشف-حساب-${merchant?.merchant_name || "التاجر"}`,
     summary: [
       { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
-      { label: "إجمالي التحصيل", value: fmtDL(totalCollected) },
-      { label: "إجمالي الصادر", value: fmtDL(totalOutgoing) },
+      { label: "النقدية المحصلة من التاجر", value: fmtDL(totalCollected) },
+      { label: "إجمالي الصادر للشركات", value: fmtDL(totalOutgoing) },
+      { label: "النقدية المصروفة للتاجر", value: fmtDL(totalPaidOut) },
       { label: "تحويل لـ USD", value: fmtDL(totalConverted) },
       { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
       { label: "صافي الرصيد", value: fmtDL(finalBalance) },
