@@ -37,6 +37,7 @@ const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "commission", label: "النسبة" },
   { key: "net", label: "الصافي" },
   { key: "balance", label: "الرصيد الحالي" },
+  { key: "actions", label: "إجراءات" },
 ];
 import { DateInput } from "@/components/inputs/DateInput";
 
