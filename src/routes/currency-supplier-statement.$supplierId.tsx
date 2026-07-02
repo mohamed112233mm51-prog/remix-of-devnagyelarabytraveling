@@ -386,9 +386,9 @@ function resolveCompanyEgpBox(boxes: CashBox[], method: string): CashBox | null 
 function methodLabelFor(s: SplitJson): string {
   if (s.method === "company_instapay") return "إنستاباي";
   if (s.method === "company_cash") return "نقدي";
-  if (s.method === "merchant_instapay") return "إنستاباي تاجر";
-  if (s.method === "merchant_wallet") return "تاجر الكاش تاجر";
-  if (s.method === "merchant_physical") return "نقدي تاجر";
+  if (s.method === "merchant_instapay") return "انستا";
+  if (s.method === "merchant_wallet") return "فودافون كاش";
+  if (s.method === "merchant_physical") return "نقدي";
   return "نقدي";
 }
 
