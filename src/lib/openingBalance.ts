@@ -107,11 +107,13 @@ export async function syncCompanyOpeningBalance(companyId: string, op: OpeningBa
   const date = op.date || todayISO();
   const debit = Math.max(0, Number(op.debit) || 0);
   const credit = Math.max(0, Number(op.credit) || 0);
+  const currency = (op.currency || "EGP").trim() || "EGP";
 
   await supabase
     .from("company_transactions")
     .delete()
     .eq("company_id", companyId)
+    .eq("currency", currency)
     .in("source_service_type", ["opening_debit", "opening_credit"] as any);
 
   const rows: any[] = [];
@@ -137,6 +139,7 @@ export async function syncCompanyOpeningBalance(companyId: string, op: OpeningBa
       note: op.note || null,
       source_service_type: "opening_debit",
       source_service_id: companyId,
+      currency,
     });
   }
   if (credit > 0) {
@@ -161,6 +164,7 @@ export async function syncCompanyOpeningBalance(companyId: string, op: OpeningBa
       note: op.note || null,
       source_service_type: "opening_credit",
       source_service_id: companyId,
+      currency,
     });
   }
   if (rows.length) {
