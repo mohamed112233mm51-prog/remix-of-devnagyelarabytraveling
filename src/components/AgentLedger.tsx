@@ -66,7 +66,7 @@ function paymentMethodLabel(t: Transaction): string {
 }
 
 function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
-  const safeTxns = Array.isArray(txns) ? txns.filter(Boolean) : [];
+  const safeTxns = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
   return [...safeTxns]
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
     .map((t) => {
