@@ -26,6 +26,7 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { syncMerchantOpeningBalance } from "@/lib/openingBalance";
 
 const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
