@@ -329,10 +329,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
 
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6}><div className="empty"><div className="empty-icon">🧾</div><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
+                <tr><td colSpan={7}><div className="empty"><div className="empty-icon">🧾</div><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
               ) : filtered.map((t, i) => {
                 const isDep = t.transaction_type === "توريد نقدية";
                 return (
@@ -342,6 +342,7 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
                     <td className="bold" data-label="نوع الحركة">{t.transaction_type}</td>
                     <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
                     <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
+                    <td data-label="البيان">{(t as any).statement || "—"}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
                 );
@@ -350,9 +351,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
                 <tr style={{ background: "#F8FAFC", fontWeight: 800 }}>
                   <td colSpan={3} data-label="الإجمالي">الإجمالي</td>
                   <td className="num-col" data-label="الرصيد" style={{ color: balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(balance)}</td>
-                  <td colSpan={2}></td>
+                  <td colSpan={3}></td>
                 </tr>
               )}
+
             </tbody>
           </table>
         </div>
