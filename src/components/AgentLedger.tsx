@@ -217,14 +217,16 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       { label: "الصافي", value: fmtDL(Math.abs(net)) },
       { label: "حالة الحساب", value: accountStatus },
     ],
-    columns: [
+    columns: ([
       { header: "#", key: "n" }, { header: "التاريخ", key: "date" }, { header: "البيان", key: "description" },
       { header: "نوع الخدمة", key: "service" }, { header: "وجهة السفر", key: "destination" },
       { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
-      { header: "قيمة الرحلة", key: "sv" },
+      { header: "قيمة الرحلة", key: "serviceValue", exportKey: "sv" },
       { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
       { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" },
-    ],
+    ] as Array<{ header: string; key: string; exportKey?: string }>)
+      .filter((c) => isVisible(c.key))
+      .map((c) => ({ header: c.header, key: c.exportKey || c.key })),
     rows: displayRows.map((e, i) => ({
       n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
       count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
