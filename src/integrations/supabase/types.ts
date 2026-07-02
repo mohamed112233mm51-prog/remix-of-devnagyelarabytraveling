@@ -298,6 +298,7 @@ export type Database = {
           service_type: string | null
           source_service_id: string | null
           source_service_type: string | null
+          statement: string | null
           total_paid: number
           trip_value: number
           usd_amount: number
@@ -327,6 +328,7 @@ export type Database = {
           service_type?: string | null
           source_service_id?: string | null
           source_service_type?: string | null
+          statement?: string | null
           total_paid?: number
           trip_value?: number
           usd_amount?: number
@@ -356,6 +358,7 @@ export type Database = {
           service_type?: string | null
           source_service_id?: string | null
           source_service_type?: string | null
+          statement?: string | null
           total_paid?: number
           trip_value?: number
           usd_amount?: number
@@ -374,6 +377,7 @@ export type Database = {
           payment_splits: Json
           sold_amount: number
           sold_currency: string
+          statement: string | null
           supplier_id: string
           tx_date: string
           tx_type: string
@@ -390,6 +394,7 @@ export type Database = {
           payment_splits?: Json
           sold_amount?: number
           sold_currency: string
+          statement?: string | null
           supplier_id: string
           tx_date?: string
           tx_type: string
@@ -406,6 +411,7 @@ export type Database = {
           payment_splits?: Json
           sold_amount?: number
           sold_currency?: string
+          statement?: string | null
           supplier_id?: string
           tx_date?: string
           tx_type?: string
@@ -541,6 +547,7 @@ export type Database = {
           id: string
           is_demo: boolean
           merchant_id: string | null
+          statement: string | null
           status: string
           usd_amount: number
         }
@@ -555,6 +562,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           merchant_id?: string | null
+          statement?: string | null
           status?: string
           usd_amount?: number
         }
@@ -569,6 +577,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           merchant_id?: string | null
+          statement?: string | null
           status?: string
           usd_amount?: number
         }
@@ -591,6 +600,7 @@ export type Database = {
           merchant_id: string | null
           notes: string | null
           payment_method: string
+          statement: string | null
           usd_amount: number
         }
         Insert: {
@@ -609,6 +619,7 @@ export type Database = {
           merchant_id?: string | null
           notes?: string | null
           payment_method?: string
+          statement?: string | null
           usd_amount?: number
         }
         Update: {
@@ -627,6 +638,7 @@ export type Database = {
           merchant_id?: string | null
           notes?: string | null
           payment_method?: string
+          statement?: string | null
           usd_amount?: number
         }
         Relationships: []
@@ -677,6 +689,7 @@ export type Database = {
           is_demo: boolean
           note: string | null
           payment_method: string | null
+          statement: string | null
           transaction_type: string
         }
         Insert: {
@@ -688,6 +701,7 @@ export type Database = {
           is_demo?: boolean
           note?: string | null
           payment_method?: string | null
+          statement?: string | null
           transaction_type: string
         }
         Update: {
@@ -699,6 +713,7 @@ export type Database = {
           is_demo?: boolean
           note?: string | null
           payment_method?: string | null
+          statement?: string | null
           transaction_type?: string
         }
         Relationships: []
@@ -785,6 +800,7 @@ export type Database = {
           is_demo: boolean
           merchant_id: string
           note: string | null
+          statement: string | null
         }
         Insert: {
           amount?: number
@@ -795,6 +811,7 @@ export type Database = {
           is_demo?: boolean
           merchant_id: string
           note?: string | null
+          statement?: string | null
         }
         Update: {
           amount?: number
@@ -805,6 +822,7 @@ export type Database = {
           is_demo?: boolean
           merchant_id?: string
           note?: string | null
+          statement?: string | null
         }
         Relationships: []
       }
@@ -1086,6 +1104,7 @@ export type Database = {
           service_type: string | null
           source_service_id: string | null
           source_service_type: string | null
+          statement: string | null
           total_paid: number
           travel_statement: string | null
         }
@@ -1114,6 +1133,7 @@ export type Database = {
           service_type?: string | null
           source_service_id?: string | null
           source_service_type?: string | null
+          statement?: string | null
           total_paid?: number
           travel_statement?: string | null
         }
@@ -1142,6 +1162,7 @@ export type Database = {
           service_type?: string | null
           source_service_id?: string | null
           source_service_type?: string | null
+          statement?: string | null
           total_paid?: number
           travel_statement?: string | null
         }
@@ -1168,6 +1189,7 @@ export type Database = {
           merchant_id: string | null
           note: string | null
           source_type: string | null
+          statement: string | null
           type: string
           usd_amount: number
         }
@@ -1183,6 +1205,7 @@ export type Database = {
           merchant_id?: string | null
           note?: string | null
           source_type?: string | null
+          statement?: string | null
           type?: string
           usd_amount?: number
         }
@@ -1198,6 +1221,7 @@ export type Database = {
           merchant_id?: string | null
           note?: string | null
           source_type?: string | null
+          statement?: string | null
           type?: string
           usd_amount?: number
         }
