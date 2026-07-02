@@ -745,7 +745,9 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     count: "0",
     price: "",
     note: "",
+    statement: "",
   });
+
   const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
 
