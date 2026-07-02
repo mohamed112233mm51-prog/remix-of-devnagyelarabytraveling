@@ -575,7 +575,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "تحويل لـ USD";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "صرف نقدية" | "تحويل لـ USD";
   statement: string;
   gross: number;
   commission: number;
