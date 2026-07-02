@@ -21,6 +21,45 @@ import {
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
+/**
+ * تحويل PaymentSplitRow (من الـ UI) إلى MovementSplit (للـ Engine)
+ * — مركز واحد للـ method labels وربط cash_box_id.
+ */
+function mapSplitsForEngine(
+  rows: PaymentSplitRow[],
+  cashBoxes: CashBox[],
+  direction: "in" | "out",
+): MovementSplit[] {
+  return rows.map((r) => {
+    const a = Number(r.amount) || 0;
+    let methodLabel = "نقدي";
+    let cashBoxId: string | null = null;
+    if (r.method === "company_instapay") {
+      methodLabel = "إنستاباي";
+      const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+      cashBoxId = box?.id || null;
+    } else if (r.method === "company_cash") {
+      methodLabel = "نقدي";
+      const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+      cashBoxId = box?.id || null;
+    } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
+    else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
+    else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
+    return {
+      method: methodLabel,
+      currency: r.currency as "EGP" | "USD" | "LYD",
+      cashBoxId,
+      amount: a,
+      direction,
+      grossAmount: a,
+      netAmount: a,
+      exchangeRate: 1,
+      egpEquivalent: r.currency === "EGP" ? a : 0,
+    };
+  });
+}
+
+
 /* ============================ AGENT CASH OUT ============================ */
 export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: string; onDone?: () => void }) {
   const { rows: agents } = useLive<Agent>("agents");
