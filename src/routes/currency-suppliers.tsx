@@ -213,8 +213,8 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
     phone: supplier?.phone || "",
     notes: supplier?.notes || "",
     status: supplier?.status || "نشط",
-    opening_debit: supplier?.opening_debit ? String(supplier.opening_debit) : "",
-    opening_credit: supplier?.opening_credit ? String(supplier.opening_credit) : "",
+    opening_kind: (Number(supplier?.opening_debit) > 0 ? "debit" : Number(supplier?.opening_credit) > 0 ? "credit" : "") as "" | "debit" | "credit",
+    opening_amount: Number(supplier?.opening_debit) > 0 ? String(supplier?.opening_debit) : Number(supplier?.opening_credit) > 0 ? String(supplier?.opening_credit) : "",
     opening_currency: supplier?.opening_currency || "EGP",
     opening_date: supplier?.opening_date || "",
     opening_note: supplier?.opening_note || "",
@@ -222,8 +222,16 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم المورد مطلوب");
-    const debit = Math.max(0, Number(form.opening_debit) || 0);
-    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const amount = Math.max(0, Number(form.opening_amount) || 0);
+    const hasOpening = !!form.opening_kind || amount > 0;
+    if (hasOpening) {
+      if (!form.opening_kind) return toast.error("اختر نوع الرصيد (مدين / دائن)");
+      if (!(amount > 0)) return toast.error("أدخل مبلغ الرصيد السابق");
+      if (!form.opening_currency) return toast.error("اختر عملة الرصيد السابق");
+      if (!form.opening_date) return toast.error("أدخل تاريخ الرصيد السابق");
+    }
+    const debit = form.opening_kind === "debit" ? amount : 0;
+    const credit = form.opening_kind === "credit" ? amount : 0;
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
@@ -278,8 +286,17 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
           <div className="form-group full" style={{ gridColumn: "1 / -1", marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
             <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
             <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-              <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
-              <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+              <div className="form-group full">
+                <label>نوع الرصيد</label>
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="cs-open-kind" checked={form.opening_kind === "debit"} onChange={() => set("opening_kind", "debit")} /> مدين</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="cs-open-kind" checked={form.opening_kind === "credit"} onChange={() => set("opening_kind", "credit")} /> دائن</label>
+                  {form.opening_kind && (
+                    <button type="button" className="action-btn" onClick={() => set("opening_kind", "")}>مسح</button>
+                  )}
+                </div>
+              </div>
+              <div className="form-group"><label>المبلغ</label><input type="number" min={0} value={form.opening_amount} onChange={(e) => set("opening_amount", e.target.value)} /></div>
               <div className="form-group"><label>العملة</label>
                 <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
                   <option value="EGP">جنيه مصري</option>

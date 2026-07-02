@@ -289,14 +289,23 @@ function MerchantForm() {
     merchant_name: "", phone: "", whatsapp: "",
     supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
     status: "نشط",
-    opening_debit: "", opening_credit: "",
+    opening_kind: "" as "" | "debit" | "credit",
+    opening_amount: "",
     opening_currency: "EGP", opening_date: "", opening_note: "",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
-    const debit = Math.max(0, Number(form.opening_debit) || 0);
-    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const amount = Math.max(0, Number(form.opening_amount) || 0);
+    const hasOpening = !!form.opening_kind || amount > 0;
+    if (hasOpening) {
+      if (!form.opening_kind) return toast.error("اختر نوع الرصيد (مدين / دائن)");
+      if (!(amount > 0)) return toast.error("أدخل مبلغ الرصيد السابق");
+      if (!form.opening_currency) return toast.error("اختر عملة الرصيد السابق");
+      if (!form.opening_date) return toast.error("أدخل تاريخ الرصيد السابق");
+    }
+    const debit = form.opening_kind === "debit" ? amount : 0;
+    const credit = form.opening_kind === "credit" ? amount : 0;
     const { data, error } = await supabase.from("merchants").insert({
       merchant_name: form.merchant_name,
       phone: form.phone || null,
@@ -330,7 +339,7 @@ function MerchantForm() {
       merchant_name: "", phone: "", whatsapp: "",
       supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
       status: "نشط",
-      opening_debit: "", opening_credit: "",
+      opening_kind: "", opening_amount: "",
       opening_currency: "EGP", opening_date: "", opening_note: "",
     });
     toast.success("تم حفظ التاجر");
@@ -359,8 +368,17 @@ function MerchantForm() {
         <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
           <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
           <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-            <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
-            <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+            <div className="form-group full">
+              <label>نوع الرصيد</label>
+              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="mrc-open-kind" checked={form.opening_kind === "debit"} onChange={() => set("opening_kind", "debit")} /> مدين</label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="mrc-open-kind" checked={form.opening_kind === "credit"} onChange={() => set("opening_kind", "credit")} /> دائن</label>
+                {form.opening_kind && (
+                  <button type="button" className="action-btn" onClick={() => set("opening_kind", "")}>مسح</button>
+                )}
+              </div>
+            </div>
+            <div className="form-group"><label>المبلغ</label><input type="number" min={0} value={form.opening_amount} onChange={(e) => set("opening_amount", e.target.value)} /></div>
             <div className="form-group"><label>العملة</label>
               <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
                 <option value="EGP">جنيه مصري</option>
@@ -632,8 +650,8 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
     supports_cash_wallet: merchant.supports_cash_wallet ?? true,
     supports_physical_cash: merchant.supports_physical_cash ?? true,
     status: m.status || "نشط",
-    opening_debit: m.opening_debit ? String(m.opening_debit) : "",
-    opening_credit: m.opening_credit ? String(m.opening_credit) : "",
+    opening_kind: (Number(m.opening_debit) > 0 ? "debit" : Number(m.opening_credit) > 0 ? "credit" : "") as "" | "debit" | "credit",
+    opening_amount: Number(m.opening_debit) > 0 ? String(m.opening_debit) : Number(m.opening_credit) > 0 ? String(m.opening_credit) : "",
     opening_currency: m.opening_currency || "EGP",
     opening_date: m.opening_date || "",
     opening_note: m.opening_note || "",
@@ -642,9 +660,17 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
+    const amount = Math.max(0, Number(form.opening_amount) || 0);
+    const hasOpening = !!form.opening_kind || amount > 0;
+    if (hasOpening) {
+      if (!form.opening_kind) { return toast.error("اختر نوع الرصيد (مدين / دائن)"); }
+      if (!(amount > 0)) { return toast.error("أدخل مبلغ الرصيد السابق"); }
+      if (!form.opening_currency) { return toast.error("اختر عملة الرصيد السابق"); }
+      if (!form.opening_date) { return toast.error("أدخل تاريخ الرصيد السابق"); }
+    }
     setSaving(true);
-    const debit = Math.max(0, Number(form.opening_debit) || 0);
-    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const debit = form.opening_kind === "debit" ? amount : 0;
+    const credit = form.opening_kind === "credit" ? amount : 0;
     const { error } = await supabase.from("merchants").update({
       merchant_name: form.merchant_name.trim(),
       phone: form.phone.trim() || null,
@@ -702,8 +728,17 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
           <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
             <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق</label>
             <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-              <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
-              <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+              <div className="form-group full">
+                <label>نوع الرصيد</label>
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="mrc-edit-open-kind" checked={form.opening_kind === "debit"} onChange={() => set("opening_kind", "debit")} /> مدين</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="mrc-edit-open-kind" checked={form.opening_kind === "credit"} onChange={() => set("opening_kind", "credit")} /> دائن</label>
+                  {form.opening_kind && (
+                    <button type="button" className="action-btn" onClick={() => set("opening_kind", "")}>مسح</button>
+                  )}
+                </div>
+              </div>
+              <div className="form-group"><label>المبلغ</label><input type="number" min={0} value={form.opening_amount} onChange={(e) => set("opening_amount", e.target.value)} /></div>
               <div className="form-group"><label>العملة</label>
                 <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
                   <option value="EGP">جنيه مصري</option>
