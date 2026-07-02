@@ -152,15 +152,15 @@ export async function postMovement(
     let transactionId = input.transactionId ?? null;
     let sourceTable = input.sourceTable ?? PARTY_TO_SOURCE_TABLE[input.partyType];
     let sourceId = input.sourceId ?? null;
+    const movementCurrencies = Array.from(new Set(validSplits.map((s) => s.currency)));
+    if ((sourceTable === "transactions" || sourceTable === "company_transactions") && movementCurrencies.length !== 1) {
+      return { ok: false, error: "لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة" };
+    }
 
     // إنشاء صف أم في transactions فقط إذا كنا نعمل على وكيل/تاجر بدون parent
     // (للتوافق مع الشاشات القديمة التي تعتمد على transactions للربط بالوكيل).
     if (!sourceId && (input.partyType === "agent" || input.partyType === "merchant")) {
-      const currencies = Array.from(new Set(validSplits.map((s) => s.currency)));
-      if (currencies.length !== 1) {
-        return { ok: false, error: "لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة" };
-      }
-      const parentCurrency = currencies[0];
+      const parentCurrency = movementCurrencies[0];
       const totalAmount = validSplits.reduce((s, r) => s + r.amount, 0);
       const isOut = input.kind === "payment" || input.kind === "expense";
       const signed = isOut ? -totalAmount : totalAmount;
@@ -192,6 +192,17 @@ export async function postMovement(
       transactionId = txn.id;
       sourceTable = "transactions";
       sourceId = txn.id;
+    }
+
+    // عند ربط الحركة بصف أم موجود، ثبّت العملة المختارة على الصف نفسه أيضاً
+    // حتى تقرأ كشوف الحساب/التصدير العملة من سجل الحركة ولا ترجع للجنيه افتراضياً.
+    if (sourceId && movementCurrencies.length === 1) {
+      const parentCurrency = movementCurrencies[0];
+      if (sourceTable === "transactions") {
+        await supabase.from("transactions").update({ currency: parentCurrency } as any).eq("id", sourceId);
+      } else if (sourceTable === "company_transactions") {
+        await supabase.from("company_transactions").update({ currency: parentCurrency, payment_currency: parentCurrency } as any).eq("id", sourceId);
+      }
     }
 
     // إدراج payment_splits
