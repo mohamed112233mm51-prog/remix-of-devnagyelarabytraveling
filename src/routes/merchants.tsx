@@ -599,8 +599,8 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
                   <td className="bold" data-label="الوكيل">{agentName(t.agent_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{(t as any).statement || ""}</td>
-                  <td data-label="تاجر الكاش">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
-                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
+                  <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
                 </tr>
               ))}
@@ -624,7 +624,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
     (!from || t.date >= from) &&
     (!to || t.date <= to)
   );
-  const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
+  const total = filtered.reduce((s, t) => s + merchantCompanyOutflowAmount(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
@@ -646,8 +646,8 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
                   <td className="bold" data-label="الشركة">{companyName(t.company_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{(t as any).statement || ""}</td>
-                  <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
-                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
+                  <td data-label="تاجر الكاش">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
                 </tr>
               ))}
