@@ -65,6 +65,15 @@ function MerchantsPage() {
     () => new Set(merchantCompanyOutTxns.map((t) => (t as any).source_service_id).filter(Boolean)),
     [merchantCompanyOutTxns],
   );
+  const merchantAgentOutSourceIds = useMemo(
+    () => new Set(
+      txns
+        .filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_agent")
+        .map((t) => (t as any).source_service_id)
+        .filter(Boolean),
+    ),
+    [txns],
+  );
 
   // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
   // Includes both wallet (net after 1% commission) and physical cash, plus USD treasury conversions.
