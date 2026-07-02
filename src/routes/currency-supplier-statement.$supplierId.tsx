@@ -506,7 +506,7 @@ function TxModal({
 
   // For buy: foreign is the BOUGHT side, EGP is the SOLD side.
   // For sell: foreign is the SOLD side, EGP is the BOUGHT side.
-  const [foreignCurrency, setForeignCurrency] = useState<string>("دولار");
+  const [foreignCurrency, setForeignCurrency] = useState<string>("USD");
   const [foreignAmount, setForeignAmount] = useState<string>("");
   const [rate, setRate] = useState<string>("");
   const [egpAmount, setEgpAmount] = useState<string>("");
