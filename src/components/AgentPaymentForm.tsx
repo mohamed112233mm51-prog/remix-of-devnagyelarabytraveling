@@ -68,7 +68,9 @@ export function AgentPaymentForm({
     count: "0",
     price: "",
     note: "",
+    statement: "",
   });
+
   const [splits, setSplits, clearSplits] = usePersistentState<SplitRow[]>(`${draftKey}:splits`, [newRow()]);
   const [saving, setSaving] = useState(false);
   const resetDraft = () => { clearForm(); clearSplits(); };
@@ -171,9 +173,12 @@ export function AgentPaymentForm({
       total_paid: totalNet,
       paid: totalNet,
       merchant_id: firstMerchant,
-      note: form.note.trim() || description,
+      // لا نستخدم أي fallback نصي — يبقى فارغاً إن لم يكتب المستخدم شيئاً
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
       source_service_type: "payment",
     };
+
 
     setSaving(true);
     const { data: txnRow, error: txnErr } = await supabase
@@ -216,12 +221,14 @@ export function AgentPaymentForm({
       partyId: form.agent_id,
       kind: "receipt",
       date: form.date,
-      note: form.note.trim() || description,
+      note: form.note.trim() ? form.note.trim() : undefined,
+      statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
       sourceTable: "transactions",
       sourceId: txnRow.id,
       transactionId: txnRow.id,
     });
+
     if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
 
     try {
@@ -273,9 +280,13 @@ export function AgentPaymentForm({
         <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
           <input type="number" value={tripValueNum || ""} disabled readOnly />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={form.statement} onChange={(e) => set("statement", e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <div className="card-header" style={{ marginTop: 8 }}>

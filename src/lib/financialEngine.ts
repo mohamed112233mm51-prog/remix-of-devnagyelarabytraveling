@@ -69,12 +69,14 @@ export type PostMovementInput = {
   partyId: string | null;         // null للتحويل بين خزينتين
   kind: MovementKind;
   date: string;                   // YYYY-MM-DD
-  note?: string;
+  note?: string;                  // ملاحظات — تُترك فارغة إذا لم يُدخلها المستخدم
+  statement?: string;             // البيان — يُدخله المستخدم يدوياً فقط، بدون توليد تلقائي
   splits: MovementSplit[];
   sourceTable?: string;           // اختياري — لربطها بعملية أم موجودة
   sourceId?: string;
   transactionId?: string;         // لو الحركة مرتبطة بصف transactions موجود
 };
+
 
 export type PostMovementResult = {
   ok: boolean;
@@ -164,9 +166,12 @@ export async function postMovement(
         paid: signed,
         total_paid: signed,
         payment_method: firstMethodArabic(validSplits[0].method),
-        note: input.note?.trim() || defaultNoteFor(input.kind, input.partyType),
+        // لا نولّد ملاحظات تلقائياً — يظل الحقل فارغاً حتى يكتب المستخدم شيئاً
+        note: input.note?.trim() ? input.note.trim() : null,
+        statement: input.statement?.trim() ? input.statement.trim() : null,
         source_service_type: sourceServiceType(input.kind, input.partyType),
       };
+
       const { data: txn, error: txnErr } = await supabase
         .from("transactions")
         .insert(parentPayload)

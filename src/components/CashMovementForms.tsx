@@ -70,9 +70,11 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
   const [agentId, setAgentId, clearAgentId] = usePersistentState<string>(`${draftKey}:agentId`, initialAgentId || "");
   const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
   const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [statement, setStatement, clearStatement] = usePersistentState<string>(`${draftKey}:statement`, "");
   const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const resetDraft = () => { clearAgentId(); clearDate(); clearNote(); clearSplits(); };
+  const resetDraft = () => { clearAgentId(); clearDate(); clearNote(); clearStatement(); clearSplits(); };
+
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -90,9 +92,11 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       partyId: agentId,
       kind: "payment",
       date,
-      note: note.trim() || "صرف نقدية للوكيل",
+      note: note.trim() ? note.trim() : undefined,
+      statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
     });
+
     setSaving(false);
     if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
 
@@ -112,9 +116,13 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={statement} onChange={(e) => setStatement(e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
@@ -138,9 +146,10 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
   const [merchantId, setMerchantId, clearMerchantId] = usePersistentState<string>(`${draftKey}:merchantId`, initialMerchantId || "");
   const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
   const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [statement, setStatement, clearStatement] = usePersistentState<string>(`${draftKey}:statement`, "");
   const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const resetDraft = () => { clearMerchantId(); clearDate(); clearNote(); clearSplits(); };
+  const resetDraft = () => { clearMerchantId(); clearDate(); clearNote(); clearStatement(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -158,7 +167,8 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
       partyId: merchantId,
       kind: "payment",
       date,
-      note: note.trim() || "صرف نقدية للتاجر",
+      note: note.trim() ? note.trim() : undefined,
+      statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
     });
     setSaving(false);
@@ -168,6 +178,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     resetDraft();
     onDone?.();
   };
+
 
 
   return (
@@ -180,9 +191,13 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={statement} onChange={(e) => setStatement(e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
@@ -208,9 +223,11 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
   const [companyId, setCompanyId, clearCompanyId] = usePersistentState<string>(`${draftKey}:companyId`, initialCompanyId || "");
   const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
   const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [statement, setStatement, clearStatement] = usePersistentState<string>(`${draftKey}:statement`, "");
   const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const resetDraft = () => { clearCompanyId(); clearDate(); clearNote(); clearSplits(); };
+  const resetDraft = () => { clearCompanyId(); clearDate(); clearNote(); clearStatement(); clearSplits(); };
+
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -251,8 +268,10 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
         total_paid: -total,
         payment_currency: "EGP",
         merchant_id: firstMerchant,
-        note: note.trim() || "توريد نقدية",
+        note: note.trim() ? note.trim() : null,
+        statement: statement.trim() ? statement.trim() : null,
         source_service_type: "company_cash_supply",
+
       } as any)
       .select("id")
       .single();
@@ -268,7 +287,9 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       partyId: companyId,
       kind: "receipt",
       date,
-      note: note.trim() || "توريد نقدية",
+      note: note.trim() ? note.trim() : undefined,
+      statement: statement.trim() ? statement.trim() : undefined,
+
       splits: engineSplits,
       sourceTable: "company_transactions",
       sourceId: txn.id,
@@ -293,9 +314,13 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
         <div className="form-group"><label>التاريخ *</label>
           <DateInput value={date} onChange={setDate} defaultToday />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={statement} onChange={(e) => setStatement(e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="سطور الدفع" />
