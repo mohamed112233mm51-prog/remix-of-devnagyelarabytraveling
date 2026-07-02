@@ -78,6 +78,12 @@ export function useSourceBalances(): SourceBalances {
       const key = merchantKey(id, currency);
       merchantBalance.set(key, (merchantBalance.get(key) || 0) + delta);
     };
+    const merchantCompanyOutSourceIds = new Set(
+      agentTxns
+        .filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
+        .map((t) => (t as any).source_service_id)
+        .filter(Boolean),
+    );
     for (const t of agentTxns) {
       if (!t.merchant_id) continue;
       const cur = (t as any).payment_currency || (t as any).currency || "EGP";
@@ -85,11 +91,16 @@ export function useSourceBalances(): SourceBalances {
         addMerchant(t.merchant_id, cur, Math.abs(Number(t.paid || 0)));
         continue;
       }
+      if (t.source_service_type === "merchant_cash_out_to_company") {
+        addMerchant(t.merchant_id, cur, -Math.abs(Number(t.paid || 0)));
+        continue;
+      }
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       addMerchant(t.merchant_id, cur, net);
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
+      if (merchantCompanyOutSourceIds.has(t.id)) continue;
       const cur = (t as any).payment_currency || (t as any).currency || "EGP";
       const net = merchantCompanyOutflowAmount(t);
       addMerchant(t.merchant_id, cur, -net);
