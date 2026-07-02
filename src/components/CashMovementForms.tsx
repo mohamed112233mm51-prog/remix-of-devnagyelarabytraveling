@@ -152,68 +152,23 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const valid = filterValidSplits(splits);
 
     setSaving(true);
-    // Same shape as agent cash-out: a transactions row + payment_splits
-    // (general second-line payments flow). agent_id is nullable; merchant_id
-    // tags the row so merchant ledgers/reports pick it up automatically.
-    const payload: any = {
-      agent_id: null,
-      merchant_id: merchantId,
+    const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
+    const res = await postMovement({
+      partyType: "merchant",
+      partyId: merchantId,
+      kind: "payment",
       date,
-      count: 0,
-      price: 0,
-      paid: -total,
-      total_paid: -total,
-      merchant_cash_physical_amount: -total,
-      payment_method: "نقدي",
       note: note.trim() || "صرف نقدية للتاجر",
-      source_service_type: "merchant_cash_out",
-    };
-    const { data: txn, error: txnErr } = await supabase
-      .from("transactions").insert(payload).select("id").single();
-    if (txnErr || !txn) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
-
-    const rows = valid.map((r) => {
-      const a = Number(r.amount) || 0;
-      let methodLabel = "نقدي";
-      let cashBoxId: string | null = null;
-      if (r.method === "company_instapay") {
-        methodLabel = "إنستاباي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "company_cash") {
-        methodLabel = "نقدي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
-        cashBoxId = box?.id || null;
-      } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
-      else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
-      else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
-      return {
-        transaction_id: txn.id,
-        method: methodLabel,
-        currency: r.currency,
-        cash_box_id: cashBoxId,
-        amount: a,
-        direction: "out",
-        source_table: "transactions",
-        source_id: txn.id,
-        gross_amount: a,
-        merchant_commission_rate: 0,
-        merchant_commission_amount: 0,
-        net_amount: a,
-        exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? a : 0,
-      };
+      splits: engineSplits,
     });
-    if (rows.length) {
-      const { error: spErr } = await supabase.from("payment_splits").insert(rows);
-      if (spErr) { setSaving(false); return toast.error(spErr.message); }
-    }
-
     setSaving(false);
+    if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
+
     toast.success("تم تسجيل صرف النقدية للتاجر");
     resetDraft();
     onDone?.();
   };
+
 
   return (
     <div className="card">
