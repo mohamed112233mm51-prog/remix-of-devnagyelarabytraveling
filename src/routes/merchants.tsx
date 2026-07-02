@@ -886,7 +886,13 @@ function MerchantStatementTab({
   const totalPaidOut = filtered.filter((m) => m.type === "صرف نقدية للتاجر").reduce((s, m) => s + m.net, 0);
   const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
-  const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
+  // Per-currency final balances (last row of each currency).
+  const finalByCurrency = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of withRunning) map.set(m.currency || "EGP", m.balance);
+    return Array.from(map.entries());
+  }, [withRunning]);
+  const finalBalance = finalByCurrency.find(([c]) => c === "EGP")?.[1] ?? 0;
 
   const [visible, setVisible] = usePersistentColumnVisibility("merchant-statement", MERCHANT_STATEMENT_COLUMNS);
   const isVisible = (k: string) => visible[k] !== false;
