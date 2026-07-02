@@ -38,7 +38,7 @@ type LedgerKind = "service" | "payment";
 type LedgerEntry = {
   id: string; date: string; kind: LedgerKind; description: string; destination: string; service: string;
   count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; raw: Transaction;
+  paymentMethod: string; note: string; currency: string; raw: Transaction;
 };
 
 type AgentLedgerProps = {
