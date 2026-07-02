@@ -383,8 +383,11 @@ async function applyTransaction(opts: {
         merchant_id: s.merchant_id,
         date: txDate,
         amount: signed,
-        note: `${kind} عملة من مورد: ${description || ""}`.trim(),
+        // نمرّر البيان كما أدخله المستخدم في نموذج التعامل بدون توليد تلقائي
+        note: null,
+        statement: description?.trim() ? description.trim() : null,
       });
+
     }
   }
 }
