@@ -715,6 +715,10 @@ function MerchantStatementTab({
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
 
+  const [visible, setVisible] = usePersistentColumnVisibility("merchant-statement", MERCHANT_STATEMENT_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+  const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
+
   const buildExport = () => ({
     title: "كشف حساب التاجر",
     subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
