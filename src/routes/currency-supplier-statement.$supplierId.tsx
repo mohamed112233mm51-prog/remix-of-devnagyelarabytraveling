@@ -598,16 +598,21 @@ function TxModal({
       payment_splits: splitsJson,
     };
 
-    const { error } = await supabase.from("currency_supplier_transactions" as any).insert(payload);
+    const { data: inserted, error } = await supabase
+      .from("currency_supplier_transactions" as any)
+      .insert(payload)
+      .select("id")
+      .single();
     if (error) return toast.error(error.message);
+    const txId = (inserted as any)?.id as string;
 
     await applyTransaction({
       kind,
       supplierId,
+      txId,
       txDate,
       foreignCurrency,
       foreignAmount: a,
-      egpAmount: e,
       splits: splitsJson,
       boxes,
       description: description.trim(),
