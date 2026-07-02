@@ -395,7 +395,7 @@ async function applyTransaction(opts: {
   const { kind, supplierId, txId, txDate, foreignCurrency, foreignAmount, splits, boxes, description } = opts;
   const isBuy = kind === "شراء عملة";
   const foreignBox = resolveForeignBox(boxes, foreignCurrency);
-  const foreignCode = CURRENCY_CODE[foreignCurrency];
+  const foreignCode = foreignCurrency;
 
   const engineSplits: MovementSplit[] = [];
 
