@@ -151,7 +151,7 @@ export async function restoreFinancialTransaction(args: {
     reason: trimmed,
     performed_by: userId,
     before_value: before as any,
-    after_value: { ...before, ...patch } as any,
+    after_value: { ...(before as any), ...patch } as any,
     ...meta,
   });
 }
