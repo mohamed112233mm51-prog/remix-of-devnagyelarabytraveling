@@ -179,41 +179,49 @@ export function AgentPaymentForm({
       .from("transactions").insert(payload).select("id").single();
     if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الدفعة"); }
 
-    // Insert payment_splits for each row. Company rows → tie to cash_box; merchant rows → no cash_box.
-    const splitRecords = validSplits.map((r) => {
+    // Post financial movement via Engine → payment_splits with direction/source
+    // → triggers auto-update cash boxes → ledgers/dashboard/reports all consistent.
+    const engineSplits = validSplits.map((r) => {
       const b = splitBreakdown(r);
       let methodLabel = "نقدي";
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
         methodLabel = "إنستاباي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+        const box = cashBoxes.find((bb) => bb.currency === r.currency && bb.name.includes("إنستا") && bb.name.includes("الشركة"));
         cashBoxId = box?.id || null;
       } else if (r.method === "company_cash") {
         methodLabel = "نقدي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+        const box = cashBoxes.find((bb) => bb.currency === r.currency && bb.name.includes("نقدي") && bb.name.includes("الشركة"));
         cashBoxId = box?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "إنستاباي تاجر";
       else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
       else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
-
       return {
-        transaction_id: txnRow.id,
         method: methodLabel,
         currency: r.currency,
-        cash_box_id: cashBoxId,
+        cashBoxId,
         amount: b.net,
-        gross_amount: b.gross,
-        merchant_commission_rate: b.rate,
-        merchant_commission_amount: b.commission,
-        net_amount: b.net,
-        exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? b.net : 0,
+        direction: "in" as const,
+        grossAmount: b.gross,
+        commissionRate: b.rate,
+        commissionAmount: b.commission,
+        netAmount: b.net,
+        exchangeRate: 1,
+        egpEquivalent: r.currency === "EGP" ? b.net : 0,
       };
     });
-    if (splitRecords.length) {
-      const { error: spErr } = await supabase.from("payment_splits").insert(splitRecords);
-      if (spErr) console.warn("payment_splits insert error:", spErr.message);
-    }
+    const engineRes = await postMovement({
+      partyType: "agent",
+      partyId: form.agent_id,
+      kind: "receipt",
+      date: form.date,
+      note: form.note.trim() || description,
+      splits: engineSplits,
+      sourceTable: "transactions",
+      sourceId: txnRow.id,
+      transactionId: txnRow.id,
+    });
+    if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
 
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -225,6 +233,7 @@ export function AgentPaymentForm({
         details: { agent_id: form.agent_id, gross: totalGross, net: totalNet, splits: validSplits.length, date: form.date },
       });
     } catch { /* ignore */ }
+
 
     setSaving(false);
     toast.success("تم تسجيل الدفعة");
