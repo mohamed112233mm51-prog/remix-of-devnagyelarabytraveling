@@ -63,18 +63,19 @@ type Tx = {
 };
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
-// Foreign currencies allowed (display names) — EGP is always the other side.
-const FOREIGN_CURRENCIES = ["دولار", "دينار ليبي"] as const;
-const EGP_LABEL = "جنيه مصري";
+// Foreign currency codes allowed — EGP is always the other side. All storage
+// uses the canonical code (EGP/USD/LYD); Arabic labels are display-only.
+const FOREIGN_CURRENCIES = ["USD", "LYD"] as const;
+const EGP_CODE = "EGP";
 
-// Map display name → cash_boxes.currency code
-const CURRENCY_CODE: Record<string, "EGP" | "USD" | "LYD"> = {
-  "جنيه مصري": "EGP",
-  "دولار": "USD",
-  "دينار ليبي": "LYD",
+const CURRENCY_LABEL_AR: Record<string, string> = {
+  EGP: "جنيه مصري",
+  USD: "دولار أمريكي",
+  LYD: "دينار ليبي",
 };
 
-const ALL_FILTER_CURRENCIES = [EGP_LABEL, ...FOREIGN_CURRENCIES];
+const ALL_FILTER_CURRENCIES = [EGP_CODE, ...FOREIGN_CURRENCIES];
+
 
 function CurrencySupplierStatementPage() {
   const { supplierId } = Route.useParams();
