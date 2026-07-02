@@ -289,14 +289,23 @@ function MerchantForm() {
     merchant_name: "", phone: "", whatsapp: "",
     supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
     status: "نشط",
-    opening_debit: "", opening_credit: "",
+    opening_kind: "" as "" | "debit" | "credit",
+    opening_amount: "",
     opening_currency: "EGP", opening_date: "", opening_note: "",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
-    const debit = Math.max(0, Number(form.opening_debit) || 0);
-    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const amount = Math.max(0, Number(form.opening_amount) || 0);
+    const hasOpening = !!form.opening_kind || amount > 0;
+    if (hasOpening) {
+      if (!form.opening_kind) return toast.error("اختر نوع الرصيد (مدين / دائن)");
+      if (!(amount > 0)) return toast.error("أدخل مبلغ الرصيد السابق");
+      if (!form.opening_currency) return toast.error("اختر عملة الرصيد السابق");
+      if (!form.opening_date) return toast.error("أدخل تاريخ الرصيد السابق");
+    }
+    const debit = form.opening_kind === "debit" ? amount : 0;
+    const credit = form.opening_kind === "credit" ? amount : 0;
     const { data, error } = await supabase.from("merchants").insert({
       merchant_name: form.merchant_name,
       phone: form.phone || null,
@@ -330,7 +339,7 @@ function MerchantForm() {
       merchant_name: "", phone: "", whatsapp: "",
       supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
       status: "نشط",
-      opening_debit: "", opening_credit: "",
+      opening_kind: "", opening_amount: "",
       opening_currency: "EGP", opening_date: "", opening_note: "",
     });
     toast.success("تم حفظ التاجر");
