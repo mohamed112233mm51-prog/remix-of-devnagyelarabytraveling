@@ -384,6 +384,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
+  const [visible, setVisible] = usePersistentColumnVisibility("company-statement", COMPANY_STATEMENT_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+
   const displayRows = useMemo(() => rowsWithMethodLabel.filter((e) => {
     if (!CF.matchDateRange(e.date, safeFilters.date)) return false;
     if (!CF.matchText(e.description, safeFilters.description)) return false;
