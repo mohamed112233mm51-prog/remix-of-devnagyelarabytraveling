@@ -280,7 +280,7 @@ type CompanyLedgerKind = "service" | "payment";
 type CompanyLedgerEntry = {
   id: string; date: string; kind: CompanyLedgerKind; description: string; destination: string; service: string;
   count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; raw: CompanyTransaction;
+  paymentMethod: string; note: string; currency: string; raw: CompanyTransaction;
 };
 
 function companyPaymentMethodLabel(t: CompanyTransaction): string {
