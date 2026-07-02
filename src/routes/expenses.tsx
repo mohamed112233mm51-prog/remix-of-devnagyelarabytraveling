@@ -185,10 +185,12 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     amount: initial ? String(initial.amount) : "",
     date: initial?.date || new Date().toISOString().slice(0, 10),
     notes: initial?.notes || "",
+    statement: (initial as any)?.statement || "",
     auto_deduct_enabled: initial?.auto_deduct_enabled || false,
     auto_deduct_day: initial?.auto_deduct_day ? String(initial.auto_deduct_day) : "1",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
+
 
   // Multi-payment splits (new): only used on insert (edit keeps original record)
   const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
