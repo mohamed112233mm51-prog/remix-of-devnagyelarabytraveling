@@ -643,7 +643,7 @@ function MerchantStatementTab({
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
         statement: label,
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        gross: amt, commission: 0, net: amt, delta: amt,
       });
     }
     for (const t of cashMoveTxns) {
