@@ -866,13 +866,15 @@ function MerchantStatementTab({
     return true;
   }), [movements, from, to, typeFilter, debouncedSearch]);
 
-  // Running balance is in EGP. Non-EGP opening rows are shown as informational
-  // lines and do NOT roll into the EGP total.
+  // Per-currency running balance. Each currency accumulates independently so
+  // EGP, USD, LYD, ... never mix into a single total.
   const withRunning = useMemo(() => {
-    let bal = 0;
+    const bals = new Map<string, number>();
     return filtered.map((m) => {
-      if (m.currency === "EGP") bal += m.delta;
-      return { ...m, balance: bal, countsInEgp: m.currency === "EGP" };
+      const cur = m.currency || "EGP";
+      const next = (bals.get(cur) || 0) + m.delta;
+      bals.set(cur, next);
+      return { ...m, balance: next, countsInEgp: cur === "EGP" };
     });
   }, [filtered]);
 
@@ -884,7 +886,13 @@ function MerchantStatementTab({
   const totalPaidOut = filtered.filter((m) => m.type === "صرف نقدية للتاجر").reduce((s, m) => s + m.net, 0);
   const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
-  const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
+  // Per-currency final balances (last row of each currency).
+  const finalByCurrency = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of withRunning) map.set(m.currency || "EGP", m.balance);
+    return Array.from(map.entries());
+  }, [withRunning]);
+  const finalBalance = finalByCurrency.find(([c]) => c === "EGP")?.[1] ?? 0;
 
   const [visible, setVisible] = usePersistentColumnVisibility("merchant-statement", MERCHANT_STATEMENT_COLUMNS);
   const isVisible = (k: string) => visible[k] !== false;
@@ -918,7 +926,7 @@ function MerchantStatementTab({
       gross: fmtCurrency(m.gross, m.currency), gross__excel: m.gross,
       commission: fmtCurrency(m.commission, m.currency), commission__excel: m.commission,
       net: fmtCurrency(m.net, m.currency), net__excel: m.net,
-      balance: m.countsInEgp ? fmtDL(m.balance) : "—", balance__excel: m.countsInEgp ? m.balance : 0,
+      balance: fmtCurrency(m.balance, m.currency), balance__excel: m.balance,
     })),
   });
 
@@ -975,7 +983,7 @@ function MerchantStatementTab({
               <div>
                 <div className="stat-row"><span className="stat-key"><Percent size={12} /> نسبة التاجر</span><span className="stat-val">1%</span></div>
                 <div className="stat-row"><span className="stat-key">تاريخ إنشاء الحساب</span><span className="stat-val">{merchant.created_at ? String(merchant.created_at).slice(0, 10) : "—"}</span></div>
-                <div className="stat-row"><span className="stat-key">الرصيد الحالي</span><span className="stat-val bold" style={{ color: finalBalance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(finalBalance)}</span></div>
+                <div className="stat-row"><span className="stat-key">الرصيد الحالي</span><span className="stat-val bold">{finalByCurrency.length === 0 ? fmtDL(0) : finalByCurrency.map(([c, v]) => fmtCurrency(v, c)).join(" · ")}</span></div>
               </div>
             </div>
           )}
@@ -1043,13 +1051,14 @@ function MerchantStatementTab({
                       {isVisible("gross") && <td className="num-col" data-label="المبلغ">{fmtCurrency(m.gross, m.currency)}</td>}
                       {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtCurrency(m.commission, m.currency)}</td>}
                       {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtCurrency(Math.abs(m.delta), m.currency)}</td>}
-                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{m.countsInEgp ? fmtDL(m.balance) : "—"}</td>}
+                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtCurrency(m.balance, m.currency)}</td>}
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجمالي — المبلغ: {fmtDL(filtered.reduce((s, m) => s + m.gross, 0))} · النسبة: {fmtDL(totalCommission)} · الصافي: {fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)} · الرصيد: {fmtDL(finalBalance)}</td></tr>
+                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجمالي بالجنيه — المبلغ: {fmtDL(filtered.filter(m => m.currency === "EGP").reduce((s, m) => s + m.gross, 0))} · النسبة: {fmtDL(totalCommission)} · الصافي: {fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)}</td></tr>
+                <tr><td colSpan={visibleCount} style={{ fontWeight: 800, background: "var(--card)" }}>الرصيد الحالي حسب العملة — {finalByCurrency.length === 0 ? "—" : finalByCurrency.map(([c, v]) => fmtCurrency(v, c)).join(" · ")}</td></tr>
               </tfoot>
             </table>
           </div>
