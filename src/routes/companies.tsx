@@ -393,8 +393,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
-    methodLabel: e.paymentMethod + (e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""),
-  })), [allWithBalance, merchants]);
+    methodLabel: e.paymentMethod,
+  })), [allWithBalance]);
 
   const serviceOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.service).filter(Boolean))).sort(), [rowsWithMethodLabel]);
   const destOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.destination).filter(Boolean))).sort(), [rowsWithMethodLabel]);
