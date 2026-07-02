@@ -65,6 +65,13 @@ function singleCurrencyOrError(rows: PaymentSplitRow[]): "EGP" | "USD" | "LYD" |
   return rows.every((r) => r.currency === first) ? first : null;
 }
 
+function validateSingleCurrency(rows: PaymentSplitRow[]): string | null {
+  if (!rows[0]?.currency) return "يجب اختيار العملة";
+  return rows.every((r) => r.currency === rows[0].currency)
+    ? null
+    : "لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة";
+}
+
 
 /* ============================ AGENT CASH OUT ============================ */
 export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: string; onDone?: () => void }) {
@@ -90,8 +97,8 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
-    const selectedCurrency = singleCurrencyOrError(valid);
-    if (!selectedCurrency) return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
+    const currencyErr = validateSingleCurrency(valid);
+    if (currencyErr) return toast.error(currencyErr);
 
     setSaving(true);
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
@@ -167,8 +174,8 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
-    const selectedCurrency = singleCurrencyOrError(valid);
-    if (!selectedCurrency) return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
+    const currencyErr = validateSingleCurrency(valid);
+    if (currencyErr) return toast.error(currencyErr);
 
     setSaving(true);
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
