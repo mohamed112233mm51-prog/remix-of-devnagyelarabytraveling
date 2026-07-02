@@ -142,6 +142,9 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const safeFilters = CF.sanitizeFilterMap(filters, initialFilters());
   const anyActive = Object.values(safeFilters).some(CF.isFilterActive);
 
+  const [visible, setVisible] = usePersistentColumnVisibility("agent-ledger", LEDGER_COLUMNS);
+  const isVisible = (k: string) => visible[k] !== false;
+
   useEffect(() => { if (lockedAgentId) setSelectedAgentId(lockedAgentId); }, [lockedAgentId]);
   useEffect(() => { if (!lockedAgentId) setSelectedAgentId(initialAgentId || ""); }, [initialAgentId, lockedAgentId]);
 
