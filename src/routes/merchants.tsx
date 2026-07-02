@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtCurrency, merchantCashGross, merchantCashNet, useLive, normalizeCurrency,
+  fmtDL, fmtCurrency, merchantCashGross, merchantCashNet, merchantCompanyOutflowAmount, useLive, normalizeCurrency,
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
@@ -57,6 +57,14 @@ function MerchantsPage() {
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "cashout" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
+  const merchantCompanyOutTxns = useMemo(
+    () => txns.filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company"),
+    [txns],
+  );
+  const merchantCompanyOutSourceIds = useMemo(
+    () => new Set(merchantCompanyOutTxns.map((t) => (t as any).source_service_id).filter(Boolean)),
+    [merchantCompanyOutTxns],
+  );
 
   // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
   // Includes both wallet (net after 1% commission) and physical cash, plus USD treasury conversions.
@@ -75,11 +83,16 @@ function MerchantsPage() {
         get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
         continue;
       }
+      if (t.source_service_type === "merchant_cash_out_to_company") {
+        get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
+        continue;
+      }
       get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
-      get(t.merchant_id).outgoing += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      if (merchantCompanyOutSourceIds.has(t.id)) continue;
+      get(t.merchant_id).outgoing += merchantCompanyOutflowAmount(t);
     }
     for (const c of collections) {
       get(c.merchant_id).collected += Number(c.amount || 0);
@@ -90,12 +103,19 @@ function MerchantsPage() {
       get(r.merchant_id).converted += Number(r.egp_amount || 0);
     }
     return map;
-  }, [txns, cTxns, collections, usdRows]);
+  }, [txns, cTxns, collections, usdRows, merchantCompanyOutSourceIds]);
 
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
-  const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [cTxns]);
+  const outgoingTxns = useMemo(
+    () => cTxns.filter((t) => merchantCompanyOutflowAmount(t) > 0),
+    [cTxns],
+  );
+  const statementOutgoingTxns = useMemo(
+    () => outgoingTxns.filter((t) => !merchantCompanyOutSourceIds.has(t.id)),
+    [outgoingTxns, merchantCompanyOutSourceIds],
+  );
   const cashMoveTxns = useMemo(
-    () => txns.filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out"),
+    () => txns.filter((t) => t.merchant_id && (t.source_service_type === "merchant_cash_out" || t.source_service_type === "merchant_cash_out_to_company")),
     [txns],
   );
 
@@ -274,7 +294,7 @@ function MerchantsPage() {
         <MerchantStatementTab
           merchants={merchants}
           incomingTxns={incomingTxns}
-          outgoingTxns={outgoingTxns}
+          outgoingTxns={statementOutgoingTxns}
           cashMoveTxns={cashMoveTxns}
           collections={collections}
           conversions={usdRows}
@@ -604,7 +624,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
     (!from || t.date >= from) &&
     (!to || t.date <= to)
   );
-  const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
+  const total = filtered.reduce((s, t) => s + merchantCompanyOutflowAmount(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
@@ -626,8 +646,8 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
                   <td className="bold" data-label="الشركة">{companyName(t.company_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{(t as any).statement || ""}</td>
-                  <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
-                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
+                  <td data-label="تاجر الكاش">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
                 </tr>
               ))}
@@ -809,8 +829,8 @@ function MerchantStatementTab({
     }
     for (const t of outgoingTxns) {
       if (t.merchant_id !== merchantId) continue;
-      const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
-      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      const gross = merchantCompanyOutflowAmount(t);
+      const net = merchantCompanyOutflowAmount(t);
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
@@ -836,11 +856,12 @@ function MerchantStatementTab({
       const amt = Math.abs(Number(t.paid || 0));
       if (amt <= 0) continue;
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
+      const toCompany = t.source_service_type === "merchant_cash_out_to_company";
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
-        type: "صرف نقدية للتاجر",
+        type: toCompany ? "صادر لشركة" : "صرف نقدية للتاجر",
         statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: amt, currency: cur,
+        gross: amt, commission: 0, net: amt, delta: toCompany ? -amt : amt, currency: cur,
       });
     }
     for (const r of conversions) {

@@ -18,6 +18,7 @@ import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
 
 import {
   PaymentSplits,
@@ -955,7 +956,22 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       sourceId: txnRow.id,
       transactionId: txnRow.id,
     });
-    if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
+    if (!engineRes.ok) {
+      setSaving(false);
+      return toast.error(engineRes.error || "تعذر حفظ سطور الدفع");
+    }
+
+    const merchantRes = await postMerchantCashOutToCompanyCounterparts({
+      splits: validSplits,
+      companyTransactionId: txnRow.id,
+      date: form.date,
+      statement: form.statement.trim() || "صادر لشركة",
+      note: form.note.trim() || undefined,
+    });
+    if (!merchantRes.ok) {
+      setSaving(false);
+      return toast.error(merchantRes.error || "تعذر حفظ قيد تاجر الكاش");
+    }
 
 
     setSaving(false);

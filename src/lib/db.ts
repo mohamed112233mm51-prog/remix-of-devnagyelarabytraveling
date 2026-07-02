@@ -61,6 +61,14 @@ export const merchantCashNet = (t: Partial<Transaction> & Partial<CompanyTransac
 export const merchantCashPhysical = (t: Partial<Transaction> & Partial<CompanyTransaction>) =>
   Math.round(Number(t.merchant_cash_physical_amount || 0));
 
+export const merchantCompanyOutflowAmount = (t: Partial<CompanyTransaction>) => {
+  const walletStored = Number(t.merchant_cash_net_amount || 0);
+  const walletGross = Number(t.merchant_cash_amount || 0);
+  const wallet = Math.abs(walletStored || walletGross);
+  const physical = Math.abs(Number(t.merchant_cash_physical_amount || 0));
+  return Math.round(wallet + physical);
+};
+
 export const txnTotalPaid = (t: Partial<Transaction>) => {
   const computed =
     Number(t.instapay_amount || 0) +

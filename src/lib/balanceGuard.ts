@@ -14,7 +14,9 @@
 import { useMemo } from "react";
 import {
   useLive,
+  normalizeCurrency,
   merchantCashNet,
+  merchantCompanyOutflowAmount,
   type Transaction,
   type CompanyTransaction,
   type ExpenseDeduction,
@@ -71,29 +73,46 @@ export function useSourceBalances(): SourceBalances {
 
     // Merchant balances (no cash_box mapping — aggregate raw movements)
     const merchantBalance = new Map<string, number>();
+    const merchantKey = (id: string, currency: unknown) => `${id}|${normalizeCurrency(String(currency || "EGP"))}`;
+    const addMerchant = (id: string, currency: unknown, delta: number) => {
+      const key = merchantKey(id, currency);
+      merchantBalance.set(key, (merchantBalance.get(key) || 0) + delta);
+    };
+    const merchantCompanyOutSourceIds = new Set(
+      agentTxns
+        .filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
+        .map((t) => (t as any).source_service_id)
+        .filter(Boolean),
+    );
     for (const t of agentTxns) {
       if (!t.merchant_id) continue;
+      const cur = (t as any).payment_currency || (t as any).currency || "EGP";
+      if (t.source_service_type === "merchant_cash_out") {
+        addMerchant(t.merchant_id, cur, Math.abs(Number(t.paid || 0)));
+        continue;
+      }
+      if (t.source_service_type === "merchant_cash_out_to_company") {
+        addMerchant(t.merchant_id, cur, -Math.abs(Number(t.paid || 0)));
+        continue;
+      }
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-      merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) + net);
+      addMerchant(t.merchant_id, cur, net);
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
-      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-      merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) - net);
+      if (merchantCompanyOutSourceIds.has(t.id)) continue;
+      const cur = (t as any).payment_currency || (t as any).currency || "EGP";
+      const net = merchantCompanyOutflowAmount(t);
+      addMerchant(t.merchant_id, cur, -net);
     }
     for (const c of collections) {
-      merchantBalance.set(
-        c.merchant_id,
-        (merchantBalance.get(c.merchant_id) || 0) - Number(c.amount || 0),
-      );
+      const cur = (c as any).opening_currency || (c as any).currency || "EGP";
+      addMerchant(c.merchant_id, cur, -Number(c.amount || 0));
     }
     for (const r of usdRows) {
       if (r.type !== "conversion" || !r.merchant_id) continue;
       if (r.source_type === "merchant_wallet" || r.source_type === "merchant_physical") {
-        merchantBalance.set(
-          r.merchant_id,
-          (merchantBalance.get(r.merchant_id) || 0) - Number(r.egp_amount || 0),
-        );
+        addMerchant(r.merchant_id, "EGP", -Number(r.egp_amount || 0));
       }
     }
 
@@ -139,7 +158,7 @@ export function validateSplitOutflows(
   const usedInsta = new Map<string, number>(); // key: "company"
   let usedCompanyInsta = 0;
   let usedCompanyCash = 0;
-  const usedMerchant = new Map<string, number>(); // merchant_id → amount
+  const usedMerchant = new Map<string, { merchantId: string; currency: string; amount: number; row: PaymentSplitRow }>();
 
   for (const r of splits) {
     const a = Number(r.amount) || 0;
@@ -147,7 +166,15 @@ export function validateSplitOutflows(
     if (r.method === "company_instapay") usedCompanyInsta += a;
     else if (r.method === "company_cash") usedCompanyCash += a;
     else if (r.source === "merchant" && r.merchant_id) {
-      usedMerchant.set(r.merchant_id, (usedMerchant.get(r.merchant_id) || 0) + a);
+      const currency = normalizeCurrency(r.currency);
+      const key = `${r.merchant_id}|${currency}`;
+      const current = usedMerchant.get(key);
+      usedMerchant.set(key, {
+        merchantId: r.merchant_id,
+        currency,
+        amount: (current?.amount || 0) + a,
+        row: current?.row || r,
+      });
     }
   }
   void usedInsta;
@@ -158,11 +185,12 @@ export function validateSplitOutflows(
   if (usedCompanyCash > balances.cash_company) {
     return `رصيد وسيلة الدفع (نقدي الشركة) غير كافٍ. الرصيد الحالي: ${fmt(balances.cash_company)}، المبلغ المطلوب: ${fmt(usedCompanyCash)}`;
   }
-  for (const [mid, amt] of usedMerchant) {
-    const bal = balances.merchantBalance.get(mid) || 0;
+  for (const [key, used] of usedMerchant) {
+    const bal = balances.merchantBalance.get(key) || 0;
+    const amt = used.amount;
     if (amt > bal) {
-      const name = merchants.find((m) => m.id === mid)?.merchant_name || "تاجر";
-      const row = splits.find((r) => r.merchant_id === mid);
+      const name = merchants.find((m) => m.id === used.merchantId)?.merchant_name || "تاجر";
+      const row = used.row;
       const label = row ? methodSourceLabel(row.method, name) : `تاجر ${name}`;
       return `رصيد وسيلة الدفع (${label}) غير كافٍ. الرصيد الحالي: ${fmt(bal)}، المبلغ المطلوب: ${fmt(amt)}`;
     }

@@ -10,6 +10,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -316,8 +317,20 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       sourceId: txn.id,
       transactionId: txn.id,
     });
+    if (!res.ok) {
+      setSaving(false);
+      return toast.error(res.error || "تعذر حفظ سطور الدفع");
+    }
+
+    const merchantRes = await postMerchantCashOutToCompanyCounterparts({
+      splits: valid,
+      companyTransactionId: txn.id,
+      date,
+      statement: statement.trim() || "صادر لشركة",
+      note: note.trim() || undefined,
+    });
     setSaving(false);
-    if (!res.ok) return toast.error(res.error || "تعذر حفظ سطور الدفع");
+    if (!merchantRes.ok) return toast.error(merchantRes.error || "تعذر حفظ قيد تاجر الكاش");
 
     toast.success("تم تسجيل توريد النقدية");
     resetDraft();
