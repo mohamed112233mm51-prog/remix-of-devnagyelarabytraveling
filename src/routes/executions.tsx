@@ -614,6 +614,7 @@ function ExecutionForm({
         destination: form.destination || null,
         airline: form.airline || null,
         passengerName: form.passenger_name,
+        executionNotes: form.notes || null,
         services,
       });
       toast.success(form.operation_status === "منفذ" ? "تم التنفيذ واعتماد الحركات المالية" : "تم الحفظ");

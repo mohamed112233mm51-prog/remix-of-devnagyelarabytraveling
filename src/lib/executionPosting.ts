@@ -29,6 +29,8 @@ export interface ExecutionPostingInput {
   destination: string | null;
   airline: string | null;
   passengerName: string | null;
+  /** ملاحظات التنفيذ — تُنسخ كما هي إلى حركات الوكيل والشركة. */
+  executionNotes?: string | null;
   services: ExecutionServiceItem[];
 }
 
@@ -61,7 +63,8 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
   if (input.operationStatus !== "منفذ") return;
 
   const date = safeDate(input.date);
-  const note = input.passengerName ?? null;
+  const passenger = input.passengerName?.trim() || null;
+  const execNotes = input.executionNotes?.trim() || null;
   const stmt = travelStatement(input);
 
   const agentRows: any[] = [];
@@ -77,7 +80,9 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     // قيمة الشركة الفعلية: company_value إن أُدخل، وإلا count × company_price
     const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
     const kind = s.kind; // "company" | "agent" | undefined (legacy)
-    const itemNote = (s.note && String(s.note).trim()) ? String(s.note).trim() : note;
+    const serviceNote = (s.note && String(s.note).trim()) ? String(s.note).trim() : null;
+    // الملاحظات على السطر = ملاحظة الخدمة أو ملاحظات التنفيذ أو اسم المسافر — بدون توليد نص.
+    const itemNote = serviceNote || execNotes || passenger;
 
     // ── سطر شركة صادرة فقط (شراء من شركة) ──
     if (kind === "company") {
