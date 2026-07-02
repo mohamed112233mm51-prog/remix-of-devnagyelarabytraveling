@@ -222,7 +222,7 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
         </div>
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={7}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية للمستثمرين بعد</div></div></td></tr>
