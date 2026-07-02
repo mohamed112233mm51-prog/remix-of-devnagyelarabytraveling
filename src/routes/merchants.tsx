@@ -783,12 +783,15 @@ function MerchantStatementTab({
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
+      const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
       list.push({
-        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدية من التاجر",
-        statement: String((c as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
+        type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
+        statement: isOpening ? "رصيد سابق" : String((c as any).statement || "").trim(),
+        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt,
       });
     }
+
     for (const t of cashMoveTxns) {
       if (t.merchant_id !== merchantId) continue;
       const amt = Math.abs(Number(t.paid || 0));
