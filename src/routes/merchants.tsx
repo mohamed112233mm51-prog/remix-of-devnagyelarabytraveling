@@ -868,11 +868,14 @@ function MerchantStatementTab({
       if (amt <= 0) continue;
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
       const toCompany = t.source_service_type === "merchant_cash_out_to_company";
+      const toAgent = t.source_service_type === "merchant_cash_out_to_agent";
+      const type = toCompany ? "صادر لشركة" : toAgent ? "صرف نقدية لوكيل" : "صرف نقدية للتاجر";
+      const delta = (toCompany || toAgent) ? -amt : amt;
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
-        type: toCompany ? "صادر لشركة" : "صرف نقدية للتاجر",
+        type,
         statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: toCompany ? -amt : amt, currency: cur,
+        gross: amt, commission: 0, net: amt, delta, currency: cur,
       });
     }
     for (const r of conversions) {
