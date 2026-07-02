@@ -983,7 +983,7 @@ function MerchantStatementTab({
               <div>
                 <div className="stat-row"><span className="stat-key"><Percent size={12} /> نسبة التاجر</span><span className="stat-val">1%</span></div>
                 <div className="stat-row"><span className="stat-key">تاريخ إنشاء الحساب</span><span className="stat-val">{merchant.created_at ? String(merchant.created_at).slice(0, 10) : "—"}</span></div>
-                <div className="stat-row"><span className="stat-key">الرصيد الحالي</span><span className="stat-val bold" style={{ color: finalBalance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(finalBalance)}</span></div>
+                <div className="stat-row"><span className="stat-key">الرصيد الحالي</span><span className="stat-val bold">{finalByCurrency.length === 0 ? fmtDL(0) : finalByCurrency.map(([c, v]) => fmtCurrency(v, c)).join(" · ")}</span></div>
               </div>
             </div>
           )}
