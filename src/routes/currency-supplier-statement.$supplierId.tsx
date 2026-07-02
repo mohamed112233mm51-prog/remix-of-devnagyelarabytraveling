@@ -403,7 +403,7 @@ async function applyTransaction(opts: {
   if (foreignBox && foreignCode && foreignAmount > 0) {
     engineSplits.push({
       method: "نقدي",
-      currency: foreignCode,
+      currency: foreignCode as "EGP" | "USD" | "LYD",
       cashBoxId: foreignBox.id,
       amount: foreignAmount,
       direction: isBuy ? "in" : "out",
