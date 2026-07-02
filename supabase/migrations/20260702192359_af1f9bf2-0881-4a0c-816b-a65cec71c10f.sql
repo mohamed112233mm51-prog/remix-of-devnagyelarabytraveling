@@ -1,0 +1,2 @@
+ALTER TABLE public.currency_supplier_transactions DROP CONSTRAINT currency_supplier_transactions_tx_type_check;
+ALTER TABLE public.currency_supplier_transactions ADD CONSTRAINT currency_supplier_transactions_tx_type_check CHECK (tx_type = ANY (ARRAY['شراء عملة'::text, 'بيع عملة'::text, 'رصيد سابق'::text]));
