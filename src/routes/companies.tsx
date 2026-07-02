@@ -932,9 +932,11 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
     exchange_rate: "",
     date: new Date().toISOString().slice(0, 10),
     note: "",
+    statement: "",
     source_type: "" as ConvertSource,
     merchant_id: "",
   });
+
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const egp = Number(form.egp_amount || 0);
