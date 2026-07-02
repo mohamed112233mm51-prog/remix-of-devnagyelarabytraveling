@@ -1380,6 +1380,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
     { header: "الخدمة / المسافر", key: "service" },
     { header: "بيان الحركة", key: "note" },
     { header: "الرصيد الدولاري بعد الحركة", key: "balance" },
+    { header: "إجراءات", key: "actions" },
   ];
 
   const rows = filtered.map((x) => {
