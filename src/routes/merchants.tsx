@@ -25,6 +25,7 @@ import {
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 
 const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -355,16 +356,61 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         return toast.error("كل سطر يجب أن يكون لتاجر محدد");
       }
     }
+
+    // 1) Insert merchant_cash_collections rows (merchant balance is aggregated from this table).
     const rows = valid.map((r) => ({
       merchant_id: r.merchant_id,
       date,
       amount: Number(r.amount || 0),
-      // بدون توليد تلقائي — يظل فارغاً إذا لم يكتب المستخدم شيئاً
       note: note.trim() ? note.trim() : null,
       statement: statement.trim() ? statement.trim() : null,
     }));
-    const { error } = await supabase.from("merchant_cash_collections").insert(rows);
+    const { data: inserted, error } = await supabase
+      .from("merchant_cash_collections")
+      .insert(rows)
+      .select("id, merchant_id, amount");
     if (error) return toast.error(error.message);
+
+    // 2) Mirror each row into payment_splits via the Financial Engine
+    //    so the movement appears in unified financial logs (no cash_box impact
+    //    because collections drain a merchant wallet, not a company treasury).
+    const methodLabelFor = (m: string): string => {
+      if (m === "merchant_instapay") return "إنستاباي تاجر";
+      if (m === "merchant_wallet") return "تاجر الكاش تاجر";
+      if (m === "merchant_physical") return "نقدي تاجر";
+      return "نقدي";
+    };
+    for (let i = 0; i < valid.length; i++) {
+      const row = valid[i];
+      const dbRow = (inserted as any[])?.[i];
+      if (!dbRow) continue;
+      const engineSplits: MovementSplit[] = [{
+        method: methodLabelFor(row.method),
+        currency: "EGP",
+        cashBoxId: null,
+        amount: Number(row.amount || 0),
+        direction: "in",
+        grossAmount: Number(row.amount || 0),
+        netAmount: Number(row.amount || 0),
+        exchangeRate: 1,
+        egpEquivalent: Number(row.amount || 0),
+      }];
+      const res = await postMovement({
+        partyType: "merchant",
+        partyId: row.merchant_id,
+        kind: "receipt",
+        date,
+        statement: statement.trim() || undefined,
+        note: note.trim() || undefined,
+        splits: engineSplits,
+        sourceTable: "merchant_cash_collections",
+        sourceId: dbRow.id,
+      });
+      if (!res.ok) {
+        toast.error(res.error || "تعذر تسجيل الحركة في السجل المالي");
+      }
+    }
+
     toast.success("تم حفظ التحصيل");
     const r = newPaymentSplitRow();
     r.source = "merchant";
