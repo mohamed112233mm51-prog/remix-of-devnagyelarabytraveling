@@ -92,9 +92,11 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       partyId: agentId,
       kind: "payment",
       date,
-      note: note.trim() || "صرف نقدية للوكيل",
+      note: note.trim() ? note.trim() : undefined,
+      statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
     });
+
     setSaving(false);
     if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
 
