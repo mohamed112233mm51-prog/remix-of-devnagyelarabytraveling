@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, fmtUSD, useLive, useDropdownOptions, withSelected, useTreasuryBalances, merchantCashNet,
+  fmtDL, fmtNum, fmtUSD, fmtCurrency, useLive, useDropdownOptions, withSelected, useTreasuryBalances, merchantCashNet,
   type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
@@ -280,7 +280,7 @@ type CompanyLedgerKind = "service" | "payment";
 type CompanyLedgerEntry = {
   id: string; date: string; kind: CompanyLedgerKind; description: string; destination: string; service: string;
   count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; raw: CompanyTransaction;
+  paymentMethod: string; note: string; currency: string; raw: CompanyTransaction;
 };
 
 function companyPaymentMethodLabel(t: CompanyTransaction): string {
@@ -332,20 +332,42 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       credit: payment,
       paymentMethod: payment > 0 ? companyPaymentMethodLabel(t) : "—",
       note: t.note || "—",
+      currency: String((t as any).currency || "EGP"),
       raw: t,
     };
   }), [myTxnsAll]);
 
-  // Running balance computed over ALL entries (filters do not affect balance)
+  // Per-currency running balance: EGP, USD, LYD, ... never mix.
   const allWithBalance = useMemo(() => {
-    let bal = 0;
-    return allEntries.map((e) => ({ ...e, balance: (bal += e.debit - e.credit) }));
+    const bals = new Map<string, number>();
+    return allEntries.map((e) => {
+      const cur = e.currency || "EGP";
+      const next = (bals.get(cur) || 0) + (e.debit - e.credit);
+      bals.set(cur, next);
+      return { ...e, balance: next };
+    });
   }, [allEntries]);
 
   const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
   const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مدين عليه" : balance < 0 ? "دائن له" : "متوازن";
+
+  const byCurrency = useMemo(() => {
+    const debits = new Map<string, number>();
+    const credits = new Map<string, number>();
+    for (const e of allEntries) {
+      const c = e.currency || "EGP";
+      debits.set(c, (debits.get(c) || 0) + e.debit);
+      credits.set(c, (credits.get(c) || 0) + e.credit);
+    }
+    const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
+    return currencies.map((c) => {
+      const d = debits.get(c) || 0;
+      const cr = credits.get(c) || 0;
+      return { currency: c, debit: d, credit: cr, net: d - cr };
+    });
+  }, [allEntries]);
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
@@ -402,9 +424,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     subtitle: company ? company.company_name : "كل الشركات",
     fileName: `كشف-حساب-${company?.company_name || "الشركات"}`,
     summary: [
-      { label: "إجمالي قيمة الخدمات", value: fmtDL(totalServices) },
-      { label: "إجمالي المدفوعات", value: fmtDL(totalPaid) },
-      { label: "الصافي", value: fmtDL(Math.abs(balance)) },
+      ...byCurrency.flatMap((b) => [
+        { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
+        { label: `إجمالي دائن (${b.currency})`, value: fmtCurrency(b.credit, b.currency) },
+        { label: `الصافي (${b.currency})`, value: fmtCurrency(Math.abs(b.net), b.currency) },
+      ]),
       { label: "حالة الحساب", value: accountStatus },
     ],
     columns: ([
@@ -420,10 +444,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     rows: displayRows.map((e, i) => ({
       n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
       count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
-      sv: fmtDL(e.serviceValue), sv__excel: e.serviceValue,
-      debit: e.debit > 0 ? fmtDL(e.debit) : "—", debit__excel: e.debit,
-      credit: e.credit > 0 ? fmtDL(e.credit) : "—", credit__excel: e.credit,
-      balance: fmtDL(e.balance), balance__excel: e.balance,
+      sv: fmtCurrency(e.serviceValue, e.currency), sv__excel: e.serviceValue,
+      debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
+      credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
+      balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
       method: e.methodLabel, note: e.note,
     })),
   });
@@ -490,21 +514,30 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   {isVisible("destination") && <td data-label="وجهة السفر">{e.destination}</td>}
                   {isVisible("count") && <td data-label="العدد">{e.count || "—"}</td>}
                   {isVisible("price") && <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>}
-                  {isVisible("serviceValue") && <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>}
-                  {isVisible("debit") && <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>}
-                  {isVisible("credit") && <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>}
-                  {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>}
+                  {isVisible("serviceValue") && <td data-label="قيمة الرحلة">{e.serviceValue ? fmtCurrency(e.serviceValue, e.currency) : "—"}</td>}
+                  {isVisible("debit") && <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtCurrency(e.debit, e.currency) : "—"}</td>}
+                  {isVisible("credit") && <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtCurrency(e.credit, e.currency) : "—"}</td>}
+                  {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                   {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                   {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                 </tr>
               ))}
             </tbody>
             <tfoot className="totals-foot">
-              <tr>
-                <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
-                  الإجمالي — مدين: {fmtDL(totalServices)} · دائن: {fmtDL(totalPaid)} · الصافي: {fmtDL(Math.abs(balance))} ({accountStatus})
-                </td>
-              </tr>
+              {byCurrency.map((b) => (
+                <tr key={`totals-${b.currency}`}>
+                  <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                    الإجمالي ({b.currency}) — مدين: {fmtCurrency(b.debit, b.currency)} · دائن: {fmtCurrency(b.credit, b.currency)} · الصافي: {fmtCurrency(Math.abs(b.net), b.currency)} ({b.net > 0 ? "مدين عليه" : b.net < 0 ? "دائن له" : "متوازن"})
+                  </td>
+                </tr>
+              ))}
+              {byCurrency.length === 0 && (
+                <tr>
+                  <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                    الإجمالي — مدين: {fmtDL(0)} · دائن: {fmtDL(0)} · الصافي: {fmtDL(0)} ({accountStatus})
+                  </td>
+                </tr>
+              )}
             </tfoot>
           </table>
         </div>
@@ -528,6 +561,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     status: company.status || "نشط",
     opening_debit: c.opening_debit ? String(c.opening_debit) : "",
     opening_credit: c.opening_credit ? String(c.opening_credit) : "",
+    opening_currency: c.opening_currency || "EGP",
     opening_date: c.opening_date || "",
     opening_note: c.opening_note || "",
   });
@@ -546,12 +580,14 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
       status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
       opening_date: form.opening_date || null,
       opening_note: form.opening_note.trim() || null,
     } as any).eq("id", company.id);
     if (error) { setSaving(false); return toast.error(error.message); }
     await syncCompanyOpeningBalance(company.id, {
       debit, credit,
+      currency: form.opening_currency || "EGP",
       date: form.opening_date || null,
       note: form.opening_note.trim() || null,
     });
@@ -644,6 +680,13 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
               <div className="form-group"><label>تاريخ الرصيد السابق</label>
                 <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
               </div>
+              <div className="form-group"><label>العملة</label>
+                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                  <option value="EGP">جنيه مصري</option>
+                  <option value="USD">دولار أمريكي</option>
+                  <option value="LYD">دينار ليبي</option>
+                </select>
+              </div>
               <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
                 <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
               </div>
@@ -671,7 +714,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:company:add:opening",
-    { debit: "", credit: "", date: "", note: "" },
+    { debit: "", credit: "", currency: "EGP", date: "", note: "" },
   );
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
@@ -687,6 +730,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
       status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
+      opening_currency: opening.currency || "EGP",
       opening_date: opening.date || null,
       opening_note: opening.note.trim() || null,
     } as any).select("id").single();
@@ -694,6 +738,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
     if (data?.id && (debit > 0 || credit > 0)) {
       await syncCompanyOpeningBalance(data.id, {
         debit, credit,
+        currency: opening.currency || "EGP",
         date: opening.date || null,
         note: opening.note.trim() || null,
       });
@@ -727,6 +772,13 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
             </div>
             <div className="form-group"><label>تاريخ الرصيد السابق</label>
               <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
+            </div>
+            <div className="form-group"><label>العملة</label>
+              <select value={opening.currency || "EGP"} onChange={(e) => setOp("currency", e.target.value)}>
+                <option value="EGP">جنيه مصري</option>
+                <option value="USD">دولار أمريكي</option>
+                <option value="LYD">دينار ليبي</option>
+              </select>
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />

@@ -53,6 +53,7 @@ export type Database = {
           name: string
           national_id: string | null
           opening_credit: number
+          opening_currency: string
           opening_date: string | null
           opening_debit: number
           opening_note: string | null
@@ -69,6 +70,7 @@ export type Database = {
           name: string
           national_id?: string | null
           opening_credit?: number
+          opening_currency?: string
           opening_date?: string | null
           opening_debit?: number
           opening_note?: string | null
@@ -85,6 +87,7 @@ export type Database = {
           name?: string
           national_id?: string | null
           opening_credit?: number
+          opening_currency?: string
           opening_date?: string | null
           opening_debit?: number
           opening_note?: string | null
@@ -289,6 +292,7 @@ export type Database = {
           company_id: string
           count: number
           created_at: string
+          currency: string
           date: string
           destination: string | null
           exchange_rate_used: number | null
@@ -319,6 +323,7 @@ export type Database = {
           company_id: string
           count?: number
           created_at?: string
+          currency?: string
           date?: string
           destination?: string | null
           exchange_rate_used?: number | null
@@ -349,6 +354,7 @@ export type Database = {
           company_id?: string
           count?: number
           created_at?: string
+          currency?: string
           date?: string
           destination?: string | null
           exchange_rate_used?: number | null
@@ -785,6 +791,7 @@ export type Database = {
           id: string
           is_demo: boolean
           opening_credit: number
+          opening_currency: string
           opening_date: string | null
           opening_debit: number
           opening_note: string | null
@@ -799,6 +806,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           opening_credit?: number
+          opening_currency?: string
           opening_date?: string | null
           opening_debit?: number
           opening_note?: string | null
@@ -813,6 +821,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           opening_credit?: number
+          opening_currency?: string
           opening_date?: string | null
           opening_debit?: number
           opening_note?: string | null
@@ -1143,6 +1152,7 @@ export type Database = {
           cash_amount: number
           count: number
           created_at: string
+          currency: string
           date: string
           destination: string | null
           id: string
@@ -1172,6 +1182,7 @@ export type Database = {
           cash_amount?: number
           count?: number
           created_at?: string
+          currency?: string
           date?: string
           destination?: string | null
           id?: string
@@ -1201,6 +1212,7 @@ export type Database = {
           cash_amount?: number
           count?: number
           created_at?: string
+          currency?: string
           date?: string
           destination?: string | null
           id?: string

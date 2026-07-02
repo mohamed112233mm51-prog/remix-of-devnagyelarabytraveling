@@ -274,6 +274,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     status: agent.status || "نشط",
     opening_debit: a.opening_debit ? String(a.opening_debit) : "",
     opening_credit: a.opening_credit ? String(a.opening_credit) : "",
+    opening_currency: a.opening_currency || "EGP",
     opening_date: a.opening_date || "",
     opening_note: a.opening_note || "",
   });
@@ -293,6 +294,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
       opening_date: form.opening_date || null,
       opening_note: form.opening_note.trim() || null,
     } as any;
@@ -303,6 +305,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     if (!ok) return;
     await syncAgentOpeningBalance(agent.id, {
       debit, credit,
+      currency: form.opening_currency || "EGP",
       date: form.opening_date || null,
       note: form.opening_note.trim() || null,
     });
@@ -343,6 +346,13 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
               <div className="form-group"><label>تاريخ الرصيد السابق</label>
                 <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
               </div>
+              <div className="form-group"><label>العملة</label>
+                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                  <option value="EGP">جنيه مصري</option>
+                  <option value="USD">دولار أمريكي</option>
+                  <option value="LYD">دينار ليبي</option>
+                </select>
+              </div>
               <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
                 <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
               </div>
@@ -371,7 +381,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
   );
   const [opening, setOpening, clearOpening] = usePersistentState(
     "form:agent:add:opening",
-    { debit: "", credit: "", date: "", note: "" },
+    { debit: "", credit: "", currency: "EGP", date: "", note: "" },
   );
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
@@ -392,6 +402,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       status: form.status || "نشط",
       opening_debit: opDebit,
       opening_credit: opCredit,
+      opening_currency: opening.currency || "EGP",
       opening_date: opening.date || null,
       opening_note: opening.note.trim() || null,
     } as any).select("id").single();
@@ -400,6 +411,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     if (agentId && (opDebit > 0 || opCredit > 0)) {
       await syncAgentOpeningBalance(agentId, {
         debit: opDebit, credit: opCredit,
+        currency: opening.currency || "EGP",
         date: opening.date || null,
         note: opening.note.trim() || null,
       });
@@ -438,6 +450,13 @@ function AgentForm({ onDone }: { onDone: () => void }) {
             </div>
             <div className="form-group"><label>تاريخ الرصيد السابق</label>
               <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
+            </div>
+            <div className="form-group"><label>العملة</label>
+              <select value={opening.currency || "EGP"} onChange={(e) => setOp("currency", e.target.value)}>
+                <option value="EGP">جنيه مصري</option>
+                <option value="USD">دولار أمريكي</option>
+                <option value="LYD">دينار ليبي</option>
+              </select>
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />

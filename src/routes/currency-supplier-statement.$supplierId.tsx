@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtNum, type Merchant } from "@/lib/db";
+import { fmtNum, fmtCurrency, type Merchant } from "@/lib/db";
 import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
@@ -143,23 +143,27 @@ function CurrencySupplierStatementPage() {
   }, [filtered]);
 
   const rowsWithBalance = useMemo(() => {
-    let running = 0;
+    // Per-currency running balance. Each currency accumulates independently
+    // so EGP/USD/LYD never mix into a single total.
+    const bals = new Map<string, number>();
     return filtered.map((t) => {
-      let delta = 0;
-      if (currencyFilter) {
-        if (t.bought_currency === currencyFilter) delta += Number(t.bought_amount || 0);
-        if (t.sold_currency === currencyFilter) delta -= Number(t.sold_amount || 0);
-      }
-      running += delta;
-      // Foreign currency + amount + rate (for display in unified columns)
       const isForeignBought = t.tx_type === "شراء عملة";
       const foreignCurrency = isForeignBought ? t.bought_currency : t.sold_currency;
       const foreignAmount = isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
       const egpAmount = isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
       const rate = Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0);
-      return { ...t, balance: currencyFilter ? running : null, foreignCurrency, foreignAmount, egpAmount, rate };
+      // Effect on the row's currency (bought increases, sold decreases).
+      let delta = 0;
+      if (t.bought_currency === t.sold_currency) {
+        delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
+      } else {
+        delta = isForeignBought ? Number(t.bought_amount || 0) : -Number(t.sold_amount || 0);
+      }
+      const next = (bals.get(foreignCurrency) || 0) + delta;
+      bals.set(foreignCurrency, next);
+      return { ...t, balance: next, foreignCurrency, foreignAmount, egpAmount, rate };
     });
-  }, [filtered, currencyFilter]);
+  }, [filtered]);
 
   const exportData = (): StatementExportData => ({
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
@@ -173,7 +177,7 @@ function CurrencySupplierStatementPage() {
       { header: "سعر الصرف", key: "rate" },
       { header: "القيمة بالجنيه", key: "egp" },
       { header: "البيان", key: "desc" },
-      ...(currencyFilter ? [{ header: `الرصيد (${currencyFilter})`, key: "balance" }] : []),
+      { header: "الرصيد الحالي (حسب العملة)", key: "balance" },
     ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: rowsWithBalance.map((r) => ({
       date: r.tx_date,
@@ -183,7 +187,7 @@ function CurrencySupplierStatementPage() {
       rate: r.rate,
       egp: r.egpAmount,
       desc: r.description || "",
-      ...(currencyFilter ? { balance: Number(r.balance || 0) } : {}),
+      balance: Number(r.balance || 0),
     })),
     fileName: `currency-supplier-${supplier?.name || supplierId}`,
   });
@@ -231,7 +235,7 @@ function CurrencySupplierStatementPage() {
             </button>
           </>
         )}
-        <ColumnVisibility columns={CS_COLUMNS.filter((c) => c.key !== "balance" || currencyFilter).filter((c) => c.key !== "actions" || perm.delete)} visible={visible} onChange={setVisible} />
+        <ColumnVisibility columns={CS_COLUMNS.filter((c) => c.key !== "actions" || perm.delete)} visible={visible} onChange={setVisible} />
         {perm.export && <ExportButton getData={exportData} />}
       </div>
 
@@ -282,7 +286,7 @@ function CurrencySupplierStatementPage() {
                   {isVisible("rate") && <th className="num-col">سعر الصرف</th>}
                   {isVisible("egp") && <th className="num-col">القيمة بالجنيه</th>}
                   {isVisible("desc") && <th>البيان</th>}
-                  {currencyFilter && isVisible("balance") && <th className="num-col">الرصيد ({currencyFilter})</th>}
+                  {isVisible("balance") && <th className="num-col">الرصيد الحالي</th>}
                   {perm.delete && isVisible("actions") && <th>إجراءات</th>}
                 </tr>
               </thead>
@@ -300,7 +304,7 @@ function CurrencySupplierStatementPage() {
                     {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
                     {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
-                    {currencyFilter && isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(r.balance || 0))}</td>}
+                    {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.foreignCurrency)}</td>}
                     {perm.delete && isVisible("actions") && (
                       <td data-label="إجراءات">
                         <button className="action-btn" onClick={async () => {

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ExportButton } from "@/components/ExportButton";
 import {
-  badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
+  badgeFor, fmtDL, fmtNum, fmtCurrency, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
   useLive, GOVERNORATES,
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
@@ -38,7 +38,7 @@ type LedgerKind = "service" | "payment";
 type LedgerEntry = {
   id: string; date: string; kind: LedgerKind; description: string; destination: string; service: string;
   count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; raw: Transaction;
+  paymentMethod: string; note: string; currency: string; raw: Transaction;
 };
 
 type AgentLedgerProps = {
@@ -89,6 +89,7 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         credit,
         paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
         note: t.note || "—",
+        currency: String((t as any).currency || "EGP"),
         raw: t,
       };
     });
@@ -160,8 +161,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
   const ledger = useMemo(() => buildLedger(myTxnsAll), [myTxnsAll]);
   const ledgerWithBalance = useMemo(() => {
-    let balance = 0;
-    return ledger.map((e) => ({ ...e, balance: (balance += e.debit - e.credit) }));
+    // Per-currency running balance: EGP, USD, LYD, ... never mix.
+    const bals = new Map<string, number>();
+    return ledger.map((e) => {
+      const cur = e.currency || "EGP";
+      const next = (bals.get(cur) || 0) + (e.debit - e.credit);
+      bals.set(cur, next);
+      return { ...e, balance: next };
+    });
   }, [ledger]);
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
@@ -195,14 +202,33 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const accountStatus = net > 0 ? "مدين عليه" : net < 0 ? "دائن له" : "متوازن";
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
 
+  // Per-currency totals for the footer (final balance per currency).
+  const byCurrency = useMemo(() => {
+    const debits = new Map<string, number>();
+    const credits = new Map<string, number>();
+    for (const e of ledger) {
+      const c = e.currency || "EGP";
+      debits.set(c, (debits.get(c) || 0) + e.debit);
+      credits.set(c, (credits.get(c) || 0) + e.credit);
+    }
+    const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
+    return currencies.map((c) => {
+      const d = debits.get(c) || 0;
+      const cr = credits.get(c) || 0;
+      return { currency: c, debit: d, credit: cr, net: d - cr };
+    });
+  }, [ledger]);
+
   const buildExportData = () => ({
     title: "كشف حساب الوكيل",
     subtitle: agent?.name || "",
     fileName: `كشف-حساب-${agent?.name || "الوكيل"}`,
     summary: [
-      { label: "إجمالي قيمة الخدمات", value: fmtDL(totalServices) },
-      { label: "إجمالي المدفوعات", value: fmtDL(totalPayments) },
-      { label: "الصافي", value: fmtDL(Math.abs(net)) },
+      ...byCurrency.flatMap((b) => [
+        { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
+        { label: `إجمالي دائن (${b.currency})`, value: fmtCurrency(b.credit, b.currency) },
+        { label: `الصافي (${b.currency})`, value: fmtCurrency(Math.abs(b.net), b.currency) },
+      ]),
       { label: "حالة الحساب", value: accountStatus },
     ],
     columns: ([
@@ -218,10 +244,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     rows: displayRows.map((e, i) => ({
       n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
       count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
-      sv: fmtDL(e.serviceValue), sv__excel: e.serviceValue,
-      debit: e.debit > 0 ? fmtDL(e.debit) : "—", debit__excel: e.debit,
-      credit: e.credit > 0 ? fmtDL(e.credit) : "—", credit__excel: e.credit,
-      balance: fmtDL(e.balance), balance__excel: e.balance,
+      sv: fmtCurrency(e.serviceValue, e.currency), sv__excel: e.serviceValue,
+      debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
+      credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
+      balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
       method: e.methodLabel, note: e.note,
     })),
   });
@@ -305,21 +331,30 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("destination") && <td data-label="وجهة السفر">{e.destination}</td>}
                       {isVisible("count") && <td data-label="العدد">{e.count || "—"}</td>}
                       {isVisible("price") && <td data-label="السعر">{e.price ? fmtNum(e.price) : "—"}</td>}
-                      {isVisible("serviceValue") && <td data-label="قيمة الرحلة">{e.serviceValue ? fmtDL(e.serviceValue) : "—"}</td>}
-                      {isVisible("debit") && <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtDL(e.debit) : "—"}</td>}
-                      {isVisible("credit") && <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtDL(e.credit) : "—"}</td>}
-                      {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtDL(e.balance)}</td>}
+                      {isVisible("serviceValue") && <td data-label="قيمة الرحلة">{e.serviceValue ? fmtCurrency(e.serviceValue, e.currency) : "—"}</td>}
+                      {isVisible("debit") && <td data-label="مدين" style={{ color: "var(--red)", fontWeight: 700 }}>{e.debit ? fmtCurrency(e.debit, e.currency) : "—"}</td>}
+                      {isVisible("credit") && <td data-label="دائن" style={{ color: "var(--green)", fontWeight: 700 }}>{e.credit ? fmtCurrency(e.credit, e.currency) : "—"}</td>}
+                      {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                       {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
-                      الإجمالي — مدين: {fmtDL(totalServices)} · دائن: {fmtDL(totalPayments)} · الصافي: {fmtDL(Math.abs(net))} ({accountStatus})
-                    </td>
-                  </tr>
+                  {byCurrency.map((b) => (
+                    <tr key={`totals-${b.currency}`}>
+                      <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                        الإجمالي ({b.currency}) — مدين: {fmtCurrency(b.debit, b.currency)} · دائن: {fmtCurrency(b.credit, b.currency)} · الصافي: {fmtCurrency(Math.abs(b.net), b.currency)} ({b.net > 0 ? "مدين عليه" : b.net < 0 ? "دائن له" : "متوازن"})
+                      </td>
+                    </tr>
+                  ))}
+                  {byCurrency.length === 0 && (
+                    <tr>
+                      <td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                        الإجمالي — مدين: {fmtDL(0)} · دائن: {fmtDL(0)} · الصافي: {fmtDL(0)} ({accountStatus})
+                      </td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>
