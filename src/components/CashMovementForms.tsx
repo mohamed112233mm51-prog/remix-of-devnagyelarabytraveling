@@ -59,6 +59,12 @@ function mapSplitsForEngine(
   });
 }
 
+function singleCurrencyOrError(rows: PaymentSplitRow[]): "EGP" | "USD" | "LYD" | null {
+  const first = rows[0]?.currency;
+  if (!first) return null;
+  return rows.every((r) => r.currency === first) ? first : null;
+}
+
 
 /* ============================ AGENT CASH OUT ============================ */
 export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: string; onDone?: () => void }) {
@@ -84,6 +90,8 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
+    const selectedCurrency = singleCurrencyOrError(valid);
+    if (!selectedCurrency) return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
 
     setSaving(true);
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
@@ -159,6 +167,8 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
+    const selectedCurrency = singleCurrencyOrError(valid);
+    if (!selectedCurrency) return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
 
     setSaving(true);
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
@@ -237,6 +247,8 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
     const valid = filterValidSplits(splits);
+    const selectedCurrency = singleCurrencyOrError(valid);
+    if (!selectedCurrency) return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
 
     // Aggregate for company_transactions metadata row (kept for ledger display).
     let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;
@@ -266,7 +278,8 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
         merchant_cash_net_amount: -merchantWallet,
         merchant_cash_physical_amount: -merchantPhysical,
         total_paid: -total,
-        payment_currency: "EGP",
+        currency: selectedCurrency,
+        payment_currency: selectedCurrency,
         merchant_id: firstMerchant,
         note: note.trim() ? note.trim() : null,
         statement: statement.trim() ? statement.trim() : null,

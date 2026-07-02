@@ -125,10 +125,16 @@ export function AgentPaymentForm({
     if (validSplits.length === 0) return toast.error("أضف وسيلة دفع واحدة على الأقل بمبلغ");
 
     for (const r of validSplits) {
+      if (!r.currency) return toast.error("يجب اختيار العملة");
       if (r.source === "merchant" && !r.merchant_id) return toast.error("اختر التاجر لكل سطر تاجر");
       if (!r.method) return toast.error("اختر وسيلة الدفع لكل سطر");
       const allowed = methodsForSplit(r).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
+    }
+    const selectedCurrency = validSplits[0]?.currency;
+    if (!selectedCurrency) return toast.error("يجب اختيار العملة");
+    if (validSplits.some((r) => r.currency !== selectedCurrency)) {
+      return toast.error("لا يمكن حفظ دفعة واحدة بأكثر من عملة؛ أضف دفعة منفصلة لكل عملة");
     }
 
     // Aggregate amounts onto the transaction record (used by ledger)
@@ -170,6 +176,7 @@ export function AgentPaymentForm({
       mobile_cash_net_amount: 0,
       total_paid: totalNet,
       paid: totalNet,
+      currency: selectedCurrency,
       merchant_id: firstMerchant,
       // لا نستخدم أي fallback نصي — يبقى فارغاً إن لم يكتب المستخدم شيئاً
       note: form.note.trim() ? form.note.trim() : null,

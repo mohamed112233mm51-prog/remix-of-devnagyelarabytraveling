@@ -44,6 +44,7 @@ export type Transaction = {
   total_paid: number;
   note: string | null;
   merchant_id: string | null;
+  currency?: string | null;
   source_service_id?: string | null;
   source_service_type?: string | null;
   created_at: string;
@@ -253,6 +254,7 @@ export type CompanyTransaction = {
   usd_amount?: number;
   exchange_rate_used?: number | null;
   payment_currency?: string | null;
+  currency?: string | null;
   created_at: string;
 };
 
