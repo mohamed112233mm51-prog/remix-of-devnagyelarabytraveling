@@ -69,12 +69,14 @@ export type PostMovementInput = {
   partyId: string | null;         // null للتحويل بين خزينتين
   kind: MovementKind;
   date: string;                   // YYYY-MM-DD
-  note?: string;
+  note?: string;                  // ملاحظات — تُترك فارغة إذا لم يُدخلها المستخدم
+  statement?: string;             // البيان — يُدخله المستخدم يدوياً فقط، بدون توليد تلقائي
   splits: MovementSplit[];
   sourceTable?: string;           // اختياري — لربطها بعملية أم موجودة
   sourceId?: string;
   transactionId?: string;         // لو الحركة مرتبطة بصف transactions موجود
 };
+
 
 export type PostMovementResult = {
   ok: boolean;
