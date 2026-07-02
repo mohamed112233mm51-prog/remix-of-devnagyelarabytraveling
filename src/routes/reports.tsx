@@ -1463,6 +1463,9 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
                   <td data-label="الخدمة">{r.service}</td>
                   <td data-label="بيان">{r.note}</td>
                   <td data-label="الرصيد">{r.balance}</td>
+                  <td data-label="إجراءات">
+                    <CancelTransactionButton table="usd_treasury_transactions" id={filtered[i]?.row.id || ""} cancelled={false} />
+                  </td>
                 </tr>
               ))}
             </tbody>
