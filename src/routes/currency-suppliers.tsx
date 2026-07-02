@@ -213,31 +213,58 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
     phone: supplier?.phone || "",
     notes: supplier?.notes || "",
     status: supplier?.status || "نشط",
+    opening_debit: supplier?.opening_debit ? String(supplier.opening_debit) : "",
+    opening_credit: supplier?.opening_credit ? String(supplier.opening_credit) : "",
+    opening_currency: supplier?.opening_currency || "EGP",
+    opening_date: supplier?.opening_date || "",
+    opening_note: supplier?.opening_note || "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم المورد مطلوب");
+    const debit = Math.max(0, Number(form.opening_debit) || 0);
+    const credit = Math.max(0, Number(form.opening_credit) || 0);
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       notes: form.notes.trim() || null,
       status: form.status,
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
+      opening_date: form.opening_date || null,
+      opening_note: form.opening_note || null,
     };
+    let id = supplier?.id;
     if (supplier) {
       const { error } = await supabase.from("currency_suppliers" as any).update(payload).eq("id", supplier.id);
       if (error) return toast.error(error.message);
-      toast.success("تم التحديث");
     } else {
-      const { error } = await supabase.from("currency_suppliers" as any).insert(payload);
+      const { data, error } = await supabase.from("currency_suppliers" as any).insert(payload).select("id").maybeSingle();
       if (error) return toast.error(error.message);
-      toast.success("تمت إضافة المورد");
+      id = (data as any)?.id;
     }
+    if (id && (debit > 0 || credit > 0)) {
+      try {
+        await syncCurrencySupplierOpeningBalance(id, {
+          debit, credit,
+          currency: form.opening_currency || "EGP",
+          date: form.opening_date || null,
+          note: form.opening_note || null,
+        });
+      } catch (e: any) {
+        return toast.error(String(e?.message || "").includes("ux_currency_supplier_opening_row")
+          ? "يوجد رصيد سابق لهذه الجهة بهذه العملة"
+          : (e?.message || "فشل حفظ الرصيد السابق"));
+      }
+    }
+    toast.success(supplier ? "تم التحديث" : "تمت إضافة المورد");
     onSaved();
   };
   if (typeof document === "undefined") return null;
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 560, width: "100%", margin: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
         <div className="card-header"><div className="card-title">{supplier ? "✏️ تعديل المورد" : "➕ إضافة مورد"}</div></div>
         <div className="form-grid">
           <div className="form-group"><label>اسم المورد</label><input value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
@@ -247,6 +274,22 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
           </div>
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
             <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} />
+          </div>
+          <div className="form-group full" style={{ gridColumn: "1 / -1", marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
+            <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
+            <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+              <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
+              <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+              <div className="form-group"><label>العملة</label>
+                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                  <option value="EGP">جنيه مصري</option>
+                  <option value="USD">دولار أمريكي</option>
+                  <option value="LYD">دينار ليبي</option>
+                </select>
+              </div>
+              <div className="form-group"><label>التاريخ</label><input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} /></div>
+              <div className="form-group full"><label>ملاحظات</label><input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} /></div>
+            </div>
           </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -258,3 +301,4 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
     document.body,
   );
 }
+
