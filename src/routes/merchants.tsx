@@ -399,22 +399,24 @@ function HistoryTab({ collections, merchants }: { collections: MerchantCashColle
         </div>
         <div className="table-wrap">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>التاجر</th><th>المبلغ</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>التاجر</th><th>المبلغ</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={5}><div className="empty"><div className="empty-text">لا توجد تحصيلات بعد</div></div></td></tr>
+                <tr><td colSpan={6}><div className="empty"><div className="empty-text">لا توجد تحصيلات بعد</div></div></td></tr>
               ) : filtered.map((c, i) => (
                 <tr key={c.id}>
                   <td data-label="#">{i + 1}</td>
                   <td data-label="التاريخ">{c.date}</td>
                   <td className="bold" data-label="التاجر">{merchants.find((m) => m.id === c.merchant_id)?.merchant_name || "—"}</td>
                   <td data-label="المبلغ">{fmtDL(Number(c.amount || 0))}</td>
+                  <td data-label="البيان">{(c as any).statement || "—"}</td>
                   <td data-label="ملاحظات">{c.note || "—"}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={3}>الإجمالي</td><td>{fmtDL(total)}</td><td></td></tr></tfoot>
+            <tfoot><tr><td colSpan={3}>الإجمالي</td><td>{fmtDL(total)}</td><td colSpan={2}></td></tr></tfoot>
           </table>
+
         </div>
       </div>
     </div>
