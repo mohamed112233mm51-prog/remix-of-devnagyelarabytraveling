@@ -297,6 +297,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const safeTxns = Array.isArray(txns) ? txns : [];
   const [companyId, setCompanyId] = useState(initialCompanyId || "");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
+  const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const merchantName = (mid: string | null | undefined) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
 
@@ -311,6 +312,23 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       ),
     [safeTxns, companyId],
   );
+
+  const splitCurrencyByTxnId = useMemo(() => {
+    const buckets = new Map<string, Set<string>>();
+    for (const s of liveSplits || []) {
+      if (s.source_table !== "company_transactions") continue;
+      const id = s.source_id || s.transaction_id;
+      if (!id || !s.currency) continue;
+      const set = buckets.get(id) || new Set<string>();
+      set.add(s.currency);
+      buckets.set(id, set);
+    }
+    const result = new Map<string, string>();
+    buckets.forEach((set, id) => {
+      if (set.size === 1) result.set(id, Array.from(set)[0]);
+    });
+    return result;
+  }, [liveSplits]);
 
   const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
     const serviceValue = Math.round(Number(t.trip_value || 0));
@@ -332,10 +350,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       credit: payment,
       paymentMethod: payment > 0 ? companyPaymentMethodLabel(t) : "—",
       note: t.note || "—",
-      currency: String((t as any).currency || "EGP"),
+      currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
       raw: t,
     };
-  }), [myTxnsAll]);
+  }), [myTxnsAll, splitCurrencyByTxnId]);
 
   // Per-currency running balance: EGP, USD, LYD, ... never mix.
   const allWithBalance = useMemo(() => {
@@ -836,8 +854,14 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     if (err) return toast.error(err);
     const validSplits = filterValidSplits(splits);
     for (const r of validSplits) {
+      if (!r.currency) return toast.error("يجب اختيار العملة");
       const allowed = methodsForSplitWidget(r, merchants).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
+    }
+    const selectedCurrency = validSplits[0]?.currency;
+    if (!selectedCurrency) return toast.error("يجب اختيار العملة");
+    if (validSplits.some((r) => r.currency !== selectedCurrency)) {
+      return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
     }
     const balanceErr = validateSplitOutflows(validSplits, balances, merchants);
     if (balanceErr) return toast.error(balanceErr);
@@ -876,7 +900,8 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       mobile_cash_net_amount: 0,
       total_paid: totalAmount,
       usd_amount: 0,
-      payment_currency: "EGP",
+      currency: selectedCurrency,
+      payment_currency: selectedCurrency,
       merchant_id: firstMerchant,
       note: form.note.trim() ? form.note.trim() : null,
       statement: form.statement.trim() ? form.statement.trim() : null,

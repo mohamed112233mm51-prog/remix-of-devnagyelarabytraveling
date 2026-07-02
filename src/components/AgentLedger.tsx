@@ -63,7 +63,7 @@ function paymentMethodLabel(t: Transaction): string {
   return parts.length ? parts.join(" + ") : (t.payment_method || "—");
 }
 
-function buildLedger(txns: Transaction[]): LedgerEntry[] {
+function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
   const safeTxns = Array.isArray(txns) ? txns.filter(Boolean) : [];
   return [...safeTxns]
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
@@ -89,7 +89,7 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         credit,
         paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
         note: t.note || "—",
-        currency: String((t as any).currency || "EGP"),
+        currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
         raw: t,
       };
     });
@@ -102,6 +102,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const flights: any[] = [];
   const { rows: liveTxns } = useLive<Transaction>("transactions");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
+  const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
   const agents = Array.isArray(liveAgents) ? liveAgents : [];
   const txns = Array.isArray(liveTxns) ? liveTxns : [];
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
@@ -159,7 +160,23 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const myFlights = useMemo(() => flights.filter((f) => f.agent_id === selectedAgentId), [flights, selectedAgentId]);
 
   const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
-  const ledger = useMemo(() => buildLedger(myTxnsAll), [myTxnsAll]);
+  const splitCurrencyByTxnId = useMemo(() => {
+    const buckets = new Map<string, Set<string>>();
+    for (const s of liveSplits || []) {
+      if (s.source_table !== "transactions") continue;
+      const id = s.source_id || s.transaction_id;
+      if (!id || !s.currency) continue;
+      const set = buckets.get(id) || new Set<string>();
+      set.add(s.currency);
+      buckets.set(id, set);
+    }
+    const result = new Map<string, string>();
+    buckets.forEach((set, id) => {
+      if (set.size === 1) result.set(id, Array.from(set)[0]);
+    });
+    return result;
+  }, [liveSplits]);
+  const ledger = useMemo(() => buildLedger(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
   const ledgerWithBalance = useMemo(() => {
     // Per-currency running balance: EGP, USD, LYD, ... never mix.
     const bals = new Map<string, number>();

@@ -170,6 +170,7 @@ export function validatePaymentSplits(splits: PaymentSplitRow[]): string | null 
   const valid = splits.filter((r) => Number(r.amount) > 0);
   if (valid.length === 0) return "أضف وسيلة دفع واحدة على الأقل بمبلغ";
   for (const r of valid) {
+    if (!r.currency) return "يجب اختيار العملة";
     if (r.source === "merchant" && !r.merchant_id) return "اختر التاجر لكل سطر تاجر";
     if (!r.method) return "اختر وسيلة الدفع لكل سطر";
   }
