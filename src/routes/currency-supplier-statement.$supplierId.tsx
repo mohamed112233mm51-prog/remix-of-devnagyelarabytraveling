@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtNum, fmtCurrency, type Merchant } from "@/lib/db";
+import { fmtNum, fmtCurrency, normalizeCurrency, type Merchant } from "@/lib/db";
 import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
@@ -63,18 +63,19 @@ type Tx = {
 };
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
-// Foreign currencies allowed (display names) — EGP is always the other side.
-const FOREIGN_CURRENCIES = ["دولار", "دينار ليبي"] as const;
-const EGP_LABEL = "جنيه مصري";
+// Foreign currency codes allowed — EGP is always the other side. All storage
+// uses the canonical code (EGP/USD/LYD); Arabic labels are display-only.
+const FOREIGN_CURRENCIES = ["USD", "LYD"] as const;
+const EGP_CODE = "EGP";
 
-// Map display name → cash_boxes.currency code
-const CURRENCY_CODE: Record<string, "EGP" | "USD" | "LYD"> = {
-  "جنيه مصري": "EGP",
-  "دولار": "USD",
-  "دينار ليبي": "LYD",
+const CURRENCY_LABEL_AR: Record<string, string> = {
+  EGP: "جنيه مصري",
+  USD: "دولار أمريكي",
+  LYD: "دينار ليبي",
 };
 
-const ALL_FILTER_CURRENCIES = [EGP_LABEL, ...FOREIGN_CURRENCIES];
+const ALL_FILTER_CURRENCIES = [EGP_CODE, ...FOREIGN_CURRENCIES];
+
 
 function CurrencySupplierStatementPage() {
   const { supplierId } = Route.useParams();
@@ -124,14 +125,23 @@ function CurrencySupplierStatementPage() {
   const refresh = () => setReload((n) => n + 1);
 
   const filtered = useMemo(() => {
-    return txns.filter((t) => {
-      if (from && t.tx_date < from) return false;
-      if (to && t.tx_date > to) return false;
-      if (typeFilter && t.tx_type !== typeFilter) return false;
-      if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
-      return true;
-    });
+    // Normalize legacy Arabic currency values to canonical codes so old rows
+    // group correctly with new ones.
+    return txns
+      .map((t) => ({
+        ...t,
+        bought_currency: normalizeCurrency(t.bought_currency),
+        sold_currency: normalizeCurrency(t.sold_currency),
+      }))
+      .filter((t) => {
+        if (from && t.tx_date < from) return false;
+        if (to && t.tx_date > to) return false;
+        if (typeFilter && t.tx_type !== typeFilter) return false;
+        if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
+        return true;
+      });
   }, [txns, from, to, typeFilter, currencyFilter]);
+
 
   const summary = useMemo(() => {
     const map = new Map<string, number>();
@@ -268,7 +278,7 @@ function CurrencySupplierStatementPage() {
           <label>العملة</label>
           <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
             <option value="">الكل</option>
-            {ALL_FILTER_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {ALL_FILTER_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>)}
           </select>
         </div>
         {(from || to || typeFilter || currencyFilter) && (
@@ -344,9 +354,9 @@ function CurrencySupplierStatementPage() {
   );
 }
 
-// Resolve the target cash_box for a currency display name (foreign leg).
-function resolveForeignBox(boxes: CashBox[], currencyDisplay: string): CashBox | null {
-  const code = CURRENCY_CODE[currencyDisplay];
+// Resolve the target cash_box for a currency code (foreign leg).
+function resolveForeignBox(boxes: CashBox[], currencyCode: string): CashBox | null {
+  const code = currencyCode;
   if (!code) return null;
   return (
     boxes.find((b) => b.currency === code && b.is_active !== false && b.name.includes("الرئيسية")) ||
@@ -354,6 +364,7 @@ function resolveForeignBox(boxes: CashBox[], currencyDisplay: string): CashBox |
     null
   );
 }
+
 
 // Resolve the company EGP cash_box for a split method (company_cash | company_instapay).
 function resolveCompanyEgpBox(boxes: CashBox[], method: string): CashBox | null {
@@ -393,7 +404,7 @@ async function applyTransaction(opts: {
   const { kind, supplierId, txId, txDate, foreignCurrency, foreignAmount, splits, boxes, description } = opts;
   const isBuy = kind === "شراء عملة";
   const foreignBox = resolveForeignBox(boxes, foreignCurrency);
-  const foreignCode = CURRENCY_CODE[foreignCurrency];
+  const foreignCode = foreignCurrency;
 
   const engineSplits: MovementSplit[] = [];
 
@@ -401,7 +412,7 @@ async function applyTransaction(opts: {
   if (foreignBox && foreignCode && foreignAmount > 0) {
     engineSplits.push({
       method: "نقدي",
-      currency: foreignCode,
+      currency: foreignCode as "EGP" | "USD" | "LYD",
       cashBoxId: foreignBox.id,
       amount: foreignAmount,
       direction: isBuy ? "in" : "out",
@@ -504,7 +515,7 @@ function TxModal({
 
   // For buy: foreign is the BOUGHT side, EGP is the SOLD side.
   // For sell: foreign is the SOLD side, EGP is the BOUGHT side.
-  const [foreignCurrency, setForeignCurrency] = useState<string>("دولار");
+  const [foreignCurrency, setForeignCurrency] = useState<string>("USD");
   const [foreignAmount, setForeignAmount] = useState<string>("");
   const [rate, setRate] = useState<string>("");
   const [egpAmount, setEgpAmount] = useState<string>("");
@@ -574,7 +585,7 @@ function TxModal({
       if (balanceErr) return toast.error(balanceErr);
     } else {
       // sell: foreign currency leaves treasury → guard the foreign box.
-      const code = CURRENCY_CODE[foreignCurrency];
+      const code = foreignCurrency;
       const box = boxes.find((b) => b.currency === code && b.is_active !== false);
       const available = Number(box?.balance || 0);
       const sErr = validateSingleOutflow(
@@ -601,9 +612,10 @@ function TxModal({
       supplier_id: supplierId,
       tx_date: txDate,
       tx_type: kind,
-      bought_currency: isBuy ? foreignCurrency : EGP_LABEL,
+      bought_currency: isBuy ? foreignCurrency : EGP_CODE,
       bought_amount: isBuy ? a : e,
-      sold_currency: isBuy ? EGP_LABEL : foreignCurrency,
+      sold_currency: isBuy ? EGP_CODE : foreignCurrency,
+
       sold_amount: isBuy ? e : a,
       exchange_rate: r,
       description: description.trim() || null,
@@ -648,7 +660,7 @@ function TxModal({
           </div>
           <div className="form-group"><label>{isBuy ? "العملة المشتراة" : "العملة المباعة"}</label>
             <select value={foreignCurrency} onChange={(e) => setForeignCurrency(e.target.value)}>
-              {FOREIGN_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {FOREIGN_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>)}
             </select>
           </div>
           <div className="form-group"><label>{isBuy ? "مبلغ العملة المشتراة" : "مبلغ العملة المباعة"}</label>
