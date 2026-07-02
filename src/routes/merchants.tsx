@@ -46,20 +46,21 @@ function MerchantsPage() {
   // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
   // Includes both wallet (net after 1% commission) and physical cash, plus USD treasury conversions.
   const merchantTotals = useMemo(() => {
-    const map = new Map<string, { incoming: number; outgoing: number; collected: number; converted: number }>();
+    const map = new Map<string, { incoming: number; outgoing: number; collected: number; paidOut: number; converted: number }>();
     const get = (id: string) => {
       let v = map.get(id);
-      if (!v) { v = { incoming: 0, outgoing: 0, collected: 0, converted: 0 }; map.set(id, v); }
+      if (!v) { v = { incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0 }; map.set(id, v); }
       return v;
     };
     for (const t of txns) {
       if (!t.merchant_id) continue;
-      get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-      // Engine-posted cash payments to merchant (via postMovement) — treated
-      // as outgoing cash to merchant, reducing merchant's obligation to us.
+      // Cash payments to merchant posted via Financial Engine keep merchant_cash_* = 0
+      // and only carry a signed `paid` — count them ONLY in paidOut (not incoming).
       if (t.source_service_type === "merchant_cash_out") {
-        get(t.merchant_id).collected += Math.abs(Number(t.paid || 0));
+        get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
+        continue;
       }
+      get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
@@ -78,22 +79,22 @@ function MerchantsPage() {
 
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
   const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [cTxns]);
-  // Cash movements posted through Financial Engine (postMovement) for merchants —
-  // كشف الحساب لازم يعرضها كسطور مستقلة بجانب التحصيلات.
   const cashMoveTxns = useMemo(
     () => txns.filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out"),
     [txns],
   );
 
   // Headline KPIs aggregate per-merchant rollups so they always equal the sum of statements.
-  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalConverted = 0;
+  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalPaidOut = 0, totalConverted = 0;
   for (const v of merchantTotals.values()) {
     totalIncoming += v.incoming;
     totalOutgoing += v.outgoing;
     totalCollected += v.collected;
+    totalPaidOut += v.paidOut;
     totalConverted += v.converted;
   }
-  const balance = totalIncoming - totalOutgoing - totalCollected - totalConverted;
+  // balance = الوارد من الوكلاء + التحصيل من التجار − الصرف للتجار − الصادر للشركات − التحويلات
+  const balance = totalIncoming + totalCollected - totalPaidOut - totalOutgoing - totalConverted;
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
   const companyName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
@@ -128,6 +129,10 @@ function MerchantsPage() {
         <div className="sum-box gold">
           <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
           <div className="kpi-text"><div className="label">النقدية المحصلة من التجار</div><div className="val">{fmtDL(totalCollected)}</div></div>
+        </div>
+        <div className="sum-box red">
+          <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتجار</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
         </div>
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
@@ -638,7 +643,7 @@ function MerchantStatementTab({
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
         statement: label,
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        gross: amt, commission: 0, net: amt, delta: amt,
       });
     }
     for (const t of cashMoveTxns) {
