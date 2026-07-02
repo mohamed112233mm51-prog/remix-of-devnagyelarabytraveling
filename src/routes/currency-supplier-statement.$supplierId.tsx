@@ -286,7 +286,7 @@ function CurrencySupplierStatementPage() {
                   {isVisible("rate") && <th className="num-col">سعر الصرف</th>}
                   {isVisible("egp") && <th className="num-col">القيمة بالجنيه</th>}
                   {isVisible("desc") && <th>البيان</th>}
-                  {currencyFilter && isVisible("balance") && <th className="num-col">الرصيد ({currencyFilter})</th>}
+                  {isVisible("balance") && <th className="num-col">الرصيد الحالي</th>}
                   {perm.delete && isVisible("actions") && <th>إجراءات</th>}
                 </tr>
               </thead>
