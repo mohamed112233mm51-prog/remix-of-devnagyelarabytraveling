@@ -10,7 +10,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
+import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -113,8 +113,26 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       splits: engineSplits,
     });
 
+    if (!res.ok) {
+      setSaving(false);
+      return toast.error(res.error || "تعذر حفظ الحركة");
+    }
+
+    if (res.transactionId) {
+      const merchantRes = await postMerchantCashOutToAgentCounterparts({
+        splits: valid,
+        agentTransactionId: res.transactionId,
+        date,
+        statement: statement.trim() || "صرف نقدية لوكيل",
+        note: note.trim() || undefined,
+      });
+      if (!merchantRes.ok) {
+        setSaving(false);
+        return toast.error(merchantRes.error || "تعذر حفظ قيد تاجر الكاش");
+      }
+    }
+
     setSaving(false);
-    if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
 
     toast.success("تم تسجيل صرف النقدية");
     resetDraft();

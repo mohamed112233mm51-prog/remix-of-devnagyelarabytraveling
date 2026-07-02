@@ -77,13 +77,15 @@ function MerchantsPage() {
     };
     for (const t of txns) {
       if (!t.merchant_id) continue;
-      // Cash payments to merchant posted via Financial Engine keep merchant_cash_* = 0
-      // and only carry a signed `paid` — count them ONLY in paidOut (not incoming).
       if (t.source_service_type === "merchant_cash_out") {
         get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
         continue;
       }
       if (t.source_service_type === "merchant_cash_out_to_company") {
+        get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
+        continue;
+      }
+      if (t.source_service_type === "merchant_cash_out_to_agent") {
         get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
         continue;
       }
@@ -115,7 +117,7 @@ function MerchantsPage() {
     [outgoingTxns, merchantCompanyOutSourceIds],
   );
   const cashMoveTxns = useMemo(
-    () => txns.filter((t) => t.merchant_id && (t.source_service_type === "merchant_cash_out" || t.source_service_type === "merchant_cash_out_to_company")),
+    () => txns.filter((t) => t.merchant_id && (t.source_service_type === "merchant_cash_out" || t.source_service_type === "merchant_cash_out_to_company" || t.source_service_type === "merchant_cash_out_to_agent")),
     [txns],
   );
 
@@ -786,7 +788,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD" | "رصيد سابق";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "صرف نقدية لوكيل" | "تحويل لـ USD" | "رصيد سابق";
   statement: string;
   gross: number;
   commission: number;
@@ -857,11 +859,14 @@ function MerchantStatementTab({
       if (amt <= 0) continue;
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
       const toCompany = t.source_service_type === "merchant_cash_out_to_company";
+      const toAgent = t.source_service_type === "merchant_cash_out_to_agent";
+      const type = toCompany ? "صادر لشركة" : toAgent ? "صرف نقدية لوكيل" : "صرف نقدية للتاجر";
+      const delta = (toCompany || toAgent) ? -amt : amt;
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
-        type: toCompany ? "صادر لشركة" : "صرف نقدية للتاجر",
+        type,
         statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: toCompany ? -amt : amt, currency: cur,
+        gross: amt, commission: 0, net: amt, delta, currency: cur,
       });
     }
     for (const r of conversions) {

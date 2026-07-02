@@ -24,6 +24,47 @@ export async function postMerchantCashOutToCompanyCounterparts(args: {
   statement?: string;
   note?: string;
 }) {
+  return postCounterparts({
+    splits: args.splits,
+    parentId: args.companyTransactionId,
+    date: args.date,
+    statement: args.statement,
+    note: args.note,
+    sourceServiceType: "merchant_cash_out_to_company",
+    serviceType: "صادر لشركة",
+    defaultStatement: "صادر لشركة",
+  });
+}
+
+export async function postMerchantCashOutToAgentCounterparts(args: {
+  splits: MerchantCompanySplit[];
+  agentTransactionId: string;
+  date: string;
+  statement?: string;
+  note?: string;
+}) {
+  return postCounterparts({
+    splits: args.splits,
+    parentId: args.agentTransactionId,
+    date: args.date,
+    statement: args.statement,
+    note: args.note,
+    sourceServiceType: "merchant_cash_out_to_agent",
+    serviceType: "صرف نقدية لوكيل",
+    defaultStatement: "صرف نقدية لوكيل",
+  });
+}
+
+async function postCounterparts(args: {
+  splits: MerchantCompanySplit[];
+  parentId: string;
+  date: string;
+  statement?: string;
+  note?: string;
+  sourceServiceType: string;
+  serviceType: string;
+  defaultStatement: string;
+}) {
   const merchantSplits = args.splits.filter(
     (r) => r.source === "merchant" && r.merchant_id && Number(r.amount || 0) > 0,
   );
@@ -31,7 +72,7 @@ export async function postMerchantCashOutToCompanyCounterparts(args: {
   for (const row of merchantSplits) {
     const amount = Number(row.amount || 0);
     const currency = normalizeCurrency(row.currency) as "EGP" | "USD" | "LYD";
-    const statement = args.statement?.trim() || "صادر لشركة";
+    const statement = args.statement?.trim() || args.defaultStatement;
     const note = args.note?.trim() || null;
     const method = methodLabel(row.method);
 
@@ -57,12 +98,12 @@ export async function postMerchantCashOutToCompanyCounterparts(args: {
         merchant_cash_net_amount: 0,
         merchant_cash_physical_amount: 0,
         payment_method: method,
-        service_type: "صادر لشركة",
+        service_type: args.serviceType,
         statement,
         note,
         currency,
-        source_service_type: "merchant_cash_out_to_company",
-        source_service_id: args.companyTransactionId,
+        source_service_type: args.sourceServiceType,
+        source_service_id: args.parentId,
       })
       .select("id")
       .single();

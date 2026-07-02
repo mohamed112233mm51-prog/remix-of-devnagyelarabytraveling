@@ -95,6 +95,10 @@ export function useSourceBalances(): SourceBalances {
         addMerchant(t.merchant_id, cur, -Math.abs(Number(t.paid || 0)));
         continue;
       }
+      if (t.source_service_type === "merchant_cash_out_to_agent") {
+        addMerchant(t.merchant_id, cur, -Math.abs(Number(t.paid || 0)));
+        continue;
+      }
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       addMerchant(t.merchant_id, cur, net);
     }
