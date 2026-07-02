@@ -55,6 +55,11 @@ function MerchantsPage() {
     for (const t of txns) {
       if (!t.merchant_id) continue;
       get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      // Engine-posted cash payments to merchant (via postMovement) — treated
+      // as outgoing cash to merchant, reducing merchant's obligation to us.
+      if (t.source_service_type === "merchant_cash_out") {
+        get(t.merchant_id).collected += Math.abs(Number(t.paid || 0));
+      }
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
@@ -73,6 +78,12 @@ function MerchantsPage() {
 
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
   const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [cTxns]);
+  // Cash movements posted through Financial Engine (postMovement) for merchants —
+  // كشف الحساب لازم يعرضها كسطور مستقلة بجانب التحصيلات.
+  const cashMoveTxns = useMemo(
+    () => txns.filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out"),
+    [txns],
+  );
 
   // Headline KPIs aggregate per-merchant rollups so they always equal the sum of statements.
   let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalConverted = 0;
@@ -244,6 +255,7 @@ function MerchantsPage() {
           merchants={merchants}
           incomingTxns={incomingTxns}
           outgoingTxns={outgoingTxns}
+          cashMoveTxns={cashMoveTxns}
           collections={collections}
           conversions={usdRows}
           agents={agents}
@@ -563,7 +575,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "تحويل لـ USD";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "صرف نقدية" | "تحويل لـ USD";
   statement: string;
   gross: number;
   commission: number;
@@ -572,11 +584,12 @@ type StatementMovement = {
 };
 
 function MerchantStatementTab({
-  merchants, incomingTxns, outgoingTxns, collections, conversions, agents, companies,
+  merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, agents, companies,
 }: {
   merchants: Merchant[];
   incomingTxns: Transaction[];
   outgoingTxns: CompanyTransaction[];
+  cashMoveTxns: Transaction[];
   collections: MerchantCashCollection[];
   conversions: UsdTreasuryTransaction[];
   agents: Agent[];
@@ -585,7 +598,7 @@ function MerchantStatementTab({
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "conversion">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "cashout" | "conversion">("all");
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
@@ -628,6 +641,17 @@ function MerchantStatementTab({
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
+    for (const t of cashMoveTxns) {
+      if (t.merchant_id !== merchantId) continue;
+      const amt = Math.abs(Number(t.paid || 0));
+      if (amt <= 0) continue;
+      list.push({
+        id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
+        type: "صرف نقدية",
+        statement: (t.note || "صرف نقدية للتاجر"),
+        gross: amt, commission: 0, net: amt, delta: -amt,
+      });
+    }
     for (const r of conversions) {
       if (r.type !== "conversion" || r.merchant_id !== merchantId) continue;
       if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
@@ -639,7 +663,7 @@ function MerchantStatementTab({
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
-  }, [merchantId, incomingTxns, outgoingTxns, collections, conversions, agents, companies]);
+  }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, agents, companies]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
@@ -648,6 +672,7 @@ function MerchantStatementTab({
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
     if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
+    if (typeFilter === "cashout" && m.type !== "صرف نقدية") return false;
     if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
@@ -732,6 +757,7 @@ function MerchantStatementTab({
                   { value: "incoming", label: "وارد من وكيل" },
                   { value: "outgoing", label: "صادر لشركة" },
                   { value: "collection", label: "تحصيل نقدي" },
+                  { value: "cashout", label: "صرف نقدية" },
                   { value: "conversion", label: "تحويل لـ USD" },
                 ]}
                 allowClear={false}
