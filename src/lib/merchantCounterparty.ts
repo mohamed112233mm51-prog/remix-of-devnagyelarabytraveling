@@ -11,9 +11,9 @@ type MerchantCompanySplit = {
 };
 
 function methodLabel(method?: string | null): string {
-  if (method === "merchant_instapay") return "إنستاباي تاجر";
-  if (method === "merchant_wallet") return "تاجر الكاش تاجر";
-  if (method === "merchant_physical") return "نقدي تاجر";
+  if (method === "merchant_instapay") return "انستا";
+  if (method === "merchant_wallet") return "فودافون كاش";
+  if (method === "merchant_physical") return "نقدي";
   return "تاجر الكاش";
 }
 
