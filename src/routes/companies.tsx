@@ -1009,8 +1009,10 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
       exchange_rate: rate,
       source_type: form.source_type,
       merchant_id: needsMerchant ? form.merchant_id : null,
-      note: form.note || null,
-    });
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
+    } as any);
+
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("تم تحويل المبلغ إلى الخزينة الدولارية");
