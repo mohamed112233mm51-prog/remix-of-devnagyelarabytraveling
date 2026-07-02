@@ -147,12 +147,19 @@ function CurrencySupplierStatementPage() {
     // so EGP/USD/LYD never mix into a single total.
     const bals = new Map<string, number>();
     return filtered.map((t) => {
+      const isOpening = t.tx_type === "رصيد سابق";
       const isForeignBought = t.tx_type === "شراء عملة";
       const foreignCurrency = isForeignBought ? t.bought_currency : t.sold_currency;
-      const foreignAmount = isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
-      const egpAmount = isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
-      const rate = Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0);
-      // Effect on the row's currency (bought increases, sold decreases).
+      // For opening balance rows both currencies equal the selected currency
+      // and only one side carries a value (bought=debit, sold=credit).
+      const foreignAmount = isOpening
+        ? Number(t.bought_amount || 0) + Number(t.sold_amount || 0)
+        : isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
+      const egpAmount = isOpening
+        ? 0
+        : isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
+      const rate = isOpening ? 0 : (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0));
+      // Effect on the row's currency: bought increases (debit), sold decreases (credit).
       let delta = 0;
       if (t.bought_currency === t.sold_currency) {
         delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
@@ -163,6 +170,7 @@ function CurrencySupplierStatementPage() {
       bals.set(foreignCurrency, next);
       return { ...t, balance: next, foreignCurrency, foreignAmount, egpAmount, rate };
     });
+
   }, [filtered]);
 
   const exportData = (): StatementExportData => ({
