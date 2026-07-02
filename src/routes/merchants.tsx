@@ -55,6 +55,11 @@ function MerchantsPage() {
     for (const t of txns) {
       if (!t.merchant_id) continue;
       get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      // Engine-posted cash payments to merchant (via postMovement) — treated
+      // as outgoing cash to merchant, reducing merchant's obligation to us.
+      if (t.source_service_type === "merchant_cash_out") {
+        get(t.merchant_id).collected += Math.abs(Number(t.paid || 0));
+      }
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
@@ -73,6 +78,12 @@ function MerchantsPage() {
 
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
   const outgoingTxns = useMemo(() => cTxns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [cTxns]);
+  // Cash movements posted through Financial Engine (postMovement) for merchants —
+  // كشف الحساب لازم يعرضها كسطور مستقلة بجانب التحصيلات.
+  const cashMoveTxns = useMemo(
+    () => txns.filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out"),
+    [txns],
+  );
 
   // Headline KPIs aggregate per-merchant rollups so they always equal the sum of statements.
   let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalConverted = 0;
