@@ -289,11 +289,15 @@ function MerchantForm() {
     merchant_name: "", phone: "", whatsapp: "",
     supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
     status: "نشط",
+    opening_debit: "", opening_credit: "",
+    opening_currency: "EGP", opening_date: "", opening_note: "",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
-    const { error } = await supabase.from("merchants").insert({
+    const debit = Math.max(0, Number(form.opening_debit) || 0);
+    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const { data, error } = await supabase.from("merchants").insert({
       merchant_name: form.merchant_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
@@ -301,9 +305,35 @@ function MerchantForm() {
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
       status: form.status || "نشط",
-    } as any);
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
+      opening_date: form.opening_date || null,
+      opening_note: form.opening_note || null,
+    } as any).select("id").maybeSingle();
     if (error) return toast.error(error.message);
-    setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true, status: "نشط" });
+    if (data?.id && (debit > 0 || credit > 0)) {
+      try {
+        await syncMerchantOpeningBalance((data as any).id, {
+          debit, credit,
+          currency: form.opening_currency || "EGP",
+          date: form.opening_date || null,
+          note: form.opening_note || null,
+        });
+      } catch (e: any) {
+        toast.error(String(e?.message || "").includes("ux_merchant_opening_row")
+          ? "يوجد رصيد سابق لهذه الجهة بهذه العملة"
+          : (e?.message || "فشل حفظ الرصيد السابق"));
+      }
+    }
+    setForm({
+      merchant_name: "", phone: "", whatsapp: "",
+      supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
+      status: "نشط",
+      opening_debit: "", opening_credit: "",
+      opening_currency: "EGP", opening_date: "", opening_note: "",
+    });
+    toast.success("تم حفظ التاجر");
   };
   return (
     <div className="card">
@@ -326,11 +356,28 @@ function MerchantForm() {
             <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={form.supports_physical_cash} onChange={(e) => set("supports_physical_cash", e.target.checked)} /> نقدي</label>
           </div>
         </div>
+        <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
+          <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
+          <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+            <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
+            <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+            <div className="form-group"><label>العملة</label>
+              <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                <option value="EGP">جنيه مصري</option>
+                <option value="USD">دولار أمريكي</option>
+                <option value="LYD">دينار ليبي</option>
+              </select>
+            </div>
+            <div className="form-group"><label>التاريخ</label><input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} /></div>
+            <div className="form-group full"><label>ملاحظات</label><input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} /></div>
+          </div>
+        </div>
       </div>
       <div className="form-footer"><button data-confirm-save="تأكيد حفظ التاجر" className="btn btn-gold" onClick={save}>💾 حفظ التاجر</button></div>
     </div>
   );
 }
+
 
 function CollectForm({ merchants }: { merchants: Merchant[] }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
