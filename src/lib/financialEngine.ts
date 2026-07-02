@@ -310,7 +310,7 @@ export async function getEntityLedger(
 
   // 1) نجيب الصفوف من الجدول الأم اللي تخص هذه الجهة (فقط لجلب IDs).
   const { data: parents, error: pErr } = await supabase
-    .from(parentTable)
+    .from(parentTable as any)
     .select("id")
     .eq(idCol, partyId);
   if (pErr) throw new Error(pErr.message);
@@ -453,7 +453,7 @@ export function useEntityBalance(
   );
   const parentTable = PARTY_TO_SOURCE_TABLE[partyType];
   const idCol = PARTY_ID_COLUMN[partyType];
-  const { rows: parents } = useLive<any>(parentTable);
+  const { rows: parents } = useLive<any>(parentTable as any);
 
   return useMemo(() => {
     if (!partyId) return 0;
@@ -480,7 +480,7 @@ export function useEntityLedger(
   const { rows: splits } = useLive<RawSplit>("payment_splits");
   const parentTable = PARTY_TO_SOURCE_TABLE[partyType];
   const idCol = PARTY_ID_COLUMN[partyType];
-  const { rows: parents } = useLive<any>(parentTable);
+  const { rows: parents } = useLive<any>(parentTable as any);
 
   return useMemo(() => {
     if (!partyId) return [];
