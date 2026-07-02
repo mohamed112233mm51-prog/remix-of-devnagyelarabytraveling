@@ -369,13 +369,15 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
         partyId: expenseRow.id,
         kind: "expense",
         date: form.date,
-        note: form.expense_name,
+        note: form.notes.trim() ? form.notes.trim() : undefined,
+        statement: form.statement.trim() ? form.statement.trim() : undefined,
         splits: engineSplits,
         sourceTable: "expenses",
         sourceId: expenseRow.id,
       });
       if (!res.ok) toast.error("تم حفظ المصروف لكن تعذر تحديث رصيد الخزنة: " + res.error);
     }
+
     if (collectionRows.length) {
       const { error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows);
       if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
