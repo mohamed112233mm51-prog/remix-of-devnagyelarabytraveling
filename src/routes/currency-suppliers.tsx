@@ -213,8 +213,8 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
     phone: supplier?.phone || "",
     notes: supplier?.notes || "",
     status: supplier?.status || "نشط",
-    opening_debit: supplier?.opening_debit ? String(supplier.opening_debit) : "",
-    opening_credit: supplier?.opening_credit ? String(supplier.opening_credit) : "",
+    opening_kind: (Number(supplier?.opening_debit) > 0 ? "debit" : Number(supplier?.opening_credit) > 0 ? "credit" : "") as "" | "debit" | "credit",
+    opening_amount: Number(supplier?.opening_debit) > 0 ? String(supplier?.opening_debit) : Number(supplier?.opening_credit) > 0 ? String(supplier?.opening_credit) : "",
     opening_currency: supplier?.opening_currency || "EGP",
     opening_date: supplier?.opening_date || "",
     opening_note: supplier?.opening_note || "",
@@ -222,8 +222,16 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم المورد مطلوب");
-    const debit = Math.max(0, Number(form.opening_debit) || 0);
-    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const amount = Math.max(0, Number(form.opening_amount) || 0);
+    const hasOpening = !!form.opening_kind || amount > 0;
+    if (hasOpening) {
+      if (!form.opening_kind) return toast.error("اختر نوع الرصيد (مدين / دائن)");
+      if (!(amount > 0)) return toast.error("أدخل مبلغ الرصيد السابق");
+      if (!form.opening_currency) return toast.error("اختر عملة الرصيد السابق");
+      if (!form.opening_date) return toast.error("أدخل تاريخ الرصيد السابق");
+    }
+    const debit = form.opening_kind === "debit" ? amount : 0;
+    const credit = form.opening_kind === "credit" ? amount : 0;
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
