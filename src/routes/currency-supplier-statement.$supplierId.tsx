@@ -345,9 +345,9 @@ function CurrencySupplierStatementPage() {
   );
 }
 
-// Resolve the target cash_box for a currency display name (foreign leg).
-function resolveForeignBox(boxes: CashBox[], currencyDisplay: string): CashBox | null {
-  const code = CURRENCY_CODE[currencyDisplay];
+// Resolve the target cash_box for a currency code (foreign leg).
+function resolveForeignBox(boxes: CashBox[], currencyCode: string): CashBox | null {
+  const code = currencyCode;
   if (!code) return null;
   return (
     boxes.find((b) => b.currency === code && b.is_active !== false && b.name.includes("الرئيسية")) ||
@@ -355,6 +355,7 @@ function resolveForeignBox(boxes: CashBox[], currencyDisplay: string): CashBox |
     null
   );
 }
+
 
 // Resolve the company EGP cash_box for a split method (company_cash | company_instapay).
 function resolveCompanyEgpBox(boxes: CashBox[], method: string): CashBox | null {
