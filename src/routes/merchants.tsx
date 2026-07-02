@@ -93,8 +93,8 @@ function MerchantsPage() {
     totalPaidOut += v.paidOut;
     totalConverted += v.converted;
   }
-  // balance = الوارد من الوكلاء + التحصيل من التجار − الصرف للتجار − الصادر للشركات − التحويلات
-  const balance = totalIncoming + totalCollected - totalPaidOut - totalOutgoing - totalConverted;
+  // balance = الوارد من الوكلاء + الصرف للتاجر − التحصيل من التاجر − الصادر للشركات − التحويلات
+  const balance = totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted;
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
   const companyName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
@@ -183,8 +183,8 @@ function MerchantsPage() {
                   {merchants.length === 0 ? (
                     <tr><td colSpan={10}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
-                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, converted: 0 };
-                    const bal = t.incoming - t.outgoing - t.collected - t.converted;
+                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0 };
+                    const bal = t.incoming + t.paidOut - t.collected - t.outgoing - t.converted;
                     return (
                       <tr key={m.id}>
                         <td data-label="#">{i + 1}</td>
@@ -580,7 +580,7 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدي" | "صرف نقدية" | "تحويل لـ USD";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD";
   statement: string;
   gross: number;
   commission: number;
@@ -641,9 +641,9 @@ function MerchantStatementTab({
         ? `دفع مصروف عبر التاجر${c.note ? ` — ${c.note}` : ""}`
         : (c.note || "تحصيل نقدية من التاجر");
       list.push({
-        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
+        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدية من التاجر",
         statement: label,
-        gross: amt, commission: 0, net: amt, delta: amt,
+        gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
     for (const t of cashMoveTxns) {
@@ -652,9 +652,9 @@ function MerchantStatementTab({
       if (amt <= 0) continue;
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
-        type: "صرف نقدية",
+        type: "صرف نقدية للتاجر",
         statement: (t.note || "صرف نقدية للتاجر"),
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        gross: amt, commission: 0, net: amt, delta: amt,
       });
     }
     for (const r of conversions) {
@@ -676,8 +676,8 @@ function MerchantStatementTab({
     if (to && m.date > to) return false;
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
-    if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
-    if (typeFilter === "cashout" && m.type !== "صرف نقدية") return false;
+    if (typeFilter === "collection" && m.type !== "تحصيل نقدية من التاجر") return false;
+    if (typeFilter === "cashout" && m.type !== "صرف نقدية للتاجر") return false;
     if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
@@ -693,7 +693,7 @@ function MerchantStatementTab({
 
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
-  const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدي").reduce((s, m) => s + m.net, 0);
+  const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدية من التاجر").reduce((s, m) => s + m.net, 0);
   const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
@@ -761,7 +761,7 @@ function MerchantStatementTab({
                   { value: "all", label: "كل الحركات" },
                   { value: "incoming", label: "وارد من وكيل" },
                   { value: "outgoing", label: "صادر لشركة" },
-                  { value: "collection", label: "تحصيل نقدي" },
+                  { value: "collection", label: "تحصيل نقدية من التاجر" },
                   { value: "cashout", label: "صرف نقدية" },
                   { value: "conversion", label: "تحويل لـ USD" },
                 ]}
