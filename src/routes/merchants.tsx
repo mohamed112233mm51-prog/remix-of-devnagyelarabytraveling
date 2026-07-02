@@ -23,6 +23,19 @@ import {
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
+  { key: "n", label: "#" },
+  { key: "date", label: "التاريخ" },
+  { key: "type", label: "نوع الحركة" },
+  { key: "statement", label: "البيان" },
+  { key: "gross", label: "المبلغ" },
+  { key: "commission", label: "النسبة" },
+  { key: "net", label: "الصافي" },
+  { key: "balance", label: "الرصيد الحالي" },
+];
 import { DateInput } from "@/components/inputs/DateInput";
 
 export const Route = createFileRoute("/merchants")({
