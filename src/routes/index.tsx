@@ -473,24 +473,23 @@ function Dashboard() {
       .slice(0, 5);
   }, [txns, agents]);
 
-  // 2. Top issuing companies by services provided
+  // 2. Top issuing companies by services provided — executions only (real executed work)
   const topCompanies = useMemo(() => {
     const byCo = new Map<string, { count: number; services: Map<string, number> }>();
-    for (const ct of cTxns) {
-      if (!ct.company_id) continue;
-      const cur = byCo.get(ct.company_id) || { count: 0, services: new Map() };
-      cur.count += 1;
-      const s = ct.service_type || "—";
-      cur.services.set(s, (cur.services.get(s) || 0) + 1);
-      byCo.set(ct.company_id, cur);
-    }
-    // also include submissions via approval_company_id
-    for (const ap of submissions) {
-      if (!ap.approval_company_id) continue;
-      const cur = byCo.get(ap.approval_company_id) || { count: 0, services: new Map() };
-      cur.count += 1;
-      cur.services.set("موافقة أمنية", (cur.services.get("موافقة أمنية") || 0) + 1);
-      byCo.set(ap.approval_company_id, cur);
+    for (const ex of executedRows) {
+      const services = Array.isArray((ex as any).services) ? (ex as any).services : [];
+      for (const s of services) {
+        if (!s || typeof s !== "object") continue;
+        if ((s as any).kind !== "company") continue;
+        const companyId = (s as any).company_id;
+        if (!companyId) continue;
+        const count = Math.max(1, Math.round(Number((s as any).count) || 1));
+        const label = String((s as any).service_type || (s as any).type || (s as any).name || "—").trim() || "—";
+        const cur = byCo.get(companyId) || { count: 0, services: new Map<string, number>() };
+        cur.count += count;
+        cur.services.set(label, (cur.services.get(label) || 0) + count);
+        byCo.set(companyId, cur);
+      }
     }
     const nameOf = new Map(companies.map((c) => [c.id, c.company_name]));
     return Array.from(byCo.entries())
@@ -501,7 +500,7 @@ function Dashboard() {
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
-  }, [cTxns, submissions, companies]);
+  }, [executedRows, companies]);
 
   // 3. Service type distribution — executions only (real executed work)
   const serviceDist = useMemo(() => {
