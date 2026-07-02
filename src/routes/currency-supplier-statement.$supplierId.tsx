@@ -576,7 +576,7 @@ function TxModal({
       if (balanceErr) return toast.error(balanceErr);
     } else {
       // sell: foreign currency leaves treasury → guard the foreign box.
-      const code = CURRENCY_CODE[foreignCurrency];
+      const code = foreignCurrency;
       const box = boxes.find((b) => b.currency === code && b.is_active !== false);
       const available = Number(box?.balance || 0);
       const sErr = validateSingleOutflow(
