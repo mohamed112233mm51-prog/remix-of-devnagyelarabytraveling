@@ -1079,6 +1079,7 @@ function MerchantStatementTab({
                 {isVisible("commission") && <th className="num-col">النسبة</th>}
                 {isVisible("net") && <th className="num-col">الصافي</th>}
                 {isVisible("balance") && <th className="num-col">الرصيد الحالي</th>}
+                {isVisible("actions") && <th>إجراءات</th>}
               </tr></thead>
               <tbody>
                 {withRunning.length === 0 ? (
@@ -1096,6 +1097,11 @@ function MerchantStatementTab({
                       {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtCurrency(m.commission, m.currency)}</td>}
                       {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtCurrency(Math.abs(m.delta), m.currency)}</td>}
                       {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtCurrency(m.balance, m.currency)}</td>}
+                      {isVisible("actions") && (
+                        <td data-label="إجراءات">
+                          <CancelTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
