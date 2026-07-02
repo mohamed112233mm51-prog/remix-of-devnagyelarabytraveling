@@ -36,5 +36,20 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  {
+    files: ["**/*.{ts,tsx}"],
+    ignores: ["src/lib/financialEngine.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.property.name='from'][arguments.0.value='payment_splits']",
+          message:
+            "ممنوع الوصول المباشر إلى payment_splits. استخدم postMovement / voidMovement / getEntityLedger من src/lib/financialEngine.ts بدلاً من supabase.from('payment_splits').",
+        },
+      ],
+    },
+  },
   eslintPluginPrettier,
 );
