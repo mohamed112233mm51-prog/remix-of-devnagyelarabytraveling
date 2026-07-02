@@ -407,8 +407,9 @@ async function reverseTransaction(r: Tx & { foreignCurrency: string; foreignAmou
         merchant_id: s.merchant_id,
         date: r.tx_date,
         amount: signed,
-        note: `إلغاء ${r.tx_type} عملة`,
+        note: null,
       });
+
     }
   }
 }
