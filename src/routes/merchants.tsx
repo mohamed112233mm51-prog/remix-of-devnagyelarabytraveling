@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, merchantCashGross, merchantCashNet, useLive,
+  fmtDL, fmtCurrency, merchantCashGross, merchantCashNet, useLive,
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
@@ -771,7 +771,8 @@ type StatementMovement = {
   gross: number;
   commission: number;
   net: number;
-  delta: number; // signed effect on merchant balance
+  delta: number; // signed effect on merchant balance (EGP)
+  currency: string; // "EGP" by default; opening rows carry the user-chosen currency
 };
 
 
@@ -802,7 +803,7 @@ function MerchantStatementTab({
       list.push({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: net,
+        gross, commission: gross - net, net, delta: net, currency: "EGP",
       });
     }
     for (const t of outgoingTxns) {
@@ -812,18 +813,19 @@ function MerchantStatementTab({
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: -net,
+        gross, commission: gross - net, net, delta: -net, currency: "EGP",
       });
     }
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
       const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
+      const rowCurrency = isOpening ? String((c as any).opening_currency || "EGP") : "EGP";
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
         type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
-        statement: isOpening ? "رصيد سابق" : String((c as any).statement || "").trim(),
-        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt,
+        statement: isOpening ? `رصيد سابق (${rowCurrency})` : String((c as any).statement || "").trim(),
+        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt, currency: rowCurrency,
       });
     }
 
@@ -835,7 +837,7 @@ function MerchantStatementTab({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
         type: "صرف نقدية للتاجر",
         statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: amt,
+        gross: amt, commission: 0, net: amt, delta: amt, currency: "EGP",
       });
     }
     for (const r of conversions) {
@@ -845,7 +847,7 @@ function MerchantStatementTab({
       list.push({
         id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
         statement: String((r as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        gross: amt, commission: 0, net: amt, delta: -amt, currency: "EGP",
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
@@ -864,10 +866,14 @@ function MerchantStatementTab({
     return true;
   }), [movements, from, to, typeFilter, debouncedSearch]);
 
-  // Running balance starts from 0 then accumulates over filtered movements (chronological).
+  // Running balance is in EGP. Non-EGP opening rows are shown as informational
+  // lines and do NOT roll into the EGP total.
   const withRunning = useMemo(() => {
     let bal = 0;
-    return filtered.map((m) => { bal += m.delta; return { ...m, balance: bal }; });
+    return filtered.map((m) => {
+      if (m.currency === "EGP") bal += m.delta;
+      return { ...m, balance: bal, countsInEgp: m.currency === "EGP" };
+    });
   }, [filtered]);
 
   const { pageRows: pageMovements, Controls, page, pageSize } = usePagination(withRunning, 50);
@@ -909,10 +915,10 @@ function MerchantStatementTab({
     ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: withRunning.map((m, i) => ({
       n: i + 1, date: m.date, type: m.type, statement: m.statement,
-      gross: fmtDL(m.gross), gross__excel: m.gross,
-      commission: fmtDL(m.commission), commission__excel: m.commission,
-      net: fmtDL(m.net), net__excel: m.net,
-      balance: fmtDL(m.balance), balance__excel: m.balance,
+      gross: fmtCurrency(m.gross, m.currency), gross__excel: m.gross,
+      commission: fmtCurrency(m.commission, m.currency), commission__excel: m.commission,
+      net: fmtCurrency(m.net, m.currency), net__excel: m.net,
+      balance: m.countsInEgp ? fmtDL(m.balance) : "—", balance__excel: m.countsInEgp ? m.balance : 0,
     })),
   });
 
@@ -1034,10 +1040,10 @@ function MerchantStatementTab({
                       {isVisible("date") && <td data-label="التاريخ">{m.date}</td>}
                       {isVisible("type") && <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>}
                       {isVisible("statement") && <td data-label="البيان">{m.statement}</td>}
-                      {isVisible("gross") && <td className="num-col" data-label="المبلغ">{fmtDL(m.gross)}</td>}
-                      {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtDL(m.commission)}</td>}
-                      {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtDL(Math.abs(m.delta))}</td>}
-                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(m.balance)}</td>}
+                      {isVisible("gross") && <td className="num-col" data-label="المبلغ">{fmtCurrency(m.gross, m.currency)}</td>}
+                      {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtCurrency(m.commission, m.currency)}</td>}
+                      {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtCurrency(Math.abs(m.delta), m.currency)}</td>}
+                      {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{m.countsInEgp ? fmtDL(m.balance) : "—"}</td>}
                     </tr>
                   );
                 })}

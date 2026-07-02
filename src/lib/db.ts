@@ -620,6 +620,22 @@ export const fmtUSD = (n: number) =>
     maximumFractionDigits: 2,
   }).format(Number(n) || 0)} $`;
 
+// Currency-aware formatter. Accepts either a currency code (EGP/USD/LYD)
+// or an Arabic display name ("جنيه مصري" / "دولار" / "دينار ليبي") and
+// prints the correct symbol without silently falling back to EGP.
+export function fmtCurrency(n: number, currency: string | null | undefined): string {
+  const c = String(currency || "").trim();
+  const code =
+    c === "USD" || c === "دولار" || c === "دولار أمريكي" ? "USD" :
+    c === "LYD" || c === "دينار ليبي" ? "LYD" :
+    c === "EGP" || c === "جنيه مصري" || c === "" ? "EGP" :
+    c;
+  if (code === "USD") return `${fmtNum(n)} $`;
+  if (code === "LYD") return `${fmtNum(n)} د.ل`;
+  if (code === "EGP") return `${fmtNum(n)} ${CURRENCY_LABEL}`;
+  return `${fmtNum(n)} ${code}`;
+}
+
 export const tripValue = (t: Pick<Transaction, "count" | "price">) =>
   Number(t.count || 0) * Number(t.price || 0);
 
