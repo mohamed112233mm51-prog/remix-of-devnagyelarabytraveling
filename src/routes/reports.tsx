@@ -1530,14 +1530,20 @@ function TreasuriesReport() {
   const cols = [
     { header: "اسم الخزينة", key: "name" },
     { header: "العملة", key: "currency" },
+    { header: "الرصيد الافتتاحي", key: "opening" },
     { header: "الرصيد", key: "balance" },
+    { header: "إجراءات", key: "actions" },
   ];
   const rows = active.map((b) => ({
     name: b.name,
     currency: CURRENCY_LABEL[b.currency] || b.currency,
+    opening: fmtNum(Number(b.opening_balance || 0)),
+    opening__excel: Number(b.opening_balance || 0),
     balance: fmtNum(Number(b.balance || 0)),
     balance__excel: Number(b.balance || 0),
   }));
+
+  const [editBox, setEditBox] = useState<CashBoxRow | null>(null);
 
   return (
     <div className="card">
@@ -1556,8 +1562,8 @@ function TreasuriesReport() {
           { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols, rows, fileName: "treasuries-report" })}
-          onPdf={() => exportStatementToPDF({ title: "تقرير الخزائن", columns: cols, rows })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows, fileName: "treasuries-report" })}
+          onPdf={() => exportStatementToPDF({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows })}
         />
         <div className="table-wrap">
           <table className="mobile-cards">
@@ -1569,16 +1575,67 @@ function TreasuriesReport() {
                 <tr key={b.id}>
                   <td className="bold" data-label="الخزينة">{b.name}</td>
                   <td data-label="العملة">{CURRENCY_LABEL[b.currency] || b.currency}</td>
+                  <td data-label="الرصيد الافتتاحي">{fmtNum(Number(b.opening_balance || 0))}</td>
                   <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(b.balance || 0))}</td>
+                  <td data-label="إجراءات">
+                    <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}
       </div>
     </div>
   );
 }
+
+function CashBoxOpeningModal({ box, onClose }: { box: CashBoxRow; onClose: () => void }) {
+  const [amount, setAmount] = useState<string>(box.opening_balance ? String(box.opening_balance) : "");
+  const [date, setDate] = useState<string>(box.opening_date || new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState<string>(box.opening_note || "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await syncCashBoxOpeningBalance(box.id, {
+        amount: Number(amount) || 0,
+        date,
+        note: note.trim() || null,
+      });
+      toast.success("تم تحديث الرصيد الافتتاحي");
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل الحفظ");
+    } finally { setSaving(false); }
+  };
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 480, width: "100%", margin: 0 }}>
+        <div className="card-header"><div className="card-title">🏦 رصيد افتتاحي — {box.name}</div></div>
+        <div className="form-grid">
+          <div className="form-group"><label>القيمة ({CURRENCY_LABEL[box.currency] || box.currency})</label>
+            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="form-group"><label>التاريخ</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="form-group full"><label>ملاحظات</label>
+            <input value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 
 // ---------- CURRENCY SUPPLIERS (buy / sell currency) ----------
 type CurrencySupplierTx = {
