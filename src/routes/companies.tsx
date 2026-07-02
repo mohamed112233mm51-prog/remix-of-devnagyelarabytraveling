@@ -810,8 +810,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       usd_amount: 0,
       payment_currency: "EGP",
       merchant_id: firstMerchant,
-      note: form.note.trim() || null,
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
     };
+
 
     setSaving(true);
     const { data: txnRow, error: txnErr } = await supabase
