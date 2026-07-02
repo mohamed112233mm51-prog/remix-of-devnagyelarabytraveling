@@ -78,14 +78,7 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         ? Math.round(Number(t.merchant_cash_net_amount || 0) || (merchantGross - merchantGross * 0.01))
         : 0;
       const merchantCommission = merchantGross - merchantNet;
-      const sst = (t as any).source_service_type as string | undefined;
-      const isOpening = sst === "opening_debit" || sst === "opening_credit";
-      let description = isOpening
-        ? "رصيد سابق"
-        : (isPayment ? "دفعة من الوكيل" : (t.service_type || t.travel_statement || "خدمة منفذة"));
-      if (!isOpening && isPayment && merchantGross > 0) {
-        description += ` — تاجر الكاش: المستلم ${fmtDL(merchantGross)} − عمولة تاجر الكاش ${fmtDL(merchantCommission)} = صافي ${fmtDL(merchantNet)}`;
-      }
+      const description = String((t as any).statement || "").trim();
       return {
         id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
         date: t.date || "",

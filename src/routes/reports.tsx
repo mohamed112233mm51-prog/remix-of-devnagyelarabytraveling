@@ -1193,6 +1193,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
     { header: "المبلغ", key: "amount" },
     { header: "التاريخ", key: "date" },
     { header: "طريقة الدفع", key: "method" },
+    { header: "البيان", key: "statement" },
     { header: "ملاحظات", key: "notes" },
   ];
   const rows = data.map((e) => ({
@@ -1201,6 +1202,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
     amount: fmtDL(Number(e.amount || 0)),
     date: e.date,
     method: e.payment_method,
+    statement: (e as any).statement || "",
     notes: e.notes || "—",
   }));
   const summary = [
@@ -1270,6 +1272,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
                   <td data-label="المبلغ">{fmtDL(Number(e.amount || 0))}</td>
                   <td data-label="التاريخ">{e.date}</td>
                   <td data-label="طريقة الدفع">{e.payment_method}</td>
+                  <td data-label="البيان">{(e as any).statement || ""}</td>
                   <td data-label="ملاحظات">{e.notes || "—"}</td>
                 </tr>
               ))}
@@ -1390,7 +1393,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
       merchant: isMerchantSrc ? merchantName(r.merchant_id) : "—",
       company: r.company_id ? companyName(r.company_id) : "—",
       service: r.note || "—",
-      note: r.note || "—",
+      note: (r as any).statement || "",
       balance: fmtUSD(x.balance),
       balance__excel: x.balance,
     };
@@ -1631,7 +1634,7 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
     sold_amount: fmtNum(Number(t.sold_amount || 0)),
     sold_amount__excel: Number(t.sold_amount || 0),
     rate: t.exchange_rate ? fmtNum(Number(t.exchange_rate)) : "—",
-    description: t.description || "—",
+    description: t.description || "",
   }));
 
   const kpiItems: { label: string; value: string; tone?: "green" | "red" | "gold" | "" }[] = [

@@ -273,13 +273,6 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     if (balanceErr) return toast.error(balanceErr);
 
 
-    // Build a human-readable summary for back-compat columns
-    const summary = valid
-      .map((r) => {
-        const label = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || r.method;
-        return `${label}: ${fmtDL(Number(r.amount) || 0)}`;
-      })
-      .join(" | ");
     const firstMethodKey = valid[0].method;
     const firstMerchantId = valid.find((r) => r.source === "merchant")?.merchant_id || null;
 

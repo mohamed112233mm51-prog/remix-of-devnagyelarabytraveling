@@ -26,6 +26,7 @@ export type Transaction = {
   date: string;
   destination: string | null;
   travel_statement: string | null;
+  statement?: string | null;
   count: number;
   price: number;
   paid: number;
@@ -230,6 +231,7 @@ export type CompanyTransaction = {
   company_id: string;
   date: string;
   destination: string | null;
+  statement?: string | null;
   count: number;
   price: number;
   trip_value: number;
@@ -272,6 +274,7 @@ export type MerchantCashCollection = {
   date: string;
   amount: number;
   note: string | null;
+  statement?: string | null;
   expense_id?: string | null;
   created_at: string;
 };
@@ -292,6 +295,7 @@ export type InvestorTransaction = {
   amount: number;
   payment_method: string | null;
   note: string | null;
+  statement?: string | null;
   created_at: string;
 };
 
@@ -303,6 +307,7 @@ export type Expense = {
   date: string;
   payment_method: string;
   notes: string | null;
+  statement?: string | null;
   auto_deduct_enabled: boolean;
   auto_deduct_day: number | null;
   funding_source: string | null;
@@ -319,6 +324,7 @@ export type ExpenseDeduction = {
   deduction_date: string;
   amount: number;
   status: string;
+  statement?: string | null;
   funding_source: string | null;
   merchant_id: string | null;
   currency: string;
@@ -336,6 +342,7 @@ export type UsdTreasuryTransaction = {
   exchange_rate: number | null;
   company_id: string | null;
   note: string | null;
+  statement?: string | null;
   source_type: string | null; // 'insta_company' | 'cash_company' | 'merchant_wallet' | 'merchant_physical'
   merchant_id: string | null;
   created_at: string;

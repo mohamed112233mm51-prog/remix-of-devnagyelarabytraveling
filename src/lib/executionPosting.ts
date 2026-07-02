@@ -40,9 +40,6 @@ function safeDate(d: string | null | undefined): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-const travelStatement = (input: ExecutionPostingInput) =>
-  [input.destination, input.date, input.airline].filter(Boolean).join(" - ") || null;
-
 async function deleteLinked(executionId: string) {
   // We use prefix matching: `${executionId}::%`
   const prefix = `${executionId}::`;
@@ -65,7 +62,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
   const date = safeDate(input.date);
   const passenger = input.passengerName?.trim() || null;
   const execNotes = input.executionNotes?.trim() || null;
-  const stmt = travelStatement(input);
 
   const agentRows: any[] = [];
   const companyRows: any[] = [];
@@ -115,7 +111,7 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           agent_id: input.agentId,
           date,
           destination: input.destination ?? undefined,
-          travel_statement: stmt ?? undefined,
+          travel_statement: null,
           service_type: s.service_type,
           count,
           price: agentPrice,
@@ -159,7 +155,7 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
       agentRows.push({
         agent_id: input.agentId, date,
         destination: input.destination ?? undefined,
-        travel_statement: stmt ?? undefined,
+        travel_statement: null,
         service_type: s.service_type, count, price: agentPrice,
         ...buckets,
         merchant_id: s.merchant_id || null,

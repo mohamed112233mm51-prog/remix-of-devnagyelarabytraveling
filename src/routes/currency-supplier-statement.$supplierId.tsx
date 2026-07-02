@@ -181,7 +181,7 @@ function CurrencySupplierStatementPage() {
       amt: r.foreignAmount,
       rate: r.rate,
       egp: r.egpAmount,
-      desc: r.description || "—",
+      desc: r.description || "",
       ...(currencyFilter ? { balance: Number(r.balance || 0) } : {}),
     })),
     fileName: `currency-supplier-${supplier?.name || supplierId}`,
@@ -298,7 +298,7 @@ function CurrencySupplierStatementPage() {
                     {isVisible("amt") && <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>}
                     {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
                     {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
-                    {isVisible("desc") && <td data-label="البيان">{r.description || "—"}</td>}
+                    {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
                     {currencyFilter && isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(r.balance || 0))}</td>}
                     {perm.delete && isVisible("actions") && (
                       <td data-label="إجراءات">

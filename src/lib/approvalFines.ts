@@ -145,7 +145,7 @@ export async function ensureApprovalFines(
       paid: 0,
       total_paid: 0,
       service_type: FINE_LABEL,
-      travel_statement: FINE_LABEL,
+      travel_statement: null,
       note: FINE_LABEL,
       source_service_type: sourceType,
       source_service_id: x.id,

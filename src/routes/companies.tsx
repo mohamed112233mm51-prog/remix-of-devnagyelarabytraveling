@@ -315,15 +315,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
     const serviceValue = Math.round(Number(t.trip_value || 0));
     const payment = Math.round(Number(t.total_paid || 0));
-    const sst = (t as any).source_service_type as string | undefined;
-    const isOpening = sst === "opening_debit" || sst === "opening_credit";
-    const isFine = sst === "submission_fine" || sst === "execution_fine";
     const kind: CompanyLedgerKind = serviceValue > 0 ? "service" : "payment";
-    const description = isOpening
-      ? "رصيد سابق"
-      : isFine
-        ? "غرامة مالية - انتهاء صلاحية الموافقة"
-        : (kind === "payment" ? "دفعة للشركة" : (t.service_type || "خدمة مستحقة"));
+    const description = String((t as any).statement || "").trim();
     return {
       id: t.id || `${t.created_at || "row"}-${t.company_id || "company"}`,
       date: t.date || "",

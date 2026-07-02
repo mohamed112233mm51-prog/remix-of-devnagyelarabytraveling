@@ -422,7 +422,7 @@ function HistoryTab({ collections, merchants }: { collections: MerchantCashColle
                   <td data-label="التاريخ">{c.date}</td>
                   <td className="bold" data-label="التاجر">{merchants.find((m) => m.id === c.merchant_id)?.merchant_name || "—"}</td>
                   <td data-label="المبلغ">{fmtDL(Number(c.amount || 0))}</td>
-                  <td data-label="البيان">{(c as any).statement || "—"}</td>
+                  <td data-label="البيان">{(c as any).statement || ""}</td>
                   <td data-label="ملاحظات">{c.note || "—"}</td>
                 </tr>
               ))}
@@ -468,7 +468,7 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
                   <td data-label="التاريخ">{t.date}</td>
                   <td className="bold" data-label="الوكيل">{agentName(t.agent_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
-                  <td data-label="بيان">{t.travel_statement || t.destination || "—"}</td>
+                  <td data-label="بيان">{(t as any).statement || ""}</td>
                   <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
                   <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
@@ -515,7 +515,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
                   <td data-label="التاريخ">{t.date}</td>
                   <td className="bold" data-label="الشركة">{companyName(t.company_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
-                  <td data-label="بيان">{t.destination || "—"}</td>
+                  <td data-label="بيان">{(t as any).statement || ""}</td>
                   <td data-label="تاجر الكاش">{fmtDL(merchantCashGross(t))}</td>
                   <td data-label="صافي تاجر الكاش بعد الخصم">{fmtDL(merchantCashNet(t))}</td>
                   <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
@@ -623,9 +623,6 @@ function MerchantStatementTab({
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
-  const aName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
-  const cName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
-
   const movements: StatementMovement[] = useMemo(() => {
     if (!merchantId) return [];
     const list: StatementMovement[] = [];
@@ -635,7 +632,7 @@ function MerchantStatementTab({
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       list.push({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
-        statement: `${aName(t.agent_id)} — ${t.travel_statement || t.destination || "—"}`,
+        statement: String((t as any).statement || "").trim(),
         gross, commission: gross - net, net, delta: net,
       });
     }
@@ -645,20 +642,16 @@ function MerchantStatementTab({
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
-        statement: `${cName(t.company_id)} — ${t.destination || "—"}`,
+        statement: String((t as any).statement || "").trim(),
         gross, commission: gross - net, net, delta: -net,
       });
     }
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
-      const isExpense = !!(c as any).expense_id;
-      const label = isExpense
-        ? `دفع مصروف عبر التاجر${c.note ? ` — ${c.note}` : ""}`
-        : (c.note || "تحصيل نقدية من التاجر");
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدية من التاجر",
-        statement: label,
+        statement: String((c as any).statement || "").trim(),
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
@@ -669,7 +662,7 @@ function MerchantStatementTab({
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
         type: "صرف نقدية للتاجر",
-        statement: (t.note || "صرف نقدية للتاجر"),
+        statement: String((t as any).statement || "").trim(),
         gross: amt, commission: 0, net: amt, delta: amt,
       });
     }
@@ -679,7 +672,7 @@ function MerchantStatementTab({
       const amt = Number(r.egp_amount || 0);
       list.push({
         id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
-        statement: `تحويل عملة إلى USD${r.note ? ` — ${r.note}` : ""}`,
+        statement: String((r as any).statement || "").trim(),
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
