@@ -221,12 +221,14 @@ export function AgentPaymentForm({
       partyId: form.agent_id,
       kind: "receipt",
       date: form.date,
-      note: form.note.trim() || description,
+      note: form.note.trim() ? form.note.trim() : undefined,
+      statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
       sourceTable: "transactions",
       sourceId: txnRow.id,
       transactionId: txnRow.id,
     });
+
     if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
 
     try {
