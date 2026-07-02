@@ -650,8 +650,8 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
     supports_cash_wallet: merchant.supports_cash_wallet ?? true,
     supports_physical_cash: merchant.supports_physical_cash ?? true,
     status: m.status || "نشط",
-    opening_debit: m.opening_debit ? String(m.opening_debit) : "",
-    opening_credit: m.opening_credit ? String(m.opening_credit) : "",
+    opening_kind: (Number(m.opening_debit) > 0 ? "debit" : Number(m.opening_credit) > 0 ? "credit" : "") as "" | "debit" | "credit",
+    opening_amount: Number(m.opening_debit) > 0 ? String(m.opening_debit) : Number(m.opening_credit) > 0 ? String(m.opening_credit) : "",
     opening_currency: m.opening_currency || "EGP",
     opening_date: m.opening_date || "",
     opening_note: m.opening_note || "",
@@ -660,9 +660,17 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
+    const amount = Math.max(0, Number(form.opening_amount) || 0);
+    const hasOpening = !!form.opening_kind || amount > 0;
+    if (hasOpening) {
+      if (!form.opening_kind) { return toast.error("اختر نوع الرصيد (مدين / دائن)"); }
+      if (!(amount > 0)) { return toast.error("أدخل مبلغ الرصيد السابق"); }
+      if (!form.opening_currency) { return toast.error("اختر عملة الرصيد السابق"); }
+      if (!form.opening_date) { return toast.error("أدخل تاريخ الرصيد السابق"); }
+    }
     setSaving(true);
-    const debit = Math.max(0, Number(form.opening_debit) || 0);
-    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const debit = form.opening_kind === "debit" ? amount : 0;
+    const credit = form.opening_kind === "credit" ? amount : 0;
     const { error } = await supabase.from("merchants").update({
       merchant_name: form.merchant_name.trim(),
       phone: form.phone.trim() || null,
