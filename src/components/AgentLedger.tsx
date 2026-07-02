@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ExportButton } from "@/components/ExportButton";
 import {
-  badgeFor, fmtDL, fmtNum, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
+  badgeFor, fmtDL, fmtNum, fmtCurrency, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
   useLive, GOVERNORATES,
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
