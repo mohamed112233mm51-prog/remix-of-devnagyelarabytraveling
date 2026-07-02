@@ -26,6 +26,7 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { syncMerchantOpeningBalance } from "@/lib/openingBalance";
 
 const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -288,11 +289,15 @@ function MerchantForm() {
     merchant_name: "", phone: "", whatsapp: "",
     supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
     status: "نشط",
+    opening_debit: "", opening_credit: "",
+    opening_currency: "EGP", opening_date: "", opening_note: "",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
-    const { error } = await supabase.from("merchants").insert({
+    const debit = Math.max(0, Number(form.opening_debit) || 0);
+    const credit = Math.max(0, Number(form.opening_credit) || 0);
+    const { data, error } = await supabase.from("merchants").insert({
       merchant_name: form.merchant_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
@@ -300,9 +305,35 @@ function MerchantForm() {
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
       status: form.status || "نشط",
-    } as any);
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
+      opening_date: form.opening_date || null,
+      opening_note: form.opening_note || null,
+    } as any).select("id").maybeSingle();
     if (error) return toast.error(error.message);
-    setForm({ merchant_name: "", phone: "", whatsapp: "", supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true, status: "نشط" });
+    if (data?.id && (debit > 0 || credit > 0)) {
+      try {
+        await syncMerchantOpeningBalance((data as any).id, {
+          debit, credit,
+          currency: form.opening_currency || "EGP",
+          date: form.opening_date || null,
+          note: form.opening_note || null,
+        });
+      } catch (e: any) {
+        toast.error(String(e?.message || "").includes("ux_merchant_opening_row")
+          ? "يوجد رصيد سابق لهذه الجهة بهذه العملة"
+          : (e?.message || "فشل حفظ الرصيد السابق"));
+      }
+    }
+    setForm({
+      merchant_name: "", phone: "", whatsapp: "",
+      supports_instapay: true, supports_cash_wallet: true, supports_physical_cash: true,
+      status: "نشط",
+      opening_debit: "", opening_credit: "",
+      opening_currency: "EGP", opening_date: "", opening_note: "",
+    });
+    toast.success("تم حفظ التاجر");
   };
   return (
     <div className="card">
@@ -325,11 +356,28 @@ function MerchantForm() {
             <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={form.supports_physical_cash} onChange={(e) => set("supports_physical_cash", e.target.checked)} /> نقدي</label>
           </div>
         </div>
+        <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
+          <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
+          <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+            <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
+            <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+            <div className="form-group"><label>العملة</label>
+              <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                <option value="EGP">جنيه مصري</option>
+                <option value="USD">دولار أمريكي</option>
+                <option value="LYD">دينار ليبي</option>
+              </select>
+            </div>
+            <div className="form-group"><label>التاريخ</label><input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} /></div>
+            <div className="form-group full"><label>ملاحظات</label><input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} /></div>
+          </div>
+        </div>
       </div>
       <div className="form-footer"><button data-confirm-save="تأكيد حفظ التاجر" className="btn btn-gold" onClick={save}>💾 حفظ التاجر</button></div>
     </div>
   );
 }
+
 
 function CollectForm({ merchants }: { merchants: Merchant[] }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -575,6 +623,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
 }
 
 function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose: () => void }) {
+  const m: any = merchant;
   const [form, setForm] = useState({
     merchant_name: merchant.merchant_name || "",
     phone: merchant.phone || "",
@@ -582,13 +631,20 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
     supports_instapay: merchant.supports_instapay ?? true,
     supports_cash_wallet: merchant.supports_cash_wallet ?? true,
     supports_physical_cash: merchant.supports_physical_cash ?? true,
-    status: (merchant as any).status || "نشط",
+    status: m.status || "نشط",
+    opening_debit: m.opening_debit ? String(m.opening_debit) : "",
+    opening_credit: m.opening_credit ? String(m.opening_credit) : "",
+    opening_currency: m.opening_currency || "EGP",
+    opening_date: m.opening_date || "",
+    opening_note: m.opening_note || "",
   });
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
     setSaving(true);
+    const debit = Math.max(0, Number(form.opening_debit) || 0);
+    const credit = Math.max(0, Number(form.opening_credit) || 0);
     const { error } = await supabase.from("merchants").update({
       merchant_name: form.merchant_name.trim(),
       phone: form.phone.trim() || null,
@@ -597,9 +653,27 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
       status: form.status || "نشط",
+      opening_debit: debit,
+      opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
+      opening_date: form.opening_date || null,
+      opening_note: form.opening_note || null,
     } as any).eq("id", merchant.id);
+    if (error) { setSaving(false); return toast.error(error.message); }
+    try {
+      await syncMerchantOpeningBalance(merchant.id, {
+        debit, credit,
+        currency: form.opening_currency || "EGP",
+        date: form.opening_date || null,
+        note: form.opening_note || null,
+      });
+    } catch (e: any) {
+      setSaving(false);
+      return toast.error(String(e?.message || "").includes("ux_merchant_opening_row")
+        ? "يوجد رصيد سابق لهذه الجهة بهذه العملة"
+        : (e?.message || "فشل حفظ الرصيد السابق"));
+    }
     setSaving(false);
-    if (error) return toast.error(error.message);
     onClose();
   };
   if (typeof document === "undefined") return null;
@@ -625,6 +699,22 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
               <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={form.supports_physical_cash} onChange={(e) => set("supports_physical_cash", e.target.checked)} /> نقدي</label>
             </div>
           </div>
+          <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
+            <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق</label>
+            <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+              <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
+              <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+              <div className="form-group"><label>العملة</label>
+                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                  <option value="EGP">جنيه مصري</option>
+                  <option value="USD">دولار أمريكي</option>
+                  <option value="LYD">دينار ليبي</option>
+                </select>
+              </div>
+              <div className="form-group"><label>التاريخ</label><input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} /></div>
+              <div className="form-group full"><label>ملاحظات</label><input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} /></div>
+            </div>
+          </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
@@ -636,17 +726,19 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
   );
 }
 
+
 type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD" | "رصيد سابق";
   statement: string;
   gross: number;
   commission: number;
   net: number;
   delta: number; // signed effect on merchant balance
 };
+
 
 function MerchantStatementTab({
   merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions,
@@ -691,12 +783,15 @@ function MerchantStatementTab({
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
+      const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
       list.push({
-        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدية من التاجر",
-        statement: String((c as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
+        type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
+        statement: isOpening ? "رصيد سابق" : String((c as any).statement || "").trim(),
+        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt,
       });
     }
+
     for (const t of cashMoveTxns) {
       if (t.merchant_id !== merchantId) continue;
       const amt = Math.abs(Number(t.paid || 0));

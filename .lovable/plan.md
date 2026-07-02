@@ -1,46 +1,69 @@
+# خطة: إضافة الرصيد السابق للتجار، موردي العملة، وخزائن الشركة
 
-# خطة التنفيذ
+نُطبّق نفس نموذج ومنطق الرصيد السابق المستخدم حالياً في الوكلاء والشركات (حقول `opening_debit` / `opening_credit` على الجهة + سطر افتتاحي في جدول الحركات) على الجهات الثلاث المطلوبة، مع دعم العملة ومنع التكرار وصلاحية مخصصة.
 
-## 1) حقل "البيان" في كل النماذج المالية
-- إضافة عمود `statement` (nullable text) في جدول `transactions` عبر migration، وإضافته لجدول `payment_splits` إذا لزم للحركات التي لا تمر عبر transactions (سنعتمد فقط على `transactions` + `merchant_cash_collections` + `expenses` + `investor_transactions` + `currency_supplier_transactions` + `agent_payments/company_transactions` — سنراجع كل جدول ونضيف `statement` حيث تُخزن الحركة).
-- تعديل `postMovement` في `src/lib/financialEngine.ts` لقبول `statement` وتمريره لصف الحركة (بدون توليد تلقائي).
-- إضافة input "البيان" في كل النماذج:
-  - `CashMovementForms.tsx` (AgentCashOut / MerchantCashOut / CompanySupply)
-  - `AgentPaymentForm.tsx`
-  - نماذج قبض/دفع الشركة، مورد العملة، تحصيل نقدية، مصروف، تحويل بين خزائن، وأي نموذج مالي آخر.
-- عرض عمود "البيان" في كشوف الحساب (منفصل عن "الملاحظات").
+## 1) قاعدة البيانات (migration واحدة)
 
-## 2) إزالة أي ملاحظات/بيانات تلقائية
-- في جميع استدعاءات `postMovement` وإدراجات الحركات: إزالة قيم مثل `note.trim() || "صرف نقدية للتاجر"`، وجعلها `note.trim() || null` (بدون fallback نصي).
-- إزالة أي `default note` مولّد من نوع الحركة أو اسم الجهة.
+- `merchants`:
+  - `opening_debit numeric default 0`, `opening_credit numeric default 0`
+  - `opening_date date`, `opening_note text`, `opening_currency text default 'EGP'`
+- `currency_suppliers`:
+  - نفس الأعمدة أعلاه
+- `cash_boxes`:
+  - `opening_balance numeric default 0`, `opening_date date`, `opening_note text` (العملة موجودة أصلاً على الخزينة)
+- `merchant_cash_collections`, `currency_supplier_transactions`, `usd_treasury_transactions`:
+  - `source_service_type text`, `source_service_id uuid` (لتعليم السطر الافتتاحي بشكل ثابت مثل ما هو موجود في transactions/company_transactions)
+- فهارس فريدة جزئية لمنع التكرار لنفس الجهة + نفس العملة:
+  - `unique (merchant_id, opening_currency, source_service_type)` where `source_service_type in ('opening_debit','opening_credit')`
+  - نفس الشيء لموردي العملة و للخزائن (`cash_box_id`)
 
-## 3) ملاحظات التنفيذ في الكشوف المرتبطة
-- في `src/routes/executions.tsx`: التأكد من تخزين `notes` كما هي.
-- في `postMovement` عند إنشاء حركات مرتبطة بالتنفيذ (وكيل + شركة): نسخ `execution.notes` إلى `transactions.note` (وليس بيان). بدون توليد نص.
-- كشف الوكيل / الشركة يعرض حقل الملاحظات الحالي — نتأكد أنه يقرأ `notes` الأصلي من التنفيذ.
+## 2) صلاحية جديدة
 
-## 4) إخفاء/إظهار الأعمدة في كل كشوف الحساب القابلة للتصدير
-استخدام المكوّن الحالي `ColumnVisibility` + `usePersistentColumnVisibility` (نفس النمط المستخدم في executions/submissions) في:
-- `src/routes/agent-statement.$agentId.tsx`
-- `src/routes/currency-supplier-statement.$supplierId.tsx`
-- كشف الشركة (`companies.tsx` statement tab)
-- كشف تاجر الكاش (`merchants.tsx` statement tab)
-- كشف الخزائن (`accounts.tsx`)
-- `expenses.tsx`
-- أي جدول قابل للتصدير في `reports.tsx`
+- مفتاح صلاحية واحد: `manage_opening_balance` (إضافة/تعديل/حذف الرصيد السابق لأي جهة).
+- يُستخدم عبر `usePerm` لتفعيل/تعطيل حقول الرصيد السابق في النماذج.
 
-لكل جدول:
-- تعريف `ColumnDef[]`
-- استخدام `usePersistentColumnVisibility(tableKey, columns)`
-- تمرير `visible` للـ `<thead>/<tbody>` (شرط render لكل خلية)
-- تمريره لدالة التصدير (Excel/PDF/Print) لتصفية الأعمدة قبل التصدير
+## 3) `src/lib/openingBalance.ts` (توسيع)
+
+نضيف:
+
+- `syncMerchantOpeningBalance(merchantId, { debit, credit, currency, date, note })`
+  - يمسح السطور القديمة (`source_service_type in (opening_debit, opening_credit)` + `merchant_id`) ثم يُدرج سطراً واحداً أو اثنين في `merchant_cash_collections` بعلامة `service_type: 'رصيد سابق'`.
+- `syncCurrencySupplierOpeningBalance(supplierId, {...})`
+  - نفس الفكرة على `currency_supplier_transactions`.
+- `syncCashBoxOpeningBalance(cashBoxId, { amount, date, note })`
+  - يمسح السطور الافتتاحية القديمة من `usd_treasury_transactions` للخزينة، ثم يُدرج سطر افتتاحي واحد بـ `service_type: 'رصيد افتتاحي'`.
+  - يُحدّث `cash_boxes.balance` ليعكس الرصيد الافتتاحي + مجموع الحركات (أو نعتمد على trigger `apply_payment_split_to_cash_box` القائم إذا أُدرج السطر عبر `payment_splits`).
+
+كل الحركات تمرّ بنفس نمط الجدول المعني، فلا يوجد منطق منفصل.
+
+## 4) واجهة المستخدم
+
+- `src/routes/merchants.tsx`: قسم "رصيد سابق" في نموذج التاجر (مدين/دائن/تاريخ/عملة/ملاحظات) + عرض في بطاقة الملف. ينادي `syncMerchantOpeningBalance` بعد الحفظ.
+- `src/routes/currency-suppliers.tsx`: نفس القسم على مورد العملة.
+- `src/routes/accounts.tsx` (تبويب الخزائن) أو مكان إدارة الخزائن: حقل "رصيد افتتاحي" لكل خزينة + زر تعديل محمي بالصلاحية.
+
+عند وجود رصيد سابق مسبق لنفس الجهة/العملة يظهر التنبيه: **"يوجد رصيد سابق لهذه الجهة بهذه العملة"** — وزر التعديل يعمل فقط لمن يملك `manage_opening_balance`.
+
+## 5) الظهور في كشوف الحساب والتقارير
+
+- كشف حساب التاجر (`src/routes/merchants.tsx` / تبويب الكشف) — يقرأ من `merchant_cash_collections` أصلاً؛ السطر الافتتاحي سيظهر تلقائياً في الأعلى (نفرزه بـ `date` ثم بـ `source_service_type` ليكون أول سطر).
+- كشف مورد العملة (`currency-supplier-statement.$supplierId.tsx`) — نفس المنطق.
+- كشف حركة الخزينة والتقارير (`reports.tsx`) — تتضمّن السطر الافتتاحي تلقائياً لأن مصدر البيانات نفسه.
+- الرصيد الحالي وكروت الداشبورد والتحقق قبل الصرف (`balanceGuard.ts`) — يعتمدون على مجموع الحركات، فيدخل الرصيد الافتتاحي فوراً بدون تعديل إضافي.
+- التصدير (`exportStatement.ts`) — يتبع نفس المصدر، يظهر السطر الافتتاحي.
+
+## 6) الاختبارات اليدوية المطلوبة
+
+1. إدخال رصيد سابق لتاجر (EGP و USD) → ظهور سطرين افتتاحيين، وتغيّر الرصيد.
+2. إدخال رصيد سابق لمورد عملة (LYD) → ظهور في الكشف والرصيد.
+3. إدخال رصيد افتتاحي لخزينة → ظهور في كشف الخزينة، تقرير الخزائن، كارت الداشبورد، ومنع الصرف عند تجاوز الرصيد.
+4. محاولة إدخال رصيد سابق ثانٍ لنفس الجهة/العملة → رسالة "يوجد رصيد سابق…" ورفض الإدراج.
+5. مستخدم بدون صلاحية `manage_opening_balance` → الحقول للقراءة فقط.
 
 ## تفاصيل تقنية
-- Migration واحد يضيف `statement text` لجداول الحركات المالية ذات الصلة، مع GRANT بدون تغيير.
-- لا تغييرات تصميمية على الجداول أو النماذج بخلاف إضافة صف/عمود "البيان".
-- كل التعديلات backward-compatible: `statement` و`note` يمكن أن يكونا NULL.
 
-## نطاق كبير — تأكيد
-هذا العمل يمس ~15 ملف نموذج + ~8 صفحات كشوف + migration واحد. سأنفذها بالترتيب: (أ) migration و engine، (ب) النماذج، (ج) الكشوف + column visibility.
+- كل الحركات الافتتاحية تُعلّم بـ `source_service_type = 'opening_debit' | 'opening_credit' | 'opening'` و `source_service_id = <entity id>`، بنفس الاصطلاح المستخدم للوكلاء والشركات.
+- منع التكرار على مستوى قاعدة البيانات عبر unique index جزئي، مع رسالة خطأ عربية في الواجهة.
+- لا توجد حركات مالية جديدة خارج جداول الحركات القائمة — لا حاجة لتوسيع `financialEngine.postMovement` لهذه المرحلة، لأن `cash_boxes.balance` يُحدّث عبر trigger موجود، والتجار/موردي العملة يعتمدون على مجموع صفوف الجداول الخاصة بهم.
 
-هل أبدأ التنفيذ الكامل، أم تفضل تقسيمه على مراحل (مثلاً: البند 4 أولاً لأنه الأسهل والأكثر وضوحاً، ثم 1+2، ثم 3)؟
+هل تريد المتابعة بهذا التنفيذ؟
