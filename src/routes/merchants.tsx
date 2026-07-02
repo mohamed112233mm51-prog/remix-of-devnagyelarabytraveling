@@ -276,8 +276,6 @@ function MerchantsPage() {
           cashMoveTxns={cashMoveTxns}
           collections={collections}
           conversions={usdRows}
-          agents={agents}
-          companies={companies}
         />
       )}
     </div>
