@@ -773,6 +773,13 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
             <div className="form-group"><label>تاريخ الرصيد السابق</label>
               <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
             </div>
+            <div className="form-group"><label>العملة</label>
+              <select value={opening.currency || "EGP"} onChange={(e) => setOp("currency", e.target.value)}>
+                <option value="EGP">جنيه مصري</option>
+                <option value="USD">دولار أمريكي</option>
+                <option value="LYD">دينار ليبي</option>
+              </select>
+            </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
               <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
             </div>
