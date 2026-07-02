@@ -915,10 +915,10 @@ function MerchantStatementTab({
     ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: withRunning.map((m, i) => ({
       n: i + 1, date: m.date, type: m.type, statement: m.statement,
-      gross: fmtDL(m.gross), gross__excel: m.gross,
-      commission: fmtDL(m.commission), commission__excel: m.commission,
-      net: fmtDL(m.net), net__excel: m.net,
-      balance: fmtDL(m.balance), balance__excel: m.balance,
+      gross: fmtCurrency(m.gross, m.currency), gross__excel: m.gross,
+      commission: fmtCurrency(m.commission, m.currency), commission__excel: m.commission,
+      net: fmtCurrency(m.net, m.currency), net__excel: m.net,
+      balance: m.countsInEgp ? fmtDL(m.balance) : "—", balance__excel: m.countsInEgp ? m.balance : 0,
     })),
   });
 
