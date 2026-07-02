@@ -63,7 +63,7 @@ export async function postMerchantCashOutToCompanyCounterparts(args: {
         currency,
         source_service_type: "merchant_cash_out_to_company",
         source_service_id: args.companyTransactionId,
-      } as any)
+      })
       .select("id")
       .single();
     if (txnErr || !txn) return { ok: false, error: txnErr?.message || "تعذر حفظ قيد تاجر الكاش" };
@@ -89,8 +89,8 @@ export async function postMerchantCashOutToCompanyCounterparts(args: {
       note: note || undefined,
       splits: [split],
       sourceTable: "transactions",
-      sourceId: (txn as any).id,
-      transactionId: (txn as any).id,
+      sourceId: txn.id,
+      transactionId: txn.id,
     });
     if (!res.ok) return { ok: false, error: res.error || "تعذر حفظ قيد تاجر الكاش" };
   }
