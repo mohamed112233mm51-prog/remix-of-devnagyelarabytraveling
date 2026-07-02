@@ -183,8 +183,8 @@ function MerchantsPage() {
                   {merchants.length === 0 ? (
                     <tr><td colSpan={10}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
-                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, converted: 0 };
-                    const bal = t.incoming - t.outgoing - t.collected - t.converted;
+                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0 };
+                    const bal = t.incoming + t.paidOut - t.collected - t.outgoing - t.converted;
                     return (
                       <tr key={m.id}>
                         <td data-label="#">{i + 1}</td>
