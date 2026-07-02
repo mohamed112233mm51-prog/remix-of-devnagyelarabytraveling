@@ -680,6 +680,13 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
               <div className="form-group"><label>تاريخ الرصيد السابق</label>
                 <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
               </div>
+              <div className="form-group"><label>العملة</label>
+                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
+                  <option value="EGP">جنيه مصري</option>
+                  <option value="USD">دولار أمريكي</option>
+                  <option value="LYD">دينار ليبي</option>
+                </select>
+              </div>
               <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
                 <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
               </div>
