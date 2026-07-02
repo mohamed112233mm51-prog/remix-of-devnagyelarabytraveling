@@ -138,10 +138,10 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("executions")
-        .select("id, created_at, operation_status")
+        .select("id, created_at, operation_status, submission_id, services")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null }[];
+      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null; submission_id: string | null; services: any }[];
     },
   });
   const executionMetrics = executionMetricsQuery.data ?? [];
@@ -149,6 +149,7 @@ function Dashboard() {
     () => executionMetrics.filter((e) => (e.operation_status || "").trim() === "منفذ"),
     [executionMetrics],
   );
+
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
   const { rows: currencyTxns } = useLive<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any }>("currency_supplier_transactions");
@@ -502,30 +503,54 @@ function Dashboard() {
       .slice(0, 5);
   }, [cTxns, submissions, companies]);
 
-  // 3. Service type distribution — from real submissions + executions
+  // 3. Service type distribution — aggregated from real services arrays on submissions + executions
   const serviceDist = useMemo(() => {
-    const targets = ["تذاكر طيران", "موافقة أمنية"];
-    const counts: Record<string, number> = { "تذاكر طيران": 0, "موافقة أمنية": 0 };
-    for (const ct of cTxns) {
-      const s = ct.service_type || "";
-      if (targets.includes(s)) counts[s] += 1;
-    }
-    for (const ex of executedRows) counts["تذاكر طيران"] += 1;
-    for (const sub of submissions) counts["موافقة أمنية"] += 1;
-    const total = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
-    const palette: Record<string, string> = {
-      "تذاكر طيران": NAVY,
-      "موافقة أمنية": GOLD,
+    const counts = new Map<string, number>();
+    const bump = (label: string, n = 1) => {
+      const k = label.trim();
+      if (!k) return;
+      counts.set(k, (counts.get(k) || 0) + n);
     };
-    return targets.map((k) => ({ label: k, value: counts[k], pct: Math.round((counts[k] / total) * 100), color: palette[k] }));
-  }, [cTxns, executedRows, submissions]);
+    const extract = (svc: any) => {
+      if (!Array.isArray(svc)) return;
+      for (const s of svc) {
+        if (!s) continue;
+        if (typeof s === "string") { bump(s); continue; }
+        const label = String((s as any).service_type || (s as any).type || (s as any).name || "").trim();
+        if (!label) continue;
+        const count = Math.max(1, Math.round(Number((s as any).count) || 1));
+        bump(label, count);
+      }
+    };
+    for (const sub of submissions) extract((sub as any).services);
+    for (const ex of executionMetrics) extract((ex as any).services);
+    const palette = [NAVY, GOLD, "#0EA5E9", "#10B981", "#EF4444", "#8B5CF6", "#F59E0B", "#14B8A6"];
+    const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((s, [, n]) => s + n, 0) || 1;
+    return entries.map(([label, value], i) => ({
+      label,
+      value,
+      pct: Math.round((value / total) * 100),
+      color: palette[i % palette.length],
+    }));
+  }, [submissions, executionMetrics]);
   const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
 
-  // 4. Travel authorities — from real submissions (approval_authority)
+  // 4. Travel authorities — real submissions + executions (via submission_id link)
   const topAuthorities = useMemo(() => {
+    const authOfSub = new Map<string, string>();
+    for (const s of submissions) {
+      const a = ((s as any).approval_authority || "").trim();
+      if (a) authOfSub.set(s.id, a);
+    }
     const byAuth = new Map<string, number>();
-    for (const f of submissions) {
-      const a = (f.approval_authority || "").trim();
+    for (const s of submissions) {
+      const a = ((s as any).approval_authority || "").trim();
+      if (!a) continue;
+      byAuth.set(a, (byAuth.get(a) || 0) + 1);
+    }
+    for (const ex of executionMetrics) {
+      const a = ex.submission_id ? authOfSub.get(ex.submission_id) : null;
       if (!a) continue;
       byAuth.set(a, (byAuth.get(a) || 0) + 1);
     }
@@ -534,8 +559,9 @@ function Dashboard() {
       .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [submissions]);
+  }, [submissions, executionMetrics]);
   const authMax = Math.max(...topAuthorities.map((a) => a.count), 1);
+
 
   // Pending submissions — operation status not finalized
   const pendingApprovals = submissions
