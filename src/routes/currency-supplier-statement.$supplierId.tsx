@@ -164,7 +164,7 @@ function CurrencySupplierStatementPage() {
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
     subtitle: currencyFilter ? `العملة: ${currencyFilter}` : undefined,
     summary: summary.map((s) => ({ label: s.currency, value: `${fmtNum(s.net)}` })),
-    columns: [
+    columns: ([
       { header: "التاريخ", key: "date" },
       { header: "نوع الحركة", key: "type" },
       { header: "العملة", key: "cur" },
@@ -173,7 +173,7 @@ function CurrencySupplierStatementPage() {
       { header: "القيمة بالجنيه", key: "egp" },
       { header: "البيان", key: "desc" },
       ...(currencyFilter ? [{ header: `الرصيد (${currencyFilter})`, key: "balance" }] : []),
-    ],
+    ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: rowsWithBalance.map((r) => ({
       date: r.tx_date,
       type: r.tx_type,
