@@ -143,23 +143,27 @@ function CurrencySupplierStatementPage() {
   }, [filtered]);
 
   const rowsWithBalance = useMemo(() => {
-    let running = 0;
+    // Per-currency running balance. Each currency accumulates independently
+    // so EGP/USD/LYD never mix into a single total.
+    const bals = new Map<string, number>();
     return filtered.map((t) => {
-      let delta = 0;
-      if (currencyFilter) {
-        if (t.bought_currency === currencyFilter) delta += Number(t.bought_amount || 0);
-        if (t.sold_currency === currencyFilter) delta -= Number(t.sold_amount || 0);
-      }
-      running += delta;
-      // Foreign currency + amount + rate (for display in unified columns)
       const isForeignBought = t.tx_type === "شراء عملة";
       const foreignCurrency = isForeignBought ? t.bought_currency : t.sold_currency;
       const foreignAmount = isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
       const egpAmount = isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
       const rate = Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0);
-      return { ...t, balance: currencyFilter ? running : null, foreignCurrency, foreignAmount, egpAmount, rate };
+      // Effect on the row's currency (bought increases, sold decreases).
+      let delta = 0;
+      if (t.bought_currency === t.sold_currency) {
+        delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
+      } else {
+        delta = isForeignBought ? Number(t.bought_amount || 0) : -Number(t.sold_amount || 0);
+      }
+      const next = (bals.get(foreignCurrency) || 0) + delta;
+      bals.set(foreignCurrency, next);
+      return { ...t, balance: next, foreignCurrency, foreignAmount, egpAmount, rate };
     });
-  }, [filtered, currencyFilter]);
+  }, [filtered]);
 
   const exportData = (): StatementExportData => ({
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
