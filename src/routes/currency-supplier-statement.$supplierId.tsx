@@ -177,7 +177,7 @@ function CurrencySupplierStatementPage() {
       { header: "سعر الصرف", key: "rate" },
       { header: "القيمة بالجنيه", key: "egp" },
       { header: "البيان", key: "desc" },
-      ...(currencyFilter ? [{ header: `الرصيد (${currencyFilter})`, key: "balance" }] : []),
+      { header: "الرصيد الحالي (حسب العملة)", key: "balance" },
     ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: rowsWithBalance.map((r) => ({
       date: r.tx_date,
@@ -187,7 +187,7 @@ function CurrencySupplierStatementPage() {
       rate: r.rate,
       egp: r.egpAmount,
       desc: r.description || "",
-      ...(currencyFilter ? { balance: Number(r.balance || 0) } : {}),
+      balance: Number(r.balance || 0),
     })),
     fileName: `currency-supplier-${supplier?.name || supplierId}`,
   });
