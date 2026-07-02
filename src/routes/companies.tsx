@@ -524,11 +524,20 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
               ))}
             </tbody>
             <tfoot className="totals-foot">
-              <tr>
-                <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
-                  الإجمالي — مدين: {fmtDL(totalServices)} · دائن: {fmtDL(totalPaid)} · الصافي: {fmtDL(Math.abs(balance))} ({accountStatus})
-                </td>
-              </tr>
+              {byCurrency.map((b) => (
+                <tr key={`totals-${b.currency}`}>
+                  <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                    الإجمالي ({b.currency}) — مدين: {fmtCurrency(b.debit, b.currency)} · دائن: {fmtCurrency(b.credit, b.currency)} · الصافي: {fmtCurrency(Math.abs(b.net), b.currency)} ({b.net > 0 ? "مدين عليه" : b.net < 0 ? "دائن له" : "متوازن"})
+                  </td>
+                </tr>
+              ))}
+              {byCurrency.length === 0 && (
+                <tr>
+                  <td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length} style={{ fontWeight: 800 }}>
+                    الإجمالي — مدين: {fmtDL(0)} · دائن: {fmtDL(0)} · الصافي: {fmtDL(0)} ({accountStatus})
+                  </td>
+                </tr>
+              )}
             </tfoot>
           </table>
         </div>
