@@ -288,6 +288,9 @@ export type Database = {
         Row: {
           arabic_tourism_cash_amount: number
           arabic_tourism_cash_net_amount: number
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           cash_amount: number
           company_id: string
           count: number
@@ -319,6 +322,9 @@ export type Database = {
         Insert: {
           arabic_tourism_cash_amount?: number
           arabic_tourism_cash_net_amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_amount?: number
           company_id: string
           count?: number
@@ -350,6 +356,9 @@ export type Database = {
         Update: {
           arabic_tourism_cash_amount?: number
           arabic_tourism_cash_net_amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_amount?: number
           company_id?: string
           count?: number
@@ -384,6 +393,9 @@ export type Database = {
         Row: {
           bought_amount: number
           bought_currency: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -404,6 +416,9 @@ export type Database = {
         Insert: {
           bought_amount?: number
           bought_currency: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -424,6 +439,9 @@ export type Database = {
         Update: {
           bought_amount?: number
           bought_currency?: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -577,6 +595,9 @@ export type Database = {
       expense_deductions: {
         Row: {
           amount: number
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           currency: string
           deduction_date: string
@@ -592,6 +613,9 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           currency?: string
           deduction_date?: string
@@ -607,6 +631,9 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           currency?: string
           deduction_date?: string
@@ -679,6 +706,51 @@ export type Database = {
           payment_method?: string
           statement?: string | null
           usd_amount?: number
+        }
+        Relationships: []
+      }
+      financial_audit_log: {
+        Row: {
+          action: string
+          after_value: Json | null
+          before_value: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          performed_at: string
+          performed_by: string | null
+          reason: string | null
+          record_id: string
+          reference_no: string | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          after_value?: Json | null
+          before_value?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          reason?: string | null
+          record_id: string
+          reference_no?: string | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          after_value?: Json | null
+          before_value?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          performed_at?: string
+          performed_by?: string | null
+          reason?: string | null
+          record_id?: string
+          reference_no?: string | null
+          table_name?: string
         }
         Relationships: []
       }
@@ -835,6 +907,9 @@ export type Database = {
       merchant_cash_collections: {
         Row: {
           amount: number
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           date: string
           expense_id: string | null
@@ -849,6 +924,9 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           date?: string
           expense_id?: string | null
@@ -863,6 +941,9 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           date?: string
           expense_id?: string | null
@@ -934,6 +1015,9 @@ export type Database = {
       payment_splits: {
         Row: {
           amount: number
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           cash_box_id: string | null
           created_at: string
           currency: string
@@ -952,6 +1036,9 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_box_id?: string | null
           created_at?: string
           currency: string
@@ -970,6 +1057,9 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_box_id?: string | null
           created_at?: string
           currency?: string
@@ -1149,6 +1239,9 @@ export type Database = {
           agent_id: string | null
           arabic_tourism_cash_amount: number
           arabic_tourism_cash_net_amount: number
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           cash_amount: number
           count: number
           created_at: string
@@ -1179,6 +1272,9 @@ export type Database = {
           agent_id?: string | null
           arabic_tourism_cash_amount?: number
           arabic_tourism_cash_net_amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_amount?: number
           count?: number
           created_at?: string
@@ -1209,6 +1305,9 @@ export type Database = {
           agent_id?: string | null
           arabic_tourism_cash_amount?: number
           arabic_tourism_cash_net_amount?: number
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_amount?: number
           count?: number
           created_at?: string
@@ -1247,6 +1346,9 @@ export type Database = {
       }
       usd_treasury_transactions: {
         Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           cash_box_id: string | null
           company_id: string | null
           created_at: string
@@ -1266,6 +1368,9 @@ export type Database = {
           usd_amount: number
         }
         Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_box_id?: string | null
           company_id?: string | null
           created_at?: string
@@ -1285,6 +1390,9 @@ export type Database = {
           usd_amount?: number
         }
         Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           cash_box_id?: string | null
           company_id?: string | null
           created_at?: string
