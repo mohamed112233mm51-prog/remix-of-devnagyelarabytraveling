@@ -27,6 +27,8 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { syncMerchantOpeningBalance } from "@/lib/openingBalance";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import type { CancellableTable } from "@/lib/financialEngine.cancel";
 
 const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -37,6 +39,7 @@ const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "commission", label: "النسبة" },
   { key: "net", label: "الصافي" },
   { key: "balance", label: "الرصيد الحالي" },
+  { key: "actions", label: "إجراءات" },
 ];
 import { DateInput } from "@/components/inputs/DateInput";
 
@@ -795,6 +798,8 @@ type StatementMovement = {
   net: number;
   delta: number; // signed effect on merchant balance (EGP)
   currency: string; // "EGP" by default; opening rows carry the user-chosen currency
+  sourceTable: CancellableTable;
+  sourceId: string;
 };
 
 
@@ -820,6 +825,7 @@ function MerchantStatementTab({
     const list: StatementMovement[] = [];
     for (const t of incomingTxns) {
       if (t.merchant_id !== merchantId) continue;
+      if ((t as any).cancelled_at) continue;
       const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
@@ -827,10 +833,12 @@ function MerchantStatementTab({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: String((t as any).statement || "").trim(),
         gross, commission: gross - net, net, delta: net, currency: cur,
+        sourceTable: "transactions", sourceId: t.id,
       });
     }
     for (const t of outgoingTxns) {
       if (t.merchant_id !== merchantId) continue;
+      if ((t as any).cancelled_at) continue;
       const gross = merchantCompanyOutflowAmount(t);
       const net = merchantCompanyOutflowAmount(t);
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
@@ -838,10 +846,12 @@ function MerchantStatementTab({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: String((t as any).statement || "").trim(),
         gross, commission: gross - net, net, delta: -net, currency: cur,
+        sourceTable: "company_transactions", sourceId: t.id,
       });
     }
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
+      if ((c as any).cancelled_at) continue;
       const amt = Number(c.amount || 0);
       const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
       const rowCurrency = normalizeCurrency(isOpening ? (c as any).opening_currency : (c as any).currency);
@@ -850,11 +860,13 @@ function MerchantStatementTab({
         type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
         statement: isOpening ? `رصيد سابق (${rowCurrency})` : String((c as any).statement || "").trim(),
         gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt, currency: rowCurrency,
+        sourceTable: "merchant_cash_collections", sourceId: c.id,
       });
     }
 
     for (const t of cashMoveTxns) {
       if (t.merchant_id !== merchantId) continue;
+      if ((t as any).cancelled_at) continue;
       const amt = Math.abs(Number(t.paid || 0));
       if (amt <= 0) continue;
       const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
@@ -867,16 +879,19 @@ function MerchantStatementTab({
         type,
         statement: String((t as any).statement || "").trim(),
         gross: amt, commission: 0, net: amt, delta, currency: cur,
+        sourceTable: "transactions", sourceId: t.id,
       });
     }
     for (const r of conversions) {
       if (r.type !== "conversion" || r.merchant_id !== merchantId) continue;
+      if ((r as any).cancelled_at) continue;
       if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
       const amt = Number(r.egp_amount || 0);
       list.push({
         id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
         statement: String((r as any).statement || "").trim(),
         gross: amt, commission: 0, net: amt, delta: -amt, currency: "EGP",
+        sourceTable: "usd_treasury_transactions", sourceId: r.id,
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
@@ -1064,6 +1079,7 @@ function MerchantStatementTab({
                 {isVisible("commission") && <th className="num-col">النسبة</th>}
                 {isVisible("net") && <th className="num-col">الصافي</th>}
                 {isVisible("balance") && <th className="num-col">الرصيد الحالي</th>}
+                {isVisible("actions") && <th>إجراءات</th>}
               </tr></thead>
               <tbody>
                 {withRunning.length === 0 ? (
@@ -1081,6 +1097,11 @@ function MerchantStatementTab({
                       {isVisible("commission") && <td className="num-col" data-label="النسبة">{fmtCurrency(m.commission, m.currency)}</td>}
                       {isVisible("net") && <td className="num-col" data-label="الصافي" style={{ color, fontWeight: 700 }}>{m.delta >= 0 ? "+" : "-"}{fmtCurrency(Math.abs(m.delta), m.currency)}</td>}
                       {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtCurrency(m.balance, m.currency)}</td>}
+                      {isVisible("actions") && (
+                        <td data-label="إجراءات">
+                          <CancelTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
