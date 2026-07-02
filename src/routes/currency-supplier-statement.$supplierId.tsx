@@ -603,9 +603,10 @@ function TxModal({
       supplier_id: supplierId,
       tx_date: txDate,
       tx_type: kind,
-      bought_currency: isBuy ? foreignCurrency : EGP_LABEL,
+      bought_currency: isBuy ? foreignCurrency : EGP_CODE,
       bought_amount: isBuy ? a : e,
-      sold_currency: isBuy ? EGP_LABEL : foreignCurrency,
+      sold_currency: isBuy ? EGP_CODE : foreignCurrency,
+
       sold_amount: isBuy ? e : a,
       exchange_rate: r,
       description: description.trim() || null,
