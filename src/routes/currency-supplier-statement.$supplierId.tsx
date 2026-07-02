@@ -230,6 +230,7 @@ function CurrencySupplierStatementPage() {
             </button>
           </>
         )}
+        <ColumnVisibility columns={CS_COLUMNS.filter((c) => c.key !== "balance" || currencyFilter).filter((c) => c.key !== "actions" || perm.delete)} visible={visible} onChange={setVisible} />
         {perm.export && <ExportButton getData={exportData} />}
       </div>
 
