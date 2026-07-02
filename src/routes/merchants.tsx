@@ -789,25 +789,33 @@ function MerchantStatementTab({
         </div>
       </div>
 
-      <div className="account-summary kpi-rich">
+      <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
-          <span className="kpi-icon"><ArrowDownCircle size={20} /></span>
-          <div className="kpi-text"><div className="label">إجمالي الوارد</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
         </div>
         <div className="sum-box gold">
-          <span className="kpi-icon"><Banknote size={20} /></span>
-          <div className="kpi-text"><div className="label">إجمالي التحصيل</div><div className="val">{fmtDL(totalCollected)}</div></div>
+          <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">النقدية المحصلة من التاجر</div><div className="val">{fmtDL(totalCollected)}</div></div>
         </div>
         <div className="sum-box red">
-          <span className="kpi-icon"><Percent size={20} /></span>
+          <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+        </div>
+        <div className="sum-box red">
+          <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتاجر</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
+        </div>
+        <div className="sum-box">
+          <span className="kpi-icon"><Percent size={20} strokeWidth={2} /></span>
           <div className="kpi-text"><div className="label">نسبة التاجر (1%)</div><div className="val">{fmtDL(totalCommission)}</div></div>
         </div>
         <div className="sum-box hero">
-          <span className="kpi-icon"><Wallet size={22} /></span>
+          <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
             <div className="label">صافي الرصيد</div>
             <div className="val">{fmtDL(finalBalance)}</div>
-            <div className="kpi-sub">الرصيد بعد كل الحركات المعروضة</div>
+            <div className="kpi-sub">= الوارد + المصروف − المحصل − الصادر − التحويلات</div>
           </div>
         </div>
       </div>
