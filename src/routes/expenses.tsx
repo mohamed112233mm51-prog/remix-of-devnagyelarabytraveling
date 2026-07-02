@@ -312,7 +312,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     // Insert one record per split into the appropriate ledger
     const deductionRows: any[] = [];
     const collectionRows: any[] = [];
-    const splitRows: any[] = [];
+    const engineSplits: MovementSplit[] = [];
     for (const r of valid) {
       const a = Number(r.amount) || 0;
       if (r.method === "company_instapay" || r.method === "company_cash") {
@@ -324,27 +324,22 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           funding_source: r.method === "company_instapay" ? "insta_company" : "cash_company",
           currency: r.currency || "EGP",
         });
-        // Also post to payment_splits so cash_boxes.balance stays authoritative.
         const boxName = r.method === "company_instapay" ? "خزينة إنستا الشركة" : "خزينة نقدي الشركة";
         const box = cashBoxes.find((b) => b.name === boxName && b.currency === (r.currency || "EGP"));
-        splitRows.push({
-          transaction_id: null,
+        engineSplits.push({
           method: r.method === "company_instapay" ? "إنستاباي" : "نقدي",
-          currency: r.currency || "EGP",
-          cash_box_id: box?.id || null,
+          currency: (r.currency || "EGP") as any,
+          cashBoxId: box?.id || null,
           amount: a,
           direction: "out",
-          source_table: "expenses",
-          source_id: expenseRow.id,
-          gross_amount: a,
-          merchant_commission_rate: 0,
-          merchant_commission_amount: 0,
-          net_amount: a,
-          exchange_rate: 1,
-          egp_equivalent: (r.currency || "EGP") === "EGP" ? a : 0,
+          grossAmount: a,
+          commissionRate: 0,
+          commissionAmount: 0,
+          netAmount: a,
+          exchangeRate: 1,
+          egpEquivalent: (r.currency || "EGP") === "EGP" ? a : 0,
         });
       } else if (r.source === "merchant" && r.merchant_id) {
-        // No 1% commission on expenses: deduct full amount from merchant balance.
         const methodLabel = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || "تاجر";
         collectionRows.push({
           expense_id: expenseRow.id,
@@ -359,14 +354,24 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       const { error: e2 } = await supabase.from("expense_deductions").insert(deductionRows);
       if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل بعض الخصومات: " + e2.message);
     }
-    if (splitRows.length) {
-      const { error: eSp } = await supabase.from("payment_splits").insert(splitRows);
-      if (eSp) toast.error("تم حفظ المصروف لكن تعذر تحديث رصيد الخزنة: " + eSp.message);
+    if (engineSplits.length) {
+      const res = await postMovement({
+        partyType: "expense",
+        partyId: expenseRow.id,
+        kind: "expense",
+        date: form.date,
+        note: form.expense_name,
+        splits: engineSplits,
+        sourceTable: "expenses",
+        sourceId: expenseRow.id,
+      });
+      if (!res.ok) toast.error("تم حفظ المصروف لكن تعذر تحديث رصيد الخزنة: " + res.error);
     }
     if (collectionRows.length) {
       const { error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows);
       if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
     }
+
 
 
     toast.success("تم حفظ المصروف وخصمه من مصادر الدفع");
