@@ -694,6 +694,7 @@ function MerchantStatementTab({
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
   const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدية من التاجر").reduce((s, m) => s + m.net, 0);
+  const totalPaidOut = filtered.filter((m) => m.type === "صرف نقدية للتاجر").reduce((s, m) => s + m.net, 0);
   const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
