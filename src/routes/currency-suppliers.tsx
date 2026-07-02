@@ -10,6 +10,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { Search, UserPlus, FileText, Coins, ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { syncCurrencySupplierOpeningBalance } from "@/lib/openingBalance";
 
 export const Route = createFileRoute("/currency-suppliers")({
   component: () => <AppErrorBoundary><CurrencySuppliersPage /></AppErrorBoundary>,
@@ -22,7 +23,13 @@ type Supplier = {
   notes: string | null;
   status: string;
   created_at: string;
+  opening_debit?: number;
+  opening_credit?: number;
+  opening_currency?: string;
+  opening_date?: string | null;
+  opening_note?: string | null;
 };
+
 
 function CurrencySuppliersPage() {
   const perm = usePerm("currency_suppliers");
