@@ -866,10 +866,14 @@ function MerchantStatementTab({
     return true;
   }), [movements, from, to, typeFilter, debouncedSearch]);
 
-  // Running balance starts from 0 then accumulates over filtered movements (chronological).
+  // Running balance is in EGP. Non-EGP opening rows are shown as informational
+  // lines and do NOT roll into the EGP total.
   const withRunning = useMemo(() => {
     let bal = 0;
-    return filtered.map((m) => { bal += m.delta; return { ...m, balance: bal }; });
+    return filtered.map((m) => {
+      if (m.currency === "EGP") bal += m.delta;
+      return { ...m, balance: bal, countsInEgp: m.currency === "EGP" };
+    });
   }, [filtered]);
 
   const { pageRows: pageMovements, Controls, page, pageSize } = usePagination(withRunning, 50);
