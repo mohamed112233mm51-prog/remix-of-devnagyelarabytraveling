@@ -16,6 +16,7 @@ export type OpeningBalanceInput = {
   credit: number;
   date: string | null; // YYYY-MM-DD
   note: string | null;
+  currency?: string;   // defaults to EGP
 };
 
 function todayISO(): string {
