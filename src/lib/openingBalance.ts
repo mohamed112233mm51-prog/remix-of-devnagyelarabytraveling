@@ -31,12 +31,15 @@ export async function syncAgentOpeningBalance(agentId: string, op: OpeningBalanc
   const date = op.date || todayISO();
   const debit = Math.max(0, Number(op.debit) || 0);
   const credit = Math.max(0, Number(op.credit) || 0);
+  const currency = (op.currency || "EGP").trim() || "EGP";
 
-  // Always wipe any prior opening rows for this agent so editing never duplicates.
+  // Wipe prior opening rows for this agent in THIS currency only, so
+  // opening balances in other currencies survive.
   await supabase
     .from("transactions")
     .delete()
     .eq("agent_id", agentId)
+    .eq("currency", currency)
     .in("source_service_type", ["opening_debit", "opening_credit"] as any);
 
   const rows: any[] = [];
@@ -64,6 +67,7 @@ export async function syncAgentOpeningBalance(agentId: string, op: OpeningBalanc
       note: op.note || null,
       source_service_type: "opening_debit",
       source_service_id: agentId,
+      currency,
     });
   }
   if (credit > 0) {
@@ -90,6 +94,7 @@ export async function syncAgentOpeningBalance(agentId: string, op: OpeningBalanc
       note: op.note || null,
       source_service_type: "opening_credit",
       source_service_id: agentId,
+      currency,
     });
   }
   if (rows.length) {
