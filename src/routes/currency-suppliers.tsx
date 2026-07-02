@@ -286,8 +286,17 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
           <div className="form-group full" style={{ gridColumn: "1 / -1", marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
             <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
             <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-              <div className="form-group"><label>مدين (له علينا)</label><input type="number" min={0} value={form.opening_debit} onChange={(e) => set("opening_debit", e.target.value)} /></div>
-              <div className="form-group"><label>دائن (علينا له)</label><input type="number" min={0} value={form.opening_credit} onChange={(e) => set("opening_credit", e.target.value)} /></div>
+              <div className="form-group full">
+                <label>نوع الرصيد</label>
+                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="cs-open-kind" checked={form.opening_kind === "debit"} onChange={() => set("opening_kind", "debit")} /> مدين</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="cs-open-kind" checked={form.opening_kind === "credit"} onChange={() => set("opening_kind", "credit")} /> دائن</label>
+                  {form.opening_kind && (
+                    <button type="button" className="action-btn" onClick={() => set("opening_kind", "")}>مسح</button>
+                  )}
+                </div>
+              </div>
+              <div className="form-group"><label>المبلغ</label><input type="number" min={0} value={form.opening_amount} onChange={(e) => set("opening_amount", e.target.value)} /></div>
               <div className="form-group"><label>العملة</label>
                 <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
                   <option value="EGP">جنيه مصري</option>
