@@ -161,6 +161,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
     amount: "",
     payment_method: "",
     note: "",
+    statement: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
@@ -173,10 +174,11 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       date: form.date,
       amount: Math.round(Number(form.amount || 0)),
       payment_method: form.payment_method,
-      note: form.note || null,
-    });
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
+    } as any);
     if (error) return toast.error(error.message);
-    setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payment_method: "", note: "" });
+    setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payment_method: "", note: "", statement: "" });
   };
   return (
     <div className="card">
@@ -190,12 +192,14 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
         <div className="form-group"><label>{methodLabel}</label>
           <SearchableSelect value={form.payment_method} onChange={(v) => set("payment_method", v)} options={PAYMENT_METHODS as unknown as string[]} placeholder="اختر..." />
         </div>
+        <div className="form-group full"><label>البيان</label><input value={form.statement} onChange={(e) => set("statement", e.target.value)} /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
       <div className="form-footer"><button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button></div>
     </div>
   );
 }
+
 
 function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransaction[]; investorName: (id: string) => string; investors: Investor[] }) {
   const [investorId, setInvestorId] = useState("");
