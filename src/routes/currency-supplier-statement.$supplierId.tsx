@@ -134,6 +134,7 @@ function CurrencySupplierStatementPage() {
         sold_currency: normalizeCurrency(t.sold_currency),
       }))
       .filter((t) => {
+        if ((t as any).cancelled_at) return false;
         if (from && t.tx_date < from) return false;
         if (to && t.tx_date > to) return false;
         if (typeFilter && t.tx_type !== typeFilter) return false;
