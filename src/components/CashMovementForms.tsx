@@ -287,7 +287,9 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       partyId: companyId,
       kind: "receipt",
       date,
-      note: note.trim() || "توريد نقدية",
+      note: note.trim() ? note.trim() : undefined,
+      statement: statement.trim() ? statement.trim() : undefined,
+
       splits: engineSplits,
       sourceTable: "company_transactions",
       sourceId: txn.id,
