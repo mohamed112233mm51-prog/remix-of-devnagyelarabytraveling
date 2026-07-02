@@ -17,6 +17,7 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
+import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 
 import {
   PaymentSplits,
