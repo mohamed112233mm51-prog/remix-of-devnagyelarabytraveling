@@ -322,6 +322,7 @@ function MerchantForm() {
 function CollectForm({ merchants }: { merchants: Merchant[] }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
+  const [statement, setStatement] = useState("");
   const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
     const r = newPaymentSplitRow();
     r.source = "merchant";
@@ -343,17 +344,14 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         return toast.error("كل سطر يجب أن يكون لتاجر محدد");
       }
     }
-    const rows = valid.map((r) => {
-      const m = merchants.find((x) => x.id === r.merchant_id);
-      const methodLabel = methodsForSplit(r, merchants).find((x) => x.key === r.method)?.label || r.method;
-      const parts = [methodLabel, note].filter(Boolean);
-      return {
-        merchant_id: r.merchant_id,
-        date,
-        amount: Number(r.amount || 0),
-        note: parts.join(" - ") || (m ? `تحصيل من ${m.merchant_name}` : null),
-      };
-    });
+    const rows = valid.map((r) => ({
+      merchant_id: r.merchant_id,
+      date,
+      amount: Number(r.amount || 0),
+      // بدون توليد تلقائي — يظل فارغاً إذا لم يكتب المستخدم شيئاً
+      note: note.trim() ? note.trim() : null,
+      statement: statement.trim() ? statement.trim() : null,
+    }));
     const { error } = await supabase.from("merchant_cash_collections").insert(rows);
     if (error) return toast.error(error.message);
     toast.success("تم حفظ التحصيل");
@@ -362,6 +360,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
     r.method = "";
     setSplits([r]);
     setNote("");
+    setStatement("");
   };
 
   return (
@@ -369,6 +368,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       <div className="card-header"><div className="card-title">💵 تحصيل نقدية من تاجر</div></div>
       <div className="form-grid">
         <div className="form-group"><label>التاريخ</label><DateInput value={date} onChange={setDate} defaultToday /></div>
+        <div className="form-group full"><label>البيان</label><input value={statement} onChange={(e) => setStatement(e.target.value)} /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
       </div>
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" hideSource />
@@ -379,6 +379,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
     </div>
   );
 }
+
 
 function HistoryTab({ collections, merchants }: { collections: MerchantCashCollection[]; merchants: Merchant[] }) {
   const [from, setFrom] = useState("");
@@ -398,22 +399,24 @@ function HistoryTab({ collections, merchants }: { collections: MerchantCashColle
         </div>
         <div className="table-wrap">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>التاجر</th><th>المبلغ</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>التاجر</th><th>المبلغ</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={5}><div className="empty"><div className="empty-text">لا توجد تحصيلات بعد</div></div></td></tr>
+                <tr><td colSpan={6}><div className="empty"><div className="empty-text">لا توجد تحصيلات بعد</div></div></td></tr>
               ) : filtered.map((c, i) => (
                 <tr key={c.id}>
                   <td data-label="#">{i + 1}</td>
                   <td data-label="التاريخ">{c.date}</td>
                   <td className="bold" data-label="التاجر">{merchants.find((m) => m.id === c.merchant_id)?.merchant_name || "—"}</td>
                   <td data-label="المبلغ">{fmtDL(Number(c.amount || 0))}</td>
+                  <td data-label="البيان">{(c as any).statement || "—"}</td>
                   <td data-label="ملاحظات">{c.note || "—"}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={3}>الإجمالي</td><td>{fmtDL(total)}</td><td></td></tr></tfoot>
+            <tfoot><tr><td colSpan={3}>الإجمالي</td><td>{fmtDL(total)}</td><td colSpan={2}></td></tr></tfoot>
           </table>
+
         </div>
       </div>
     </div>

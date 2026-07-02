@@ -161,6 +161,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
     amount: "",
     payment_method: "",
     note: "",
+    statement: "",
   });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
@@ -173,10 +174,11 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       date: form.date,
       amount: Math.round(Number(form.amount || 0)),
       payment_method: form.payment_method,
-      note: form.note || null,
-    });
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
+    } as any);
     if (error) return toast.error(error.message);
-    setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payment_method: "", note: "" });
+    setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payment_method: "", note: "", statement: "" });
   };
   return (
     <div className="card">
@@ -190,12 +192,14 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
         <div className="form-group"><label>{methodLabel}</label>
           <SearchableSelect value={form.payment_method} onChange={(v) => set("payment_method", v)} options={PAYMENT_METHODS as unknown as string[]} placeholder="اختر..." />
         </div>
+        <div className="form-group full"><label>البيان</label><input value={form.statement} onChange={(e) => set("statement", e.target.value)} /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
       <div className="form-footer"><button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button></div>
     </div>
   );
 }
+
 
 function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransaction[]; investorName: (id: string) => string; investors: Investor[] }) {
   const [investorId, setInvestorId] = useState("");
@@ -218,10 +222,10 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
         </div>
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية للمستثمرين بعد</div></div></td></tr>
+                <tr><td colSpan={8}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية للمستثمرين بعد</div></div></td></tr>
               ) : filtered.map((t, i) => {
                 const isDep = t.transaction_type === "توريد نقدية";
                 return (
@@ -232,10 +236,12 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
                     <td data-label="نوع الحركة">{t.transaction_type}</td>
                     <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
                     <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
+                    <td data-label="البيان">{(t as any).statement || "—"}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
                 );
               })}
+
             </tbody>
           </table>
         </div>
@@ -323,10 +329,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
 
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6}><div className="empty"><div className="empty-icon">🧾</div><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
+                <tr><td colSpan={7}><div className="empty"><div className="empty-icon">🧾</div><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
               ) : filtered.map((t, i) => {
                 const isDep = t.transaction_type === "توريد نقدية";
                 return (
@@ -336,6 +342,7 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
                     <td className="bold" data-label="نوع الحركة">{t.transaction_type}</td>
                     <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
                     <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
+                    <td data-label="البيان">{(t as any).statement || "—"}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
                 );
@@ -344,9 +351,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
                 <tr style={{ background: "#F8FAFC", fontWeight: 800 }}>
                   <td colSpan={3} data-label="الإجمالي">الإجمالي</td>
                   <td className="num-col" data-label="الرصيد" style={{ color: balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(balance)}</td>
-                  <td colSpan={2}></td>
+                  <td colSpan={3}></td>
                 </tr>
               )}
+
             </tbody>
           </table>
         </div>

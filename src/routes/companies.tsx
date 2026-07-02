@@ -745,7 +745,9 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     count: "0",
     price: "",
     note: "",
+    statement: "",
   });
+
   const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
 
@@ -808,8 +810,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       usd_amount: 0,
       payment_currency: "EGP",
       merchant_id: firstMerchant,
-      note: form.note.trim() || null,
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
     };
+
 
     setSaving(true);
     const { data: txnRow, error: txnErr } = await supabase
@@ -850,8 +854,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       partyId: form.company_id,
       kind: "payment",
       date: form.date,
-      note: form.note.trim() || undefined,
+      note: form.note.trim() ? form.note.trim() : undefined,
+      statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
+
       sourceTable: "company_transactions",
       sourceId: txnRow.id,
       transactionId: txnRow.id,
@@ -889,9 +895,13 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         <div className="form-group"><label>قيمة الرحلة (محسوبة)</label>
           <input type="number" value={tripValueNum || ""} disabled readOnly />
         </div>
-        <div className="form-group full"><label>ملاحظات</label>
-          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="اختياري" />
+        <div className="form-group full"><label>البيان</label>
+          <input value={form.statement} onChange={(e) => set("statement", e.target.value)} placeholder="" />
         </div>
+        <div className="form-group full"><label>ملاحظات</label>
+          <input value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="" />
+        </div>
+
       </div>
 
       <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} />
@@ -922,9 +932,11 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
     exchange_rate: "",
     date: new Date().toISOString().slice(0, 10),
     note: "",
+    statement: "",
     source_type: "" as ConvertSource,
     merchant_id: "",
   });
+
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const egp = Number(form.egp_amount || 0);
@@ -997,8 +1009,10 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
       exchange_rate: rate,
       source_type: form.source_type,
       merchant_id: needsMerchant ? form.merchant_id : null,
-      note: form.note || null,
-    });
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
+    } as any);
+
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("تم تحويل المبلغ إلى الخزينة الدولارية");
@@ -1042,9 +1056,13 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
           <div className="form-group"><label>التاريخ</label>
             <DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday />
           </div>
+          <div className="form-group full"><label>البيان</label>
+            <input value={form.statement} onChange={(e) => set("statement", e.target.value)} />
+          </div>
           <div className="form-group full"><label>ملاحظات</label>
             <input value={form.note} onChange={(e) => set("note", e.target.value)} />
           </div>
+
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>

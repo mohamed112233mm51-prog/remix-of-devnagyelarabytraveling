@@ -185,10 +185,12 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     amount: initial ? String(initial.amount) : "",
     date: initial?.date || new Date().toISOString().slice(0, 10),
     notes: initial?.notes || "",
+    statement: (initial as any)?.statement || "",
     auto_deduct_enabled: initial?.auto_deduct_enabled || false,
     auto_deduct_day: initial?.auto_deduct_day ? String(initial.auto_deduct_day) : "1",
   });
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
+
 
   // Multi-payment splits (new): only used on insert (edit keeps original record)
   const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
@@ -239,7 +241,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           expense_type: form.expense_type,
           amount: totalAmount,
           date: form.date,
-          notes: form.notes || null,
+          notes: form.notes.trim() ? form.notes.trim() : null,
+          statement: form.statement.trim() ? form.statement.trim() : null,
+
           auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
           auto_deduct_day:
             form.expense_type === "ثابت" && form.auto_deduct_enabled
@@ -285,7 +289,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       amount: totalAmount,
       date: form.date,
       payment_method: valid.length > 1 ? "متعدد" : (methodsForSplit(valid[0], merchants).find((m) => m.key === firstMethodKey)?.label || "نقدي"),
-      notes: form.notes ? `${form.notes}\n${summary}` : summary,
+      // لا نضيف ملخص طرق الدفع تلقائياً — يبقى كما كتبه المستخدم فقط
+      notes: form.notes.trim() ? form.notes.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
       auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
       auto_deduct_day:
         form.expense_type === "ثابت" && form.auto_deduct_enabled
@@ -304,6 +310,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       usd_amount: 0,
       exchange_rate: null,
     };
+
 
     const { data: expenseRow, error } = await supabase
       .from("expenses").insert(expensePayload).select("id").single();
@@ -340,15 +347,17 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           egpEquivalent: (r.currency || "EGP") === "EGP" ? a : 0,
         });
       } else if (r.source === "merchant" && r.merchant_id) {
-        const methodLabel = methodsForSplit(r, merchants).find((m) => m.key === r.method)?.label || "تاجر";
         collectionRows.push({
           expense_id: expenseRow.id,
           merchant_id: r.merchant_id,
           date: form.date,
           amount: a,
-          note: `مصروف (${methodLabel}): ${form.expense_name}`,
+          // بدون توليد تلقائي — ننقل بيان/ملاحظات المستخدم كما هي
+          note: form.notes.trim() ? form.notes.trim() : null,
+          statement: form.statement.trim() ? form.statement.trim() : null,
         });
       }
+
     }
     if (deductionRows.length) {
       const { error: e2 } = await supabase.from("expense_deductions").insert(deductionRows);
@@ -360,13 +369,15 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
         partyId: expenseRow.id,
         kind: "expense",
         date: form.date,
-        note: form.expense_name,
+        note: form.notes.trim() ? form.notes.trim() : undefined,
+        statement: form.statement.trim() ? form.statement.trim() : undefined,
         splits: engineSplits,
         sourceTable: "expenses",
         sourceId: expenseRow.id,
       });
       if (!res.ok) toast.error("تم حفظ المصروف لكن تعذر تحديث رصيد الخزنة: " + res.error);
     }
+
     if (collectionRows.length) {
       const { error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows);
       if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
@@ -381,9 +392,11 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       amount: "",
       date: new Date().toISOString().slice(0, 10),
       notes: "",
+      statement: "",
       auto_deduct_enabled: false,
       auto_deduct_day: "1",
     });
+
     setSplits([newPaymentSplitRow()]);
     onDone?.();
   };
@@ -400,7 +413,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           <NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} />
         </div>
         <div className="form-group"><label>التاريخ</label><DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday /></div>
-        <div className="form-group full"><label>البيان / ملاحظات</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+        <div className="form-group full"><label>البيان</label><input value={form.statement} onChange={(e) => set("statement", e.target.value)} /></div>
+        <div className="form-group full"><label>ملاحظات</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+
 
         {form.expense_type === "ثابت" && (
           <>
@@ -518,10 +533,10 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
       <div className="card-body">
         <div className="table-wrap">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
             <tbody>
               {expenses.length === 0 ? (
-                <tr><td colSpan={8}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
+                <tr><td colSpan={9}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
               ) : expenses.map((e, i) => (
                 <tr key={e.id}>
                   <td data-label="#">{i + 1}</td>
@@ -537,11 +552,13 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
                   </td>
                   <td data-label="التاريخ">{e.date}</td>
                   <td data-label="وسائل الدفع" style={{ fontSize: 12, lineHeight: 1.6 }}>{paymentsCell(e)}</td>
-                  <td data-label="البيان">{e.notes || "—"}</td>
+                  <td data-label="البيان">{(e as any).statement || "—"}</td>
+                  <td data-label="ملاحظات">{e.notes || "—"}</td>
                   <td data-label="إجراءات">
                     <button className="btn" onClick={() => setEdit(e)}>تعديل</button>
                     <button className="btn" onClick={() => del(e.id)} style={{ marginInlineStart: 6 }}>حذف</button>
                   </td>
+
                 </tr>
               ))}
             </tbody>
