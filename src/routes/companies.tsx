@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
