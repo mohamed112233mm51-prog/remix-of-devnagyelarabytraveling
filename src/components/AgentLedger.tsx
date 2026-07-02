@@ -89,6 +89,7 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
         credit,
         paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
         note: t.note || "—",
+        currency: String((t as any).currency || "EGP"),
         raw: t,
       };
     });
