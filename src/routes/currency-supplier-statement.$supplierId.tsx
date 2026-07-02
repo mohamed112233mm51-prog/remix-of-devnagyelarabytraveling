@@ -304,7 +304,7 @@ function CurrencySupplierStatementPage() {
                     {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
                     {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
-                    {currencyFilter && isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(r.balance || 0))}</td>}
+                    {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.foreignCurrency)}</td>}
                     {perm.delete && isVisible("actions") && (
                       <td data-label="إجراءات">
                         <button className="action-btn" onClick={async () => {
