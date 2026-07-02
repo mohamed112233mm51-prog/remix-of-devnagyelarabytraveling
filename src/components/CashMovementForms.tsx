@@ -268,8 +268,10 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
         total_paid: -total,
         payment_currency: "EGP",
         merchant_id: firstMerchant,
-        note: note.trim() || "توريد نقدية",
+        note: note.trim() ? note.trim() : null,
+        statement: statement.trim() ? statement.trim() : null,
         source_service_type: "company_cash_supply",
+
       } as any)
       .select("id")
       .single();
