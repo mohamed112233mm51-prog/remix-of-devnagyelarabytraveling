@@ -68,7 +68,9 @@ export function AgentPaymentForm({
     count: "0",
     price: "",
     note: "",
+    statement: "",
   });
+
   const [splits, setSplits, clearSplits] = usePersistentState<SplitRow[]>(`${draftKey}:splits`, [newRow()]);
   const [saving, setSaving] = useState(false);
   const resetDraft = () => { clearForm(); clearSplits(); };
