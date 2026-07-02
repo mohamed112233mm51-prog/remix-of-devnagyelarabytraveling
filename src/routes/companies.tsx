@@ -854,8 +854,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       partyId: form.company_id,
       kind: "payment",
       date: form.date,
-      note: form.note.trim() || undefined,
+      note: form.note.trim() ? form.note.trim() : undefined,
+      statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
+
       sourceTable: "company_transactions",
       sourceId: txnRow.id,
       transactionId: txnRow.id,
