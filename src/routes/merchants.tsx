@@ -126,7 +126,7 @@ function MerchantsPage() {
     [outgoingTxns, merchantCompanyOutSourceIds],
   );
   const cashMoveTxns = useMemo(
-    () => txns.filter((t) => t.merchant_id && (t.source_service_type === "merchant_cash_out" || t.source_service_type === "merchant_cash_out_to_company")),
+    () => txns.filter((t) => t.merchant_id && (t.source_service_type === "merchant_cash_out" || t.source_service_type === "merchant_cash_out_to_company" || t.source_service_type === "merchant_cash_out_to_agent")),
     [txns],
   );
 
