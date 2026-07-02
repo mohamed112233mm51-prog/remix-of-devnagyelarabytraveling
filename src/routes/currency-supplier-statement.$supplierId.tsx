@@ -660,7 +660,7 @@ function TxModal({
           </div>
           <div className="form-group"><label>{isBuy ? "العملة المشتراة" : "العملة المباعة"}</label>
             <select value={foreignCurrency} onChange={(e) => setForeignCurrency(e.target.value)}>
-              {FOREIGN_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {FOREIGN_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>)}
             </select>
           </div>
           <div className="form-group"><label>{isBuy ? "مبلغ العملة المشتراة" : "مبلغ العملة المباعة"}</label>
