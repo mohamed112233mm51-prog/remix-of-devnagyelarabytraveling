@@ -831,20 +831,21 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       else if (r.method === "merchant_wallet") methodLabel = "تاجر الكاش تاجر";
       else if (r.method === "merchant_physical") methodLabel = "نقدي تاجر";
 
-      // Company payment = outflow: negate amount so cash_boxes trigger subtracts.
-      const signed = -a;
       return {
         transaction_id: txnRow.id,
         method: methodLabel,
         currency: r.currency,
         cash_box_id: cashBoxId,
-        amount: signed,
+        amount: a,
+        direction: "out",
+        source_table: "company_transactions",
+        source_id: txnRow.id,
         gross_amount: a,
         merchant_commission_rate: 0,
         merchant_commission_amount: 0,
         net_amount: a,
         exchange_rate: 1,
-        egp_equivalent: r.currency === "EGP" ? signed : 0,
+        egp_equivalent: r.currency === "EGP" ? a : 0,
       };
     });
     if (splitRecords.length) {
