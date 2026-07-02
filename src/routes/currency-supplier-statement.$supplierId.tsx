@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtNum, fmtCurrency, type Merchant } from "@/lib/db";
+import { fmtNum, fmtCurrency, normalizeCurrency, type Merchant } from "@/lib/db";
 import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
