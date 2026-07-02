@@ -926,7 +926,7 @@ function MerchantStatementTab({
       gross: fmtCurrency(m.gross, m.currency), gross__excel: m.gross,
       commission: fmtCurrency(m.commission, m.currency), commission__excel: m.commission,
       net: fmtCurrency(m.net, m.currency), net__excel: m.net,
-      balance: m.countsInEgp ? fmtDL(m.balance) : "—", balance__excel: m.countsInEgp ? m.balance : 0,
+      balance: fmtCurrency(m.balance, m.currency), balance__excel: m.balance,
     })),
   });
 
