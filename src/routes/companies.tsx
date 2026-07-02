@@ -561,6 +561,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     status: company.status || "نشط",
     opening_debit: c.opening_debit ? String(c.opening_debit) : "",
     opening_credit: c.opening_credit ? String(c.opening_credit) : "",
+    opening_currency: c.opening_currency || "EGP",
     opening_date: c.opening_date || "",
     opening_note: c.opening_note || "",
   });
