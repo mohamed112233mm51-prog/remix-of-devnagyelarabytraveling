@@ -289,7 +289,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       amount: totalAmount,
       date: form.date,
       payment_method: valid.length > 1 ? "متعدد" : (methodsForSplit(valid[0], merchants).find((m) => m.key === firstMethodKey)?.label || "نقدي"),
-      notes: form.notes ? `${form.notes}\n${summary}` : summary,
+      // لا نضيف ملخص طرق الدفع تلقائياً — يبقى كما كتبه المستخدم فقط
+      notes: form.notes.trim() ? form.notes.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
       auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
       auto_deduct_day:
         form.expense_type === "ثابت" && form.auto_deduct_enabled
@@ -308,6 +310,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       usd_amount: 0,
       exchange_rate: null,
     };
+
 
     const { data: expenseRow, error } = await supabase
       .from("expenses").insert(expensePayload).select("id").single();
