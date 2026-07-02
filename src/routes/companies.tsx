@@ -730,6 +730,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
       status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
+      opening_currency: opening.currency || "EGP",
       opening_date: opening.date || null,
       opening_note: opening.note.trim() || null,
     } as any).select("id").single();
@@ -737,6 +738,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
     if (data?.id && (debit > 0 || credit > 0)) {
       await syncCompanyOpeningBalance(data.id, {
         debit, credit,
+        currency: opening.currency || "EGP",
         date: opening.date || null,
         note: opening.note.trim() || null,
       });
