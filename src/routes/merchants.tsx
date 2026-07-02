@@ -641,6 +641,17 @@ function MerchantStatementTab({
         gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
+    for (const t of cashMoveTxns) {
+      if (t.merchant_id !== merchantId) continue;
+      const amt = Math.abs(Number(t.paid || 0));
+      if (amt <= 0) continue;
+      list.push({
+        id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
+        type: "صرف نقدية",
+        statement: (t.note || "صرف نقدية للتاجر"),
+        gross: amt, commission: 0, net: amt, delta: -amt,
+      });
+    }
     for (const r of conversions) {
       if (r.type !== "conversion" || r.merchant_id !== merchantId) continue;
       if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
@@ -652,7 +663,7 @@ function MerchantStatementTab({
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
-  }, [merchantId, incomingTxns, outgoingTxns, collections, conversions, agents, companies]);
+  }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, agents, companies]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
