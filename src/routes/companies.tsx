@@ -52,6 +52,7 @@ const COMPANY_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "balance", label: "الرصيد الحالي" },
   { key: "method", label: "وسيلة الدفع" },
   { key: "note", label: "ملاحظات" },
+  { key: "actions", label: "إجراءات" },
 ];
 import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
