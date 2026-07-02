@@ -577,7 +577,7 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
     (!from || t.date >= from) &&
     (!to || t.date <= to)
   );
-  const total = filtered.reduce((s, t) => s + merchantCompanyOutflowAmount(t), 0);
+  const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (تاجر الكاش)</div></div>

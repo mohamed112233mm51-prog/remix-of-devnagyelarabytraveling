@@ -74,6 +74,10 @@ export function useSourceBalances(): SourceBalances {
     const merchantBalance = new Map<string, number>();
     for (const t of agentTxns) {
       if (!t.merchant_id) continue;
+      if (t.source_service_type === "merchant_cash_out") {
+        merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) + Math.abs(Number(t.paid || 0)));
+        continue;
+      }
       const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
       merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) + net);
     }
