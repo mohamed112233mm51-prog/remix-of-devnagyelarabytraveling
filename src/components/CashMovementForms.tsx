@@ -146,9 +146,10 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
   const [merchantId, setMerchantId, clearMerchantId] = usePersistentState<string>(`${draftKey}:merchantId`, initialMerchantId || "");
   const [date, setDate, clearDate] = usePersistentState<string>(`${draftKey}:date`, new Date().toISOString().slice(0, 10));
   const [note, setNote, clearNote] = usePersistentState<string>(`${draftKey}:note`, "");
+  const [statement, setStatement, clearStatement] = usePersistentState<string>(`${draftKey}:statement`, "");
   const [splits, setSplits, clearSplits] = usePersistentState<PaymentSplitRow[]>(`${draftKey}:splits`, [newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
-  const resetDraft = () => { clearMerchantId(); clearDate(); clearNote(); clearSplits(); };
+  const resetDraft = () => { clearMerchantId(); clearDate(); clearNote(); clearStatement(); clearSplits(); };
 
   const total = useMemo(() => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0), [splits]);
 
@@ -166,7 +167,8 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
       partyId: merchantId,
       kind: "payment",
       date,
-      note: note.trim() || "صرف نقدية للتاجر",
+      note: note.trim() ? note.trim() : undefined,
+      statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
     });
     setSaving(false);
@@ -176,6 +178,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     resetDraft();
     onDone?.();
   };
+
 
 
   return (
