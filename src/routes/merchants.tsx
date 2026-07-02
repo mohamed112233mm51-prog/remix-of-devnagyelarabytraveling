@@ -641,9 +641,9 @@ function MerchantStatementTab({
         ? `دفع مصروف عبر التاجر${c.note ? ` — ${c.note}` : ""}`
         : (c.note || "تحصيل نقدية من التاجر");
       list.push({
-        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدي",
+        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "", type: "تحصيل نقدية من التاجر",
         statement: label,
-        gross: amt, commission: 0, net: amt, delta: amt,
+        gross: amt, commission: 0, net: amt, delta: -amt,
       });
     }
     for (const t of cashMoveTxns) {
@@ -652,9 +652,9 @@ function MerchantStatementTab({
       if (amt <= 0) continue;
       list.push({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
-        type: "صرف نقدية",
+        type: "صرف نقدية للتاجر",
         statement: (t.note || "صرف نقدية للتاجر"),
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        gross: amt, commission: 0, net: amt, delta: amt,
       });
     }
     for (const r of conversions) {
