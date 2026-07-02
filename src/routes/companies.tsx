@@ -580,12 +580,14 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
       status: form.status || "نشط",
       opening_debit: debit,
       opening_credit: credit,
+      opening_currency: form.opening_currency || "EGP",
       opening_date: form.opening_date || null,
       opening_note: form.opening_note.trim() || null,
     } as any).eq("id", company.id);
     if (error) { setSaving(false); return toast.error(error.message); }
     await syncCompanyOpeningBalance(company.id, {
       debit, credit,
+      currency: form.opening_currency || "EGP",
       date: form.opening_date || null,
       note: form.opening_note.trim() || null,
     });
