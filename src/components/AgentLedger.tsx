@@ -191,8 +191,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   }, [ledger]);
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
-    methodLabel: e.paymentMethod + (e.raw.merchant_id && merchantName(e.raw.merchant_id) ? ` — ${merchantName(e.raw.merchant_id)}` : ""),
-  })), [ledgerWithBalance, merchants]);
+    methodLabel: e.paymentMethod,
+  })), [ledgerWithBalance]);
 
   const serviceOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.service).filter(Boolean))).sort(), [rowsWithMethodLabel]);
   const destOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.destination).filter(Boolean))).sort(), [rowsWithMethodLabel]);
