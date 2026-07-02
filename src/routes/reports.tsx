@@ -1471,7 +1471,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
 }
 
 // ---------- TREASURIES (cash boxes) ----------
-type CashBoxRow = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+type CashBoxRow = { id: string; name: string; currency: string; balance: number; is_active: boolean; opening_balance?: number; opening_date?: string | null; opening_note?: string | null };
 
 const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: "دولار أمريكي", LYD: "دينار ليبي" };
 
