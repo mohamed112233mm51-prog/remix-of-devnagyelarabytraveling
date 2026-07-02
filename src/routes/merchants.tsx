@@ -732,7 +732,7 @@ function MerchantStatementTab({
       { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
       { label: "صافي الرصيد", value: fmtDL(finalBalance) },
     ],
-    columns: [
+    columns: ([
       { header: "#", key: "n" },
       { header: "التاريخ", key: "date" },
       { header: "نوع الحركة", key: "type" },
@@ -741,7 +741,7 @@ function MerchantStatementTab({
       { header: "النسبة", key: "commission" },
       { header: "الصافي", key: "net" },
       { header: "الرصيد الحالي", key: "balance" },
-    ],
+    ] as Array<{ header: string; key: string }>).filter((c) => isVisible(c.key)),
     rows: withRunning.map((m, i) => ({
       n: i + 1, date: m.date, type: m.type, statement: m.statement,
       gross: fmtDL(m.gross), gross__excel: m.gross,
