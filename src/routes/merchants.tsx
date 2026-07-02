@@ -866,13 +866,15 @@ function MerchantStatementTab({
     return true;
   }), [movements, from, to, typeFilter, debouncedSearch]);
 
-  // Running balance is in EGP. Non-EGP opening rows are shown as informational
-  // lines and do NOT roll into the EGP total.
+  // Per-currency running balance. Each currency accumulates independently so
+  // EGP, USD, LYD, ... never mix into a single total.
   const withRunning = useMemo(() => {
-    let bal = 0;
+    const bals = new Map<string, number>();
     return filtered.map((m) => {
-      if (m.currency === "EGP") bal += m.delta;
-      return { ...m, balance: bal, countsInEgp: m.currency === "EGP" };
+      const cur = m.currency || "EGP";
+      const next = (bals.get(cur) || 0) + m.delta;
+      bals.set(cur, next);
+      return { ...m, balance: next, countsInEgp: cur === "EGP" };
     });
   }, [filtered]);
 
