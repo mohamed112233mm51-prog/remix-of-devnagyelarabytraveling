@@ -605,7 +605,7 @@ type StatementMovement = {
 };
 
 function MerchantStatementTab({
-  merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, agents, companies,
+  merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions,
 }: {
   merchants: Merchant[];
   incomingTxns: Transaction[];
@@ -613,8 +613,6 @@ function MerchantStatementTab({
   cashMoveTxns: Transaction[];
   collections: MerchantCashCollection[];
   conversions: UsdTreasuryTransaction[];
-  agents: Agent[];
-  companies: IssuingCompany[];
 }) {
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
   const [from, setFrom] = useState("");
@@ -677,7 +675,7 @@ function MerchantStatementTab({
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
-  }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, agents, companies]);
+  }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {

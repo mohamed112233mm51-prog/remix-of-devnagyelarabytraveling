@@ -73,11 +73,6 @@ function buildLedger(txns: Transaction[]): LedgerEntry[] {
       const payment = txnTotalPaid(t);
       const isPayment = kind === "payment";
       const credit = isPayment ? (payment || serviceValue) : payment;
-      const merchantGross = Number(t.merchant_cash_amount || 0);
-      const merchantNet = merchantCashGross(t) > 0
-        ? Math.round(Number(t.merchant_cash_net_amount || 0) || (merchantGross - merchantGross * 0.01))
-        : 0;
-      const merchantCommission = merchantGross - merchantNet;
       const description = String((t as any).statement || "").trim();
       return {
         id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
