@@ -13,6 +13,7 @@ import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -28,6 +29,7 @@ const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "balance", label: "الرصيد الحالي" },
   { key: "method", label: "وسيلة الدفع" },
   { key: "note", label: "ملاحظات" },
+  { key: "actions", label: "إجراءات" },
 ];
 
 
