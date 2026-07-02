@@ -332,96 +332,141 @@ function CurrencySupplierStatementPage() {
   );
 }
 
-// Adjust a cash box for a given currency *display* name (e.g. "دولار", "جنيه مصري").
-async function adjustCashBoxByCurrency(boxes: CashBox[], currencyDisplay: string, delta: number) {
-  if (!currencyDisplay || !delta) return;
+// Resolve the target cash_box for a currency display name (foreign leg).
+function resolveForeignBox(boxes: CashBox[], currencyDisplay: string): CashBox | null {
   const code = CURRENCY_CODE[currencyDisplay];
-  if (!code) return;
-  // Prefer "main" treasury for that currency; fallback to first active box of that currency.
-  const box =
+  if (!code) return null;
+  return (
     boxes.find((b) => b.currency === code && b.is_active !== false && b.name.includes("الرئيسية")) ||
-    boxes.find((b) => b.currency === code && b.is_active !== false);
-  if (box) {
-    await supabase.from("cash_boxes" as any).update({ balance: Number(box.balance || 0) + delta }).eq("id", box.id);
-  } else {
-    await supabase.from("cash_boxes" as any).insert({
-      name: `الخزينة الرئيسية - ${currencyDisplay}`,
-      currency: code,
-      balance: delta,
-      is_active: true,
-    });
-  }
+    boxes.find((b) => b.currency === code && b.is_active !== false) ||
+    null
+  );
 }
 
-// Adjust a specific company EGP cash box by method (company_cash | company_instapay).
-async function adjustCompanyEgpBox(boxes: CashBox[], method: string, delta: number) {
-  if (!delta) return;
-  let box: CashBox | undefined;
+// Resolve the company EGP cash_box for a split method (company_cash | company_instapay).
+function resolveCompanyEgpBox(boxes: CashBox[], method: string): CashBox | null {
   if (method === "company_cash") {
-    box = boxes.find((b) => b.currency === "EGP" && b.name.includes("نقدي") && b.name.includes("الشركة"));
-  } else if (method === "company_instapay") {
-    box = boxes.find((b) => b.currency === "EGP" && b.name.includes("إنستا") && b.name.includes("الشركة"));
+    return boxes.find((b) => b.currency === "EGP" && b.name.includes("نقدي") && b.name.includes("الشركة")) || null;
   }
-  if (!box) {
-    // fallback to any EGP company box
-    box = boxes.find((b) => b.currency === "EGP" && b.name.includes("الشركة")) ||
-          boxes.find((b) => b.currency === "EGP" && b.is_active !== false);
+  if (method === "company_instapay") {
+    return boxes.find((b) => b.currency === "EGP" && b.name.includes("إنستا") && b.name.includes("الشركة")) || null;
   }
-  if (box) {
-    await supabase.from("cash_boxes" as any).update({ balance: Number(box.balance || 0) + delta }).eq("id", box.id);
-  }
+  return null;
 }
 
-// Apply all the side-effects of a saved transaction: cash boxes + merchant collections.
+// Method labels stored in payment_splits (kept consistent with CashMovementForms).
+function methodLabelFor(s: SplitJson): string {
+  if (s.method === "company_instapay") return "إنستاباي";
+  if (s.method === "company_cash") return "نقدي";
+  if (s.method === "merchant_instapay") return "إنستاباي تاجر";
+  if (s.method === "merchant_wallet") return "تاجر الكاش تاجر";
+  if (s.method === "merchant_physical") return "نقدي تاجر";
+  return "نقدي";
+}
+
+// Apply all the side-effects of a saved transaction via the Financial Engine.
+//   - Foreign box + company EGP boxes: payment_splits rows with cash_box_id (trigger updates balance).
+//   - Merchant legs: payment_splits with cash_box_id=null (no box impact) + merchant_cash_collections row (merchant balance).
 async function applyTransaction(opts: {
   kind: "شراء عملة" | "بيع عملة";
   supplierId: string;
+  txId: string;
   txDate: string;
   foreignCurrency: string;
   foreignAmount: number;
-  egpAmount: number;
   splits: SplitJson[];
   boxes: CashBox[];
   description: string;
 }) {
-  const { kind, supplierId: _sid, txDate, foreignCurrency, foreignAmount, splits, boxes, description } = opts;
-  // 1. Foreign currency box: + on buy, - on sell
-  await adjustCashBoxByCurrency(boxes, foreignCurrency, kind === "شراء عملة" ? +foreignAmount : -foreignAmount);
-  // 2. EGP side via splits
+  const { kind, supplierId, txId, txDate, foreignCurrency, foreignAmount, splits, boxes, description } = opts;
+  const isBuy = kind === "شراء عملة";
+  const foreignBox = resolveForeignBox(boxes, foreignCurrency);
+  const foreignCode = CURRENCY_CODE[foreignCurrency];
+
+  const engineSplits: MovementSplit[] = [];
+
+  // 1. Foreign currency leg (buy → +foreign box, sell → -foreign box)
+  if (foreignBox && foreignCode && foreignAmount > 0) {
+    engineSplits.push({
+      method: "نقدي",
+      currency: foreignCode,
+      cashBoxId: foreignBox.id,
+      amount: foreignAmount,
+      direction: isBuy ? "in" : "out",
+      grossAmount: foreignAmount,
+      netAmount: foreignAmount,
+      exchangeRate: 1,
+      egpEquivalent: 0,
+    });
+  }
+
+  // 2. EGP legs (company boxes update via trigger; merchant legs recorded but no box impact)
   for (const s of splits) {
     const amt = Number(s.amount || 0);
     if (!amt) continue;
+    const dir: "in" | "out" = isBuy ? "out" : "in"; // buy → EGP leaves us; sell → EGP arrives
+    let cashBoxId: string | null = null;
     if (s.source === "company") {
-      // buy → EGP leaves company box (-); sell → EGP arrives in company box (+)
-      await adjustCompanyEgpBox(boxes, s.method, kind === "شراء عملة" ? -amt : +amt);
-    } else if (s.source === "merchant" && s.merchant_id) {
-      // buy: merchant pays on our behalf → his balance decreases (we owe him less / he owes us more depending on convention)
-      // We mirror expenses pattern: insert a merchant_cash_collection deducting merchant balance.
-      // sell: not typical for sell; if used → reverse sign.
-      const signed = kind === "شراء عملة" ? amt : -amt;
+      cashBoxId = resolveCompanyEgpBox(boxes, s.method)?.id || null;
+    }
+    engineSplits.push({
+      method: methodLabelFor(s),
+      currency: "EGP",
+      cashBoxId,
+      amount: amt,
+      direction: dir,
+      grossAmount: amt,
+      netAmount: amt,
+      exchangeRate: 1,
+      egpEquivalent: amt,
+    });
+
+    // Merchant balance is aggregated from merchant_cash_collections, so keep that row.
+    if (s.source === "merchant" && s.merchant_id) {
+      const signed = isBuy ? amt : -amt;
       await supabase.from("merchant_cash_collections").insert({
         merchant_id: s.merchant_id,
         date: txDate,
         amount: signed,
-        // نمرّر البيان كما أدخله المستخدم في نموذج التعامل بدون توليد تلقائي
         note: null,
         statement: description?.trim() ? description.trim() : null,
       });
-
     }
+  }
+
+  if (engineSplits.length === 0) return;
+
+  const res = await postMovement({
+    partyType: "currency_supplier",
+    partyId: supplierId,
+    kind: isBuy ? "payment" : "receipt",
+    date: txDate,
+    statement: description?.trim() || undefined,
+    splits: engineSplits,
+    sourceTable: "currency_supplier_transactions",
+    sourceId: txId,
+  });
+  if (!res.ok) {
+    toast.error(res.error || "تعذر تسجيل الحركة في الخزائن");
   }
 }
 
 // Reverse a previously-applied transaction (used on delete).
-async function reverseTransaction(r: Tx & { foreignCurrency: string; foreignAmount: number; egpAmount: number }, boxes: CashBox[]) {
-  await adjustCashBoxByCurrency(boxes, r.foreignCurrency, r.tx_type === "شراء عملة" ? -r.foreignAmount : +r.foreignAmount);
+async function reverseTransaction(r: Tx & { foreignCurrency: string; foreignAmount: number; egpAmount: number }, _boxes: CashBox[]) {
+  void _boxes;
+  // Deleting payment_splits rows triggers cash_boxes reversal automatically.
+  await supabase
+    .from("payment_splits")
+    .delete()
+    .eq("source_table", "currency_supplier_transactions")
+    .eq("source_id", r.id);
+
+  // Reverse merchant balance side-effects (merchant_cash_collections rows).
   const splits = Array.isArray(r.payment_splits) ? r.payment_splits : [];
   for (const s of splits) {
     const amt = Number(s.amount || 0);
     if (!amt) continue;
-    if (s.source === "company") {
-      await adjustCompanyEgpBox(boxes, s.method, r.tx_type === "شراء عملة" ? +amt : -amt);
-    } else if (s.source === "merchant" && s.merchant_id) {
+    if (s.source === "merchant" && s.merchant_id) {
       const signed = r.tx_type === "شراء عملة" ? -amt : +amt;
       await supabase.from("merchant_cash_collections").insert({
         merchant_id: s.merchant_id,
@@ -429,7 +474,6 @@ async function reverseTransaction(r: Tx & { foreignCurrency: string; foreignAmou
         amount: signed,
         note: null,
       });
-
     }
   }
 }
