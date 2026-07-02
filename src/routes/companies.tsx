@@ -337,16 +337,37 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     };
   }), [myTxnsAll]);
 
-  // Running balance computed over ALL entries (filters do not affect balance)
+  // Per-currency running balance: EGP, USD, LYD, ... never mix.
   const allWithBalance = useMemo(() => {
-    let bal = 0;
-    return allEntries.map((e) => ({ ...e, balance: (bal += e.debit - e.credit) }));
+    const bals = new Map<string, number>();
+    return allEntries.map((e) => {
+      const cur = e.currency || "EGP";
+      const next = (bals.get(cur) || 0) + (e.debit - e.credit);
+      bals.set(cur, next);
+      return { ...e, balance: next };
+    });
   }, [allEntries]);
 
   const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
   const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مدين عليه" : balance < 0 ? "دائن له" : "متوازن";
+
+  const byCurrency = useMemo(() => {
+    const debits = new Map<string, number>();
+    const credits = new Map<string, number>();
+    for (const e of allEntries) {
+      const c = e.currency || "EGP";
+      debits.set(c, (debits.get(c) || 0) + e.debit);
+      credits.set(c, (credits.get(c) || 0) + e.credit);
+    }
+    const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
+    return currencies.map((c) => {
+      const d = debits.get(c) || 0;
+      const cr = credits.get(c) || 0;
+      return { currency: c, debit: d, credit: cr, net: d - cr };
+    });
+  }, [allEntries]);
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
