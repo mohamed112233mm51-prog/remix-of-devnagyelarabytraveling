@@ -151,17 +151,43 @@ export function CancelTransactionButton({
   const date = pickDate(row);
   const counterparty = pickCounterparty(row);
 
+  if (cancelled) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium select-none"
+        style={{
+          background: "color-mix(in oklab, var(--text) 6%, transparent)",
+          borderColor: "var(--border)",
+          color: "var(--muted-foreground, #64748b)",
+        }}
+        title="هذه الحركة ملغاة"
+      >
+        <Ban size={12} />
+        ملغاة
+      </span>
+    );
+  }
+
   return (
     <>
-      <Button
-        variant={cancelled ? "outline" : "destructive"}
-        size={compact ? "sm" : "default"}
+      <button
+        type="button"
         onClick={() => setOpen(true)}
-        title={cancelled ? "إعادة تفعيل" : "إلغاء الحركة"}
+        title="إلغاء الحركة المالية"
+        aria-label="إلغاء الحركة المالية"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md h-8 px-3 text-xs font-medium text-white shadow-sm transition-all duration-150 hover:scale-[1.03] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 whitespace-nowrap"
+        style={{
+          background: "var(--red, #dc2626)",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "var(--red-dark, #b91c1c)")
+        }
+        onMouseLeave={(e) => (e.currentTarget.style.background = "var(--red, #dc2626)")}
       >
-        {cancelled ? <RotateCcw size={14} /> : <Ban size={14} />}
-        {!compact && <span>{cancelled ? "إعادة تفعيل" : "إلغاء"}</span>}
-      </Button>
+        <Ban size={14} />
+        <span className="hidden sm:inline">إلغاء</span>
+      </button>
+
 
       <Modal
         open={open}
