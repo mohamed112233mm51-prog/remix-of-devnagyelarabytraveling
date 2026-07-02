@@ -161,8 +161,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
   const ledger = useMemo(() => buildLedger(myTxnsAll), [myTxnsAll]);
   const ledgerWithBalance = useMemo(() => {
-    let balance = 0;
-    return ledger.map((e) => ({ ...e, balance: (balance += e.debit - e.credit) }));
+    // Per-currency running balance: EGP, USD, LYD, ... never mix.
+    const bals = new Map<string, number>();
+    return ledger.map((e) => {
+      const cur = e.currency || "EGP";
+      const next = (bals.get(cur) || 0) + (e.debit - e.credit);
+      bals.set(cur, next);
+      return { ...e, balance: next };
+    });
   }, [ledger]);
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
