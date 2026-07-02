@@ -731,13 +731,14 @@ type StatementMovement = {
   id: string;
   date: string;
   createdAt: string;
-  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD";
+  type: "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر" | "صرف نقدية للتاجر" | "تحويل لـ USD" | "رصيد سابق";
   statement: string;
   gross: number;
   commission: number;
   net: number;
   delta: number; // signed effect on merchant balance
 };
+
 
 function MerchantStatementTab({
   merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions,
