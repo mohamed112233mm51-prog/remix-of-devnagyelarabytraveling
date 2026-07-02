@@ -10,6 +10,7 @@
 // On every save we delete the existing opening rows for that entity then
 // re-insert only the sides the user actually entered (>0).
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeCurrency } from "@/lib/db";
 
 export type OpeningBalanceInput = {
   debit: number;
@@ -31,7 +32,7 @@ export async function syncAgentOpeningBalance(agentId: string, op: OpeningBalanc
   const date = op.date || todayISO();
   const debit = Math.max(0, Number(op.debit) || 0);
   const credit = Math.max(0, Number(op.credit) || 0);
-  const currency = (op.currency || "EGP").trim() || "EGP";
+  const currency = normalizeCurrency(op.currency);
 
   // Wipe prior opening rows for this agent in THIS currency only, so
   // opening balances in other currencies survive.
@@ -107,7 +108,7 @@ export async function syncCompanyOpeningBalance(companyId: string, op: OpeningBa
   const date = op.date || todayISO();
   const debit = Math.max(0, Number(op.debit) || 0);
   const credit = Math.max(0, Number(op.credit) || 0);
-  const currency = (op.currency || "EGP").trim() || "EGP";
+  const currency = normalizeCurrency(op.currency);
 
   await supabase
     .from("company_transactions")
@@ -178,7 +179,7 @@ export type MerchantOpeningInput = OpeningBalanceInput & { currency: string };
 export async function syncMerchantOpeningBalance(merchantId: string, op: MerchantOpeningInput) {
   if (!merchantId) return;
   const date = op.date || todayISO();
-  const currency = (op.currency || "EGP").trim() || "EGP";
+  const currency = normalizeCurrency(op.currency);
   const debit = Math.max(0, Number(op.debit) || 0);
   const credit = Math.max(0, Number(op.credit) || 0);
 
@@ -235,7 +236,7 @@ export async function syncCurrencySupplierOpeningBalance(
 ) {
   if (!supplierId) return;
   const date = op.date || todayISO();
-  const currency = (op.currency || "EGP").trim() || "EGP";
+  const currency = normalizeCurrency(op.currency);
   const debit = Math.max(0, Number(op.debit) || 0);
   const credit = Math.max(0, Number(op.credit) || 0);
 
