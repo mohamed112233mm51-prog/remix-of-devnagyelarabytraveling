@@ -676,8 +676,8 @@ function MerchantStatementTab({
     if (to && m.date > to) return false;
     if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
     if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
-    if (typeFilter === "collection" && m.type !== "تحصيل نقدي") return false;
-    if (typeFilter === "cashout" && m.type !== "صرف نقدية") return false;
+    if (typeFilter === "collection" && m.type !== "تحصيل نقدية من التاجر") return false;
+    if (typeFilter === "cashout" && m.type !== "صرف نقدية للتاجر") return false;
     if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
@@ -693,7 +693,7 @@ function MerchantStatementTab({
 
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
-  const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدي").reduce((s, m) => s + m.net, 0);
+  const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدية من التاجر").reduce((s, m) => s + m.net, 0);
   const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
@@ -761,7 +761,7 @@ function MerchantStatementTab({
                   { value: "all", label: "كل الحركات" },
                   { value: "incoming", label: "وارد من وكيل" },
                   { value: "outgoing", label: "صادر لشركة" },
-                  { value: "collection", label: "تحصيل نقدي" },
+                  { value: "collection", label: "تحصيل نقدية من التاجر" },
                   { value: "cashout", label: "صرف نقدية" },
                   { value: "conversion", label: "تحويل لـ USD" },
                 ]}
