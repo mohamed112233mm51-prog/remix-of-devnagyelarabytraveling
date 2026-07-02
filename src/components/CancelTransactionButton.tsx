@@ -147,8 +147,7 @@ export function CancelTransactionButton({
     }
   };
 
-  const amount = pickAmount(row);
-  const currency = pickCurrency(row);
+  const { amount, currency } = pickAmountAndCurrency(table, row);
   const date = pickDate(row);
   const counterparty = pickCounterparty(row);
 
