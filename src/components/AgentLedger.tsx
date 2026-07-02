@@ -11,6 +11,24 @@ import {
 } from "@/lib/db";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const LEDGER_COLUMNS: ColumnDef[] = [
+  { key: "n", label: "#" },
+  { key: "date", label: "التاريخ" },
+  { key: "description", label: "البيان" },
+  { key: "service", label: "نوع الخدمة" },
+  { key: "destination", label: "وجهة السفر" },
+  { key: "count", label: "العدد" },
+  { key: "price", label: "السعر" },
+  { key: "serviceValue", label: "قيمة الرحلة" },
+  { key: "debit", label: "مدين" },
+  { key: "credit", label: "دائن" },
+  { key: "balance", label: "الرصيد الحالي" },
+  { key: "method", label: "وسيلة الدفع" },
+  { key: "note", label: "ملاحظات" },
+];
 
 
 
