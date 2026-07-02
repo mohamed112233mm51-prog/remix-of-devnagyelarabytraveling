@@ -536,7 +536,7 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
             <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
             <tbody>
               {expenses.length === 0 ? (
-                <tr><td colSpan={8}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
+                <tr><td colSpan={9}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
               ) : expenses.map((e, i) => (
                 <tr key={e.id}>
                   <td data-label="#">{i + 1}</td>
@@ -552,11 +552,13 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
                   </td>
                   <td data-label="التاريخ">{e.date}</td>
                   <td data-label="وسائل الدفع" style={{ fontSize: 12, lineHeight: 1.6 }}>{paymentsCell(e)}</td>
-                  <td data-label="البيان">{e.notes || "—"}</td>
+                  <td data-label="البيان">{(e as any).statement || "—"}</td>
+                  <td data-label="ملاحظات">{e.notes || "—"}</td>
                   <td data-label="إجراءات">
                     <button className="btn" onClick={() => setEdit(e)}>تعديل</button>
                     <button className="btn" onClick={() => del(e.id)} style={{ marginInlineStart: 6 }}>حذف</button>
                   </td>
+
                 </tr>
               ))}
             </tbody>
