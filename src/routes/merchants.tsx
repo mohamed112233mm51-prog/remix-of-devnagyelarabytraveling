@@ -803,7 +803,7 @@ function MerchantStatementTab({
       list.push({
         id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
         statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: net,
+        gross, commission: gross - net, net, delta: net, currency: "EGP",
       });
     }
     for (const t of outgoingTxns) {
@@ -813,18 +813,19 @@ function MerchantStatementTab({
       list.push({
         id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
         statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: -net,
+        gross, commission: gross - net, net, delta: -net, currency: "EGP",
       });
     }
     for (const c of collections) {
       if (c.merchant_id !== merchantId) continue;
       const amt = Number(c.amount || 0);
       const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
+      const rowCurrency = isOpening ? String((c as any).opening_currency || "EGP") : "EGP";
       list.push({
         id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
         type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
-        statement: isOpening ? "رصيد سابق" : String((c as any).statement || "").trim(),
-        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt,
+        statement: isOpening ? `رصيد سابق (${rowCurrency})` : String((c as any).statement || "").trim(),
+        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt, currency: rowCurrency,
       });
     }
 
@@ -836,7 +837,7 @@ function MerchantStatementTab({
         id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
         type: "صرف نقدية للتاجر",
         statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: amt,
+        gross: amt, commission: 0, net: amt, delta: amt, currency: "EGP",
       });
     }
     for (const r of conversions) {
@@ -846,7 +847,7 @@ function MerchantStatementTab({
       list.push({
         id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
         statement: String((r as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: -amt,
+        gross: amt, commission: 0, net: amt, delta: -amt, currency: "EGP",
       });
     }
     return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
