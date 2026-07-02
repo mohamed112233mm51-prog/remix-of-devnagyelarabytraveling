@@ -694,6 +694,7 @@ function MerchantStatementTab({
   const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
   const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
   const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدية من التاجر").reduce((s, m) => s + m.net, 0);
+  const totalPaidOut = filtered.filter((m) => m.type === "صرف نقدية للتاجر").reduce((s, m) => s + m.net, 0);
   const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
   const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
   const finalBalance = withRunning.length ? withRunning[withRunning.length - 1].balance : 0;
@@ -704,8 +705,9 @@ function MerchantStatementTab({
     fileName: `كشف-حساب-${merchant?.merchant_name || "التاجر"}`,
     summary: [
       { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
-      { label: "إجمالي التحصيل", value: fmtDL(totalCollected) },
-      { label: "إجمالي الصادر", value: fmtDL(totalOutgoing) },
+      { label: "النقدية المحصلة من التاجر", value: fmtDL(totalCollected) },
+      { label: "إجمالي الصادر للشركات", value: fmtDL(totalOutgoing) },
+      { label: "النقدية المصروفة للتاجر", value: fmtDL(totalPaidOut) },
       { label: "تحويل لـ USD", value: fmtDL(totalConverted) },
       { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
       { label: "صافي الرصيد", value: fmtDL(finalBalance) },
@@ -788,25 +790,33 @@ function MerchantStatementTab({
         </div>
       </div>
 
-      <div className="account-summary kpi-rich">
+      <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
-          <span className="kpi-icon"><ArrowDownCircle size={20} /></span>
-          <div className="kpi-text"><div className="label">إجمالي الوارد</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
         </div>
         <div className="sum-box gold">
-          <span className="kpi-icon"><Banknote size={20} /></span>
-          <div className="kpi-text"><div className="label">إجمالي التحصيل</div><div className="val">{fmtDL(totalCollected)}</div></div>
+          <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">النقدية المحصلة من التاجر</div><div className="val">{fmtDL(totalCollected)}</div></div>
         </div>
         <div className="sum-box red">
-          <span className="kpi-icon"><Percent size={20} /></span>
+          <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+        </div>
+        <div className="sum-box red">
+          <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتاجر</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
+        </div>
+        <div className="sum-box">
+          <span className="kpi-icon"><Percent size={20} strokeWidth={2} /></span>
           <div className="kpi-text"><div className="label">نسبة التاجر (1%)</div><div className="val">{fmtDL(totalCommission)}</div></div>
         </div>
         <div className="sum-box hero">
-          <span className="kpi-icon"><Wallet size={22} /></span>
+          <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
             <div className="label">صافي الرصيد</div>
             <div className="val">{fmtDL(finalBalance)}</div>
-            <div className="kpi-sub">الرصيد بعد كل الحركات المعروضة</div>
+            <div className="kpi-sub">= الوارد + المصروف − المحصل − الصادر − التحويلات</div>
           </div>
         </div>
       </div>
@@ -838,7 +848,7 @@ function MerchantStatementTab({
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming - totalOutgoing - totalCollected - totalConverted)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
+                <tr><td colSpan={4}>الإجمالي</td><td className="num-col">{fmtDL(filtered.reduce((s, m) => s + m.gross, 0))}</td><td className="num-col">{fmtDL(totalCommission)}</td><td className="num-col">{fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)}</td><td className="num-col">{fmtDL(finalBalance)}</td></tr>
               </tfoot>
             </table>
           </div>
