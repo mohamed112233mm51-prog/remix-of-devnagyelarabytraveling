@@ -28,9 +28,10 @@ function CountsWord(n: number) {
 }
 
 export function CurrencyTotalsCards({ totals }: { totals: CurrencyTotal[] }) {
-  // Filter: only currencies with any movement or non-zero balance
-  const shown = totals.filter(
-    (t) => (t.count ?? 0) > 0 || t.debit !== 0 || t.credit !== 0 || t.net !== 0,
+  // Defensive: accept only a valid array
+  const list = Array.isArray(totals) ? totals : [];
+  const shown = list.filter(
+    (t) => t && ((t.count ?? 0) > 0 || t.debit !== 0 || t.credit !== 0 || t.net !== 0),
   );
   if (shown.length === 0) return null;
 
