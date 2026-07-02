@@ -86,6 +86,7 @@ export function useSourceBalances(): SourceBalances {
     );
     for (const t of agentTxns) {
       if (!t.merchant_id) continue;
+      if ((t as any).cancelled_at) continue;
       const cur = (t as any).payment_currency || (t as any).currency || "EGP";
       if (t.source_service_type === "merchant_cash_out") {
         addMerchant(t.merchant_id, cur, Math.abs(Number(t.paid || 0)));
@@ -104,17 +105,20 @@ export function useSourceBalances(): SourceBalances {
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
+      if ((t as any).cancelled_at) continue;
       if (merchantCompanyOutSourceIds.has(t.id)) continue;
       const cur = (t as any).payment_currency || (t as any).currency || "EGP";
       const net = merchantCompanyOutflowAmount(t);
       addMerchant(t.merchant_id, cur, -net);
     }
     for (const c of collections) {
+      if ((c as any).cancelled_at) continue;
       const cur = (c as any).opening_currency || (c as any).currency || "EGP";
       addMerchant(c.merchant_id, cur, -Number(c.amount || 0));
     }
     for (const r of usdRows) {
       if (r.type !== "conversion" || !r.merchant_id) continue;
+      if ((r as any).cancelled_at) continue;
       if (r.source_type === "merchant_wallet" || r.source_type === "merchant_physical") {
         addMerchant(r.merchant_id, "EGP", -Number(r.egp_amount || 0));
       }
