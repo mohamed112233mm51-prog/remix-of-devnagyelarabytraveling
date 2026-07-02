@@ -10,7 +10,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
+import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
 import {
   PaymentSplits,
   newPaymentSplitRow,
