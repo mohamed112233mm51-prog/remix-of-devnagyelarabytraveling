@@ -34,6 +34,24 @@ import { CompanySupplyForm } from "@/components/CashMovementForms";
 import { EntityProfileModal } from "@/components/EntityProfileModal";
 import * as CF from "@/components/ColumnFilter";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
+import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+
+const COMPANY_STATEMENT_COLUMNS: ColumnDef[] = [
+  { key: "n", label: "#" },
+  { key: "date", label: "التاريخ" },
+  { key: "description", label: "البيان" },
+  { key: "service", label: "نوع الخدمة" },
+  { key: "destination", label: "وجهة السفر" },
+  { key: "count", label: "العدد" },
+  { key: "price", label: "السعر" },
+  { key: "serviceValue", label: "قيمة الرحلة" },
+  { key: "debit", label: "مدين" },
+  { key: "credit", label: "دائن" },
+  { key: "balance", label: "الرصيد الحالي" },
+  { key: "method", label: "وسيلة الدفع" },
+  { key: "note", label: "ملاحظات" },
+];
 import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
