@@ -178,6 +178,9 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          opening_balance: number
+          opening_date: string | null
+          opening_note: string | null
           updated_at: string
         }
         Insert: {
@@ -187,6 +190,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          opening_balance?: number
+          opening_date?: string | null
+          opening_note?: string | null
           updated_at?: string
         }
         Update: {
@@ -196,6 +202,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          opening_balance?: number
+          opening_date?: string | null
+          opening_note?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -374,9 +383,12 @@ export type Database = {
           description: string | null
           exchange_rate: number | null
           id: string
+          opening_currency: string | null
           payment_splits: Json
           sold_amount: number
           sold_currency: string
+          source_service_id: string | null
+          source_service_type: string | null
           statement: string | null
           supplier_id: string
           tx_date: string
@@ -391,9 +403,12 @@ export type Database = {
           description?: string | null
           exchange_rate?: number | null
           id?: string
+          opening_currency?: string | null
           payment_splits?: Json
           sold_amount?: number
           sold_currency: string
+          source_service_id?: string | null
+          source_service_type?: string | null
           statement?: string | null
           supplier_id: string
           tx_date?: string
@@ -408,9 +423,12 @@ export type Database = {
           description?: string | null
           exchange_rate?: number | null
           id?: string
+          opening_currency?: string | null
           payment_splits?: Json
           sold_amount?: number
           sold_currency?: string
+          source_service_id?: string | null
+          source_service_type?: string | null
           statement?: string | null
           supplier_id?: string
           tx_date?: string
@@ -433,6 +451,11 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          opening_credit: number
+          opening_currency: string
+          opening_date: string | null
+          opening_debit: number
+          opening_note: string | null
           phone: string | null
           status: string
           updated_at: string
@@ -442,6 +465,11 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          opening_credit?: number
+          opening_currency?: string
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           status?: string
           updated_at?: string
@@ -451,6 +479,11 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          opening_credit?: number
+          opening_currency?: string
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           status?: string
           updated_at?: string
@@ -800,6 +833,9 @@ export type Database = {
           is_demo: boolean
           merchant_id: string
           note: string | null
+          opening_currency: string | null
+          source_service_id: string | null
+          source_service_type: string | null
           statement: string | null
         }
         Insert: {
@@ -811,6 +847,9 @@ export type Database = {
           is_demo?: boolean
           merchant_id: string
           note?: string | null
+          opening_currency?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           statement?: string | null
         }
         Update: {
@@ -822,6 +861,9 @@ export type Database = {
           is_demo?: boolean
           merchant_id?: string
           note?: string | null
+          opening_currency?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           statement?: string | null
         }
         Relationships: []
@@ -832,6 +874,11 @@ export type Database = {
           id: string
           is_demo: boolean
           merchant_name: string
+          opening_credit: number
+          opening_currency: string
+          opening_date: string | null
+          opening_debit: number
+          opening_note: string | null
           phone: string | null
           status: string
           supports_cash_wallet: boolean
@@ -844,6 +891,11 @@ export type Database = {
           id?: string
           is_demo?: boolean
           merchant_name: string
+          opening_credit?: number
+          opening_currency?: string
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           status?: string
           supports_cash_wallet?: boolean
@@ -856,6 +908,11 @@ export type Database = {
           id?: string
           is_demo?: boolean
           merchant_name?: string
+          opening_credit?: number
+          opening_currency?: string
+          opening_date?: string | null
+          opening_debit?: number
+          opening_note?: string | null
           phone?: string | null
           status?: string
           supports_cash_wallet?: boolean
@@ -1178,6 +1235,7 @@ export type Database = {
       }
       usd_treasury_transactions: {
         Row: {
+          cash_box_id: string | null
           company_id: string | null
           created_at: string
           date: string
@@ -1188,12 +1246,15 @@ export type Database = {
           is_demo: boolean
           merchant_id: string | null
           note: string | null
+          source_service_id: string | null
+          source_service_type: string | null
           source_type: string | null
           statement: string | null
           type: string
           usd_amount: number
         }
         Insert: {
+          cash_box_id?: string | null
           company_id?: string | null
           created_at?: string
           date?: string
@@ -1204,12 +1265,15 @@ export type Database = {
           is_demo?: boolean
           merchant_id?: string | null
           note?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           source_type?: string | null
           statement?: string | null
           type?: string
           usd_amount?: number
         }
         Update: {
+          cash_box_id?: string | null
           company_id?: string | null
           created_at?: string
           date?: string
@@ -1220,12 +1284,22 @@ export type Database = {
           is_demo?: boolean
           merchant_id?: string | null
           note?: string | null
+          source_service_id?: string | null
+          source_service_type?: string | null
           source_type?: string | null
           statement?: string | null
           type?: string
           usd_amount?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "usd_treasury_transactions_cash_box_id_fkey"
+            columns: ["cash_box_id"]
+            isOneToOne: false
+            referencedRelation: "cash_boxes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
