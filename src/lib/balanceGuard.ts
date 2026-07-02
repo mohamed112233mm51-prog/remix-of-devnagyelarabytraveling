@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import {
   useLive,
   merchantCashNet,
+  merchantCompanyOutflowAmount,
   type Transaction,
   type CompanyTransaction,
   type ExpenseDeduction,
@@ -78,7 +79,7 @@ export function useSourceBalances(): SourceBalances {
     }
     for (const t of cTxns) {
       if (!t.merchant_id) continue;
-      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      const net = merchantCompanyOutflowAmount(t);
       merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) - net);
     }
     for (const c of collections) {
