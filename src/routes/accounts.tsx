@@ -402,6 +402,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       status: form.status || "نشط",
       opening_debit: opDebit,
       opening_credit: opCredit,
+      opening_currency: opening.currency || "EGP",
       opening_date: opening.date || null,
       opening_note: opening.note.trim() || null,
     } as any).select("id").single();
@@ -410,6 +411,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     if (agentId && (opDebit > 0 || opCredit > 0)) {
       await syncAgentOpeningBalance(agentId, {
         debit: opDebit, credit: opCredit,
+        currency: opening.currency || "EGP",
         date: opening.date || null,
         note: opening.note.trim() || null,
       });
