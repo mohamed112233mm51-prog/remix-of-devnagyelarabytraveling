@@ -744,10 +744,10 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
           </div>
           <div className="form-group full">
             <label style={{ fontWeight: 700, marginBottom: 8 }}>طرق الدفع المتاحة</label>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={form.supports_physical_cash} onChange={(e) => set("supports_physical_cash", e.target.checked)} /> نقدي</label>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={form.supports_instapay} onChange={(e) => set("supports_instapay", e.target.checked)} /> انستا</label>
-              <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={form.supports_cash_wallet} onChange={(e) => set("supports_cash_wallet", e.target.checked)} /> فودافون كاش</label>
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)", whiteSpace: "nowrap", height: 42, fontSize: 14 }}><input type="checkbox" checked={form.supports_physical_cash} onChange={(e) => set("supports_physical_cash", e.target.checked)} /> نقدي</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)", whiteSpace: "nowrap", height: 42, fontSize: 14 }}><input type="checkbox" checked={form.supports_instapay} onChange={(e) => set("supports_instapay", e.target.checked)} /> انستا</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)", whiteSpace: "nowrap", height: 42, fontSize: 14 }}><input type="checkbox" checked={form.supports_cash_wallet} onChange={(e) => set("supports_cash_wallet", e.target.checked)} /> فودافون كاش</label>
             </div>
           </div>
           <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
