@@ -576,8 +576,9 @@ function AuditLogPage() {
       {selected && (
         <DetailsModal
           row={selected}
-          userLabel={users[selected.performed_by || ""] || selected.performed_by || "—"}
+          userLabel={users[selected.performed_by || ""] || (selected.performed_by ? "مستخدم غير معروف" : "—")}
           lookups={lookups}
+          users={users}
           onClose={()=>setSelected(null)}
         />
       )}
