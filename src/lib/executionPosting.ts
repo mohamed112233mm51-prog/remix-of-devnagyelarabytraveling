@@ -184,12 +184,20 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
   });
 
   if (agentRows.length) {
-    const { error } = await supabase.from("transactions").insert(agentRows);
+    const { data, error } = await supabase.from("transactions").insert(agentRows).select("id");
     if (error) throw new Error(`فشل إنشاء حركات الوكيل: ${error.message}`);
+    for (let i = 0; i < (data?.length || 0); i++) {
+      const id = (data![i] as any)?.id;
+      if (id) await logCreate("transactions", id, { ...agentRows[i], id }, "توليد من التنفيذ");
+    }
   }
   if (companyRows.length) {
-    const { error } = await supabase.from("company_transactions").insert(companyRows);
+    const { data, error } = await supabase.from("company_transactions").insert(companyRows).select("id");
     if (error) throw new Error(`فشل إنشاء حركات الشركة: ${error.message}`);
+    for (let i = 0; i < (data?.length || 0); i++) {
+      const id = (data![i] as any)?.id;
+      if (id) await logCreate("company_transactions", id, { ...companyRows[i], id }, "توليد من التنفيذ");
+    }
   }
 }
 
