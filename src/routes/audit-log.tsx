@@ -151,6 +151,129 @@ function formatValue(k: string, v: any, row: any): string {
   return String(v);
 }
 
+type Lookups = {
+  agents: Record<string, string>;
+  companies: Record<string, string>;
+  merchants: Record<string, string>;
+  suppliers: Record<string, string>;
+  cashBoxes: Record<string, string>;
+};
+
+const COMPANY_TREASURY_LABEL = "خزينة الشركة";
+
+function resolveCashBox(id: string | null | undefined, lk: Lookups): string | null {
+  if (!id) return null;
+  return lk.cashBoxes[id] || COMPANY_TREASURY_LABEL;
+}
+
+function derivePaymentMethod(ctx: Record<string, any>): string | null {
+  if (ctx.payment_method) return String(ctx.payment_method);
+  const pairs: Array<[string, string]> = [
+    ["cash_amount", "نقدي"],
+    ["instapay_amount", "انستا باي"],
+    ["mobile_cash_amount", "فودافون كاش"],
+    ["arabic_tourism_cash_amount", "السياحة العربية كاش"],
+    ["merchant_cash_amount", "عبر تاجر كاش"],
+  ];
+  const active = pairs.filter(([k]) => Number(ctx[k]) > 0).map(([, v]) => v);
+  return active.length ? active.join(" + ") : null;
+}
+
+function pickAmount(ctx: Record<string, any>): { amount: number | null; currency: string | null } {
+  const amt =
+    Number(ctx.total_paid) ||
+    Number(ctx.amount) ||
+    Number(ctx.usd_amount) ||
+    Number(ctx.bought_amount) ||
+    Number(ctx.sold_amount) ||
+    Number(ctx.cash_amount) ||
+    null;
+  const cur =
+    ctx.currency ||
+    ctx.payment_currency ||
+    ctx.bought_currency ||
+    ctx.sold_currency ||
+    ctx.opening_currency ||
+    null;
+  return { amount: amt || null, currency: cur || null };
+}
+
+/**
+ * Derive a "from → method → to" description of the underlying financial movement
+ * from the audited row snapshot. Rules are heuristic per table_name.
+ */
+function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups) {
+  const agent = ctx.agent_id ? lk.agents[ctx.agent_id] || "وكيل غير معروف" : null;
+  const company = ctx.company_id ? lk.companies[ctx.company_id] || "شركة غير معروفة" : null;
+  const merchant = ctx.merchant_id ? lk.merchants[ctx.merchant_id] || "تاجر كاش غير معروف" : null;
+  const supplier = ctx.supplier_id ? lk.suppliers[ctx.supplier_id] || "مورد عملة غير معروف" : null;
+  const cashBox = resolveCashBox(ctx.cash_box_id, lk);
+  const fromBox = resolveCashBox(ctx.from_cash_box_id, lk);
+  const toBox = resolveCashBox(ctx.to_cash_box_id, lk);
+
+  let from: string | null = null;
+  let to: string | null = null;
+  let method: string | null = derivePaymentMethod(ctx);
+  const isPayIn = ["دفعة", "in", "buy", "شراء"].includes(String(ctx.tx_type || ctx.type || ""));
+
+  switch (tableName) {
+    case "transactions":
+      from = agent;
+      to = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      break;
+    case "company_transactions":
+      from = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      to = company;
+      break;
+    case "merchant_cash_collections":
+      from = merchant ? `تاجر الكاش ${merchant}` : null;
+      to = COMPANY_TREASURY_LABEL;
+      if (!method) method = "نقدي";
+      break;
+    case "currency_supplier_transactions": {
+      const buying = String(ctx.tx_type || "").includes("buy") || Number(ctx.bought_amount) > 0;
+      if (buying) { from = COMPANY_TREASURY_LABEL; to = supplier; }
+      else { from = supplier; to = COMPANY_TREASURY_LABEL; }
+      break;
+    }
+    case "usd_treasury_transactions":
+      from = fromBox || cashBox || COMPANY_TREASURY_LABEL;
+      to = toBox || company || (merchant ? `تاجر الكاش ${merchant}` : null) || COMPANY_TREASURY_LABEL;
+      break;
+    case "expense_deductions":
+      from = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      to = "مصروف";
+      break;
+    case "payment_splits": {
+      const outflow = String(ctx.direction || "in") === "out";
+      const box = cashBox || COMPANY_TREASURY_LABEL;
+      from = outflow ? box : null;
+      to = outflow ? null : box;
+      break;
+    }
+    default:
+      from = agent || merchant || supplier || cashBox;
+      to = company || cashBox;
+  }
+
+  // Fallbacks — never leave everything empty when we do have entities.
+  if (!from && !to) {
+    from = agent || merchant || supplier || cashBox;
+    to = company || cashBox;
+  }
+
+  const { amount, currency } = pickAmount(ctx);
+  return {
+    from: from || "—",
+    method: method || "—",
+    to: to || "—",
+    amount,
+    currency,
+    _isPayIn: isPayIn,
+  };
+}
+
+
 function AuditLogPage() {
   const { permissions, isAdmin, isSuperAdmin } = useAuth();
   const allowed = isSuperAdmin || isAdmin || checkPerm(permissions, false, "audit_log_view", "view");
