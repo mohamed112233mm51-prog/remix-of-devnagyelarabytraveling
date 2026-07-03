@@ -13,6 +13,7 @@ import type { StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
   type PaymentSplitRow,
+  type SplitCurrency,
   newPaymentSplitRow,
   validatePaymentSplits,
   filterValidSplits,
