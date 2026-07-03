@@ -22,6 +22,7 @@ import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 
 const CS_COLUMNS: ColumnDef[] = [
   { key: "date", label: "التاريخ" },
@@ -185,6 +186,30 @@ function CurrencySupplierStatementPage() {
 
   }, [filtered]);
 
+  // Per-currency debit/credit/net/count aggregated from the same rows the
+  // ledger displays — feeds the shared CurrencyTotalsCards component.
+  const byCurrency = useMemo<CurrencyTotal[]>(() => {
+    const map = new Map<string, { debit: number; credit: number; count: number }>();
+    const bump = (cur: string, d: number, c: number) => {
+      const k = cur || "EGP";
+      const g = map.get(k) || { debit: 0, credit: 0, count: 0 };
+      g.debit += d; g.credit += c; g.count += 1;
+      map.set(k, g);
+    };
+    for (const r of rowsWithBalance) {
+      const cur = r.foreignCurrency;
+      const d = r.tx_type === "رصيد سابق"
+        ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
+        : r.bought_currency === r.sold_currency
+          ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
+          : r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
+      if (d >= 0) bump(cur, d, 0); else bump(cur, 0, -d);
+    }
+    return Array.from(map.entries())
+      .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
+      .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
+  }, [rowsWithBalance]);
+
   const exportData = (): StatementExportData => ({
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
     subtitle: currencyFilter ? `العملة: ${currencyFilter}` : undefined,
@@ -231,18 +256,7 @@ function CurrencySupplierStatementPage() {
         </div>
       </div>
 
-      {summary.length > 0 && (
-        <div className="account-summary kpi-rich" style={{ flexWrap: "wrap" }}>
-          {summary.map((s) => (
-            <div key={s.currency} className={`sum-box ${s.net >= 0 ? "green" : "red"}`}>
-              <div className="kpi-text">
-                <div className="label">صافي {s.currency}</div>
-                <div className="val">{fmtNum(s.net)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <CurrencyTotalsCards totals={byCurrency} entityKind="currency_supplier" />
 
       <div className="action-toolbar" style={{ flexWrap: "wrap", gap: 8 }}>
         {perm.create && (
