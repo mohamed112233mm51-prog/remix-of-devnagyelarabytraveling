@@ -586,7 +586,7 @@ function AuditLogPage() {
   );
 }
 
-function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; userLabel: string; lookups: Lookups; onClose: () => void }) {
+function DetailsModal({ row, userLabel, lookups, users, onClose }: { row: AuditRow; userLabel: string; lookups: Lookups; users: Record<string, string>; onClose: () => void }) {
   const before = (row.before_value || {}) as Record<string, any>;
   const after = (row.after_value || {}) as Record<string, any>;
   const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
