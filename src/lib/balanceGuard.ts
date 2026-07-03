@@ -134,13 +134,13 @@ export function useSourceBalances(): SourceBalances {
 }
 
 
-function methodSourceLabel(method: string, merchantName?: string): string {
+function methodSourceLabel(method: string, _merchantName?: string): string {
   switch (method) {
     case "company_instapay": return "إنستا الشركة";
     case "company_cash":     return "نقدي الشركة";
-    case "merchant_instapay":return `إنستا ${merchantName || "تاجر"}`;
-    case "merchant_wallet":  return `تاجر الكاش ${merchantName || ""}`.trim();
-    case "merchant_physical":return `نقدي ${merchantName || "تاجر"}`;
+    case "merchant_instapay":return "انستا";
+    case "merchant_wallet":  return "فودافون كاش";
+    case "merchant_physical":return "نقدي";
     default: return method;
   }
 }
