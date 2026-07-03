@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { useMemo, useState } from "react";
 import {
   fmtDL,

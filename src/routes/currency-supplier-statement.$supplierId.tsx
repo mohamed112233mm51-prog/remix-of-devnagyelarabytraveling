@@ -19,6 +19,7 @@ import {
 } from "@/components/PaymentSplits";
 import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
@@ -342,6 +343,7 @@ function CurrencySupplierStatementPage() {
                     {perm.delete && isVisible("actions") && (
                       <td data-label="إجراءات">
                         <div style={{ display: "inline-flex", gap: 6 }}>
+                          <EditTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
                           <CancelTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
                           <button className="action-btn" onClick={async () => {
                             const ok = await confirmDialog("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.", { confirmLabel: "حذف", cancelLabel: "إلغاء" });
