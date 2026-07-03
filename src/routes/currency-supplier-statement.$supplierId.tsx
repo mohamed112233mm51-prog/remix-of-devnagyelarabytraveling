@@ -642,6 +642,7 @@ function TxModal({
       .single();
     if (error) return toast.error(error.message);
     const txId = (inserted as any)?.id as string;
+    await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
 
     await applyTransaction({
       kind,
