@@ -354,8 +354,14 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 
     }
     if (deductionRows.length) {
-      const { error: e2 } = await supabase.from("expense_deductions").insert(deductionRows);
+      const { data: dedIns, error: e2 } = await supabase.from("expense_deductions").insert(deductionRows).select("id");
       if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل بعض الخصومات: " + e2.message);
+      else if (dedIns) {
+        for (let i = 0; i < dedIns.length; i++) {
+          const id = (dedIns[i] as any)?.id;
+          if (id) await logCreate("expense_deductions", id, { ...deductionRows[i], id }, "خصم مصروف");
+        }
+      }
     }
     if (engineSplits.length) {
       const res = await postMovement({
@@ -373,8 +379,14 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     }
 
     if (collectionRows.length) {
-      const { error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows);
+      const { data: colIns, error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows).select("id");
       if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
+      else if (colIns) {
+        for (let i = 0; i < colIns.length; i++) {
+          const id = (colIns[i] as any)?.id;
+          if (id) await logCreate("merchant_cash_collections", id, { ...collectionRows[i], id }, "خصم رصيد تاجر (مصروف)");
+        }
+      }
     }
 
 
