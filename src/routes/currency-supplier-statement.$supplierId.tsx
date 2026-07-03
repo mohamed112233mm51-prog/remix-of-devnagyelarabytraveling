@@ -198,19 +198,11 @@ function CurrencySupplierStatementPage() {
     };
     for (const r of rowsWithBalance) {
       const cur = r.foreignCurrency;
-      const delta = Number((r as any).balance) - ((): number => {
-        // recompute delta from same logic used above
-        if (r.tx_type === "رصيد سابق") return Number(r.bought_amount || 0) + Number(r.sold_amount || 0);
-        if (r.bought_currency === r.sold_currency) return Number(r.bought_amount || 0) - Number(r.sold_amount || 0);
-        return r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
-      })();
-      // Above computes balance-before; delta itself:
       const d = r.tx_type === "رصيد سابق"
         ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
         : r.bought_currency === r.sold_currency
           ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
           : r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
-      void delta;
       if (d >= 0) bump(cur, d, 0); else bump(cur, 0, -d);
     }
     return Array.from(map.entries())
