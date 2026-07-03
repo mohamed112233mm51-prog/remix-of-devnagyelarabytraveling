@@ -6,7 +6,8 @@ import { checkPerm } from "@/hooks/usePerm";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { fmtCurrency } from "@/lib/db";
-import { FileClock, Search, Eye, Download, Printer, RefreshCcw } from "lucide-react";
+import { FileClock, Search, Eye, RefreshCcw } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
 
 export const Route = createFileRoute("/audit-log")({
   component: AuditLogPage,
@@ -239,29 +240,29 @@ function AuditLogPage() {
     );
   }
 
-  const exportCSV = () => {
-    if (!canExport) { toast.error("لا تملك صلاحية التصدير"); return; }
-    const header = ["التاريخ والوقت","المستخدم","العملية","نوع الحركة","نوع الجهة","رقم المرجع","السبب","record_id"];
-    const lines = [header.join(",")];
-    filtered.forEach((r) => {
-      const cells = [
-        new Date(r.performed_at).toLocaleString("ar-EG"),
-        users[r.performed_by || ""] || r.performed_by || "",
-        ACTION_LABEL[r.action] || r.action,
-        TABLE_LABEL[r.table_name] || r.table_name,
-        ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "",
-        r.reference_no || "",
-        (r.reason || "").replace(/[\r\n,]/g, " "),
-        r.record_id,
-      ].map((c) => `"${String(c).replace(/"/g, '""')}"`);
-      lines.push(cells.join(","));
-    });
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `audit-log-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
-  };
+  const buildExportData = () => ({
+    title: "سجل تدقيق الحركات المالية",
+    subtitle: `عدد العمليات: ${filtered.length}`,
+    fileName: `audit-log-${new Date().toISOString().slice(0, 10)}`,
+    columns: [
+      { header: "التاريخ والوقت", key: "when" },
+      { header: "المستخدم", key: "user" },
+      { header: "العملية", key: "action" },
+      { header: "نوع الحركة", key: "table" },
+      { header: "نوع الجهة", key: "entity" },
+      { header: "رقم المرجع", key: "ref" },
+      { header: "السبب", key: "reason" },
+    ],
+    rows: filtered.map((r) => ({
+      when: new Date(r.performed_at).toLocaleString("ar-EG"),
+      user: users[r.performed_by || ""] || r.performed_by || "—",
+      action: ACTION_LABEL[r.action] || r.action,
+      table: TABLE_LABEL[r.table_name] || r.table_name,
+      entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
+      ref: r.reference_no || "—",
+      reason: r.reason || "—",
+    })),
+  });
 
   return (
     <div className="page" dir="rtl">
@@ -275,17 +276,11 @@ function AuditLogPage() {
             <RefreshCcw size={14} /> تحديث
           </button>
           {canExport && (
-            <>
-              <button className="btn btn-outline" onClick={exportCSV}>
-                <Download size={14} /> Excel
-              </button>
-              <button className="btn btn-outline" onClick={() => window.print()}>
-                <Printer size={14} /> طباعة
-              </button>
-            </>
+            <ExportButton getData={buildExportData} disabled={loading || filtered.length === 0} />
           )}
         </div>
       </div>
+
 
       <div className="card">
         <div className="card-header"><div className="card-title">🔍 الفلاتر</div></div>
