@@ -1,19 +1,15 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm } from "@/hooks/usePerm";
 import { Modal } from "@/components/Modal";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { toDisplayDate } from "@/lib/dateFormat";
+import { fmtCurrency } from "@/lib/db";
 import { FileClock, Search, Eye, Download, Printer, RefreshCcw } from "lucide-react";
 
 export const Route = createFileRoute("/audit-log")({
   component: AuditLogPage,
-  beforeLoad: () => {
-    // Client-side gate only — deeper enforcement happens in the component.
-  },
 });
 
 type AuditRow = {
@@ -47,7 +43,7 @@ const ACTION_LABEL: Record<string, string> = {
   restore: "إعادة تفعيل",
   delete: "حذف",
 };
-const ACTION_COLOR: Record<string, string> = {
+const ACTION_BADGE: Record<string, string> = {
   create: "badge-green",
   edit: "badge-blue",
   cancel: "badge-red",
@@ -63,6 +59,96 @@ const ENTITY_LABEL: Record<string, string> = {
   expense: "مصروف",
   payment_split: "تقسيم دفع",
 };
+
+// Arabic labels for DB column names
+const FIELD_LABEL: Record<string, string> = {
+  cash_amount: "المبلغ النقدي",
+  amount: "المبلغ",
+  total_paid: "إجمالي المدفوع",
+  total_amount: "الإجمالي",
+  statement: "البيان",
+  note: "ملاحظة",
+  notes: "ملاحظات",
+  reason: "السبب",
+  currency: "العملة",
+  payment_method: "وسيلة الدفع",
+  cash_box_id: "الخزينة",
+  merchant_id: "تاجر الكاش",
+  agent_id: "الوكيل",
+  company_id: "الشركة",
+  supplier_id: "مورد العملة",
+  reference_no: "رقم المرجع",
+  date: "التاريخ",
+  transaction_date: "تاريخ الحركة",
+  collection_date: "تاريخ التحصيل",
+  status: "الحالة",
+  is_active: "مفعّل",
+  cancelled: "ملغى",
+  cancelled_at: "تاريخ الإلغاء",
+  cancelled_by: "أُلغي بواسطة",
+  cancel_reason: "سبب الإلغاء",
+  restored_at: "تاريخ إعادة التفعيل",
+  restored_by: "أعاد التفعيل",
+  price: "السعر",
+  count: "العدد",
+  quantity: "الكمية",
+  rate: "سعر التحويل",
+  fx_rate: "سعر الصرف",
+  buy_price: "سعر الشراء",
+  sell_price: "سعر البيع",
+  usd_amount: "المبلغ بالدولار",
+  egp_amount: "المبلغ بالجنيه",
+  lyd_amount: "المبلغ بالدينار",
+  from_currency: "من عملة",
+  to_currency: "إلى عملة",
+  from_cash_box_id: "من خزينة",
+  to_cash_box_id: "إلى خزينة",
+  category: "التصنيف",
+  type: "النوع",
+  kind: "النوع",
+  direction: "الاتجاه",
+  service_id: "الخدمة",
+  execution_id: "التنفيذ",
+  submission_id: "الطلب",
+  invoice_no: "رقم الفاتورة",
+  created_by: "أنشئ بواسطة",
+  updated_by: "عُدل بواسطة",
+};
+
+const MONEY_FIELDS = new Set([
+  "amount","cash_amount","total_paid","total_amount","price",
+  "usd_amount","egp_amount","lyd_amount","buy_price","sell_price",
+]);
+const DATE_FIELDS = new Set([
+  "date","transaction_date","collection_date",
+  "cancelled_at","restored_at","created_at","updated_at",
+]);
+const BOOL_FIELDS = new Set(["is_active","cancelled"]);
+const HIDDEN_FIELDS = new Set([
+  "id","created_at","updated_at","org_id","tenant_id",
+  "created_by","updated_by",
+]);
+
+function fieldLabel(k: string): string {
+  return FIELD_LABEL[k] || k;
+}
+
+function formatValue(k: string, v: any, row: any): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (BOOL_FIELDS.has(k) || typeof v === "boolean") return v ? "نعم" : "لا";
+  if (MONEY_FIELDS.has(k) && typeof v === "number") {
+    const cur = row?.currency || row?.from_currency || "EGP";
+    return fmtCurrency(v, cur);
+  }
+  if (DATE_FIELDS.has(k)) {
+    try {
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return d.toLocaleString("ar-EG");
+    } catch { /* noop */ }
+  }
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
 
 function AuditLogPage() {
   const { permissions, isAdmin, isSuperAdmin } = useAuth();
@@ -80,7 +166,6 @@ function AuditLogPage() {
   const [tableName, setTableName] = useState<string>("");
   const [entityType, setEntityType] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
-  const [refNo, setRefNo] = useState<string>("");
   const [q, setQ] = useState<string>("");
 
   const refresh = async () => {
@@ -98,12 +183,10 @@ function AuditLogPage() {
       if (tableName) query = query.eq("table_name", tableName);
       if (entityType) query = query.eq("entity_type", entityType);
       if (userId) query = query.eq("performed_by", userId);
-      if (refNo.trim()) query = query.ilike("reference_no", `%${refNo.trim()}%`);
       const { data, error } = await query;
       if (error) throw error;
       setRows((data || []) as any);
 
-      // fetch user labels for the rows we just got
       const uids = Array.from(new Set((data || []).map((r: any) => r.performed_by).filter(Boolean)));
       if (uids.length) {
         const { data: profs } = await supabase
@@ -123,7 +206,12 @@ function AuditLogPage() {
     }
   };
 
-  useEffect(() => { refresh(); /* eslint-disable-next-line */ }, []);
+  // Auto-refresh whenever any server-side filter changes (no apply button).
+  useEffect(() => {
+    const t = setTimeout(() => { refresh(); }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to, action, tableName, entityType, userId]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -145,8 +233,8 @@ function AuditLogPage() {
 
   if (!allowed) {
     return (
-      <div className="p-6" dir="rtl">
-        <div className="card p-8 text-center text-muted-foreground">لا تملك صلاحية عرض سجل التدقيق.</div>
+      <div className="page" dir="rtl">
+        <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 40, color: "var(--text3)" }}>لا تملك صلاحية عرض سجل التدقيق.</div></div>
       </div>
     );
   }
@@ -176,186 +264,223 @@ function AuditLogPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="text-xl font-bold flex items-center gap-2" style={{ color: "var(--text)" }}>
-          <FileClock size={22} /> سجل تدقيق الحركات المالية
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={refresh} disabled={loading}>
+    <div className="page" dir="rtl">
+      <div className="page-header">
+        <div className="page-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <FileClock size={20} strokeWidth={2} />
+          <span>سجل تدقيق الحركات المالية</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-outline" onClick={refresh} disabled={loading}>
             <RefreshCcw size={14} /> تحديث
-          </Button>
+          </button>
           {canExport && (
             <>
-              <Button variant="outline" onClick={exportCSV}><Download size={14} /> Excel/CSV</Button>
-              <Button variant="outline" onClick={() => window.print()}><Printer size={14} /> طباعة</Button>
+              <button className="btn btn-outline" onClick={exportCSV}>
+                <Download size={14} /> Excel
+              </button>
+              <button className="btn btn-outline" onClick={() => window.print()}>
+                <Printer size={14} /> طباعة
+              </button>
             </>
           )}
         </div>
       </div>
 
-      <div className="card p-3">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-          <Field label="من"><input type="date" className="ip" value={from} onChange={(e)=>setFrom(e.target.value)} /></Field>
-          <Field label="إلى"><input type="date" className="ip" value={to} onChange={(e)=>setTo(e.target.value)} /></Field>
-          <Field label="العملية">
-            <select className="ip" value={action} onChange={(e)=>setAction(e.target.value)}>
-              <option value="">الكل</option>
+      <div className="card">
+        <div className="card-header"><div className="card-title">🔍 الفلاتر</div></div>
+        <div className="card-body">
+          <div className="filter-bar">
+            <input type="date" className="filter-select" value={from} onChange={(e)=>setFrom(e.target.value)} title="من تاريخ" />
+            <input type="date" className="filter-select" value={to} onChange={(e)=>setTo(e.target.value)} title="إلى تاريخ" />
+            <select className="filter-select" value={action} onChange={(e)=>setAction(e.target.value)}>
+              <option value="">كل العمليات</option>
               {Object.entries(ACTION_LABEL).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="نوع الحركة">
-            <select className="ip" value={tableName} onChange={(e)=>setTableName(e.target.value)}>
-              <option value="">الكل</option>
+            <select className="filter-select" value={tableName} onChange={(e)=>setTableName(e.target.value)}>
+              <option value="">كل أنواع الحركات</option>
               {Object.entries(TABLE_LABEL).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="نوع الجهة">
-            <select className="ip" value={entityType} onChange={(e)=>setEntityType(e.target.value)}>
-              <option value="">الكل</option>
+            <select className="filter-select" value={entityType} onChange={(e)=>setEntityType(e.target.value)}>
+              <option value="">كل الجهات</option>
               {Object.entries(ENTITY_LABEL).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="المستخدم">
-            <select className="ip" value={userId} onChange={(e)=>setUserId(e.target.value)}>
-              <option value="">الكل</option>
+            <select className="filter-select" value={userId} onChange={(e)=>setUserId(e.target.value)}>
+              <option value="">كل المستخدمين</option>
               {Object.entries(users).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="رقم المرجع">
-            <input className="ip" value={refNo} onChange={(e)=>setRefNo(e.target.value)} placeholder="بحث..." />
-          </Field>
-          <Field label="بحث حر">
-            <div className="relative">
-              <Search size={12} className="absolute top-2.5 right-2 text-muted-foreground" />
-              <input className="ip pr-7" value={q} onChange={(e)=>setQ(e.target.value)} placeholder="سبب / جهة / مستخدم..." />
+            <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+              <Search size={14} style={{ position: "absolute", top: 12, insetInlineEnd: 10, color: "var(--text3)" }} />
+              <input
+                className="search-input"
+                value={q}
+                onChange={(e)=>setQ(e.target.value)}
+                placeholder="بحث حر: سبب / مرجع / جهة / مستخدم..."
+                style={{ paddingInlineEnd: 32 }}
+              />
             </div>
-          </Field>
-        </div>
-        <div className="mt-3 flex justify-end">
-          <Button onClick={refresh} disabled={loading}>تطبيق الفلاتر</Button>
+          </div>
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="p-2 text-right">التاريخ والوقت</th>
-                <th className="p-2 text-right">المستخدم</th>
-                <th className="p-2 text-right">العملية</th>
-                <th className="p-2 text-right">نوع الحركة</th>
-                <th className="p-2 text-right">نوع الجهة</th>
-                <th className="p-2 text-right">رقم المرجع</th>
-                <th className="p-2 text-right">السبب</th>
-                <th className="p-2 text-center">تفاصيل</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">جارٍ التحميل…</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">لا توجد سجلات مطابقة.</td></tr>
-              ) : filtered.map((r) => (
-                <tr key={r.id} className="border-t hover:bg-muted/30">
-                  <td className="p-2 whitespace-nowrap">{new Date(r.performed_at).toLocaleString("ar-EG")}</td>
-                  <td className="p-2">{users[r.performed_by || ""] || "—"}</td>
-                  <td className="p-2">
-                    <span className={`badge pill-badge ${ACTION_COLOR[r.action] || ""}`}>{ACTION_LABEL[r.action] || r.action}</span>
-                  </td>
-                  <td className="p-2">{TABLE_LABEL[r.table_name] || r.table_name}</td>
-                  <td className="p-2">{ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—"}</td>
-                  <td className="p-2">{r.reference_no ? toDisplayDate(r.reference_no) || r.reference_no : "—"}</td>
-                  <td className="p-2 max-w-[240px] truncate" title={r.reason || ""}>{r.reason || "—"}</td>
-                  <td className="p-2 text-center">
-                    <button className="action-btn" onClick={()=>setSelected(r)} title="عرض التفاصيل">
-                      <Eye size={14} />
-                    </button>
-                  </td>
+      <div className="card">
+        <div className="card-header"><div className="card-title">📋 السجل — {filtered.length} عملية</div></div>
+        <div className="card-body">
+          <div className="table-wrap enterprise-table">
+            <table className="mobile-cards">
+              <thead>
+                <tr>
+                  <th>التاريخ والوقت</th>
+                  <th>المستخدم</th>
+                  <th>العملية</th>
+                  <th>نوع الحركة</th>
+                  <th>نوع الجهة</th>
+                  <th>رقم المرجع</th>
+                  <th>السبب</th>
+                  <th style={{ textAlign: "center" }}>تفاصيل</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={8}><div className="empty"><div className="empty-text">جارٍ التحميل…</div></div></td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={8}><div className="empty"><div className="empty-icon">📋</div><div className="empty-text">لا توجد سجلات مطابقة</div></div></td></tr>
+                ) : filtered.map((r) => (
+                  <tr key={r.id}>
+                    <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{new Date(r.performed_at).toLocaleString("ar-EG")}</td>
+                    <td data-label="المستخدم">{users[r.performed_by || ""] || "—"}</td>
+                    <td data-label="العملية">
+                      <span className={`badge pill-badge ${ACTION_BADGE[r.action] || ""}`}>{ACTION_LABEL[r.action] || r.action}</span>
+                    </td>
+                    <td data-label="نوع الحركة">{TABLE_LABEL[r.table_name] || r.table_name}</td>
+                    <td data-label="نوع الجهة">{ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—"}</td>
+                    <td data-label="رقم المرجع">{r.reference_no || "—"}</td>
+                    <td data-label="السبب" style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.reason || ""}>{r.reason || "—"}</td>
+                    <td data-label="تفاصيل" style={{ textAlign: "center" }}>
+                      <button className="action-btn" onClick={()=>setSelected(r)} title="عرض التفاصيل">
+                        <Eye size={14} /> عرض
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {selected && (
-        <DetailsModal row={selected} userLabel={users[selected.performed_by || ""] || selected.performed_by || "—"} onClose={()=>setSelected(null)} />
+        <DetailsModal
+          row={selected}
+          userLabel={users[selected.performed_by || ""] || selected.performed_by || "—"}
+          onClose={()=>setSelected(null)}
+        />
       )}
-
-      <style>{`
-        .ip { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card, #fff); color: var(--text); font-size: 13px; }
-        .ip:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary, #2563eb) 30%, transparent); }
-      `}</style>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
 function DetailsModal({ row, userLabel, onClose }: { row: AuditRow; userLabel: string; onClose: () => void }) {
-  const before = row.before_value || {};
-  const after = row.after_value || {};
-  const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
-    .filter((k) => !["created_at","updated_at"].includes(k));
-  const changed = new Set<string>();
-  keys.forEach((k) => {
-    if (JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k])) changed.add(k);
-  });
+  const before = (row.before_value || {}) as Record<string, any>;
+  const after = (row.after_value || {}) as Record<string, any>;
+  const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
+    .filter((k) => !HIDDEN_FIELDS.has(k));
+
+  // Only show fields that actually changed (for edit). For create/cancel/etc.
+  // show all non-null after fields when before is empty, or vice versa.
+  const changedKeys = allKeys.filter((k) => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]));
+  const rowsToShow = row.action === "edit"
+    ? changedKeys
+    : allKeys.filter((k) => (after?.[k] ?? before?.[k]) !== null && (after?.[k] ?? before?.[k]) !== undefined && (after?.[k] ?? before?.[k]) !== "");
+
+  const context = { ...before, ...after };
 
   return (
     <Modal
       open={true}
       onClose={onClose}
-      maxWidth={880}
-      title={<span>تفاصيل عملية — {ACTION_LABEL[row.action] || row.action}</span>}
-      footer={<Button variant="outline" onClick={onClose}>إغلاق</Button>}
+      maxWidth={960}
+      title={
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          تفاصيل العملية
+          <span className={`badge pill-badge ${ACTION_BADGE[row.action] || ""}`}>{ACTION_LABEL[row.action] || row.action}</span>
+        </span>
+      }
+      footer={<button className="btn btn-outline" onClick={onClose}>إغلاق</button>}
     >
-      <div dir="rtl" className="space-y-4 text-sm">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          <Info label="المستخدم" value={userLabel} />
-          <Info label="التاريخ والوقت" value={new Date(row.performed_at).toLocaleString("ar-EG")} />
-          <Info label="العملية" value={ACTION_LABEL[row.action] || row.action} />
-          <Info label="نوع الحركة" value={TABLE_LABEL[row.table_name] || row.table_name} />
-          <Info label="نوع الجهة" value={ENTITY_LABEL[row.entity_type || ""] || row.entity_type || "—"} />
-          <Info label="رقم المرجع" value={row.reference_no || "—"} />
-          <Info label="رقم السجل" value={row.record_id} mono />
-          <Info label="السبب" value={row.reason || "—"} full />
+      <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Operation info card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div className="card-header"><div className="card-title">🧾 معلومات العملية</div></div>
+          <div className="card-body">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <InfoCell label="نوع العملية" value={ACTION_LABEL[row.action] || row.action} />
+              <InfoCell label="المستخدم" value={userLabel} />
+              <InfoCell label="التاريخ والوقت" value={new Date(row.performed_at).toLocaleString("ar-EG")} />
+              <InfoCell label="نوع الحركة" value={TABLE_LABEL[row.table_name] || row.table_name} />
+              <InfoCell label="نوع الجهة" value={ENTITY_LABEL[row.entity_type || ""] || row.entity_type || "—"} />
+              <InfoCell label="رقم المرجع" value={row.reference_no || "—"} />
+              <InfoCell label="السبب" value={row.reason || "—"} full />
+            </div>
+          </div>
         </div>
 
-        <div className="border-t pt-3">
-          <div className="font-semibold mb-2">مقارنة الحقول <span className="text-muted-foreground text-xs">(الحقول المتغيرة مميزة)</span></div>
-          <div className="overflow-auto max-h-96 border rounded">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/50 sticky top-0">
-                <tr>
-                  <th className="p-2 text-right">الحقل</th>
-                  <th className="p-2 text-right">قبل</th>
-                  <th className="p-2 text-right">بعد</th>
-                </tr>
-              </thead>
-              <tbody>
-                {keys.length === 0 && <tr><td colSpan={3} className="p-3 text-center text-muted-foreground">لا توجد بيانات</td></tr>}
-                {keys.map((k) => {
-                  const isChanged = changed.has(k);
-                  return (
-                    <tr key={k} className={`border-t ${isChanged ? "bg-yellow-50" : ""}`}>
-                      <td className="p-2 font-medium">{k}{isChanged && " •"}</td>
-                      <td className="p-2 whitespace-pre-wrap break-all">{formatVal(before?.[k])}</td>
-                      <td className="p-2 whitespace-pre-wrap break-all">{formatVal(after?.[k])}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Comparison card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div className="card-header">
+            <div className="card-title">
+              🔄 مقارنة الحقول
+              <span style={{ color: "var(--text3)", fontWeight: 400, fontSize: 12, marginInlineStart: 8 }}>
+                (الحقول {row.action === "edit" ? "المتغيرة فقط" : "المتعلقة بالحركة"})
+              </span>
+            </div>
+          </div>
+          <div className="card-body">
+            <div className="table-wrap enterprise-table" style={{ maxHeight: 420, overflow: "auto" }}>
+              <table className="mobile-cards">
+                <thead>
+                  <tr>
+                    <th style={{ width: "28%" }}>الحقل</th>
+                    <th>قبل</th>
+                    <th>بعد</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rowsToShow.length === 0 ? (
+                    <tr><td colSpan={3}><div className="empty"><div className="empty-text">لا توجد بيانات للمقارنة</div></div></td></tr>
+                  ) : rowsToShow.map((k) => {
+                    const b = formatValue(k, before?.[k], context);
+                    const a = formatValue(k, after?.[k], context);
+                    const isChanged = JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]);
+                    return (
+                      <tr key={k}>
+                        <td data-label="الحقل" style={{ fontWeight: 700 }}>{fieldLabel(k)}</td>
+                        <td data-label="قبل">
+                          <span
+                            className="badge pill-badge"
+                            style={isChanged ? {
+                              background: "color-mix(in oklab, var(--red) 12%, transparent)",
+                              color: "var(--red)",
+                              border: "1px solid color-mix(in oklab, var(--red) 30%, transparent)",
+                            } : undefined}
+                          >{b}</span>
+                        </td>
+                        <td data-label="بعد">
+                          <span
+                            className="badge pill-badge"
+                            style={isChanged ? {
+                              background: "color-mix(in oklab, var(--green) 12%, transparent)",
+                              color: "var(--green)",
+                              border: "1px solid color-mix(in oklab, var(--green) 30%, transparent)",
+                            } : undefined}
+                          >{a}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -363,17 +488,17 @@ function DetailsModal({ row, userLabel, onClose }: { row: AuditRow; userLabel: s
   );
 }
 
-function Info({ label, value, mono, full }: { label: string; value: string; mono?: boolean; full?: boolean }) {
+function InfoCell({ label, value, full }: { label: string; value: string; full?: boolean }) {
   return (
-    <div className={full ? "col-span-full" : ""}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={mono ? "font-mono text-xs break-all" : "text-sm"}>{value}</div>
+    <div style={{
+      background: "var(--card2, var(--card))",
+      border: "1px solid var(--border)",
+      borderRadius: 8,
+      padding: "8px 10px",
+      gridColumn: full ? "1 / -1" : undefined,
+    }}>
+      <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600 }}>{value}</div>
     </div>
   );
-}
-
-function formatVal(v: any): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "object") return JSON.stringify(v, null, 2);
-  return String(v);
 }
