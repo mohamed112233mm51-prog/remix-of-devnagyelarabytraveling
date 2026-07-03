@@ -12,6 +12,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { Modal } from "@/components/Modal";
 import { confirmDialog } from "@/lib/confirm";
 import { toDisplayDate, parseDisplayDate, isValidDisplayDate } from "@/lib/dateFormat";
 import { ExportButton } from "@/components/ExportButton";
@@ -542,6 +543,7 @@ function ExecutionForm({
     return out;
   })());
   const [saving, setSaving] = useState(false);
+  const [dupWarning, setDupWarning] = useState<{ matches: any[] } | null>(null);
 
   const companyServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "company");
   const agentServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "agent");
@@ -558,12 +560,30 @@ function ExecutionForm({
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
 
 
-  const save = async () => {
+  const save = async (skipDupCheck = false) => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
     if (services.length === 0) { toast.error("أضف خدمة واحدة على الأقل"); return; }
     if (form.dob && !isValidDisplayDate(form.dob)) {
       toast.error("تاريخ الميلاد غير صحيح. الصيغة المطلوبة: DD/MM/YYYY");
       return;
+    }
+    // Duplicate passport check (case/space-insensitive)
+    const passportNorm = (form.passport || "").trim().toLowerCase();
+    if (!skipDupCheck && passportNorm) {
+      try {
+        const { data: dups } = await supabase
+          .from("executions")
+          .select("id,passenger_name,passport,operation_status,status,travel_date,created_at,services")
+          .ilike("passport", passportNorm);
+        const matches = (dups || []).filter((d: any) =>
+          (d.passport || "").trim().toLowerCase() === passportNorm
+          && d.id !== editing?.id,
+        );
+        if (matches.length > 0) {
+          setDupWarning({ matches });
+          return;
+        }
+      } catch { /* if check fails, don't block save */ }
     }
     setSaving(true);
     const payload = {
@@ -888,8 +908,52 @@ function ExecutionForm({
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
         <button className="btn" onClick={onDone} disabled={saving}>إلغاء</button>
-        <button data-confirm-save={editing?.id ? "تأكيد حفظ تعديل التنفيذ" : "تأكيد حفظ التنفيذ"} onClick={save} disabled={saving} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : "حفظ"}</button>
+        <button data-confirm-save={editing?.id ? "تأكيد حفظ تعديل التنفيذ" : "تأكيد حفظ التنفيذ"} onClick={() => save()} disabled={saving} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : "حفظ"}</button>
       </div>
+
+      <Modal
+        open={!!dupWarning}
+        onClose={() => setDupWarning(null)}
+        title="تنبيه: تنفيذ مكرر لنفس رقم الجواز"
+        maxWidth={560}
+        zIndex={100001}
+        footer={
+          <>
+            <button className="btn" onClick={() => setDupWarning(null)}>إلغاء الحفظ</button>
+            <button
+              className="btn"
+              style={{ background: "#b45309", color: "#fff", border: 0, fontWeight: 800 }}
+              onClick={() => { setDupWarning(null); void save(true); }}
+            >
+              تأكيد الحفظ على أي حال
+            </button>
+          </>
+        }
+      >
+        <div style={{ fontSize: 13, color: "#334155", lineHeight: 1.9 }}>
+          <div style={{ padding: 10, borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", marginBottom: 12, fontWeight: 700 }}>
+            هذا المسافر تم تسجيل تنفيذ له من قبل بنفس رقم الجواز.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 320, overflowY: "auto" }}>
+            {dupWarning?.matches.map((m: any) => {
+              const svcNames = Array.isArray(m.services)
+                ? m.services.map((s: any) => s?.service_type).filter(Boolean).join("، ")
+                : "";
+              return (
+                <div key={m.id} style={{ padding: 10, borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <div><b>الاسم:</b> {m.passenger_name || "—"}</div>
+                  <div><b>رقم الجواز:</b> {m.passport || "—"}</div>
+                  <div><b>حالة العملية:</b> {m.operation_status || "—"}</div>
+                  <div><b>تاريخ التنفيذ:</b> {toDisplayDate(m.created_at) || "—"}</div>
+                  <div><b>تاريخ السفر:</b> {toDisplayDate(m.travel_date) || "—"}</div>
+                  {svcNames && <div><b>الخدمة:</b> {svcNames}</div>}
+                  <div style={{ color: "#64748b", fontSize: 11 }}>رقم العملية: {m.id}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
