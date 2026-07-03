@@ -450,9 +450,8 @@ function CurrencySupplierStatementPage() {
       {showPay && perm.create && (
         <CashMovementModal supplierId={supplierId} kind="دفع نقدية" boxes={boxes} merchants={merchants} onClose={() => setShowPay(false)} onSaved={() => { setShowPay(false); refresh(); }} />
       )}
-      {showCollect && perm.create && (
-        <CashMovementModal supplierId={supplierId} kind="استلام نقدية" boxes={boxes} merchants={merchants} onClose={() => setShowCollect(false)} onSaved={() => { setShowCollect(false); refresh(); }} />
-      )}
+
+
     </div>
   );
 }
