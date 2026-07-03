@@ -237,6 +237,10 @@ export function AgentPaymentForm({
 
     if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
 
+    await logCreate("transactions", txnRow.id, { ...payload, id: txnRow.id }, "دفعة وكيل");
+
+
+
     try {
       const { data: u } = await supabase.auth.getUser();
       await supabase.from("activity_logs").insert({
