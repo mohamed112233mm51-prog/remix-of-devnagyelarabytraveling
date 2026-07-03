@@ -62,6 +62,7 @@ export const ROUTE_PERM: Record<string, string | null> = {
   "/expenses": "expenses",
   "/reports": "reports",
   "/data-import": "data_import",
+  "/audit-log": "audit_log_view",
 };
 
 export function checkPerm(
