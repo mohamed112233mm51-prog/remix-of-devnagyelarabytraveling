@@ -567,18 +567,26 @@ function ExecutionForm({
       toast.error("تاريخ الميلاد غير صحيح. الصيغة المطلوبة: DD/MM/YYYY");
       return;
     }
-    // Duplicate passport check (case/space-insensitive)
+    // Duplicate check by passport OR national_id (case/space-insensitive, ignore cancelled)
     const passportNorm = (form.passport || "").trim().toLowerCase();
-    if (!skipDupCheck && passportNorm) {
+    const nationalNorm = (form.national_id || "").trim().toLowerCase();
+    if (!skipDupCheck && (passportNorm || nationalNorm)) {
       try {
+        const filters: string[] = [];
+        if (passportNorm) filters.push(`passport.ilike.${passportNorm}`);
+        if (nationalNorm) filters.push(`national_id.ilike.${nationalNorm}`);
         const { data: dups } = await supabase
           .from("executions")
-          .select("id,passenger_name,passport,operation_status,status,travel_date,created_at,services")
-          .ilike("passport", passportNorm);
-        const matches = (dups || []).filter((d: any) =>
-          (d.passport || "").trim().toLowerCase() === passportNorm
-          && d.id !== editing?.id,
-        );
+          .select("id,passenger_name,passport,national_id,operation_status,status,travel_date,created_at,services")
+          .or(filters.join(","));
+        const matches = (dups || []).filter((d: any) => {
+          if (d.id === editing?.id) return false;
+          const op = (d.operation_status || "").toString();
+          if (op.includes("ملغي") || op.includes("ملغاة")) return false;
+          const pMatch = passportNorm && (d.passport || "").trim().toLowerCase() === passportNorm;
+          const nMatch = nationalNorm && (d.national_id || "").trim().toLowerCase() === nationalNorm;
+          return pMatch || nMatch;
+        });
         if (matches.length > 0) {
           setDupWarning({ matches });
           return;
