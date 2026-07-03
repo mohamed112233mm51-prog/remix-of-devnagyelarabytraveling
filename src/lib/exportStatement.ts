@@ -68,6 +68,28 @@ const uiKey = (key: string) => `${key}__ui`;
 const getExcelCellValue = (row: Record<string, string | number>, key: string) =>
   row[excelKey(key)] ?? row[key];
 
+// PDF cell value: mirror the on-screen cell, but if the UI hides a non-zero
+// value (e.g. shows "—" for negatives via a `> 0 ? fmt : "—"` guard) fall
+// back to the raw __excel numeric so negative amounts still print.
+const NUMERIC_KEYWORDS = [...CURRENCY_KEYWORDS, ...QUANTITY_KEYWORDS].map((w) => w.toLowerCase());
+const pdfCellValue = (row: Record<string, string | number>, key: string): string | number => {
+  const ui = row[key];
+  const raw = row[excelKey(key)];
+  const rawNum = typeof raw === "number" ? raw : (typeof raw === "string" ? parseNumber(raw) : null);
+  const uiStr = ui === undefined || ui === null ? "" : String(ui);
+  const uiIsEmpty = uiStr === "" || uiStr === "—" || uiStr === "-";
+  if (rawNum !== null && rawNum !== 0 && uiIsEmpty) {
+    const k = key.toLowerCase();
+    const isNumeric = NUMERIC_KEYWORDS.some((w) => k.includes(w));
+    if (isNumeric) {
+      const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, useGrouping: true }).format(rawNum);
+      return formatted;
+    }
+    return rawNum;
+  }
+  return ui === undefined || ui === null ? "" : ui;
+};
+
 function debugStatementExportValues(data: StatementExportData) {
   const priceCol = data.columns.find((c) => /price|السعر/i.test(`${c.key} ${c.header}`));
   const shouldDebug = /كشف حساب|فودافون كاش/.test(data.title) && (priceCol || data.rows.length > 0);
