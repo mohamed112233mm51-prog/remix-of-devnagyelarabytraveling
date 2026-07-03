@@ -58,6 +58,18 @@ function CurrencySuppliersPage() {
     return () => { cancel = true; };
   }, [reloadTick]);
 
+  // Realtime: refresh the list on any change to currency_suppliers or their
+  // transactions (which affects balances shown in the row).
+  useEffect(() => {
+    const bump = () => setReloadTick((n) => n + 1);
+    const ch = supabase
+      .channel("currency-suppliers-list-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "currency_suppliers" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "currency_supplier_transactions" }, bump)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
   const refresh = () => setReloadTick((n) => n + 1);
 
   const debounced = useDebouncedValue(search, 200);

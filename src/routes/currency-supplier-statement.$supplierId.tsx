@@ -128,6 +128,29 @@ function CurrencySupplierStatementPage() {
 
   const refresh = () => setReload((n) => n + 1);
 
+  // Realtime: refresh this supplier's statement whenever a related row
+  // changes anywhere in the system. Filter by supplier_id where possible so
+  // other suppliers' activity doesn't ping this screen.
+  useEffect(() => {
+    const bump = () => setReload((n) => n + 1);
+    const ch = supabase
+      .channel(`currency-supplier-statement-rt-${supplierId}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public",
+        table: "currency_supplier_transactions",
+        filter: `supplier_id=eq.${supplierId}`,
+      }, bump)
+      .on("postgres_changes", {
+        event: "*", schema: "public",
+        table: "currency_suppliers",
+        filter: `id=eq.${supplierId}`,
+      }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "cash_boxes" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "payment_splits" }, bump)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [supplierId]);
+
   const filtered = useMemo(() => {
     // Normalize legacy Arabic currency values to canonical codes so old rows
     // group correctly with new ones.
