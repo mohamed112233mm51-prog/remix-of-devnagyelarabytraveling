@@ -55,7 +55,7 @@ type Tx = {
   id: string;
   supplier_id: string;
   tx_date: string;
-  tx_type: "شراء عملة" | "بيع عملة" | "رصيد سابق";
+  tx_type: "شراء عملة" | "بيع عملة" | "رصيد سابق" | "صرف نقدية" | "استلام نقدية";
   bought_currency: string;
   bought_amount: number;
   sold_currency: string;
