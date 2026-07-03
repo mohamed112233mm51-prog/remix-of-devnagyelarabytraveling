@@ -127,14 +127,27 @@ const DATE_FIELDS = new Set([
 const BOOL_FIELDS = new Set(["is_active","cancelled"]);
 const HIDDEN_FIELDS = new Set([
   "id","created_at","updated_at","org_id","tenant_id",
-  "created_by","updated_by",
+  "created_by","updated_by","record_id","deleted_at",
+  "is_demo","paid",
+  // FK IDs are already resolved in the "مسار الحركة المالية" section
+  "agent_id","company_id","merchant_id","supplier_id",
+  "cash_box_id","from_cash_box_id","to_cash_box_id",
+  "user_id","performed_by","service_id","execution_id","submission_id",
 ]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function fieldLabel(k: string): string {
   return FIELD_LABEL[k] || k;
 }
 
-function formatValue(k: string, v: any, row: any): string {
+function resolveIdToName(v: string, lk?: Lookups): string | null {
+  if (!lk) return null;
+  return lk.agents[v] || lk.companies[v] || lk.merchants[v]
+    || lk.suppliers[v] || lk.cashBoxes[v] || null;
+}
+
+function formatValue(k: string, v: any, row: any, lk?: Lookups): string {
   if (v === null || v === undefined || v === "") return "—";
   if (BOOL_FIELDS.has(k) || typeof v === "boolean") return v ? "نعم" : "لا";
   if (MONEY_FIELDS.has(k) && typeof v === "number") {
@@ -146,6 +159,9 @@ function formatValue(k: string, v: any, row: any): string {
       const d = new Date(v);
       if (!isNaN(d.getTime())) return d.toLocaleString("ar-EG");
     } catch { /* noop */ }
+  }
+  if (typeof v === "string" && UUID_RE.test(v)) {
+    return resolveIdToName(v, lk) || "—";
   }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
@@ -545,12 +561,13 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
   const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
     .filter((k) => !HIDDEN_FIELDS.has(k));
 
-  // Only show fields that actually changed (for edit). For create/cancel/etc.
-  // show all non-null after fields when before is empty, or vice versa.
-  const changedKeys = allKeys.filter((k) => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]));
-  const rowsToShow = row.action === "edit"
-    ? changedKeys
-    : allKeys.filter((k) => (after?.[k] ?? before?.[k]) !== null && (after?.[k] ?? before?.[k]) !== undefined && (after?.[k] ?? before?.[k]) !== "");
+  // Unified rule for all actions (edit / cancel / restore / delete / create):
+  // show every field whose value differs between before and after. When one
+  // side is empty (create / cancel / delete / restore), this naturally
+  // reduces to all populated fields on the non-empty side.
+  const rowsToShow = allKeys.filter(
+    (k) => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]),
+  );
 
   const context = { ...before, ...after };
   const flow = deriveFlow(row.table_name, context, lookups, row);
@@ -614,7 +631,7 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
             <div className="card-title">
               🔄 مقارنة الحقول
               <span style={{ color: "var(--text3)", fontWeight: 400, fontSize: 12, marginInlineStart: 8 }}>
-                (الحقول {row.action === "edit" ? "المتغيرة فقط" : "المتعلقة بالحركة"})
+                (الحقول المتغيرة فقط)
               </span>
             </div>
           </div>
@@ -632,8 +649,8 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
                   {rowsToShow.length === 0 ? (
                     <tr><td colSpan={3}><div className="empty"><div className="empty-text">لا توجد بيانات للمقارنة</div></div></td></tr>
                   ) : rowsToShow.map((k) => {
-                    const b = formatValue(k, before?.[k], context);
-                    const a = formatValue(k, after?.[k], context);
+                    const b = formatValue(k, before?.[k], context, lookups);
+                    const a = formatValue(k, after?.[k], context, lookups);
                     const isChanged = JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]);
                     return (
                       <tr key={k}>
