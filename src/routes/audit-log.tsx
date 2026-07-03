@@ -464,7 +464,7 @@ function AuditLogPage() {
     ],
     rows: filtered.map((r) => ({
       when: new Date(r.performed_at).toLocaleString("ar-EG"),
-      user: users[r.performed_by || ""] || r.performed_by || "—",
+      user: users[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—"),
       action: ACTION_LABEL[r.action] || r.action,
       table: TABLE_LABEL[r.table_name] || r.table_name,
       entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
