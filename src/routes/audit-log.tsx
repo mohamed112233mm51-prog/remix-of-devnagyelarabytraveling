@@ -680,8 +680,8 @@ function DetailsModal({ row, userLabel, lookups, users, onClose }: { row: AuditR
                   {rowsToShow.length === 0 ? (
                     <tr><td colSpan={3}><div className="empty"><div className="empty-text">لا توجد بيانات للمقارنة</div></div></td></tr>
                   ) : rowsToShow.map((k) => {
-                    const b = formatValue(k, before?.[k], context, lookups);
-                    const a = formatValue(k, after?.[k], context, lookups);
+                    const b = formatValue(k, before?.[k], context, lookups, users);
+                    const a = formatValue(k, after?.[k], context, lookups, users);
                     const isChanged = JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]);
                     return (
                       <tr key={k}>
