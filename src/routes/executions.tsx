@@ -560,12 +560,30 @@ function ExecutionForm({
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
 
 
-  const save = async () => {
+  const save = async (skipDupCheck = false) => {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
     if (services.length === 0) { toast.error("أضف خدمة واحدة على الأقل"); return; }
     if (form.dob && !isValidDisplayDate(form.dob)) {
       toast.error("تاريخ الميلاد غير صحيح. الصيغة المطلوبة: DD/MM/YYYY");
       return;
+    }
+    // Duplicate passport check (case/space-insensitive)
+    const passportNorm = (form.passport || "").trim().toLowerCase();
+    if (!skipDupCheck && passportNorm) {
+      try {
+        const { data: dups } = await supabase
+          .from("executions")
+          .select("id,passenger_name,passport,operation_status,status,travel_date,created_at,services")
+          .ilike("passport", passportNorm);
+        const matches = (dups || []).filter((d: any) =>
+          (d.passport || "").trim().toLowerCase() === passportNorm
+          && d.id !== editing?.id,
+        );
+        if (matches.length > 0) {
+          setDupWarning({ matches });
+          return;
+        }
+      } catch { /* if check fails, don't block save */ }
     }
     setSaving(true);
     const payload = {
