@@ -69,7 +69,7 @@ export function CurrencyTotalsCards({
         };
         const Icon = meta.icon;
         const status =
-          t.net > 0 ? "مدين علينا" : t.net < 0 ? "دائن له" : "متوازن";
+          t.net > 0 ? labels.debit : t.net < 0 ? labels.credit : "متوازن";
         const statusColor =
           t.net > 0
             ? "var(--red, #dc2626)"
