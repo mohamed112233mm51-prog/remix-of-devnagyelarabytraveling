@@ -370,7 +370,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 </tbody>
               </table>
             </div>
-            <CurrencyTotalsCards totals={byCurrency} />
+            <CurrencyTotalsCards totals={byCurrency} entityKind="agent" />
           </div>
         </div>
         </>
