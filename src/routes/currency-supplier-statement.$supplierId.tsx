@@ -183,39 +183,83 @@ function CurrencySupplierStatementPage() {
     return Array.from(map.entries()).map(([cur, net]) => ({ currency: cur, net }));
   }, [filtered]);
 
+  // ============================================================
+  // Balance model (positive = supplier owes us, negative = we owe supplier).
+  // For شراء/بيع we ONLY affect EGP by the residual (owed − paid); the
+  // foreign leg is a contra-entry and does NOT create phantom debt.
+  //   Buy  paid fully → residual 0.
+  //   Buy  paid part  → residual negative (we owe supplier the rest).
+  //   Sell paid fully → 0. Sell paid part → positive (supplier owes us).
+  // Opening balance: bought=debit, sold=credit in opening_currency.
+  // Cash payment TO supplier: +amount in paid currency (supplier now owes us).
+  // Cash collection FROM supplier: −amount (supplier owes us less).
+  // ============================================================
+  function deltaFor(t: Tx): { currency: string; delta: number } {
+    const splitsTotal = (t.payment_splits || []).reduce(
+      (s, x) => s + (Number(x?.amount) || 0), 0,
+    );
+    if (t.tx_type === "شراء عملة") {
+      const egp = Number(t.sold_amount || 0);
+      return { currency: EGP_CODE, delta: splitsTotal - egp };
+    }
+    if (t.tx_type === "بيع عملة") {
+      const egp = Number(t.bought_amount || 0);
+      return { currency: EGP_CODE, delta: egp - splitsTotal };
+    }
+    if (t.tx_type === "دفع نقدية") {
+      return {
+        currency: normalizeCurrency(t.sold_currency),
+        delta: Number(t.sold_amount || 0),
+      };
+    }
+    if (t.tx_type === "استلام نقدية") {
+      return {
+        currency: normalizeCurrency(t.bought_currency),
+        delta: -Number(t.bought_amount || 0),
+      };
+    }
+    // opening
+    const cur = normalizeCurrency(t.opening_currency || t.bought_currency);
+    return { currency: cur, delta: Number(t.bought_amount || 0) - Number(t.sold_amount || 0) };
+  }
+
   const rowsWithBalance = useMemo(() => {
-    // Per-currency running balance. Each currency accumulates independently
-    // so EGP/USD/LYD never mix into a single total.
     const bals = new Map<string, number>();
     return filtered.map((t) => {
+      // Display fields
+      const isBuy = t.tx_type === "شراء عملة";
+      const isSell = t.tx_type === "بيع عملة";
+      const isCashOut = t.tx_type === "دفع نقدية";
+      const isCashIn = t.tx_type === "استلام نقدية";
       const isOpening = t.tx_type === "رصيد سابق";
-      const isForeignBought = t.tx_type === "شراء عملة";
-      const foreignCurrency = isForeignBought ? t.bought_currency : t.sold_currency;
-      // For opening balance rows both currencies equal the selected currency
-      // and only one side carries a value (bought=debit, sold=credit).
-      const foreignAmount = isOpening
-        ? Number(t.bought_amount || 0) + Number(t.sold_amount || 0)
-        : isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
-      const egpAmount = isOpening
-        ? 0
-        : isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
-      const rate = isOpening ? 0 : (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0));
-      // Effect on the row's currency: bought increases (debit), sold decreases (credit).
-      let delta = 0;
-      if (t.bought_currency === t.sold_currency) {
-        delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
-      } else {
-        delta = isForeignBought ? Number(t.bought_amount || 0) : -Number(t.sold_amount || 0);
-      }
-      const next = (bals.get(foreignCurrency) || 0) + delta;
-      bals.set(foreignCurrency, next);
-      return { ...t, balance: next, foreignCurrency, foreignAmount, egpAmount, rate };
-    });
+      const foreignCurrency =
+        isBuy ? t.bought_currency :
+        isSell ? t.sold_currency :
+        isCashOut ? t.sold_currency :
+        isCashIn ? t.bought_currency :
+        (t.opening_currency || t.bought_currency);
+      const foreignAmount =
+        isBuy ? Number(t.bought_amount || 0) :
+        isSell ? Number(t.sold_amount || 0) :
+        isCashOut ? Number(t.sold_amount || 0) :
+        isCashIn ? Number(t.bought_amount || 0) :
+        isOpening ? Number(t.bought_amount || 0) + Number(t.sold_amount || 0) : 0;
+      const egpAmount =
+        isBuy ? Number(t.sold_amount || 0) :
+        isSell ? Number(t.bought_amount || 0) : 0;
+      const rate =
+        (isBuy || isSell)
+          ? (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0))
+          : 0;
 
+      const { currency: balCur, delta } = deltaFor(t);
+      const next = (bals.get(balCur) || 0) + delta;
+      bals.set(balCur, next);
+      return { ...t, balance: next, balanceCurrency: balCur, foreignCurrency, foreignAmount, egpAmount, rate };
+    });
   }, [filtered]);
 
-  // Per-currency debit/credit/net/count aggregated from the same rows the
-  // ledger displays — feeds the shared CurrencyTotalsCards component.
+  // Per-currency totals for the cards row.
   const byCurrency = useMemo<CurrencyTotal[]>(() => {
     const map = new Map<string, { debit: number; credit: number; count: number }>();
     const bump = (cur: string, d: number, c: number) => {
@@ -224,19 +268,16 @@ function CurrencySupplierStatementPage() {
       g.debit += d; g.credit += c; g.count += 1;
       map.set(k, g);
     };
-    for (const r of rowsWithBalance) {
-      const cur = r.foreignCurrency;
-      const d = r.tx_type === "رصيد سابق"
-        ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
-        : r.bought_currency === r.sold_currency
-          ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
-          : r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
-      if (d >= 0) bump(cur, d, 0); else bump(cur, 0, -d);
+    for (const t of filtered) {
+      const { currency, delta } = deltaFor(t);
+      if (delta === 0) { bump(currency, 0, 0); continue; }
+      if (delta > 0) bump(currency, delta, 0); else bump(currency, 0, -delta);
     }
     return Array.from(map.entries())
       .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
       .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
-  }, [rowsWithBalance]);
+  }, [filtered]);
+
 
   const exportData = (): StatementExportData => ({
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
