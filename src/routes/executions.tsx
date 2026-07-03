@@ -951,6 +951,7 @@ function ExecutionForm({
                 <div key={m.id} style={{ padding: 10, borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc" }}>
                   <div><b>الاسم:</b> {m.passenger_name || "—"}</div>
                   <div><b>رقم الجواز:</b> {m.passport || "—"}</div>
+                  <div><b>الرقم القومي:</b> {m.national_id || "—"}</div>
                   <div><b>حالة العملية:</b> {m.operation_status || "—"}</div>
                   <div><b>تاريخ التنفيذ:</b> {toDisplayDate(m.created_at) || "—"}</div>
                   <div><b>تاريخ السفر:</b> {toDisplayDate(m.travel_date) || "—"}</div>
