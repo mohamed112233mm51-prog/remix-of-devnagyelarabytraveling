@@ -15,6 +15,7 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -301,7 +302,20 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
       {!lockedAgentId && (
         <div className="card no-print-actions" style={{ marginBottom: 12 }}>
-          <div className="form-grid" style={{ padding: 12 }}><div className="form-group"><label>الوكيل</label><select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)}><option value="">— اختر وكيلاً —</option>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div></div>
+          <div className="form-grid" style={{ padding: 12 }}>
+            <div className="form-group">
+              <label>الوكيل</label>
+              <SearchableSelect
+                value={selectedAgentId}
+                onChange={setSelectedAgentId}
+                options={[...agents]
+                  .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"))
+                  .map((a) => ({ value: a.id, label: a.name }))}
+                placeholder="— اختر وكيلاً —"
+                emptyLabel="لا يوجد وكيل مطابق."
+              />
+            </div>
+          </div>
         </div>
       )}
 
