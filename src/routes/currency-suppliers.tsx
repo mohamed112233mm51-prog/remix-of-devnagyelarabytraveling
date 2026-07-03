@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { Search, UserPlus, FileText, Coins, ChevronLeft, Pencil, Trash2, Banknote } from "lucide-react";
+import { Search, UserPlus, FileText, Coins, ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { syncCurrencySupplierOpeningBalance } from "@/lib/openingBalance";
 
@@ -150,18 +150,6 @@ function CurrencySuppliersPage() {
                         >
                           <FileText size={14} strokeWidth={2} />
                         </button>
-                        {perm.create && (
-                          <button
-                            type="button"
-                            className="action-btn icon-only"
-                            onClick={() => navigate({ to: "/currency-supplier-statement/$supplierId", params: { supplierId: s.id }, search: { action: "pay" } as any })}
-                            title="صرف نقدية للمورد"
-                            aria-label="صرف نقدية للمورد"
-                            style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6, color: "var(--gold, #b8860b)" }}
-                          >
-                            <Banknote size={14} strokeWidth={2} />
-                          </button>
-                        )}
                         {perm.edit && (
                           <button
                             type="button"
