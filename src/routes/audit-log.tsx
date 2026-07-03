@@ -6,7 +6,8 @@ import { checkPerm } from "@/hooks/usePerm";
 import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { fmtCurrency } from "@/lib/db";
-import { FileClock, Search, Eye, Download, Printer, RefreshCcw } from "lucide-react";
+import { FileClock, Search, Eye, RefreshCcw } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
 
 export const Route = createFileRoute("/audit-log")({
   component: AuditLogPage,
