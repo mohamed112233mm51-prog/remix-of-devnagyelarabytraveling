@@ -20,6 +20,7 @@ import {
   Upload,
   Coins,
   Tag,
+  FileClock,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm, checkSettingsPerm } from "@/hooks/usePerm";
