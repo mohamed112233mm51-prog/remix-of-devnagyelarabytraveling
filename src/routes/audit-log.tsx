@@ -674,3 +674,33 @@ function InfoCell({ label, value, full }: { label: string; value: string; full?:
     </div>
   );
 }
+
+function FlowNode({ label, value, tone }: { label: string; value: string; tone: "red" | "green" | "gold" }) {
+  const color =
+    tone === "red" ? "var(--red)" :
+    tone === "green" ? "var(--green)" :
+    "var(--gold2, #B45309)";
+  return (
+    <div style={{
+      background: "var(--card2, var(--card))",
+      border: `1px solid color-mix(in oklab, ${color} 35%, var(--border))`,
+      borderRadius: 10,
+      padding: "10px 12px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      minWidth: 0,
+    }}>
+      <div style={{ fontSize: 11, color, fontWeight: 800 }}>{label}</div>
+      <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 700, overflowWrap: "anywhere" }}>{value}</div>
+    </div>
+  );
+}
+
+function FlowArrow() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 20, fontWeight: 700 }}>
+      ←
+    </div>
+  );
+}
