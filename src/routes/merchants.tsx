@@ -939,6 +939,21 @@ function MerchantStatementTab({
   }, [withRunning]);
   const finalBalance = finalByCurrency.find(([c]) => c === "EGP")?.[1] ?? 0;
 
+  // Per-currency debit/credit/net/count for the shared summary cards.
+  const byCurrency = useMemo<CurrencyTotal[]>(() => {
+    const map = new Map<string, { debit: number; credit: number; count: number }>();
+    for (const m of filtered) {
+      const cur = m.currency || "EGP";
+      const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
+      if (m.delta >= 0) g.debit += m.delta; else g.credit += -m.delta;
+      g.count += 1;
+      map.set(cur, g);
+    }
+    return Array.from(map.entries())
+      .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
+      .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
+  }, [filtered]);
+
   const [visible, setVisible] = usePersistentColumnVisibility("merchant-statement", MERCHANT_STATEMENT_COLUMNS);
   const isVisible = (k: string) => visible[k] !== false;
   const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
