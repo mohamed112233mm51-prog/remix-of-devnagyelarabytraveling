@@ -367,7 +367,25 @@ function AuditLogPage() {
       if (error) throw error;
       setRows((data || []) as any);
 
-      const uids = Array.from(new Set((data || []).map((r: any) => r.performed_by).filter(Boolean)));
+      // Collect every user id that might appear in the UI: the audit
+      // performer, plus any *_by field in before/after snapshots
+      // (cancelled_by, restored_by, created_by, updated_by, ...).
+      const userIdSet = new Set<string>();
+      (data || []).forEach((r: any) => {
+        if (r.performed_by) userIdSet.add(r.performed_by);
+        const scan = (obj: any) => {
+          if (!obj || typeof obj !== "object") return;
+          for (const [k, v] of Object.entries(obj)) {
+            if (typeof v !== "string" || !UUID_RE.test(v)) continue;
+            if (k.endsWith("_by") || k === "user_id" || k === "performed_by") {
+              userIdSet.add(v);
+            }
+          }
+        };
+        scan(r.before_value);
+        scan(r.after_value);
+      });
+      const uids = Array.from(userIdSet);
       if (uids.length) {
         const { data: profs } = await supabase
           .from("profiles")
@@ -375,7 +393,7 @@ function AuditLogPage() {
           .in("id", uids);
         const map: Record<string, string> = {};
         (profs || []).forEach((p: any) => {
-          map[p.id] = p.full_name || p.email || p.id;
+          map[p.id] = p.full_name || p.email || "مستخدم غير معروف";
         });
         setUsers(map);
       }
