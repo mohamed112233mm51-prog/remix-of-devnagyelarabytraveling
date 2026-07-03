@@ -552,7 +552,7 @@ function AuditLogPage() {
                 ) : filtered.map((r) => (
                   <tr key={r.id}>
                     <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{new Date(r.performed_at).toLocaleString("ar-EG")}</td>
-                    <td data-label="المستخدم">{users[r.performed_by || ""] || "—"}</td>
+                    <td data-label="المستخدم">{users[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—")}</td>
                     <td data-label="العملية">
                       <span className={`badge pill-badge ${ACTION_BADGE[r.action] || ""}`}>{ACTION_LABEL[r.action] || r.action}</span>
                     </td>
