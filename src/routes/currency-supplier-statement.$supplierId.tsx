@@ -410,14 +410,20 @@ function CurrencySupplierStatementPage() {
                   <tr key={r.id}>
                     {isVisible("date") && <td data-label="التاريخ">{r.tx_date}</td>}
                     {isVisible("type") && <td data-label="النوع">
-                      <span className={`badge pill-badge ${r.tx_type === "شراء عملة" ? "badge-green" : "badge-blue"}`}>{r.tx_type}</span>
+                      <span className={`badge pill-badge ${
+                        r.tx_type === "شراء عملة" ? "badge-green" :
+                        r.tx_type === "بيع عملة" ? "badge-blue" :
+                        r.tx_type === "صرف نقدية" ? "badge-red" :
+                        r.tx_type === "استلام نقدية" ? "badge-green" :
+                        "badge"
+                      }`}>{r.tx_type}</span>
                     </td>}
                     {isVisible("cur") && <td data-label="العملة">{r.foreignCurrency}</td>}
                     {isVisible("amt") && <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>}
                     {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
-                    {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
+                    {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{r.egpAmount ? fmtNum(r.egpAmount) : "—"}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
-                    {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.foreignCurrency)}</td>}
+                    {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.balanceCurrency)}</td>}
                     {isVisible("actions") && (
                       <td data-label="إجراءات">
                         <div style={{ display: "inline-flex", gap: 6 }}>
