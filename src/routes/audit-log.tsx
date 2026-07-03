@@ -202,14 +202,23 @@ function pickAmount(ctx: Record<string, any>): { amount: number | null; currency
  * Derive a "from → method → to" description of the underlying financial movement
  * from the audited row snapshot. Rules are heuristic per table_name.
  */
-function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups) {
-  const agent = ctx.agent_id ? lk.agents[ctx.agent_id] || "وكيل غير معروف" : null;
-  const company = ctx.company_id ? lk.companies[ctx.company_id] || "شركة غير معروفة" : null;
-  const merchant = ctx.merchant_id ? lk.merchants[ctx.merchant_id] || "تاجر كاش غير معروف" : null;
-  const supplier = ctx.supplier_id ? lk.suppliers[ctx.supplier_id] || "مورد عملة غير معروف" : null;
+function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups, auditRow?: AuditRow) {
+  // Fall back to audit row.entity_id when the snapshot didn't include the FK column.
+  const et = auditRow?.entity_type || null;
+  const eid = auditRow?.entity_id || null;
+  const agentId = ctx.agent_id || (et === "agent" ? eid : null);
+  const companyId = ctx.company_id || (et === "company" ? eid : null);
+  const merchantId = ctx.merchant_id || (et === "merchant" ? eid : null);
+  const supplierId = ctx.supplier_id || (et === "currency_supplier" ? eid : null);
+
+  const agent = agentId ? (lk.agents[agentId] || "وكيل غير معروف") : null;
+  const company = companyId ? (lk.companies[companyId] || "شركة غير معروفة") : null;
+  const merchant = merchantId ? (lk.merchants[merchantId] || "تاجر كاش غير معروف") : null;
+  const supplier = supplierId ? (lk.suppliers[supplierId] || "مورد عملة غير معروف") : null;
   const cashBox = resolveCashBox(ctx.cash_box_id, lk);
   const fromBox = resolveCashBox(ctx.from_cash_box_id, lk);
   const toBox = resolveCashBox(ctx.to_cash_box_id, lk);
+
 
   let from: string | null = null;
   let to: string | null = null;
