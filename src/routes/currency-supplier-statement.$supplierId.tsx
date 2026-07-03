@@ -84,6 +84,7 @@ const ALL_FILTER_CURRENCIES = [EGP_CODE, ...FOREIGN_CURRENCIES];
 
 function CurrencySupplierStatementPage() {
   const { supplierId } = Route.useParams();
+  const { action } = Route.useSearch();
   const perm = usePerm("currency_suppliers");
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
