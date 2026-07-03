@@ -520,6 +520,7 @@ function AuditLogPage() {
         <DetailsModal
           row={selected}
           userLabel={users[selected.performed_by || ""] || selected.performed_by || "—"}
+          lookups={lookups}
           onClose={()=>setSelected(null)}
         />
       )}
