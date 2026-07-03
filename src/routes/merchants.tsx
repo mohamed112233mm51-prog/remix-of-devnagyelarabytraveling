@@ -29,6 +29,7 @@ import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { syncMerchantOpeningBalance } from "@/lib/openingBalance";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import type { CancellableTable } from "@/lib/financialEngine.cancel";
+import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 
 const MERCHANT_STATEMENT_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
