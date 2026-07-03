@@ -27,7 +27,23 @@ function CountsWord(n: number) {
   return "حركة";
 }
 
-export function CurrencyTotalsCards({ totals }: { totals: CurrencyTotal[] }) {
+export type EntityKind = "agent" | "company" | "merchant" | "currency_supplier";
+
+const ENTITY_LABELS: Record<EntityKind, { debit: string; credit: string }> = {
+  agent: { debit: "مستحق على الوكيل", credit: "مستحق للوكيل" },
+  company: { debit: "مستحق على الشركة", credit: "مستحق للشركة" },
+  merchant: { debit: "مستحق على التاجر", credit: "مستحق للتاجر" },
+  currency_supplier: { debit: "مستحق على المورد", credit: "مستحق للمورد" },
+};
+
+export function CurrencyTotalsCards({
+  totals,
+  entityKind = "agent",
+}: {
+  totals: CurrencyTotal[];
+  entityKind?: EntityKind;
+}) {
+  const labels = ENTITY_LABELS[entityKind] || ENTITY_LABELS.agent;
   // Defensive: accept only a valid array
   const list = Array.isArray(totals) ? totals : [];
   const shown = list.filter(
