@@ -794,9 +794,14 @@ function TxModal({
 
         <div style={{ padding: "4px 12px 8px", fontSize: 13 }}>
           إجمالي وسائل الدفع: <b>{fmtNum(splitsTotal)}</b>
-          {Math.abs(splitsDiff) > 0.5 && (
+          {splitsDiff > 0.5 && (
+            <span style={{ color: "var(--gold, #b8860b)", marginInlineStart: 8 }}>
+              الباقي المستحق للمورد: {fmtNum(splitsDiff)}
+            </span>
+          )}
+          {splitsDiff < -0.5 && (
             <span style={{ color: "var(--red, #c00)", marginInlineStart: 8 }}>
-              الفرق: {fmtNum(splitsDiff)}
+              الفرق (زيادة): {fmtNum(-splitsDiff)}
             </span>
           )}
         </div>
@@ -810,4 +815,175 @@ function TxModal({
     document.body,
   );
 }
+
+// ============================================================
+// CashMovementModal — صرف/استلام نقدية لمورد العملة
+// ============================================================
+function CashMovementModal({
+  supplierId, kind, boxes, onClose, onSaved,
+}: {
+  supplierId: string;
+  kind: "دفع نقدية" | "استلام نقدية";
+  boxes: CashBox[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isOut = kind === "دفع نقدية"; // out = we pay supplier
+  const [currency, setCurrency] = useState<string>("EGP");
+  const [amount, setAmount] = useState<string>("");
+  const [cashBoxId, setCashBoxId] = useState<string>("");
+  const [method, setMethod] = useState<string>("نقدي");
+  const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState<string>("");
+  const [note, setNote] = useState<string>("");
+
+  const eligibleBoxes = useMemo(
+    () => boxes.filter((b) => b.currency === currency && b.is_active !== false),
+    [boxes, currency],
+  );
+
+  // Auto-pick a box when the currency changes and current selection is invalid.
+  useEffect(() => {
+    if (!eligibleBoxes.length) { setCashBoxId(""); return; }
+    if (!eligibleBoxes.find((b) => b.id === cashBoxId)) {
+      const preferred = eligibleBoxes.find((b) => b.name.includes("الرئيسية")) || eligibleBoxes[0];
+      setCashBoxId(preferred.id);
+    }
+  }, [eligibleBoxes, cashBoxId]);
+
+  const selectedBox = eligibleBoxes.find((b) => b.id === cashBoxId) || null;
+  const boxBalance = Number(selectedBox?.balance || 0);
+  const amountNum = Number(amount) || 0;
+
+  const save = async () => {
+    if (!txDate) return toast.error("التاريخ مطلوب");
+    if (!currency) return toast.error("اختر العملة");
+    if (!(amountNum > 0)) return toast.error("أدخل مبلغاً صحيحاً");
+    if (!cashBoxId || !selectedBox) return toast.error("اختر الخزينة");
+
+    if (isOut) {
+      const err = validateSingleOutflow(selectedBox.name || `خزينة ${currency}`, boxBalance, amountNum);
+      if (err) return toast.error(err);
+    }
+
+    const payload: any = {
+      supplier_id: supplierId,
+      tx_date: txDate,
+      tx_type: kind,
+      bought_currency: currency,
+      bought_amount: isOut ? 0 : amountNum,
+      sold_currency: currency,
+      sold_amount: isOut ? amountNum : 0,
+      exchange_rate: 1,
+      description: description.trim() || null,
+      payment_splits: [],
+    };
+
+    const { data: inserted, error } = await supabase
+      .from("currency_supplier_transactions" as any)
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) return toast.error(error.message);
+    const txId = (inserted as any)?.id as string;
+    await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
+
+    const res = await postMovement({
+      partyType: "currency_supplier",
+      partyId: supplierId,
+      kind: isOut ? "payment" : "receipt",
+      date: txDate,
+      note: note.trim() || undefined,
+      statement: description.trim() || undefined,
+      splits: [{
+        method,
+        currency: currency as "EGP" | "USD" | "LYD",
+        cashBoxId,
+        amount: amountNum,
+        direction: isOut ? "out" : "in",
+        grossAmount: amountNum,
+        netAmount: amountNum,
+        exchangeRate: 1,
+        egpEquivalent: currency === "EGP" ? amountNum : 0,
+      }],
+      sourceTable: "currency_supplier_transactions",
+      sourceId: txId,
+    });
+    if (!res.ok) {
+      toast.error(res.error || "تعذر تسجيل الحركة في الخزائن");
+      return;
+    }
+
+    toast.success(isOut ? "تم صرف المبلغ للمورد" : "تم تسجيل استلام المبلغ من المورد");
+    onSaved();
+  };
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0, maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="card-header">
+          <div className="card-title">
+            {isOut ? "💸 صرف نقدية لمورد العملة" : "💰 استلام نقدية من مورد العملة"}
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group"><label>التاريخ</label>
+            <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} />
+          </div>
+          <div className="form-group"><label>العملة</label>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {[EGP_CODE, ...FOREIGN_CURRENCIES].map((c) => (
+                <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group"><label>المبلغ</label>
+            <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="form-group"><label>وسيلة الدفع</label>
+            <select value={method} onChange={(e) => setMethod(e.target.value)}>
+              <option value="نقدي">نقدي</option>
+              <option value="إنستاباي">إنستاباي</option>
+              <option value="فودافون كاش">فودافون كاش</option>
+              <option value="تحويل بنكي">تحويل بنكي</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+            <label>{isOut ? "الخزينة (مصدر الصرف)" : "الخزينة (وجهة الاستلام)"}</label>
+            <select value={cashBoxId} onChange={(e) => setCashBoxId(e.target.value)}>
+              {eligibleBoxes.length === 0 && <option value="">لا توجد خزائن بهذه العملة</option>}
+              {eligibleBoxes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} — الرصيد: {fmtCurrency(Number(b.balance || 0), b.currency)}
+                </option>
+              ))}
+            </select>
+            {isOut && selectedBox && (
+              <div style={{ fontSize: 12, marginTop: 4, color: amountNum > boxBalance ? "var(--red, #c00)" : "var(--muted)" }}>
+                الرصيد المتاح: {fmtCurrency(boxBalance, currency)}
+                {amountNum > boxBalance && " — الرصيد غير كافٍ"}
+              </div>
+            )}
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>البيان</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          </div>
+        </div>
+
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
+          <button className="action-btn" onClick={onClose}>إلغاء</button>
+          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 
