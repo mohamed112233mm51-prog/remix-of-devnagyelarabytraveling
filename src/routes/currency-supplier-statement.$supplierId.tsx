@@ -678,8 +678,9 @@ function TxModal({
     if (!(a > 0) || !(r > 0) || !(e > 0)) return toast.error("أدخل قيمتين على الأقل لحساب الثالثة");
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
-    if (Math.abs(splitsDiff) > 0.5) {
-      return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) لا يساوي قيمة العملة المباعة بالجنيه (${fmtNum(egpNum)})`);
+    // Partial payment allowed. Only block if paying MORE than the exchange value.
+    if (splitsDiff < -0.5) {
+      return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) يتجاوز قيمة الصفقة بالجنيه (${fmtNum(egpNum)})`);
     }
     const validForCheck = filterValidSplits(splits);
     if (kind === "شراء عملة") {
