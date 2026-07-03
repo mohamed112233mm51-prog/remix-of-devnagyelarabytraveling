@@ -98,6 +98,11 @@ function CurrencySupplierStatementPage() {
   const [showSell, setShowSell] = useState(false);
   const [showPay, setShowPay] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
+  useEffect(() => {
+    if (action === "pay" && perm.create) setShowPay(true);
+    if (action === "receive" && perm.create) setShowReceive(true);
+  }, [action, perm.create]);
+
 
   // Filters
   const [from, setFrom] = useState("");
