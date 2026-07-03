@@ -809,3 +809,156 @@ function TxModal({
   );
 }
 
+// Cash disbursement / receipt to a currency supplier (single cash box, same currency, no split).
+function CashMovementModal({
+  supplierId, kind, boxes, onClose, onSaved,
+}: {
+  supplierId: string;
+  kind: "صرف نقدية" | "استلام نقدية";
+  boxes: CashBox[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isPay = kind === "صرف نقدية";
+  const allCurrencies = [EGP_CODE, ...FOREIGN_CURRENCIES] as const;
+  const [currency, setCurrency] = useState<string>("USD");
+  const [amount, setAmount] = useState<string>("");
+  const [cashBoxId, setCashBoxId] = useState<string>("");
+  const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState<string>("");
+
+  const availableBoxes = useMemo(
+    () => boxes.filter((b) => b.currency === currency && b.is_active !== false),
+    [boxes, currency],
+  );
+
+  // Auto-pick the first matching box when currency changes.
+  useEffect(() => {
+    if (availableBoxes.length && !availableBoxes.find((b) => b.id === cashBoxId)) {
+      setCashBoxId(availableBoxes[0].id);
+    }
+    if (!availableBoxes.length) setCashBoxId("");
+  }, [availableBoxes, cashBoxId]);
+
+  const selectedBox = availableBoxes.find((b) => b.id === cashBoxId) || null;
+
+  const save = async () => {
+    const amt = Number(amount);
+    if (!txDate) return toast.error("التاريخ مطلوب");
+    if (!currency) return toast.error("اختر العملة");
+    if (!(amt > 0)) return toast.error("أدخل مبلغاً صحيحاً");
+    if (!cashBoxId || !selectedBox) return toast.error("اختر الخزينة");
+    if (isPay) {
+      // Guard: cash box must have enough balance in the same currency.
+      const available = Number(selectedBox.balance || 0);
+      if (amt > available + 0.001) {
+        return toast.error(
+          `رصيد ${selectedBox.name} غير كافٍ (${fmtCurrency(available, selectedBox.currency)})`,
+        );
+      }
+    }
+
+    // Store cash-only movement in currency_supplier_transactions using existing columns.
+    //  - صرف نقدية:   sold_amount = amount, sold_currency = currency, bought = 0
+    //  - استلام نقدية: bought_amount = amount, bought_currency = currency, sold = 0
+    const payload: any = {
+      supplier_id: supplierId,
+      tx_date: txDate,
+      tx_type: kind,
+      bought_currency: currency,
+      bought_amount: isPay ? 0 : amt,
+      sold_currency: currency,
+      sold_amount: isPay ? amt : 0,
+      exchange_rate: null,
+      description: description.trim() || null,
+      payment_splits: [],
+    };
+    const { data: inserted, error } = await supabase
+      .from("currency_supplier_transactions" as any)
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) return toast.error(error.message);
+    const txId = (inserted as any)?.id as string;
+    await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
+
+    // Post the single-box cash-box movement via the Financial Engine so that
+    // the trigger updates cash_boxes.balance and Audit / reports pick it up.
+    const engineSplits: MovementSplit[] = [{
+      method: "نقدي",
+      currency: currency as "EGP" | "USD" | "LYD",
+      cashBoxId: cashBoxId,
+      amount: amt,
+      direction: isPay ? "out" : "in",
+      grossAmount: amt,
+      netAmount: amt,
+      exchangeRate: 1,
+      egpEquivalent: currency === "EGP" ? amt : 0,
+    }];
+    const res = await postMovement({
+      partyType: "currency_supplier",
+      partyId: supplierId,
+      kind: isPay ? "payment" : "receipt",
+      date: txDate,
+      statement: description.trim() || undefined,
+      splits: engineSplits,
+      sourceTable: "currency_supplier_transactions",
+      sourceId: txId,
+    });
+    if (!res.ok) {
+      toast.error(res.error || "تعذر تسجيل الحركة في الخزائن");
+      return;
+    }
+    toast.success("تم حفظ الحركة");
+    onSaved();
+  };
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0, maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="card-header"><div className="card-title">{isPay ? "💸 صرف نقدية لمورد العملة" : "💰 استلام نقدية من مورد العملة"}</div></div>
+
+        <div className="form-grid">
+          <div className="form-group"><label>التاريخ</label>
+            <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} />
+          </div>
+          <div className="form-group"><label>العملة</label>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {allCurrencies.map((c) => <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>)}
+            </select>
+          </div>
+          <div className="form-group"><label>المبلغ</label>
+            <input type="number" step="0.0001" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="form-group"><label>{isPay ? "الخزينة (مصدر الصرف)" : "الخزينة (وجهة الاستلام)"}</label>
+            <select value={cashBoxId} onChange={(e) => setCashBoxId(e.target.value)}>
+              {availableBoxes.length === 0 && <option value="">لا توجد خزينة بنفس العملة</option>}
+              {availableBoxes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} — الرصيد: {fmtCurrency(Number(b.balance || 0), b.currency)}
+                </option>
+              ))}
+            </select>
+            {selectedBox && isPay && (
+              <div style={{ fontSize: 12, color: "var(--muted, #666)", marginTop: 4 }}>
+                الرصيد المتاح: <b>{fmtCurrency(Number(selectedBox.balance || 0), selectedBox.currency)}</b>
+              </div>
+            )}
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>البيان</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          </div>
+        </div>
+
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
+          <button className="action-btn" onClick={onClose}>إلغاء</button>
+          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
