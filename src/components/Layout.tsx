@@ -71,10 +71,11 @@ const NAV: { label: string; items: Item[] }[] = [
     items: [{ to: "/reports", icon: BarChart3, label: "التقارير", section: "التقارير", permKey: "reports" }],
   },
   {
-    label: "الإعدادات",
+    label: "الإدارة",
     items: [
-      { to: "/data-import", icon: Upload, label: "مركز استيراد البيانات", section: "الإعدادات", permKey: "data_import" },
-      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإعدادات", permKey: "__settings__" },
+      { to: "/data-import", icon: Upload, label: "مركز استيراد البيانات", section: "الإدارة", permKey: "data_import" },
+      { to: "/audit-log", icon: FileClock, label: "سجل تدقيق الحركات المالية", section: "الإدارة", permKey: "audit_log_view" },
+      { to: "/settings", icon: Settings, label: "الإعدادات", section: "الإدارة", permKey: "__settings__" },
     ],
   },
 ];
