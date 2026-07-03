@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { ExecutionServiceItem } from "@/lib/db";
+import { logCreate } from "@/lib/financialAudit";
 
 /**
  * Execution financial posting.
