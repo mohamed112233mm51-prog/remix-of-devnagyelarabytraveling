@@ -158,6 +158,9 @@ function AuditLogPage() {
 
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [users, setUsers] = useState<Record<string, string>>({});
+  const [lookups, setLookups] = useState<Lookups>({
+    agents: {}, companies: {}, merchants: {}, suppliers: {}, cashBoxes: {},
+  });
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditRow | null>(null);
 
@@ -168,6 +171,32 @@ function AuditLogPage() {
   const [entityType, setEntityType] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
   const [q, setQ] = useState<string>("");
+
+  // Load entity name lookups once so the modal can render human names instead of IDs.
+  useEffect(() => {
+    (async () => {
+      const [ag, co, me, su, cb] = await Promise.all([
+        supabase.from("agents").select("id,agent_name"),
+        supabase.from("issuing_companies").select("id,company_name"),
+        supabase.from("merchants").select("id,merchant_name"),
+        supabase.from("currency_suppliers").select("id,supplier_name"),
+        supabase.from("cash_boxes").select("id,name,currency"),
+      ]);
+      const toMap = (rs: any[] | null, k: string) =>
+        (rs || []).reduce<Record<string, string>>((m, r) => { m[r.id] = r[k]; return m; }, {});
+      setLookups({
+        agents: toMap(ag.data as any, "agent_name"),
+        companies: toMap(co.data as any, "company_name"),
+        merchants: toMap(me.data as any, "merchant_name"),
+        suppliers: toMap(su.data as any, "supplier_name"),
+        cashBoxes: (cb.data || []).reduce<Record<string, string>>((m: any, r: any) => {
+          m[r.id] = r.currency ? `${r.name} — ${r.currency}` : r.name;
+          return m;
+        }, {}),
+      });
+    })();
+  }, []);
+
 
   const refresh = async () => {
     if (!allowed) return;
