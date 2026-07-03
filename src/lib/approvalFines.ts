@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logCreate } from "@/lib/financialAudit";
 
 /**
  * Approval expiry fine logic — applies ONLY to "موافقة أمنية".
