@@ -365,6 +365,9 @@ function CurrencySupplierStatementPage() {
             <option value="">الكل</option>
             <option value="شراء عملة">شراء عملة</option>
             <option value="بيع عملة">بيع عملة</option>
+            <option value="دفع نقدية">دفع نقدية للمورد</option>
+            <option value="استلام نقدية">استلام نقدية من المورد</option>
+            <option value="رصيد سابق">رصيد سابق</option>
           </select>
         </div>
         <div className="form-group" style={{ minWidth: 180 }}>
