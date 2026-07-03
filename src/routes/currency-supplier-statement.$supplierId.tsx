@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
-import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet, HandCoins } from "lucide-react";
 import type { StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
@@ -25,6 +25,7 @@ import { logCreate } from "@/lib/financialAudit";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
+
 
 const CS_COLUMNS: ColumnDef[] = [
   { key: "date", label: "التاريخ" },
