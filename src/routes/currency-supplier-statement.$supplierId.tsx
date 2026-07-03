@@ -186,6 +186,38 @@ function CurrencySupplierStatementPage() {
 
   }, [filtered]);
 
+  // Per-currency debit/credit/net/count aggregated from the same rows the
+  // ledger displays — feeds the shared CurrencyTotalsCards component.
+  const byCurrency = useMemo<CurrencyTotal[]>(() => {
+    const map = new Map<string, { debit: number; credit: number; count: number }>();
+    const bump = (cur: string, d: number, c: number) => {
+      const k = cur || "EGP";
+      const g = map.get(k) || { debit: 0, credit: 0, count: 0 };
+      g.debit += d; g.credit += c; g.count += 1;
+      map.set(k, g);
+    };
+    for (const r of rowsWithBalance) {
+      const cur = r.foreignCurrency;
+      const delta = Number((r as any).balance) - ((): number => {
+        // recompute delta from same logic used above
+        if (r.tx_type === "رصيد سابق") return Number(r.bought_amount || 0) + Number(r.sold_amount || 0);
+        if (r.bought_currency === r.sold_currency) return Number(r.bought_amount || 0) - Number(r.sold_amount || 0);
+        return r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
+      })();
+      // Above computes balance-before; delta itself:
+      const d = r.tx_type === "رصيد سابق"
+        ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
+        : r.bought_currency === r.sold_currency
+          ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
+          : r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
+      void delta;
+      if (d >= 0) bump(cur, d, 0); else bump(cur, 0, -d);
+    }
+    return Array.from(map.entries())
+      .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
+      .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
+  }, [rowsWithBalance]);
+
   const exportData = (): StatementExportData => ({
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
     subtitle: currencyFilter ? `العملة: ${currencyFilter}` : undefined,
