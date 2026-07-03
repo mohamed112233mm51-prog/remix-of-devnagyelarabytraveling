@@ -1110,7 +1110,7 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
     if (needsMerchant && !form.merchant_id) return toast.error("اختر التاجر");
     if (egp > sourceBalance) return toast.error("لا يوجد رصيد كافي في مصدر التحويل");
     setSaving(true);
-    const { error } = await supabase.from("usd_treasury_transactions").insert({
+    const treasuryPayload = {
       date: form.date,
       type: "conversion",
       egp_amount: egp,
@@ -1120,10 +1120,13 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
       merchant_id: needsMerchant ? form.merchant_id : null,
       note: form.note.trim() ? form.note.trim() : null,
       statement: form.statement.trim() ? form.statement.trim() : null,
-    } as any);
+    };
+    const { data: treasuryRow, error } = await supabase
+      .from("usd_treasury_transactions").insert(treasuryPayload as any).select("id").single();
 
     setSaving(false);
     if (error) return toast.error(error.message);
+    if (treasuryRow?.id) await logCreate("usd_treasury_transactions", treasuryRow.id, { ...treasuryPayload, id: treasuryRow.id }, "تحويل خزينة");
     toast.success("تم تحويل المبلغ إلى الخزينة الدولارية");
     onClose();
   };
