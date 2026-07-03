@@ -21,6 +21,7 @@ import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from 
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { logCreate } from "@/lib/financialAudit";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
