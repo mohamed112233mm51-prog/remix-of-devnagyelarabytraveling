@@ -340,20 +340,11 @@ function CurrencySupplierStatementPage() {
                     {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
                     {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.foreignCurrency)}</td>}
-                    {perm.delete && isVisible("actions") && (
+                    {isVisible("actions") && (
                       <td data-label="إجراءات">
                         <div style={{ display: "inline-flex", gap: 6 }}>
                           <EditTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
                           <CancelTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
-                          <button className="action-btn" onClick={async () => {
-                            const ok = await confirmDialog("حذف هذه الحركة؟ سيتم عكس تأثيرها على الخزائن وحسابات التجار.", { confirmLabel: "حذف", cancelLabel: "إلغاء" });
-                            if (!ok) return;
-                            await reverseTransaction(r, boxes);
-                            const { error } = await supabase.from("currency_supplier_transactions" as any).delete().eq("id", r.id);
-                            if (error) return toast.error(error.message);
-                            toast.success("تم حذف الحركة");
-                            refresh();
-                          }}>🗑</button>
                         </div>
                       </td>
                     )}
