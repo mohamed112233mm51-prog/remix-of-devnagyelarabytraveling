@@ -14,6 +14,7 @@ import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 
@@ -376,6 +377,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
+                          <EditTransactionButton table="transactions" id={e.id} cancelled={false} />
                           <CancelTransactionButton table="transactions" id={e.id} cancelled={false} />
                         </td>
                       )}

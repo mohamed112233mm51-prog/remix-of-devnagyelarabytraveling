@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -548,6 +549,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                   {isVisible("actions") && (
                     <td data-label="إجراءات">
+                      <EditTransactionButton table="company_transactions" id={e.id} cancelled={false} />
                       <CancelTransactionButton table="company_transactions" id={e.id} cancelled={false} />
                     </td>
                   )}

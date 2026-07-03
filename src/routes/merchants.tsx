@@ -28,6 +28,7 @@ import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibi
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { syncMerchantOpeningBalance } from "@/lib/openingBalance";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
+import { EditTransactionButton } from "@/components/EditTransactionButton";
 import type { CancellableTable } from "@/lib/financialEngine.cancel";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 
@@ -1118,6 +1119,7 @@ function MerchantStatementTab({
                       {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtCurrency(m.balance, m.currency)}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
+                          <EditTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
                           <CancelTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
                         </td>
                       )}
