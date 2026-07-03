@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
-import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet, HandCoins } from "lucide-react";
+import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet } from "lucide-react";
 import type { StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
@@ -99,7 +99,7 @@ function CurrencySupplierStatementPage() {
   const [showBuy, setShowBuy] = useState(false);
   const [showSell, setShowSell] = useState(false);
   const [showPay, setShowPay] = useState(false);
-  const [showCollect, setShowCollect] = useState(false);
+  
 
   // Filters
   const [from, setFrom] = useState("");
@@ -342,9 +342,8 @@ function CurrencySupplierStatementPage() {
             <button className="btn" onClick={() => setShowPay(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
               <Wallet size={15} /> صرف نقدية لمورد العملة
             </button>
-            <button className="btn" onClick={() => setShowCollect(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-              <HandCoins size={15} /> استلام نقدية من المورد
-            </button>
+
+
           </>
         )}
         <ColumnVisibility columns={CS_COLUMNS} visible={visible} onChange={setVisible} />
@@ -451,9 +450,8 @@ function CurrencySupplierStatementPage() {
       {showPay && perm.create && (
         <CashMovementModal supplierId={supplierId} kind="دفع نقدية" boxes={boxes} merchants={merchants} onClose={() => setShowPay(false)} onSaved={() => { setShowPay(false); refresh(); }} />
       )}
-      {showCollect && perm.create && (
-        <CashMovementModal supplierId={supplierId} kind="استلام نقدية" boxes={boxes} merchants={merchants} onClose={() => setShowCollect(false)} onSaved={() => { setShowCollect(false); refresh(); }} />
-      )}
+
+
     </div>
   );
 }
