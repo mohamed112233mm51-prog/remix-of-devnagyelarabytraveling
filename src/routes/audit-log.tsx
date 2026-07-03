@@ -631,7 +631,7 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
             <div className="card-title">
               🔄 مقارنة الحقول
               <span style={{ color: "var(--text3)", fontWeight: 400, fontSize: 12, marginInlineStart: 8 }}>
-                (الحقول {row.action === "edit" ? "المتغيرة فقط" : "المتعلقة بالحركة"})
+                (الحقول المتغيرة فقط)
               </span>
             </div>
           </div>
