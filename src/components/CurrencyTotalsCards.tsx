@@ -31,7 +31,7 @@ export type EntityKind = "agent" | "company" | "merchant" | "currency_supplier";
 
 const ENTITY_LABELS: Record<EntityKind, { debit: string; credit: string }> = {
   agent: { debit: "مستحق على الوكيل", credit: "مستحق للوكيل" },
-  company: { debit: "مستحق على الشركة", credit: "مستحق للشركة" },
+  company: { debit: "مستحق للشركة", credit: "مستحق على الشركة" },
   merchant: { debit: "مستحق على التاجر", credit: "مستحق للتاجر" },
   currency_supplier: { debit: "مستحق على المورد", credit: "مستحق للمورد" },
 };
