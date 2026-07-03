@@ -256,18 +256,7 @@ function CurrencySupplierStatementPage() {
         </div>
       </div>
 
-      {summary.length > 0 && (
-        <div className="account-summary kpi-rich" style={{ flexWrap: "wrap" }}>
-          {summary.map((s) => (
-            <div key={s.currency} className={`sum-box ${s.net >= 0 ? "green" : "red"}`}>
-              <div className="kpi-text">
-                <div className="label">صافي {s.currency}</div>
-                <div className="val">{fmtNum(s.net)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <CurrencyTotalsCards totals={byCurrency} entityKind="currency_supplier" />
 
       <div className="action-toolbar" style={{ flexWrap: "wrap", gap: 8 }}>
         {perm.create && (
