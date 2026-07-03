@@ -963,15 +963,34 @@ function MerchantStatementTab({
     title: "كشف حساب التاجر",
     subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
     fileName: `كشف-حساب-${merchant?.merchant_name || "التاجر"}`,
-    summary: [
-      { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
-      { label: "النقدية المحصلة من التاجر", value: fmtDL(totalCollected) },
-      { label: "إجمالي الصادر للشركات", value: fmtDL(totalOutgoing) },
-      { label: "النقدية المصروفة للتاجر", value: fmtDL(totalPaidOut) },
-      { label: "تحويل لـ USD", value: fmtDL(totalConverted) },
-      { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
-      { label: "صافي الرصيد", value: fmtDL(finalBalance) },
-    ],
+    summary: (() => {
+      const CUR_NAMES: Record<string, string> = {
+        EGP: "الجنيه المصري",
+        USD: "الدولار الأمريكي",
+        LYD: "الدينار الليبي",
+      };
+      const LABELS = { debit: "مستحق على التاجر", credit: "مستحق للتاجر", balanced: "متوازن" };
+      const base = [
+        { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
+        { label: "النقدية المحصلة من التاجر", value: fmtDL(totalCollected) },
+        { label: "إجمالي الصادر للشركات", value: fmtDL(totalOutgoing) },
+        { label: "النقدية المصروفة للتاجر", value: fmtDL(totalPaidOut) },
+        { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
+      ];
+      const perCurrency = byCurrency.flatMap((t) => {
+        const name = CUR_NAMES[t.currency] || t.currency;
+        const status = t.net > 0 ? LABELS.debit : t.net < 0 ? LABELS.credit : LABELS.balanced;
+        return [
+          { label: `— ${name} —`, value: "" },
+          { label: `مدين (${name})`, value: fmtCurrency(t.debit, t.currency) },
+          { label: `دائن (${name})`, value: fmtCurrency(t.credit, t.currency) },
+          { label: `الصافي (${name})`, value: fmtCurrency(Math.abs(t.net), t.currency) },
+          { label: `حالة الحساب (${name})`, value: status },
+          { label: `عدد الحركات (${name})`, value: String(t.count ?? 0) },
+        ];
+      });
+      return [...base, ...perCurrency];
+    })(),
     columns: ([
       { header: "#", key: "n" },
       { header: "التاريخ", key: "date" },
