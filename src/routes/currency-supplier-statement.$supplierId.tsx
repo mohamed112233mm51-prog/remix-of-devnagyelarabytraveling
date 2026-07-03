@@ -446,6 +446,12 @@ function CurrencySupplierStatementPage() {
       {showSell && perm.create && (
         <TxModal supplierId={supplierId} kind="بيع عملة" boxes={boxes} merchants={merchants} onClose={() => setShowSell(false)} onSaved={() => { setShowSell(false); refresh(); }} />
       )}
+      {showPay && perm.create && (
+        <CashMovementModal supplierId={supplierId} kind="صرف نقدية" boxes={boxes} onClose={() => setShowPay(false)} onSaved={() => { setShowPay(false); refresh(); }} />
+      )}
+      {showReceive && perm.create && (
+        <CashMovementModal supplierId={supplierId} kind="استلام نقدية" boxes={boxes} onClose={() => setShowReceive(false)} onSaved={() => { setShowReceive(false); refresh(); }} />
+      )}
     </div>
   );
 }
