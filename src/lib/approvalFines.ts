@@ -177,12 +177,24 @@ export async function ensureApprovalFines(
     if (agentRows.length > 0) {
       const { error, data } = await supabase.from("transactions").insert(agentRows as any).select("id");
       if (error) console.error("[approvalFines] agent insert error:", error);
-      else created += data?.length || 0;
+      else {
+        created += data?.length || 0;
+        for (let i = 0; i < (data?.length || 0); i++) {
+          const id = (data![i] as any)?.id;
+          if (id) await logCreate("transactions", id, { ...(agentRows as any)[i], id }, "غرامة انتهاء موافقة");
+        }
+      }
     }
     if (companyRows.length > 0) {
       const { error, data } = await supabase.from("company_transactions").insert(companyRows as any).select("id");
       if (error) console.error("[approvalFines] company insert error:", error);
-      else created += data?.length || 0;
+      else {
+        created += data?.length || 0;
+        for (let i = 0; i < (data?.length || 0); i++) {
+          const id = (data![i] as any)?.id;
+          if (id) await logCreate("company_transactions", id, { ...(companyRows as any)[i], id }, "غرامة انتهاء موافقة");
+        }
+      }
     }
   } catch (e) {
     console.error("[approvalFines] insert exception:", e);
