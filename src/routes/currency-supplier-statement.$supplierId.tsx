@@ -337,6 +337,12 @@ function CurrencySupplierStatementPage() {
             <button className="btn" onClick={() => setShowSell(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
               <ArrowUpCircle size={15} /> إضافة حركة بيع عملة
             </button>
+            <button className="btn" onClick={() => setShowPay(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+              <Banknote size={15} /> صرف نقدية للمورد
+            </button>
+            <button className="btn" onClick={() => setShowReceive(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+              <HandCoins size={15} /> استلام نقدية من المورد
+            </button>
           </>
         )}
         <ColumnVisibility columns={CS_COLUMNS} visible={visible} onChange={setVisible} />
