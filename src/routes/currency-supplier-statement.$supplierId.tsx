@@ -22,6 +22,7 @@ import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 
 const CS_COLUMNS: ColumnDef[] = [
   { key: "date", label: "التاريخ" },
