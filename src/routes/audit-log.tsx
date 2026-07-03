@@ -147,7 +147,18 @@ function resolveIdToName(v: string, lk?: Lookups): string | null {
     || lk.suppliers[v] || lk.cashBoxes[v] || null;
 }
 
-function formatValue(k: string, v: any, row: any, lk?: Lookups): string {
+const USER_FIELDS = new Set([
+  "cancelled_by","restored_by","created_by","updated_by",
+  "performed_by","user_id","deleted_by","approved_by",
+]);
+
+function formatValue(
+  k: string,
+  v: any,
+  row: any,
+  lk?: Lookups,
+  users?: Record<string, string>,
+): string {
   if (v === null || v === undefined || v === "") return "—";
   if (BOOL_FIELDS.has(k) || typeof v === "boolean") return v ? "نعم" : "لا";
   if (MONEY_FIELDS.has(k) && typeof v === "number") {
@@ -161,6 +172,7 @@ function formatValue(k: string, v: any, row: any, lk?: Lookups): string {
     } catch { /* noop */ }
   }
   if (typeof v === "string" && UUID_RE.test(v)) {
+    if (USER_FIELDS.has(k)) return users?.[v] || "مستخدم غير معروف";
     return resolveIdToName(v, lk) || "—";
   }
   if (typeof v === "object") return JSON.stringify(v);
