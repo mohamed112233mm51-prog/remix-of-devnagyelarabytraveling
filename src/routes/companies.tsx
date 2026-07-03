@@ -556,7 +556,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             </tbody>
           </table>
         </div>
-        <CurrencyTotalsCards totals={byCurrency} />
+        <CurrencyTotalsCards totals={byCurrency} entityKind="company" />
       </div>
     </div>
   );
