@@ -374,7 +374,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
   const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
   const balance = totalServices - totalPaid;
-  const accountStatus = balance > 0 ? "مدين عليه" : balance < 0 ? "دائن له" : "متوازن";
+  const accountStatus = balance > 0 ? "مستحق على الشركة" : balance < 0 ? "مستحق للشركة" : "متوازن";
 
   const byCurrency = useMemo(() => {
     const debits = new Map<string, number>();
@@ -556,7 +556,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             </tbody>
           </table>
         </div>
-        <CurrencyTotalsCards totals={byCurrency} />
+        <CurrencyTotalsCards totals={byCurrency} entityKind="company" />
       </div>
     </div>
   );

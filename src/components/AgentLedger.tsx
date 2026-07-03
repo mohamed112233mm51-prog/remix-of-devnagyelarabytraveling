@@ -219,7 +219,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const totalServices = ledger.reduce((s, e) => s + e.debit, 0);
   const totalPayments = ledger.reduce((s, e) => s + e.credit, 0);
   const net = totalServices - totalPayments;
-  const accountStatus = net > 0 ? "مدين عليه" : net < 0 ? "دائن له" : "متوازن";
+  const accountStatus = net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن";
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
 
   // Per-currency totals for the footer (final balance per currency).
@@ -370,7 +370,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 </tbody>
               </table>
             </div>
-            <CurrencyTotalsCards totals={byCurrency} />
+            <CurrencyTotalsCards totals={byCurrency} entityKind="agent" />
           </div>
         </div>
         </>
