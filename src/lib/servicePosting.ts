@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logCreate } from "@/lib/financialAudit";
 
 /**
  * Service financial posting helpers.
