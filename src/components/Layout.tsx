@@ -93,6 +93,7 @@ const TITLES: Record<string, ReactNode> = {
   "/reports": (<>التقارير <span>والإحصائيات</span></>),
   "/settings": (<>الإعدادات <span>والصلاحيات</span></>),
   "/data-import": (<>مركز <span>استيراد البيانات</span></>),
+  "/audit-log": (<>سجل <span>تدقيق الحركات المالية</span></>),
 };
 
 export default function Layout() {
