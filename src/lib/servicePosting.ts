@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logCreate } from "@/lib/financialAudit";
 
 /**
  * Service financial posting helpers.
@@ -152,8 +153,9 @@ export async function updateServiceFinancials(input: ServicePostingInput): Promi
         .eq("id", existing.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabase.from("transactions").insert(base);
+      const { data, error } = await supabase.from("transactions").insert(base).select("id").single();
       if (error) throw new Error(error.message);
+      if (data?.id) await logCreate("transactions", data.id, { ...base, id: data.id }, "توليد من تقديم خدمة");
     }
   }
 
@@ -194,8 +196,9 @@ export async function updateServiceFinancials(input: ServicePostingInput): Promi
         if (error) throw new Error(error.message);
       }
     } else if (value > 0) {
-      const { error } = await supabase.from("company_transactions").insert(base);
+      const { data, error } = await supabase.from("company_transactions").insert(base).select("id").single();
       if (error) throw new Error(error.message);
+      if (data?.id) await logCreate("company_transactions", data.id, { ...base, id: data.id }, "توليد من تقديم خدمة");
     }
   }
 }

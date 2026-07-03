@@ -22,6 +22,7 @@ export const SECTION_KEYS = [
   "service_price_search",
   "financial_cancel",
   "financial_transaction_update",
+  "audit_log_view",
   NET_PROFIT_PERMISSION_KEY,
   PROFIT_SUMMARY_PERMISSION_KEY,
 ] as const;

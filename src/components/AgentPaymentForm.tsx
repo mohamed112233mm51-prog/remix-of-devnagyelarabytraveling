@@ -8,6 +8,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement } from "@/lib/financialEngine";
+import { logCreate } from "@/lib/financialAudit";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
@@ -235,6 +236,10 @@ export function AgentPaymentForm({
     });
 
     if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
+
+    await logCreate("transactions", txnRow.id, { ...payload, id: txnRow.id }, "دفعة وكيل");
+
+
 
     try {
       const { data: u } = await supabase.auth.getUser();
