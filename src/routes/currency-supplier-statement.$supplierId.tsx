@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
-import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet, HandCoins } from "lucide-react";
 import type { StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
@@ -25,6 +25,7 @@ import { logCreate } from "@/lib/financialAudit";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
+
 
 const CS_COLUMNS: ColumnDef[] = [
   { key: "date", label: "التاريخ" },
@@ -51,11 +52,12 @@ type SplitJson = {
   method: string;
   amount: number;
 };
+type TxType = "شراء عملة" | "بيع عملة" | "رصيد سابق" | "دفع نقدية" | "استلام نقدية";
 type Tx = {
   id: string;
   supplier_id: string;
   tx_date: string;
-  tx_type: "شراء عملة" | "بيع عملة" | "رصيد سابق";
+  tx_type: TxType;
   bought_currency: string;
   bought_amount: number;
   sold_currency: string;
@@ -63,6 +65,7 @@ type Tx = {
   exchange_rate: number | null;
   description: string | null;
   payment_splits: SplitJson[] | null;
+  opening_currency?: string | null;
   created_at: string;
 };
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
@@ -94,6 +97,8 @@ function CurrencySupplierStatementPage() {
 
   const [showBuy, setShowBuy] = useState(false);
   const [showSell, setShowSell] = useState(false);
+  const [showPay, setShowPay] = useState(false);
+  const [showCollect, setShowCollect] = useState(false);
 
   // Filters
   const [from, setFrom] = useState("");
@@ -180,39 +185,83 @@ function CurrencySupplierStatementPage() {
     return Array.from(map.entries()).map(([cur, net]) => ({ currency: cur, net }));
   }, [filtered]);
 
+  // ============================================================
+  // Balance model (positive = supplier owes us, negative = we owe supplier).
+  // For شراء/بيع we ONLY affect EGP by the residual (owed − paid); the
+  // foreign leg is a contra-entry and does NOT create phantom debt.
+  //   Buy  paid fully → residual 0.
+  //   Buy  paid part  → residual negative (we owe supplier the rest).
+  //   Sell paid fully → 0. Sell paid part → positive (supplier owes us).
+  // Opening balance: bought=debit, sold=credit in opening_currency.
+  // Cash payment TO supplier: +amount in paid currency (supplier now owes us).
+  // Cash collection FROM supplier: −amount (supplier owes us less).
+  // ============================================================
+  function deltaFor(t: Tx): { currency: string; delta: number } {
+    const splitsTotal = (t.payment_splits || []).reduce(
+      (s, x) => s + (Number(x?.amount) || 0), 0,
+    );
+    if (t.tx_type === "شراء عملة") {
+      const egp = Number(t.sold_amount || 0);
+      return { currency: EGP_CODE, delta: splitsTotal - egp };
+    }
+    if (t.tx_type === "بيع عملة") {
+      const egp = Number(t.bought_amount || 0);
+      return { currency: EGP_CODE, delta: egp - splitsTotal };
+    }
+    if (t.tx_type === "دفع نقدية") {
+      return {
+        currency: normalizeCurrency(t.sold_currency),
+        delta: Number(t.sold_amount || 0),
+      };
+    }
+    if (t.tx_type === "استلام نقدية") {
+      return {
+        currency: normalizeCurrency(t.bought_currency),
+        delta: -Number(t.bought_amount || 0),
+      };
+    }
+    // opening
+    const cur = normalizeCurrency(t.opening_currency || t.bought_currency);
+    return { currency: cur, delta: Number(t.bought_amount || 0) - Number(t.sold_amount || 0) };
+  }
+
   const rowsWithBalance = useMemo(() => {
-    // Per-currency running balance. Each currency accumulates independently
-    // so EGP/USD/LYD never mix into a single total.
     const bals = new Map<string, number>();
     return filtered.map((t) => {
+      // Display fields
+      const isBuy = t.tx_type === "شراء عملة";
+      const isSell = t.tx_type === "بيع عملة";
+      const isCashOut = t.tx_type === "دفع نقدية";
+      const isCashIn = t.tx_type === "استلام نقدية";
       const isOpening = t.tx_type === "رصيد سابق";
-      const isForeignBought = t.tx_type === "شراء عملة";
-      const foreignCurrency = isForeignBought ? t.bought_currency : t.sold_currency;
-      // For opening balance rows both currencies equal the selected currency
-      // and only one side carries a value (bought=debit, sold=credit).
-      const foreignAmount = isOpening
-        ? Number(t.bought_amount || 0) + Number(t.sold_amount || 0)
-        : isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
-      const egpAmount = isOpening
-        ? 0
-        : isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
-      const rate = isOpening ? 0 : (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0));
-      // Effect on the row's currency: bought increases (debit), sold decreases (credit).
-      let delta = 0;
-      if (t.bought_currency === t.sold_currency) {
-        delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
-      } else {
-        delta = isForeignBought ? Number(t.bought_amount || 0) : -Number(t.sold_amount || 0);
-      }
-      const next = (bals.get(foreignCurrency) || 0) + delta;
-      bals.set(foreignCurrency, next);
-      return { ...t, balance: next, foreignCurrency, foreignAmount, egpAmount, rate };
-    });
+      const foreignCurrency =
+        isBuy ? t.bought_currency :
+        isSell ? t.sold_currency :
+        isCashOut ? t.sold_currency :
+        isCashIn ? t.bought_currency :
+        (t.opening_currency || t.bought_currency);
+      const foreignAmount =
+        isBuy ? Number(t.bought_amount || 0) :
+        isSell ? Number(t.sold_amount || 0) :
+        isCashOut ? Number(t.sold_amount || 0) :
+        isCashIn ? Number(t.bought_amount || 0) :
+        isOpening ? Number(t.bought_amount || 0) + Number(t.sold_amount || 0) : 0;
+      const egpAmount =
+        isBuy ? Number(t.sold_amount || 0) :
+        isSell ? Number(t.bought_amount || 0) : 0;
+      const rate =
+        (isBuy || isSell)
+          ? (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0))
+          : 0;
 
+      const { currency: balCur, delta } = deltaFor(t);
+      const next = (bals.get(balCur) || 0) + delta;
+      bals.set(balCur, next);
+      return { ...t, balance: next, balanceCurrency: balCur, foreignCurrency, foreignAmount, egpAmount, rate };
+    });
   }, [filtered]);
 
-  // Per-currency debit/credit/net/count aggregated from the same rows the
-  // ledger displays — feeds the shared CurrencyTotalsCards component.
+  // Per-currency totals for the cards row.
   const byCurrency = useMemo<CurrencyTotal[]>(() => {
     const map = new Map<string, { debit: number; credit: number; count: number }>();
     const bump = (cur: string, d: number, c: number) => {
@@ -221,19 +270,16 @@ function CurrencySupplierStatementPage() {
       g.debit += d; g.credit += c; g.count += 1;
       map.set(k, g);
     };
-    for (const r of rowsWithBalance) {
-      const cur = r.foreignCurrency;
-      const d = r.tx_type === "رصيد سابق"
-        ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
-        : r.bought_currency === r.sold_currency
-          ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
-          : r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
-      if (d >= 0) bump(cur, d, 0); else bump(cur, 0, -d);
+    for (const t of filtered) {
+      const { currency, delta } = deltaFor(t);
+      if (delta === 0) { bump(currency, 0, 0); continue; }
+      if (delta > 0) bump(currency, delta, 0); else bump(currency, 0, -delta);
     }
     return Array.from(map.entries())
       .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
       .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
-  }, [rowsWithBalance]);
+  }, [filtered]);
+
 
   const exportData = (): StatementExportData => ({
     title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
@@ -292,6 +338,12 @@ function CurrencySupplierStatementPage() {
             <button className="btn" onClick={() => setShowSell(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
               <ArrowUpCircle size={15} /> إضافة حركة بيع عملة
             </button>
+            <button className="btn" onClick={() => setShowPay(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+              <Wallet size={15} /> صرف نقدية لمورد العملة
+            </button>
+            <button className="btn" onClick={() => setShowCollect(true)} type="button" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+              <HandCoins size={15} /> استلام نقدية من المورد
+            </button>
           </>
         )}
         <ColumnVisibility columns={CS_COLUMNS} visible={visible} onChange={setVisible} />
@@ -313,6 +365,9 @@ function CurrencySupplierStatementPage() {
             <option value="">الكل</option>
             <option value="شراء عملة">شراء عملة</option>
             <option value="بيع عملة">بيع عملة</option>
+            <option value="دفع نقدية">دفع نقدية للمورد</option>
+            <option value="استلام نقدية">استلام نقدية من المورد</option>
+            <option value="رصيد سابق">رصيد سابق</option>
           </select>
         </div>
         <div className="form-group" style={{ minWidth: 180 }}>
@@ -356,14 +411,20 @@ function CurrencySupplierStatementPage() {
                   <tr key={r.id}>
                     {isVisible("date") && <td data-label="التاريخ">{r.tx_date}</td>}
                     {isVisible("type") && <td data-label="النوع">
-                      <span className={`badge pill-badge ${r.tx_type === "شراء عملة" ? "badge-green" : "badge-blue"}`}>{r.tx_type}</span>
+                      <span className={`badge pill-badge ${
+                        r.tx_type === "شراء عملة" ? "badge-green" :
+                        r.tx_type === "بيع عملة" ? "badge-blue" :
+                        r.tx_type === "دفع نقدية" ? "badge-red" :
+                        r.tx_type === "استلام نقدية" ? "badge-teal" :
+                        "badge-gray"
+                      }`}>{r.tx_type === "دفع نقدية" ? "صرف نقدية للمورد" : r.tx_type === "استلام نقدية" ? "استلام نقدية من المورد" : r.tx_type}</span>
                     </td>}
                     {isVisible("cur") && <td data-label="العملة">{r.foreignCurrency}</td>}
                     {isVisible("amt") && <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>}
                     {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
-                    {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{fmtNum(r.egpAmount)}</td>}
+                    {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{r.egpAmount ? fmtNum(r.egpAmount) : "—"}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
-                    {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.foreignCurrency)}</td>}
+                    {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.balanceCurrency)}</td>}
                     {isVisible("actions") && (
                       <td data-label="إجراءات">
                         <div style={{ display: "inline-flex", gap: 6 }}>
@@ -385,6 +446,12 @@ function CurrencySupplierStatementPage() {
       )}
       {showSell && perm.create && (
         <TxModal supplierId={supplierId} kind="بيع عملة" boxes={boxes} merchants={merchants} onClose={() => setShowSell(false)} onSaved={() => { setShowSell(false); refresh(); }} />
+      )}
+      {showPay && perm.create && (
+        <CashMovementModal supplierId={supplierId} kind="دفع نقدية" boxes={boxes} onClose={() => setShowPay(false)} onSaved={() => { setShowPay(false); refresh(); }} />
+      )}
+      {showCollect && perm.create && (
+        <CashMovementModal supplierId={supplierId} kind="استلام نقدية" boxes={boxes} onClose={() => setShowCollect(false)} onSaved={() => { setShowCollect(false); refresh(); }} />
       )}
     </div>
   );
@@ -611,8 +678,9 @@ function TxModal({
     if (!(a > 0) || !(r > 0) || !(e > 0)) return toast.error("أدخل قيمتين على الأقل لحساب الثالثة");
     const err = validatePaymentSplits(splits);
     if (err) return toast.error(err);
-    if (Math.abs(splitsDiff) > 0.5) {
-      return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) لا يساوي قيمة العملة المباعة بالجنيه (${fmtNum(egpNum)})`);
+    // Partial payment allowed. Only block if paying MORE than the exchange value.
+    if (splitsDiff < -0.5) {
+      return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) يتجاوز قيمة الصفقة بالجنيه (${fmtNum(egpNum)})`);
     }
     const validForCheck = filterValidSplits(splits);
     if (kind === "شراء عملة") {
@@ -726,9 +794,14 @@ function TxModal({
 
         <div style={{ padding: "4px 12px 8px", fontSize: 13 }}>
           إجمالي وسائل الدفع: <b>{fmtNum(splitsTotal)}</b>
-          {Math.abs(splitsDiff) > 0.5 && (
+          {splitsDiff > 0.5 && (
+            <span style={{ color: "var(--gold, #b8860b)", marginInlineStart: 8 }}>
+              الباقي المستحق للمورد: {fmtNum(splitsDiff)}
+            </span>
+          )}
+          {splitsDiff < -0.5 && (
             <span style={{ color: "var(--red, #c00)", marginInlineStart: 8 }}>
-              الفرق: {fmtNum(splitsDiff)}
+              الفرق (زيادة): {fmtNum(-splitsDiff)}
             </span>
           )}
         </div>
@@ -742,4 +815,175 @@ function TxModal({
     document.body,
   );
 }
+
+// ============================================================
+// CashMovementModal — صرف/استلام نقدية لمورد العملة
+// ============================================================
+function CashMovementModal({
+  supplierId, kind, boxes, onClose, onSaved,
+}: {
+  supplierId: string;
+  kind: "دفع نقدية" | "استلام نقدية";
+  boxes: CashBox[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isOut = kind === "دفع نقدية"; // out = we pay supplier
+  const [currency, setCurrency] = useState<string>("EGP");
+  const [amount, setAmount] = useState<string>("");
+  const [cashBoxId, setCashBoxId] = useState<string>("");
+  const [method, setMethod] = useState<string>("نقدي");
+  const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState<string>("");
+  const [note, setNote] = useState<string>("");
+
+  const eligibleBoxes = useMemo(
+    () => boxes.filter((b) => b.currency === currency && b.is_active !== false),
+    [boxes, currency],
+  );
+
+  // Auto-pick a box when the currency changes and current selection is invalid.
+  useEffect(() => {
+    if (!eligibleBoxes.length) { setCashBoxId(""); return; }
+    if (!eligibleBoxes.find((b) => b.id === cashBoxId)) {
+      const preferred = eligibleBoxes.find((b) => b.name.includes("الرئيسية")) || eligibleBoxes[0];
+      setCashBoxId(preferred.id);
+    }
+  }, [eligibleBoxes, cashBoxId]);
+
+  const selectedBox = eligibleBoxes.find((b) => b.id === cashBoxId) || null;
+  const boxBalance = Number(selectedBox?.balance || 0);
+  const amountNum = Number(amount) || 0;
+
+  const save = async () => {
+    if (!txDate) return toast.error("التاريخ مطلوب");
+    if (!currency) return toast.error("اختر العملة");
+    if (!(amountNum > 0)) return toast.error("أدخل مبلغاً صحيحاً");
+    if (!cashBoxId || !selectedBox) return toast.error("اختر الخزينة");
+
+    if (isOut) {
+      const err = validateSingleOutflow(selectedBox.name || `خزينة ${currency}`, boxBalance, amountNum);
+      if (err) return toast.error(err);
+    }
+
+    const payload: any = {
+      supplier_id: supplierId,
+      tx_date: txDate,
+      tx_type: kind,
+      bought_currency: currency,
+      bought_amount: isOut ? 0 : amountNum,
+      sold_currency: currency,
+      sold_amount: isOut ? amountNum : 0,
+      exchange_rate: 1,
+      description: description.trim() || null,
+      payment_splits: [],
+    };
+
+    const { data: inserted, error } = await supabase
+      .from("currency_supplier_transactions" as any)
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) return toast.error(error.message);
+    const txId = (inserted as any)?.id as string;
+    await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
+
+    const res = await postMovement({
+      partyType: "currency_supplier",
+      partyId: supplierId,
+      kind: isOut ? "payment" : "receipt",
+      date: txDate,
+      note: note.trim() || undefined,
+      statement: description.trim() || undefined,
+      splits: [{
+        method,
+        currency: currency as "EGP" | "USD" | "LYD",
+        cashBoxId,
+        amount: amountNum,
+        direction: isOut ? "out" : "in",
+        grossAmount: amountNum,
+        netAmount: amountNum,
+        exchangeRate: 1,
+        egpEquivalent: currency === "EGP" ? amountNum : 0,
+      }],
+      sourceTable: "currency_supplier_transactions",
+      sourceId: txId,
+    });
+    if (!res.ok) {
+      toast.error(res.error || "تعذر تسجيل الحركة في الخزائن");
+      return;
+    }
+
+    toast.success(isOut ? "تم صرف المبلغ للمورد" : "تم تسجيل استلام المبلغ من المورد");
+    onSaved();
+  };
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0, maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="card-header">
+          <div className="card-title">
+            {isOut ? "💸 صرف نقدية لمورد العملة" : "💰 استلام نقدية من مورد العملة"}
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group"><label>التاريخ</label>
+            <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} />
+          </div>
+          <div className="form-group"><label>العملة</label>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {[EGP_CODE, ...FOREIGN_CURRENCIES].map((c) => (
+                <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group"><label>المبلغ</label>
+            <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="form-group"><label>وسيلة الدفع</label>
+            <select value={method} onChange={(e) => setMethod(e.target.value)}>
+              <option value="نقدي">نقدي</option>
+              <option value="إنستاباي">إنستاباي</option>
+              <option value="فودافون كاش">فودافون كاش</option>
+              <option value="تحويل بنكي">تحويل بنكي</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+            <label>{isOut ? "الخزينة (مصدر الصرف)" : "الخزينة (وجهة الاستلام)"}</label>
+            <select value={cashBoxId} onChange={(e) => setCashBoxId(e.target.value)}>
+              {eligibleBoxes.length === 0 && <option value="">لا توجد خزائن بهذه العملة</option>}
+              {eligibleBoxes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} — الرصيد: {fmtCurrency(Number(b.balance || 0), b.currency)}
+                </option>
+              ))}
+            </select>
+            {isOut && selectedBox && (
+              <div style={{ fontSize: 12, marginTop: 4, color: amountNum > boxBalance ? "var(--red, #c00)" : "var(--muted)" }}>
+                الرصيد المتاح: {fmtCurrency(boxBalance, currency)}
+                {amountNum > boxBalance && " — الرصيد غير كافٍ"}
+              </div>
+            )}
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>البيان</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          </div>
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          </div>
+        </div>
+
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
+          <button className="action-btn" onClick={onClose}>إلغاء</button>
+          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 
