@@ -553,7 +553,7 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
     : allKeys.filter((k) => (after?.[k] ?? before?.[k]) !== null && (after?.[k] ?? before?.[k]) !== undefined && (after?.[k] ?? before?.[k]) !== "");
 
   const context = { ...before, ...after };
-  const flow = deriveFlow(row.table_name, context, lookups);
+  const flow = deriveFlow(row.table_name, context, lookups, row);
 
 
   return (
