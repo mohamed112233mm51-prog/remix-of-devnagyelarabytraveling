@@ -13,6 +13,7 @@ import type { StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
   type PaymentSplitRow,
+  type SplitCurrency,
   newPaymentSplitRow,
   validatePaymentSplits,
   filterValidSplits,
@@ -448,10 +449,10 @@ function CurrencySupplierStatementPage() {
         <TxModal supplierId={supplierId} kind="بيع عملة" boxes={boxes} merchants={merchants} onClose={() => setShowSell(false)} onSaved={() => { setShowSell(false); refresh(); }} />
       )}
       {showPay && perm.create && (
-        <CashMovementModal supplierId={supplierId} kind="دفع نقدية" boxes={boxes} onClose={() => setShowPay(false)} onSaved={() => { setShowPay(false); refresh(); }} />
+        <CashMovementModal supplierId={supplierId} kind="دفع نقدية" boxes={boxes} merchants={merchants} onClose={() => setShowPay(false)} onSaved={() => { setShowPay(false); refresh(); }} />
       )}
       {showCollect && perm.create && (
-        <CashMovementModal supplierId={supplierId} kind="استلام نقدية" boxes={boxes} onClose={() => setShowCollect(false)} onSaved={() => { setShowCollect(false); refresh(); }} />
+        <CashMovementModal supplierId={supplierId} kind="استلام نقدية" boxes={boxes} merchants={merchants} onClose={() => setShowCollect(false)} onSaved={() => { setShowCollect(false); refresh(); }} />
       )}
     </div>
   );
@@ -818,54 +819,77 @@ function TxModal({
 
 // ============================================================
 // CashMovementModal — صرف/استلام نقدية لمورد العملة
+// يستخدم نفس PaymentSplits المستخدم في باقي النظام: يدعم الدفع
+// من خزائن الشركة أو من تجار الكاش، بعملات مختلفة، وأكثر من سطر.
 // ============================================================
 function CashMovementModal({
-  supplierId, kind, boxes, onClose, onSaved,
+  supplierId, kind, boxes, merchants, onClose, onSaved,
 }: {
   supplierId: string;
   kind: "دفع نقدية" | "استلام نقدية";
   boxes: CashBox[];
+  merchants: Merchant[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const isOut = kind === "دفع نقدية"; // out = we pay supplier
-  const [currency, setCurrency] = useState<string>("EGP");
+  const balances = useSourceBalances();
+
+  const [currency, setCurrency] = useState<SplitCurrency>("EGP");
   const [amount, setAmount] = useState<string>("");
-  const [cashBoxId, setCashBoxId] = useState<string>("");
-  const [method, setMethod] = useState<string>("نقدي");
   const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState<string>("");
   const [note, setNote] = useState<string>("");
 
-  const eligibleBoxes = useMemo(
-    () => boxes.filter((b) => b.currency === currency && b.is_active !== false),
-    [boxes, currency],
-  );
-
-  // Auto-pick a box when the currency changes and current selection is invalid.
+  // Lock split rows to the modal's currency (single-currency movement).
+  const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
+    const r = newPaymentSplitRow();
+    r.currency = "EGP";
+    return [r];
+  });
   useEffect(() => {
-    if (!eligibleBoxes.length) { setCashBoxId(""); return; }
-    if (!eligibleBoxes.find((b) => b.id === cashBoxId)) {
-      const preferred = eligibleBoxes.find((b) => b.name.includes("الرئيسية")) || eligibleBoxes[0];
-      setCashBoxId(preferred.id);
-    }
-  }, [eligibleBoxes, cashBoxId]);
+    setSplits((prev) => prev.map((r) => ({ ...r, currency })));
+  }, [currency]);
+  const onSplitsChange = (next: PaymentSplitRow[]) => {
+    setSplits(next.map((r) => ({ ...r, currency })));
+  };
 
-  const selectedBox = eligibleBoxes.find((b) => b.id === cashBoxId) || null;
-  const boxBalance = Number(selectedBox?.balance || 0);
+  const splitsTotal = useMemo(
+    () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [splits],
+  );
   const amountNum = Number(amount) || 0;
+  const diff = +(amountNum - splitsTotal).toFixed(2);
 
   const save = async () => {
     if (!txDate) return toast.error("التاريخ مطلوب");
-    if (!currency) return toast.error("اختر العملة");
     if (!(amountNum > 0)) return toast.error("أدخل مبلغاً صحيحاً");
-    if (!cashBoxId || !selectedBox) return toast.error("اختر الخزينة");
-
-    if (isOut) {
-      const err = validateSingleOutflow(selectedBox.name || `خزينة ${currency}`, boxBalance, amountNum);
-      if (err) return toast.error(err);
+    const vErr = validatePaymentSplits(splits);
+    if (vErr) return toast.error(vErr);
+    if (Math.abs(diff) > 0.5) {
+      return toast.error(`إجمالي سطور الدفع (${fmtNum(splitsTotal)}) لا يساوي المبلغ المطلوب (${fmtNum(amountNum)})`);
     }
 
+    const validSplits = filterValidSplits(splits);
+
+    // ==== Balance guard (outflow only) ====
+    if (isOut) {
+      // Merchant legs use the shared guard (per-merchant per-currency balances).
+      const merchantErr = validateSplitOutflows(validSplits, balances, merchants);
+      if (merchantErr) return toast.error(merchantErr);
+      // Company legs: check the resolved cash box balance for THIS currency.
+      for (const r of validSplits) {
+        if (r.source !== "company") continue;
+        const box = resolveCompanyBoxForSplit(boxes, r.currency, r.method);
+        if (!box) {
+          return toast.error(`لا توجد خزينة شركة لـ ${methodLabelForSplit(r.method)} بعملة ${r.currency}`);
+        }
+        const bErr = validateSingleOutflow(box.name, Number(box.balance || 0), Number(r.amount || 0));
+        if (bErr) return toast.error(bErr);
+      }
+    }
+
+    // ==== Insert parent transaction (metadata only) ====
     const payload: any = {
       supplier_id: supplierId,
       tx_date: txDate,
@@ -876,7 +900,13 @@ function CashMovementModal({
       sold_amount: isOut ? amountNum : 0,
       exchange_rate: 1,
       description: description.trim() || null,
-      payment_splits: [],
+      payment_splits: validSplits.map((r) => ({
+        source: r.source,
+        currency,
+        merchant_id: r.source === "merchant" ? r.merchant_id : null,
+        method: r.method,
+        amount: Number(r.amount) || 0,
+      })),
     };
 
     const { data: inserted, error } = await supabase
@@ -888,6 +918,42 @@ function CashMovementModal({
     const txId = (inserted as any)?.id as string;
     await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
 
+    // ==== Build engine splits + merchant side-effects ====
+    const engineSplits: MovementSplit[] = [];
+    for (const r of validSplits) {
+      const amt = Number(r.amount) || 0;
+      if (!amt) continue;
+      let cashBoxId: string | null = null;
+      if (r.source === "company") {
+        cashBoxId = resolveCompanyBoxForSplit(boxes, r.currency, r.method)?.id || null;
+      }
+      engineSplits.push({
+        method: methodLabelForSplit(r.method),
+        currency,
+        cashBoxId,
+        amount: amt,
+        direction: isOut ? "out" : "in",
+        grossAmount: amt,
+        netAmount: amt,
+        exchangeRate: 1,
+        egpEquivalent: currency === "EGP" ? amt : 0,
+      });
+
+      // Merchant balance is aggregated from merchant_cash_collections.
+      // Convention (see applyTransaction): "buy"/"pay-out" via merchant → +amount
+      // (merchant absorbs the outflow on our behalf); collection/receipt → -amount.
+      if (r.source === "merchant" && r.merchant_id) {
+        const signed = isOut ? +amt : -amt;
+        await supabase.from("merchant_cash_collections").insert({
+          merchant_id: r.merchant_id,
+          date: txDate,
+          amount: signed,
+          note: null,
+          statement: description.trim() ? description.trim() : null,
+        });
+      }
+    }
+
     const res = await postMovement({
       partyType: "currency_supplier",
       partyId: supplierId,
@@ -895,17 +961,7 @@ function CashMovementModal({
       date: txDate,
       note: note.trim() || undefined,
       statement: description.trim() || undefined,
-      splits: [{
-        method,
-        currency: currency as "EGP" | "USD" | "LYD",
-        cashBoxId,
-        amount: amountNum,
-        direction: isOut ? "out" : "in",
-        grossAmount: amountNum,
-        netAmount: amountNum,
-        exchangeRate: 1,
-        egpEquivalent: currency === "EGP" ? amountNum : 0,
-      }],
+      splits: engineSplits,
       sourceTable: "currency_supplier_transactions",
       sourceId: txId,
     });
@@ -922,7 +978,7 @@ function CashMovementModal({
 
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0, maxHeight: "90vh", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 820, width: "100%", margin: 0, maxHeight: "90vh", overflowY: "auto" }}>
         <div className="card-header">
           <div className="card-title">
             {isOut ? "💸 صرف نقدية لمورد العملة" : "💰 استلام نقدية من مورد العملة"}
@@ -934,39 +990,14 @@ function CashMovementModal({
             <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} />
           </div>
           <div className="form-group"><label>العملة</label>
-            <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value as SplitCurrency)}>
               {[EGP_CODE, ...FOREIGN_CURRENCIES].map((c) => (
                 <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>
               ))}
             </select>
           </div>
-          <div className="form-group"><label>المبلغ</label>
+          <div className="form-group"><label>المبلغ الإجمالي</label>
             <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div className="form-group"><label>وسيلة الدفع</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value)}>
-              <option value="نقدي">نقدي</option>
-              <option value="إنستاباي">إنستاباي</option>
-              <option value="فودافون كاش">فودافون كاش</option>
-              <option value="تحويل بنكي">تحويل بنكي</option>
-            </select>
-          </div>
-          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-            <label>{isOut ? "الخزينة (مصدر الصرف)" : "الخزينة (وجهة الاستلام)"}</label>
-            <select value={cashBoxId} onChange={(e) => setCashBoxId(e.target.value)}>
-              {eligibleBoxes.length === 0 && <option value="">لا توجد خزائن بهذه العملة</option>}
-              {eligibleBoxes.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} — الرصيد: {fmtCurrency(Number(b.balance || 0), b.currency)}
-                </option>
-              ))}
-            </select>
-            {isOut && selectedBox && (
-              <div style={{ fontSize: 12, marginTop: 4, color: amountNum > boxBalance ? "var(--red, #c00)" : "var(--muted)" }}>
-                الرصيد المتاح: {fmtCurrency(boxBalance, currency)}
-                {amountNum > boxBalance && " — الرصيد غير كافٍ"}
-              </div>
-            )}
           </div>
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>البيان</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
@@ -974,6 +1005,22 @@ function CashMovementModal({
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
           </div>
+        </div>
+
+        <PaymentSplits
+          splits={splits}
+          merchants={merchants}
+          onChange={onSplitsChange}
+          title={isOut ? "سطور الدفع (من الشركة / تاجر كاش)" : "سطور الاستلام (إلى الشركة / تاجر كاش)"}
+        />
+
+        <div style={{ padding: "4px 12px 8px", fontSize: 13 }}>
+          إجمالي السطور: <b>{fmtNum(splitsTotal)}</b>
+          {Math.abs(diff) > 0.5 && (
+            <span style={{ color: "var(--red, #c00)", marginInlineStart: 8 }}>
+              الفرق عن المبلغ المطلوب: {fmtNum(diff)}
+            </span>
+          )}
         </div>
 
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
@@ -985,5 +1032,31 @@ function CashMovementModal({
     document.body,
   );
 }
+
+/**
+ * Resolve the company cash_box for a given (currency, split method).
+ *   - EGP + company_cash     → "خزينة نقدي الشركة" EGP
+ *   - EGP + company_instapay → "خزينة إنستا الشركة" EGP
+ *   - USD/LYD (any method)   → the main foreign box for that currency
+ */
+function resolveCompanyBoxForSplit(
+  boxes: CashBox[],
+  currency: string,
+  method: string,
+): CashBox | null {
+  if (currency === "EGP") return resolveCompanyEgpBox(boxes, method);
+  return resolveForeignBox(boxes, currency);
+}
+
+/** Arabic label persisted in payment_splits.method (mirrors CashMovementForms). */
+function methodLabelForSplit(method: string): string {
+  if (method === "company_instapay") return "إنستاباي";
+  if (method === "company_cash") return "نقدي";
+  if (method === "merchant_instapay") return "انستا";
+  if (method === "merchant_wallet") return "فودافون كاش";
+  if (method === "merchant_physical") return "نقدي";
+  return "نقدي";
+}
+
 
 
