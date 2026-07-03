@@ -21,6 +21,7 @@ import { Route as ExecutionsRouteImport } from './routes/executions'
 import { Route as DataImportRouteImport } from './routes/data-import'
 import { Route as CurrencySuppliersRouteImport } from './routes/currency-suppliers'
 import { Route as CompaniesRouteImport } from './routes/companies'
+import { Route as AuditLogRouteImport } from './routes/audit-log'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
@@ -88,6 +89,11 @@ const CompaniesRoute = CompaniesRouteImport.update({
   path: '/companies',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuditLogRoute = AuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountsRoute = AccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
+  '/audit-log': typeof AuditLogRoute
   '/companies': typeof CompaniesRoute
   '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
+  '/audit-log': typeof AuditLogRoute
   '/companies': typeof CompaniesRoute
   '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/accounts': typeof AccountsRoute
+  '/audit-log': typeof AuditLogRoute
   '/companies': typeof CompaniesRoute
   '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/accounts'
+    | '/audit-log'
     | '/companies'
     | '/currency-suppliers'
     | '/data-import'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/accounts'
+    | '/audit-log'
     | '/companies'
     | '/currency-suppliers'
     | '/data-import'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/accounts'
+    | '/audit-log'
     | '/companies'
     | '/currency-suppliers'
     | '/data-import'
@@ -248,6 +260,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptInviteRoute: typeof AcceptInviteRoute
   AccountsRoute: typeof AccountsRoute
+  AuditLogRoute: typeof AuditLogRoute
   CompaniesRoute: typeof CompaniesRoute
   CurrencySuppliersRoute: typeof CurrencySuppliersRoute
   DataImportRoute: typeof DataImportRoute
@@ -351,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompaniesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/audit-log': {
+      id: '/audit-log'
+      path: '/audit-log'
+      fullPath: '/audit-log'
+      preLoaderRoute: typeof AuditLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/accounts': {
       id: '/accounts'
       path: '/accounts'
@@ -400,6 +420,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptInviteRoute: AcceptInviteRoute,
   AccountsRoute: AccountsRoute,
+  AuditLogRoute: AuditLogRoute,
   CompaniesRoute: CompaniesRoute,
   CurrencySuppliersRoute: CurrencySuppliersRoute,
   DataImportRoute: DataImportRoute,
