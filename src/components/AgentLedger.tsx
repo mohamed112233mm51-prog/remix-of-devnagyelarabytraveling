@@ -15,6 +15,7 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
+import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
