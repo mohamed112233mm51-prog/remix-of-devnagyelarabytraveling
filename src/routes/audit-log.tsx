@@ -561,12 +561,13 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
   const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
     .filter((k) => !HIDDEN_FIELDS.has(k));
 
-  // Only show fields that actually changed (for edit). For create/cancel/etc.
-  // show all non-null after fields when before is empty, or vice versa.
-  const changedKeys = allKeys.filter((k) => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]));
-  const rowsToShow = row.action === "edit"
-    ? changedKeys
-    : allKeys.filter((k) => (after?.[k] ?? before?.[k]) !== null && (after?.[k] ?? before?.[k]) !== undefined && (after?.[k] ?? before?.[k]) !== "");
+  // Unified rule for all actions (edit / cancel / restore / delete / create):
+  // show every field whose value differs between before and after. When one
+  // side is empty (create / cancel / delete / restore), this naturally
+  // reduces to all populated fields on the non-empty side.
+  const rowsToShow = allKeys.filter(
+    (k) => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]),
+  );
 
   const context = { ...before, ...after };
   const flow = deriveFlow(row.table_name, context, lookups, row);
