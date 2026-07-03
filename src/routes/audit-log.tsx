@@ -575,6 +575,28 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
           </div>
         </div>
 
+        {/* Financial flow path card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div className="card-header"><div className="card-title">🔀 مسار الحركة المالية</div></div>
+          <div className="card-body">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: 10, alignItems: "stretch" }}>
+              <FlowNode label="من" value={flow.from} tone="red" />
+              <FlowArrow />
+              <FlowNode label="وسيلة الدفع / الخزينة" value={flow.method} tone="gold" />
+              <FlowArrow />
+              <FlowNode label="إلى" value={flow.to} tone="green" />
+            </div>
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+              <InfoCell
+                label="المبلغ"
+                value={flow.amount != null ? fmtCurrency(flow.amount, flow.currency) : "—"}
+              />
+              <InfoCell label="العملة" value={flow.currency || "—"} />
+            </div>
+          </div>
+        </div>
+
+
         {/* Comparison card */}
         <div className="card" style={{ margin: 0 }}>
           <div className="card-header">
