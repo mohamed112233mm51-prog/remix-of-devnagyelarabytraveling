@@ -21,6 +21,7 @@ import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
 
 import {
