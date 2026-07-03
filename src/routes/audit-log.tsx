@@ -147,7 +147,18 @@ function resolveIdToName(v: string, lk?: Lookups): string | null {
     || lk.suppliers[v] || lk.cashBoxes[v] || null;
 }
 
-function formatValue(k: string, v: any, row: any, lk?: Lookups): string {
+const USER_FIELDS = new Set([
+  "cancelled_by","restored_by","created_by","updated_by",
+  "performed_by","user_id","deleted_by","approved_by",
+]);
+
+function formatValue(
+  k: string,
+  v: any,
+  row: any,
+  lk?: Lookups,
+  users?: Record<string, string>,
+): string {
   if (v === null || v === undefined || v === "") return "—";
   if (BOOL_FIELDS.has(k) || typeof v === "boolean") return v ? "نعم" : "لا";
   if (MONEY_FIELDS.has(k) && typeof v === "number") {
@@ -161,6 +172,7 @@ function formatValue(k: string, v: any, row: any, lk?: Lookups): string {
     } catch { /* noop */ }
   }
   if (typeof v === "string" && UUID_RE.test(v)) {
+    if (USER_FIELDS.has(k)) return users?.[v] || "مستخدم غير معروف";
     return resolveIdToName(v, lk) || "—";
   }
   if (typeof v === "object") return JSON.stringify(v);
@@ -367,7 +379,25 @@ function AuditLogPage() {
       if (error) throw error;
       setRows((data || []) as any);
 
-      const uids = Array.from(new Set((data || []).map((r: any) => r.performed_by).filter(Boolean)));
+      // Collect every user id that might appear in the UI: the audit
+      // performer, plus any *_by field in before/after snapshots
+      // (cancelled_by, restored_by, created_by, updated_by, ...).
+      const userIdSet = new Set<string>();
+      (data || []).forEach((r: any) => {
+        if (r.performed_by) userIdSet.add(r.performed_by);
+        const scan = (obj: any) => {
+          if (!obj || typeof obj !== "object") return;
+          for (const [k, v] of Object.entries(obj)) {
+            if (typeof v !== "string" || !UUID_RE.test(v)) continue;
+            if (k.endsWith("_by") || k === "user_id" || k === "performed_by") {
+              userIdSet.add(v);
+            }
+          }
+        };
+        scan(r.before_value);
+        scan(r.after_value);
+      });
+      const uids = Array.from(userIdSet);
       if (uids.length) {
         const { data: profs } = await supabase
           .from("profiles")
@@ -375,7 +405,7 @@ function AuditLogPage() {
           .in("id", uids);
         const map: Record<string, string> = {};
         (profs || []).forEach((p: any) => {
-          map[p.id] = p.full_name || p.email || p.id;
+          map[p.id] = p.full_name || p.email || "مستخدم غير معروف";
         });
         setUsers(map);
       }
@@ -434,7 +464,7 @@ function AuditLogPage() {
     ],
     rows: filtered.map((r) => ({
       when: new Date(r.performed_at).toLocaleString("ar-EG"),
-      user: users[r.performed_by || ""] || r.performed_by || "—",
+      user: users[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—"),
       action: ACTION_LABEL[r.action] || r.action,
       table: TABLE_LABEL[r.table_name] || r.table_name,
       entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
@@ -522,7 +552,7 @@ function AuditLogPage() {
                 ) : filtered.map((r) => (
                   <tr key={r.id}>
                     <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{new Date(r.performed_at).toLocaleString("ar-EG")}</td>
-                    <td data-label="المستخدم">{users[r.performed_by || ""] || "—"}</td>
+                    <td data-label="المستخدم">{users[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—")}</td>
                     <td data-label="العملية">
                       <span className={`badge pill-badge ${ACTION_BADGE[r.action] || ""}`}>{ACTION_LABEL[r.action] || r.action}</span>
                     </td>
@@ -546,8 +576,9 @@ function AuditLogPage() {
       {selected && (
         <DetailsModal
           row={selected}
-          userLabel={users[selected.performed_by || ""] || selected.performed_by || "—"}
+          userLabel={users[selected.performed_by || ""] || (selected.performed_by ? "مستخدم غير معروف" : "—")}
           lookups={lookups}
+          users={users}
           onClose={()=>setSelected(null)}
         />
       )}
@@ -555,7 +586,7 @@ function AuditLogPage() {
   );
 }
 
-function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; userLabel: string; lookups: Lookups; onClose: () => void }) {
+function DetailsModal({ row, userLabel, lookups, users, onClose }: { row: AuditRow; userLabel: string; lookups: Lookups; users: Record<string, string>; onClose: () => void }) {
   const before = (row.before_value || {}) as Record<string, any>;
   const after = (row.after_value || {}) as Record<string, any>;
   const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
@@ -649,8 +680,8 @@ function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; use
                   {rowsToShow.length === 0 ? (
                     <tr><td colSpan={3}><div className="empty"><div className="empty-text">لا توجد بيانات للمقارنة</div></div></td></tr>
                   ) : rowsToShow.map((k) => {
-                    const b = formatValue(k, before?.[k], context, lookups);
-                    const a = formatValue(k, after?.[k], context, lookups);
+                    const b = formatValue(k, before?.[k], context, lookups, users);
+                    const a = formatValue(k, after?.[k], context, lookups, users);
                     const isChanged = JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]);
                     return (
                       <tr key={k}>
