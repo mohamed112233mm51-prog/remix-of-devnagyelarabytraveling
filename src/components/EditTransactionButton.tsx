@@ -227,7 +227,7 @@ export function EditTransactionButton({
                   <input
                     type="number"
                     step="0.01"
-                    className="input w-full"
+                    className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     disabled={busy || !amountEditable}
@@ -236,7 +236,7 @@ export function EditTransactionButton({
                 <Field label="التاريخ">
                   <input
                     type="date"
-                    className="input w-full"
+                    className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     disabled={busy}
@@ -247,7 +247,7 @@ export function EditTransactionButton({
               <Field label="البيان">
                 <input
                   type="text"
-                  className="input w-full"
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                   value={statement}
                   onChange={(e) => setStatement(e.target.value)}
                   disabled={busy}
@@ -256,7 +256,7 @@ export function EditTransactionButton({
 
               <Field label="الملاحظات">
                 <textarea
-                  className="input w-full min-h-16"
+                  className="w-full rounded-md border px-3 py-2 text-sm min-h-16 focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   disabled={busy}
