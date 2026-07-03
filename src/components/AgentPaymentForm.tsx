@@ -93,9 +93,9 @@ export function AgentPaymentForm({
     const m = merchants.find((x) => x.id === row.merchant_id);
     if (!m) return [];
     const opts: { key: string; label: string }[] = [];
-    if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: `إنستا ${m.merchant_name}` });
+    if (m.supports_instapay) opts.push({ key: "merchant_instapay", label: "انستا" });
     if (m.supports_cash_wallet) opts.push({ key: "merchant_wallet", label: "فودافون كاش" });
-    if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: `نقدي ${m.merchant_name}` });
+    if (m.supports_physical_cash) opts.push({ key: "merchant_physical", label: "نقدي" });
     return opts;
   };
 
