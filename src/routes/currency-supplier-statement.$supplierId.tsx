@@ -183,34 +183,80 @@ function CurrencySupplierStatementPage() {
   }, [filtered]);
 
   const rowsWithBalance = useMemo(() => {
-    // Per-currency running balance. Each currency accumulates independently
-    // so EGP/USD/LYD never mix into a single total.
+    // Per-currency running balance on the supplier account.
+    // Convention: POSITIVE = we still owe the supplier (creditor);
+    //             NEGATIVE = supplier owes us (advance / debit).
+    //
+    // Rules:
+    //  - رصيد سابق: opening balance (bought - sold on same currency).
+    //  - شراء / بيع عملة: a completed exchange has ZERO impact on the supplier
+    //    account. The foreign leg hits our cash-box, the EGP leg hits our
+    //    cash-box (via payment_splits). Any UNSETTLED EGP amount
+    //    (contracted − actually settled through splits) creates residual debt.
+    //  - صرف نقدية: we paid supplier X foreign → supplier balance -= X
+    //  - استلام نقدية: supplier gave us X foreign → supplier balance += X
     const bals = new Map<string, number>();
     return filtered.map((t) => {
       const isOpening = t.tx_type === "رصيد سابق";
-      const isForeignBought = t.tx_type === "شراء عملة";
-      const foreignCurrency = isForeignBought ? t.bought_currency : t.sold_currency;
-      // For opening balance rows both currencies equal the selected currency
-      // and only one side carries a value (bought=debit, sold=credit).
+      const isBuy = t.tx_type === "شراء عملة";
+      const isSell = t.tx_type === "بيع عملة";
+      const isPay = t.tx_type === "صرف نقدية";
+      const isReceive = t.tx_type === "استلام نقدية";
+      const isCashOnly = isPay || isReceive;
+
+      // Display fields.
+      const foreignCurrency = isCashOnly
+        ? (isPay ? t.sold_currency : t.bought_currency)
+        : isBuy ? t.bought_currency
+        : isSell ? t.sold_currency
+        : t.bought_currency; // opening
       const foreignAmount = isOpening
         ? Number(t.bought_amount || 0) + Number(t.sold_amount || 0)
-        : isForeignBought ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
-      const egpAmount = isOpening
+        : isCashOnly
+          ? (isPay ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0))
+          : isBuy ? Number(t.bought_amount || 0) : Number(t.sold_amount || 0);
+      const egpAmount = isOpening || isCashOnly
         ? 0
-        : isForeignBought ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
-      const rate = isOpening ? 0 : (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0));
-      // Effect on the row's currency: bought increases (debit), sold decreases (credit).
-      let delta = 0;
-      if (t.bought_currency === t.sold_currency) {
-        delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
-      } else {
-        delta = isForeignBought ? Number(t.bought_amount || 0) : -Number(t.sold_amount || 0);
-      }
-      const next = (bals.get(foreignCurrency) || 0) + delta;
-      bals.set(foreignCurrency, next);
-      return { ...t, balance: next, foreignCurrency, foreignAmount, egpAmount, rate };
-    });
+        : isBuy ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
+      const rate = isOpening || isCashOnly
+        ? 0
+        : (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0));
 
+      // Determine which currency & delta impact the supplier balance.
+      let balanceCurrency = foreignCurrency;
+      let delta = 0;
+      if (isOpening) {
+        // Same currency both sides; positive = supplier is creditor.
+        delta = Number(t.bought_amount || 0) - Number(t.sold_amount || 0);
+      } else if (isBuy || isSell) {
+        // Residual EGP debt only (foreign leg always fully settled via cash-box).
+        balanceCurrency = "EGP";
+        const splits = Array.isArray(t.payment_splits) ? t.payment_splits : [];
+        const settled = splits.reduce((s, r) => s + Number(r.amount || 0), 0);
+        const contracted = isBuy ? Number(t.sold_amount || 0) : Number(t.bought_amount || 0);
+        const shortfall = +(contracted - settled).toFixed(2);
+        // Buy: we still owe supplier the unpaid EGP → +shortfall.
+        // Sell: supplier still owes us the unreceived EGP → -shortfall.
+        delta = isBuy ? shortfall : -shortfall;
+      } else if (isPay) {
+        delta = -Number(t.sold_amount || 0); // paid → supplier balance drops
+      } else if (isReceive) {
+        delta = +Number(t.bought_amount || 0); // received → supplier balance rises
+      }
+
+      const next = (bals.get(balanceCurrency) || 0) + delta;
+      bals.set(balanceCurrency, next);
+      return {
+        ...t,
+        balance: next,
+        balanceCurrency,
+        foreignCurrency,
+        foreignAmount,
+        egpAmount,
+        rate,
+        balanceDelta: delta,
+      };
+    });
   }, [filtered]);
 
   // Per-currency debit/credit/net/count aggregated from the same rows the
@@ -224,13 +270,10 @@ function CurrencySupplierStatementPage() {
       map.set(k, g);
     };
     for (const r of rowsWithBalance) {
-      const cur = r.foreignCurrency;
-      const d = r.tx_type === "رصيد سابق"
-        ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
-        : r.bought_currency === r.sold_currency
-          ? Number(r.bought_amount || 0) - Number(r.sold_amount || 0)
-          : r.tx_type === "شراء عملة" ? Number(r.bought_amount || 0) : -Number(r.sold_amount || 0);
-      if (d >= 0) bump(cur, d, 0); else bump(cur, 0, -d);
+      const d = r.balanceDelta;
+      if (d === 0) continue;
+      if (d > 0) bump(r.balanceCurrency, d, 0);
+      else bump(r.balanceCurrency, 0, -d);
     }
     return Array.from(map.entries())
       .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
