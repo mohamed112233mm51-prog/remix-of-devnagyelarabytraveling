@@ -53,6 +53,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "service_price_search",   label: "أسعار الخدمات — بحث سعر خدمة", route: "/service-pricing#lookup" },
   { key: "reports",            label: "التقارير",                 route: "/reports" },
   { key: "data_import",        label: "مركز استيراد البيانات",    route: "/data-import" },
+  { key: "audit_log_view",     label: "سجل تدقيق الحركات المالية", route: "/audit-log" },
   { key: NET_PROFIT_PERMISSION_KEY, label: "صافي الأرباح",         route: "/#net-profit" },
   { key: PROFIT_SUMMARY_PERMISSION_KEY, label: "ملخص الأرباح",     route: "/#profit-summary" },
 ];
