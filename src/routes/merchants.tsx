@@ -1081,6 +1081,9 @@ function MerchantStatementTab({
         </div>
       </div>
 
+      <CurrencyTotalsCards totals={byCurrency} entityKind="merchant" />
+
+
       <div className="card">
         <div className="card-header"><div className="card-title">💳 الحركات المالية</div></div>
         <div className="card-body">
