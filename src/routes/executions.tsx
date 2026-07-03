@@ -543,6 +543,7 @@ function ExecutionForm({
     return out;
   })());
   const [saving, setSaving] = useState(false);
+  const [dupWarning, setDupWarning] = useState<{ matches: any[] } | null>(null);
 
   const companyServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "company");
   const agentServices = services.map((s, idx) => ({ s, idx })).filter((x) => x.s.kind === "agent");
