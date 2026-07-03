@@ -8,7 +8,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
-import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Banknote, HandCoins } from "lucide-react";
 import type { StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
