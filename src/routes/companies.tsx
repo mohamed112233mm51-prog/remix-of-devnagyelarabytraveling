@@ -913,6 +913,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     const { data: txnRow, error: txnErr } = await supabase
       .from("company_transactions").insert(payload).select("id").single();
     if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
+    await logCreate("company_transactions", txnRow.id, { ...payload, id: txnRow.id }, "حركة شركة");
 
     const engineSplits: MovementSplit[] = validSplits.map((r) => {
       const a = Number(r.amount) || 0;
