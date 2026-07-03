@@ -438,7 +438,7 @@ ${summaryHtml}
 <tbody>${data.rows
     .map(
       (r) =>
-        `<tr>${data.columns.map((c) => `<td>${esc(r[c.key])}</td>`).join("")}</tr>`,
+        `<tr>${data.columns.map((c) => `<td>${esc(pdfCellValue(r, c.key))}</td>`).join("")}</tr>`,
     )
     .join("")}</tbody></table></div>
 <div class="foot">${esc(companyName)} • تم التوليد آليًا</div>
