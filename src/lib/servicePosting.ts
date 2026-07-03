@@ -153,8 +153,9 @@ export async function updateServiceFinancials(input: ServicePostingInput): Promi
         .eq("id", existing.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabase.from("transactions").insert(base);
+      const { data, error } = await supabase.from("transactions").insert(base).select("id").single();
       if (error) throw new Error(error.message);
+      if (data?.id) await logCreate("transactions", data.id, { ...base, id: data.id }, "توليد من تقديم خدمة");
     }
   }
 
