@@ -30,6 +30,7 @@ import {
   methodsForSplit,
 } from "@/components/PaymentSplits";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { logCreate } from "@/lib/financialAudit";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
