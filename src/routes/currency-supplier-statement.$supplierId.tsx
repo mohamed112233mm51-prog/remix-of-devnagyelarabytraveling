@@ -99,7 +99,7 @@ function CurrencySupplierStatementPage() {
   const [showBuy, setShowBuy] = useState(false);
   const [showSell, setShowSell] = useState(false);
   const [showPay, setShowPay] = useState(false);
-  const [showCollect, setShowCollect] = useState(false);
+  
 
   // Filters
   const [from, setFrom] = useState("");
