@@ -40,6 +40,7 @@ const CS_COLUMNS: ColumnDef[] = [
 
 
 export const Route = createFileRoute("/currency-supplier-statement/$supplierId")({
+  validateSearch: (s: Record<string, unknown>) => ({ action: (s.action as string) || "" }),
   component: () => <AppErrorBoundary><CurrencySupplierStatementPage /></AppErrorBoundary>,
 });
 
