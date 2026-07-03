@@ -351,14 +351,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       price: Number(t.price || 0),
       serviceValue,
       payment,
-      // Accounting direction (company = vendor / accounts-payable):
-      //   - مدين: ما دفعناه للشركة (يقلّل التزامنا تجاهها)
-      //   - دائن: قيمة الخدمات التي قدّمتها الشركة (يزيد التزامنا تجاهها)
-      // net = مدين - دائن = المدفوعات - الخدمات.
-      // موجب => دفعنا أكثر من قيمة الخدمات => "مستحق على الشركة"
-      // سالب => الخدمات أكبر من المدفوعات    => "مستحق للشركة"
-      debit: payment,
-      credit: serviceValue,
+      debit: serviceValue,
+      credit: payment,
       paymentMethod: payment > 0 ? companyPaymentMethodLabel(t) : "—",
       note: t.note || "—",
       currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
@@ -377,9 +371,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     });
   }, [allEntries]);
 
-  const totalDebit = allEntries.reduce((s, e) => s + e.debit, 0);
-  const totalCredit = allEntries.reduce((s, e) => s + e.credit, 0);
-  const balance = totalDebit - totalCredit; // payments - services
+  const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
+  const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
+  const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مستحق على الشركة" : balance < 0 ? "مستحق للشركة" : "متوازن";
 
   const byCurrency = useMemo(() => {
@@ -485,7 +479,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   useRegisterStatementCapture(
     () => ({ data: buildData(), whatsapp: (company as any)?.whatsapp || null, contextId: company?.id || null }),
-    [company, displayRows, totalDebit, totalCredit, balance, filters],
+    [company, displayRows, totalServices, totalPaid, balance, filters],
   );
 
   const Th = ({ children, filterKey, options }: { children: React.ReactNode; filterKey?: string; options?: string[] }) => (
