@@ -52,11 +52,12 @@ type SplitJson = {
   method: string;
   amount: number;
 };
+type TxType = "شراء عملة" | "بيع عملة" | "رصيد سابق" | "دفع نقدية" | "استلام نقدية";
 type Tx = {
   id: string;
   supplier_id: string;
   tx_date: string;
-  tx_type: "شراء عملة" | "بيع عملة" | "رصيد سابق";
+  tx_type: TxType;
   bought_currency: string;
   bought_amount: number;
   sold_currency: string;
@@ -64,6 +65,7 @@ type Tx = {
   exchange_rate: number | null;
   description: string | null;
   payment_splits: SplitJson[] | null;
+  opening_currency?: string | null;
   created_at: string;
 };
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
