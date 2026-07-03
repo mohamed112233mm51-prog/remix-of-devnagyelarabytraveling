@@ -151,6 +151,129 @@ function formatValue(k: string, v: any, row: any): string {
   return String(v);
 }
 
+type Lookups = {
+  agents: Record<string, string>;
+  companies: Record<string, string>;
+  merchants: Record<string, string>;
+  suppliers: Record<string, string>;
+  cashBoxes: Record<string, string>;
+};
+
+const COMPANY_TREASURY_LABEL = "خزينة الشركة";
+
+function resolveCashBox(id: string | null | undefined, lk: Lookups): string | null {
+  if (!id) return null;
+  return lk.cashBoxes[id] || COMPANY_TREASURY_LABEL;
+}
+
+function derivePaymentMethod(ctx: Record<string, any>): string | null {
+  if (ctx.payment_method) return String(ctx.payment_method);
+  const pairs: Array<[string, string]> = [
+    ["cash_amount", "نقدي"],
+    ["instapay_amount", "انستا باي"],
+    ["mobile_cash_amount", "فودافون كاش"],
+    ["arabic_tourism_cash_amount", "السياحة العربية كاش"],
+    ["merchant_cash_amount", "عبر تاجر كاش"],
+  ];
+  const active = pairs.filter(([k]) => Number(ctx[k]) > 0).map(([, v]) => v);
+  return active.length ? active.join(" + ") : null;
+}
+
+function pickAmount(ctx: Record<string, any>): { amount: number | null; currency: string | null } {
+  const amt =
+    Number(ctx.total_paid) ||
+    Number(ctx.amount) ||
+    Number(ctx.usd_amount) ||
+    Number(ctx.bought_amount) ||
+    Number(ctx.sold_amount) ||
+    Number(ctx.cash_amount) ||
+    null;
+  const cur =
+    ctx.currency ||
+    ctx.payment_currency ||
+    ctx.bought_currency ||
+    ctx.sold_currency ||
+    ctx.opening_currency ||
+    null;
+  return { amount: amt || null, currency: cur || null };
+}
+
+/**
+ * Derive a "from → method → to" description of the underlying financial movement
+ * from the audited row snapshot. Rules are heuristic per table_name.
+ */
+function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups) {
+  const agent = ctx.agent_id ? lk.agents[ctx.agent_id] || "وكيل غير معروف" : null;
+  const company = ctx.company_id ? lk.companies[ctx.company_id] || "شركة غير معروفة" : null;
+  const merchant = ctx.merchant_id ? lk.merchants[ctx.merchant_id] || "تاجر كاش غير معروف" : null;
+  const supplier = ctx.supplier_id ? lk.suppliers[ctx.supplier_id] || "مورد عملة غير معروف" : null;
+  const cashBox = resolveCashBox(ctx.cash_box_id, lk);
+  const fromBox = resolveCashBox(ctx.from_cash_box_id, lk);
+  const toBox = resolveCashBox(ctx.to_cash_box_id, lk);
+
+  let from: string | null = null;
+  let to: string | null = null;
+  let method: string | null = derivePaymentMethod(ctx);
+  const isPayIn = ["دفعة", "in", "buy", "شراء"].includes(String(ctx.tx_type || ctx.type || ""));
+
+  switch (tableName) {
+    case "transactions":
+      from = agent;
+      to = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      break;
+    case "company_transactions":
+      from = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      to = company;
+      break;
+    case "merchant_cash_collections":
+      from = merchant ? `تاجر الكاش ${merchant}` : null;
+      to = COMPANY_TREASURY_LABEL;
+      if (!method) method = "نقدي";
+      break;
+    case "currency_supplier_transactions": {
+      const buying = String(ctx.tx_type || "").includes("buy") || Number(ctx.bought_amount) > 0;
+      if (buying) { from = COMPANY_TREASURY_LABEL; to = supplier; }
+      else { from = supplier; to = COMPANY_TREASURY_LABEL; }
+      break;
+    }
+    case "usd_treasury_transactions":
+      from = fromBox || cashBox || COMPANY_TREASURY_LABEL;
+      to = toBox || company || (merchant ? `تاجر الكاش ${merchant}` : null) || COMPANY_TREASURY_LABEL;
+      break;
+    case "expense_deductions":
+      from = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      to = "مصروف";
+      break;
+    case "payment_splits": {
+      const outflow = String(ctx.direction || "in") === "out";
+      const box = cashBox || COMPANY_TREASURY_LABEL;
+      from = outflow ? box : null;
+      to = outflow ? null : box;
+      break;
+    }
+    default:
+      from = agent || merchant || supplier || cashBox;
+      to = company || cashBox;
+  }
+
+  // Fallbacks — never leave everything empty when we do have entities.
+  if (!from && !to) {
+    from = agent || merchant || supplier || cashBox;
+    to = company || cashBox;
+  }
+
+  const { amount, currency } = pickAmount(ctx);
+  return {
+    from: from || "—",
+    method: method || "—",
+    to: to || "—",
+    amount,
+    currency,
+    _isPayIn: isPayIn,
+  };
+}
+
+
 function AuditLogPage() {
   const { permissions, isAdmin, isSuperAdmin } = useAuth();
   const allowed = isSuperAdmin || isAdmin || checkPerm(permissions, false, "audit_log_view", "view");
@@ -158,6 +281,9 @@ function AuditLogPage() {
 
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [users, setUsers] = useState<Record<string, string>>({});
+  const [lookups, setLookups] = useState<Lookups>({
+    agents: {}, companies: {}, merchants: {}, suppliers: {}, cashBoxes: {},
+  });
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditRow | null>(null);
 
@@ -168,6 +294,32 @@ function AuditLogPage() {
   const [entityType, setEntityType] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
   const [q, setQ] = useState<string>("");
+
+  // Load entity name lookups once so the modal can render human names instead of IDs.
+  useEffect(() => {
+    (async () => {
+      const [ag, co, me, su, cb] = await Promise.all([
+        supabase.from("agents").select("id,agent_name"),
+        supabase.from("issuing_companies").select("id,company_name"),
+        supabase.from("merchants").select("id,merchant_name"),
+        supabase.from("currency_suppliers").select("id,supplier_name"),
+        supabase.from("cash_boxes").select("id,name,currency"),
+      ]);
+      const toMap = (rs: any[] | null, k: string) =>
+        (rs || []).reduce<Record<string, string>>((m, r) => { m[r.id] = r[k]; return m; }, {});
+      setLookups({
+        agents: toMap(ag.data as any, "agent_name"),
+        companies: toMap(co.data as any, "company_name"),
+        merchants: toMap(me.data as any, "merchant_name"),
+        suppliers: toMap(su.data as any, "supplier_name"),
+        cashBoxes: (cb.data || []).reduce<Record<string, string>>((m: any, r: any) => {
+          m[r.id] = r.currency ? `${r.name} — ${r.currency}` : r.name;
+          return m;
+        }, {}),
+      });
+    })();
+  }, []);
+
 
   const refresh = async () => {
     if (!allowed) return;
@@ -368,6 +520,7 @@ function AuditLogPage() {
         <DetailsModal
           row={selected}
           userLabel={users[selected.performed_by || ""] || selected.performed_by || "—"}
+          lookups={lookups}
           onClose={()=>setSelected(null)}
         />
       )}
@@ -375,7 +528,7 @@ function AuditLogPage() {
   );
 }
 
-function DetailsModal({ row, userLabel, onClose }: { row: AuditRow; userLabel: string; onClose: () => void }) {
+function DetailsModal({ row, userLabel, lookups, onClose }: { row: AuditRow; userLabel: string; lookups: Lookups; onClose: () => void }) {
   const before = (row.before_value || {}) as Record<string, any>;
   const after = (row.after_value || {}) as Record<string, any>;
   const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
@@ -389,6 +542,8 @@ function DetailsModal({ row, userLabel, onClose }: { row: AuditRow; userLabel: s
     : allKeys.filter((k) => (after?.[k] ?? before?.[k]) !== null && (after?.[k] ?? before?.[k]) !== undefined && (after?.[k] ?? before?.[k]) !== "");
 
   const context = { ...before, ...after };
+  const flow = deriveFlow(row.table_name, context, lookups);
+
 
   return (
     <Modal
@@ -419,6 +574,28 @@ function DetailsModal({ row, userLabel, onClose }: { row: AuditRow; userLabel: s
             </div>
           </div>
         </div>
+
+        {/* Financial flow path card */}
+        <div className="card" style={{ margin: 0 }}>
+          <div className="card-header"><div className="card-title">🔀 مسار الحركة المالية</div></div>
+          <div className="card-body">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: 10, alignItems: "stretch" }}>
+              <FlowNode label="من" value={flow.from} tone="red" />
+              <FlowArrow />
+              <FlowNode label="وسيلة الدفع / الخزينة" value={flow.method} tone="gold" />
+              <FlowArrow />
+              <FlowNode label="إلى" value={flow.to} tone="green" />
+            </div>
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+              <InfoCell
+                label="المبلغ"
+                value={flow.amount != null ? fmtCurrency(flow.amount, flow.currency) : "—"}
+              />
+              <InfoCell label="العملة" value={flow.currency || "—"} />
+            </div>
+          </div>
+        </div>
+
 
         {/* Comparison card */}
         <div className="card" style={{ margin: 0 }}>
@@ -494,6 +671,36 @@ function InfoCell({ label, value, full }: { label: string; value: string; full?:
     }}>
       <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4, fontWeight: 700 }}>{label}</div>
       <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 600 }}>{value}</div>
+    </div>
+  );
+}
+
+function FlowNode({ label, value, tone }: { label: string; value: string; tone: "red" | "green" | "gold" }) {
+  const color =
+    tone === "red" ? "var(--red)" :
+    tone === "green" ? "var(--green)" :
+    "var(--gold2, #B45309)";
+  return (
+    <div style={{
+      background: "var(--card2, var(--card))",
+      border: `1px solid color-mix(in oklab, ${color} 35%, var(--border))`,
+      borderRadius: 10,
+      padding: "10px 12px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      minWidth: 0,
+    }}>
+      <div style={{ fontSize: 11, color, fontWeight: 800 }}>{label}</div>
+      <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 700, overflowWrap: "anywhere" }}>{value}</div>
+    </div>
+  );
+}
+
+function FlowArrow() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 20, fontWeight: 700 }}>
+      ←
     </div>
   );
 }
