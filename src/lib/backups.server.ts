@@ -167,7 +167,7 @@ const UPSERT_CONFLICT_KEY: Record<string, string> = {
 // are wiped then re-inserted in chunks. Bypasses RLS via service role.
 // Caller MUST be admin (enforced upstream).
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; mode: "upsert" | "wipe-insert"; error?: string }> = {};
+  const summary: Record<string, { restored: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
 
   // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
@@ -180,12 +180,127 @@ export async function restoreFromPayload(payload: BackupPayload) {
     }
   }
 
+  // Mapping of cash_box IDs from JSON -> live DB IDs. Built during cash_boxes
+  // phase, consumed during payment_splits phase.
+  const cashBoxIdMap = new Map<string, string>();
+  let cashBoxesMapped = 0;
+  let cashBoxesCreated = 0;
+
   // PHASE 2: insert / upsert in FORWARD FK order (parents first)
   for (const t of BACKUP_TABLES) {
     if (summary[t]?.error) continue; // wipe failed
     const rows = payload.data[t] ?? [];
     const isReference = REFERENCE_TABLES_NO_WIPE.has(t);
     try {
+      // --- Special handling: cash_boxes (unique on name+currency) ---
+      if (t === "cash_boxes") {
+        const { data: existing, error: exErr } = await (supabaseAdmin.from as any)("cash_boxes")
+          .select("id,name,currency");
+        if (exErr) throw new Error(`fetch existing: ${exErr.message}`);
+        const keyOf = (n: any, c: any) =>
+          `${String(n ?? "").trim().toLowerCase()}|${String(c ?? "").trim().toUpperCase()}`;
+        const byKey = new Map<string, string>();
+        for (const r of existing ?? []) byKey.set(keyOf(r.name, r.currency), r.id);
+        const existingIds = new Set<string>((existing ?? []).map((r: any) => r.id));
+
+        const toInsert: any[] = [];
+        for (const row of rows) {
+          const oldId = row.id;
+          const k = keyOf(row.name, row.currency);
+          const existId = byKey.get(k);
+          if (existId) {
+            cashBoxIdMap.set(oldId, existId);
+            cashBoxesMapped++;
+          } else {
+            const newId = existingIds.has(oldId) ? crypto.randomUUID() : oldId;
+            cashBoxIdMap.set(oldId, newId);
+            toInsert.push({ ...row, id: newId });
+            cashBoxesCreated++;
+          }
+        }
+        let inserted = 0;
+        const CHUNK = 500;
+        for (let i = 0; i < toInsert.length; i += CHUNK) {
+          const slice = toInsert.slice(i, i + CHUNK);
+          const res = await (supabaseAdmin.from as any)("cash_boxes").insert(slice);
+          if (res.error) throw new Error(`insert: ${res.error.message}`);
+          inserted += slice.length;
+        }
+        summary[t] = {
+          restored: cashBoxesMapped + inserted,
+          mode: "map-insert",
+          details: { mapped: cashBoxesMapped, created: cashBoxesCreated },
+        };
+        continue;
+      }
+
+      // --- Special handling: payment_splits (remap cash_box_id) ---
+      if (t === "payment_splits") {
+        let remapped = 0;
+        const dbCashIds = new Set<string>(Array.from(cashBoxIdMap.values()));
+        const failed: Array<{ id: any; reason: string }> = [];
+        const prepared: any[] = [];
+        for (const row of rows) {
+          const oldCb = row.cash_box_id;
+          let newCb: string | null = oldCb ?? null;
+          if (oldCb) {
+            const mapped = cashBoxIdMap.get(oldCb);
+            if (mapped) {
+              if (mapped !== oldCb) remapped++;
+              newCb = mapped;
+            } else if (!dbCashIds.has(oldCb)) {
+              failed.push({ id: row.id, reason: `unknown cash_box_id ${oldCb}` });
+              newCb = null;
+            }
+          }
+          prepared.push({ ...row, cash_box_id: newCb });
+        }
+        let inserted = 0;
+        const CHUNK = 500;
+        for (let i = 0; i < prepared.length; i += CHUNK) {
+          const slice = prepared.slice(i, i + CHUNK);
+          const res = await (supabaseAdmin.from as any)("payment_splits").insert(slice);
+          if (res.error) throw new Error(`insert: ${res.error.message}`);
+          inserted += slice.length;
+        }
+
+        // Reconcile cash_box balances deterministically from splits +
+        // opening_balance, independent of prior drift or trigger side-effects.
+        let balances: Array<{ id: string; balance: number }> = [];
+        try {
+          const { data: boxes } = await (supabaseAdmin.from as any)("cash_boxes")
+            .select("id,opening_balance");
+          const { data: allSplits } = await (supabaseAdmin.from as any)("payment_splits")
+            .select("cash_box_id,amount,direction,cancelled_at");
+          const sums = new Map<string, number>();
+          for (const s of allSplits ?? []) {
+            if (!s.cash_box_id || s.cancelled_at) continue;
+            const sign = s.direction === "out" ? -1 : 1;
+            sums.set(s.cash_box_id, (sums.get(s.cash_box_id) ?? 0) + sign * Number(s.amount ?? 0));
+          }
+          for (const b of boxes ?? []) {
+            const bal = Number(b.opening_balance ?? 0) + (sums.get(b.id) ?? 0);
+            balances.push({ id: b.id, balance: bal });
+            await (supabaseAdmin.from as any)("cash_boxes")
+              .update({ balance: bal })
+              .eq("id", b.id);
+          }
+        } catch (e: any) {
+          summary[t] = {
+            restored: inserted,
+            mode: "map-insert",
+            details: { remapped, failed: failed.length, failures: failed.slice(0, 20), reconcileError: e?.message ?? String(e) },
+          };
+          continue;
+        }
+        summary[t] = {
+          restored: inserted,
+          mode: "map-insert",
+          details: { remapped, failed: failed.length, failures: failed.slice(0, 20), balances },
+        };
+        continue;
+      }
+
       const CHUNK = 500;
       let written = 0;
       for (let i = 0; i < rows.length; i += CHUNK) {
