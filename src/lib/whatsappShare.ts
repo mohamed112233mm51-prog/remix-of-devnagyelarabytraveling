@@ -1,9 +1,13 @@
 import { toast } from "sonner";
-import { buildStatementExcelBlob, exportStatementToPDF, type StatementExportData } from "./exportStatement";
+import {
+  buildStatementExcelBlob,
+  buildStatementPdfBlob,
+  type StatementExportData,
+} from "./exportStatement";
 
 const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const MIME_PDF = "application/pdf";
 
-/** Normalize a phone number for use with wa.me. */
 export function normalizeWhatsappPhone(raw?: string | null): string | null {
   if (!raw) return null;
   let d = String(raw).replace(/\D+/g, "");
@@ -24,17 +28,42 @@ function downloadBlob(blob: Blob, fileName: string) {
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  a.remove();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/**
- * Called synchronously from the click handler — opens WhatsApp in a new tab
- * FIRST so the browser accepts it as a user-gesture-driven popup. Then does
- * the async export work and downloads the file so it's ready in Downloads.
- */
+async function shareExcel(data: StatementExportData, phone: string | null, message: string) {
+  // 1) Open WhatsApp FIRST (same user gesture)
+  window.open(buildWhatsappUrl(phone, message), "_blank");
+  // 2) Then build + download the file
+  try {
+    const built = await buildStatementExcelBlob(data);
+    const fileName = `${built.fileName}.xlsx`;
+    const typedBlob = new Blob([built.blob], { type: MIME_XLSX });
+    downloadBlob(typedBlob, fileName);
+    toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
+  } catch (e) {
+    toast.error("تعذر تجهيز ملف Excel: " + (e as Error).message);
+  }
+}
+
+async function sharePdf(data: StatementExportData, phone: string | null, message: string) {
+  // Mirrors shareExcel exactly — only MIME type and extension differ.
+  window.open(buildWhatsappUrl(phone, message), "_blank");
+  try {
+    const built = await buildStatementPdfBlob(data);
+    const fileName = `${built.fileName}.pdf`;
+    const typedBlob = new Blob([built.blob], { type: MIME_PDF });
+    downloadBlob(typedBlob, fileName);
+    toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
+  } catch (e) {
+    toast.error("تعذر تجهيز ملف PDF: " + (e as Error).message);
+  }
+}
+
 export async function shareStatementViaWhatsApp(opts: {
   kind: "pdf" | "excel";
   data: StatementExportData;
@@ -42,31 +71,6 @@ export async function shareStatementViaWhatsApp(opts: {
 }): Promise<void> {
   const phone = normalizeWhatsappPhone(opts.phone);
   const message = `مرفق ${opts.data.title}`;
-
-  // 1) MUST be the first line — open WhatsApp inside the click gesture,
-  //    before any await/setTimeout, or mobile browsers block the popup.
-  const waWin = window.open(buildWhatsappUrl(phone, message), "_blank");
-
-  // 2) Now do the async export + download.
-  if (opts.kind === "excel") {
-    try {
-      const built = await buildStatementExcelBlob(opts.data);
-      const fileName = `${built.fileName}.xlsx`;
-      const typedBlob = new Blob([built.blob], { type: MIME_XLSX });
-      downloadBlob(typedBlob, fileName);
-      toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
-    } catch (e) {
-      toast.error("تعذر تجهيز ملف Excel: " + (e as Error).message);
-    }
-    return;
-  }
-
-  // PDF path — existing exporter opens a print window (no Blob). Keep it.
-  try {
-    await exportStatementToPDF(opts.data);
-    toast.message("احفظ ملف PDF ثم أرفقه في محادثة واتساب.");
-  } catch (e) {
-    toast.error("تعذر تصدير PDF: " + (e as Error).message);
-    if (waWin && !waWin.closed) waWin.close();
-  }
+  if (opts.kind === "excel") await shareExcel(opts.data, phone, message);
+  else await sharePdf(opts.data, phone, message);
 }
