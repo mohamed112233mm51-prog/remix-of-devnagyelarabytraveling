@@ -587,6 +587,15 @@ function ExecutionForm({
   const singleProfitCurrency = profitCurrencies.length === 1 ? profitCurrencies[0] : null;
   const profit = singleProfitCurrency ? profitByCurrency[singleProfitCurrency] : 0;
   const profitCurrency = singleProfitCurrency;
+  // Fixed display order for currencies across all cards.
+  const CURRENCY_ORDER = ["EGP", "USD", "LYD"];
+  const sortCurrencies = (curs: string[]) => {
+    const rank = (c: string) => {
+      const i = CURRENCY_ORDER.indexOf(c);
+      return i === -1 ? CURRENCY_ORDER.length : i;
+    };
+    return [...curs].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  };
 
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
