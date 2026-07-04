@@ -26,11 +26,9 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 function openWhatsapp(phone?: string | null, text?: string) {
-  const params = new URLSearchParams();
-  if (phone) params.set("phone", phone);
-  if (text) params.set("text", text);
-  const qs = params.toString();
-  window.location.href = `whatsapp://send${qs ? `?${qs}` : ""}`;
+  const base = phone ? `https://wa.me/${phone}` : "https://wa.me/";
+  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
+  window.location.href = `${base}${qs}`;
 }
 
 /**
