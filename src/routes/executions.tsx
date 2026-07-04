@@ -362,7 +362,7 @@ function ExecutionsPage() {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={EXECUTION_COLUMNS} visible={visible} onChange={setVisible} />
-              <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} />
+              <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} whatsapp={{ phone: null }} />
             </div>
           </div>
 

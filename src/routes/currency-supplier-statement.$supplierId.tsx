@@ -348,7 +348,7 @@ function CurrencySupplierStatementPage() {
           </>
         )}
         <ColumnVisibility columns={CS_COLUMNS} visible={visible} onChange={setVisible} />
-        {perm.export && <ExportButton getData={exportData} />}
+        {perm.export && <ExportButton getData={exportData} whatsapp={{ phone: supplier?.phone || null, recipientName: supplier?.name || null }} />}
       </div>
 
       <div className="filter-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

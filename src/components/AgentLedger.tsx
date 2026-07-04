@@ -345,7 +345,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
               <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
-              {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} />}
+              {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} whatsapp={{ phone: agent?.whatsapp || null, recipientName: agent?.name || null }} />}
             </div>
           </div>
           <div className="card-body">

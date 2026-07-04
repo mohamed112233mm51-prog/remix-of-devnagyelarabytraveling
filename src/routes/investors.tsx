@@ -308,7 +308,7 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
     <div className="card">
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <div className="card-title">🧾 كشف حساب المستثمر</div>
-        <ExportButton disabled={filtered.length === 0} getData={buildData} />
+        <ExportButton disabled={filtered.length === 0} getData={buildData} whatsapp={{ phone: (investor as any)?.whatsapp || (investor as any)?.phone || null, recipientName: (investor as any)?.investor_name || null }} />
       </div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>

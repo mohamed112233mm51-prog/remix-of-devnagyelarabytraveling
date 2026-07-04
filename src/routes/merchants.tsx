@@ -1031,7 +1031,7 @@ function MerchantStatementTab({
           <div className="card-title"><FileText size={18} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} /> كشف حساب التاجر</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <ColumnVisibility columns={MERCHANT_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
-            <ExportButton disabled={withRunning.length === 0} getData={buildExport} />
+            <ExportButton disabled={withRunning.length === 0} getData={buildExport} whatsapp={{ phone: (merchant as any)?.whatsapp || (merchant as any)?.phone || null, recipientName: (merchant as any)?.merchant_name || null }} />
           </div>
         </div>
         <div className="card-body">
