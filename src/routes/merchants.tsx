@@ -961,9 +961,9 @@ function MerchantStatementTab({
   const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
 
   const buildExport = () => ({
-    title: "كشف حساب التاجر",
+    title: `كشف حساب تاجر الكاش${merchant?.merchant_name ? ` — ${merchant.merchant_name}` : ""}`,
     subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
-    fileName: `كشف-حساب-${merchant?.merchant_name || "التاجر"}`,
+    fileName: buildArabicFileName("كشف حساب تاجر الكاش", merchant?.merchant_name),
     summary: (() => {
       const CUR_NAMES: Record<string, string> = {
         EGP: "الجنيه المصري",
