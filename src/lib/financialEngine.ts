@@ -387,10 +387,19 @@ export async function getEntityBalance(
 export async function getCashBoxBalance(cashBoxId: string): Promise<number> {
   const { data, error } = await supabase
     .from("cash_boxes")
-    .select("balance")
+    .select("id,name,currency,balance")
     .eq("id", cashBoxId)
     .single();
   if (error) throw new Error(error.message);
+  if (import.meta.env.DEV) {
+    console.debug("[cash-box-balance:getCashBoxBalance]", {
+      "Cash Box ID": data?.id,
+      "Cash Box Name": data?.name,
+      "Currency ID": data?.currency,
+      "Currency Name": currencyNameForDebug(data?.currency),
+      "Calculated Balance": Number(data?.balance) || 0,
+    });
+  }
   return Number(data?.balance) || 0;
 }
 
@@ -554,6 +563,13 @@ export async function fetchCashBoxByName(
 
 function fmt(n: number): string {
   return new Intl.NumberFormat("en-US").format(Math.round(n));
+}
+
+function currencyNameForDebug(currency: string | null | undefined): string {
+  if (currency === "USD") return "الدولار الأمريكي";
+  if (currency === "LYD") return "الدينار الليبي";
+  if (currency === "EGP") return "الجنيه المصري";
+  return currency || "—";
 }
 
 function firstMethodArabic(method: string): string {

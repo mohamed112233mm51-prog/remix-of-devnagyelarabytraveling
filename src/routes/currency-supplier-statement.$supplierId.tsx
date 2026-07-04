@@ -19,7 +19,7 @@ import {
   validatePaymentSplits,
   filterValidSplits,
 } from "@/components/PaymentSplits";
-import { useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
+import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows, validateSingleOutflow } from "@/lib/balanceGuard";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
@@ -1037,8 +1037,7 @@ function resolveCompanyBoxForSplit(
   currency: string,
   method: string,
 ): CashBox | null {
-  if (currency === "EGP") return resolveCompanyEgpBox(boxes, method);
-  return resolveForeignBox(boxes, currency);
+  return resolveCompanyCashBoxForSplit(boxes, currency, method);
 }
 
 /** Arabic label persisted in payment_splits.method (mirrors CashMovementForms). */

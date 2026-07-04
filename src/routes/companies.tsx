@@ -34,7 +34,7 @@ import {
   filterValidSplits,
   type PaymentSplitRow,
 } from "@/components/PaymentSplits";
-import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
+import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 
 import { Building2, Briefcase, Wallet, AlertCircle, Search, Plus, CreditCard, FileText, ChevronLeft, Banknote, BadgeDollarSign } from "lucide-react";
 import { CompanySupplyForm } from "@/components/CashMovementForms";
@@ -934,11 +934,11 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
         methodLabel = "إنستاباي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
         cashBoxId = box?.id || null;
       } else if (r.method === "company_cash") {
         methodLabel = "نقدي";
-        const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
         cashBoxId = box?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "انستا";
       else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";

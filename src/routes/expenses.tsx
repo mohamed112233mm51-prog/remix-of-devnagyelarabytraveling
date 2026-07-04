@@ -6,13 +6,8 @@ import {
   fmtDL,
   fmtUSD,
   useLive,
-  merchantCashNet,
   type Expense,
   type ExpenseDeduction,
-  type Transaction,
-  type CompanyTransaction,
-  type InvestorTransaction,
-  type UsdTreasuryTransaction,
   type Merchant,
   type MerchantCashCollection,
 } from "@/lib/db";
@@ -31,6 +26,7 @@ import {
 } from "@/components/PaymentSplits";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
+import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
@@ -50,67 +46,6 @@ const legacySourceLabel = (v?: string | null) =>
   (v && LEGACY_SOURCE_LABELS[v]) || v || "—";
 
 type Tab = "add" | "history";
-
-function useSourceBalances() {
-  const { rows: agentTxns } = useLive<Transaction>("transactions");
-  const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: investorTxns } = useLive<InvestorTransaction>("investor_transactions");
-  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-
-  return useMemo(() => {
-    let instaIn = 0, cashIn = 0;
-    for (const t of agentTxns) {
-      instaIn += Number(t.instapay_amount || 0);
-      cashIn += Number(t.cash_amount || 0);
-    }
-    let instaOut = 0, cashOut = 0;
-    for (const t of cTxns) {
-      instaOut += Number(t.instapay_amount || 0);
-      cashOut += Number(t.cash_amount || 0);
-    }
-    let investorIn = 0, investorOut = 0;
-    for (const t of investorTxns) {
-      if (t.transaction_type === "توريد نقدية") investorIn += Number(t.amount || 0);
-      else if (t.transaction_type === "صرف نقدية") investorOut += Number(t.amount || 0);
-    }
-    let usdConvEgp = 0, usdBalance = 0;
-    for (const r of usdRows) {
-      if (r.type === "conversion") usdConvEgp += Number(r.egp_amount || 0);
-      const amt = Number(r.usd_amount || 0);
-      usdBalance += r.type === "company_payment" ? -amt : amt;
-    }
-    let instaExp = 0, cashExp = 0;
-    for (const d of deductions) {
-      const a = Number(d.amount || 0);
-      if (d.funding_source === "insta_company") instaExp += a;
-      else if (d.funding_source === "cash_company") cashExp += a;
-      else if (!d.funding_source) cashExp += a; // legacy → cash
-    }
-    const merchantBalance = new Map<string, number>();
-    for (const t of agentTxns) {
-      if (!t.merchant_id) continue;
-      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-      merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) + net);
-    }
-    for (const t of cTxns) {
-      if (!t.merchant_id) continue;
-      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-      merchantBalance.set(t.merchant_id, (merchantBalance.get(t.merchant_id) || 0) - net);
-    }
-    for (const c of collections) {
-      merchantBalance.set(c.merchant_id, (merchantBalance.get(c.merchant_id) || 0) - Number(c.amount || 0));
-    }
-
-    return {
-      insta_company: Math.round(instaIn - instaOut - instaExp),
-      cash_company: Math.round(cashIn + investorIn - investorOut - cashOut - cashExp - usdConvEgp),
-      usd_treasury: Math.round(usdBalance * 100) / 100,
-      merchantBalance,
-    };
-  }, [agentTxns, cTxns, investorTxns, deductions, usdRows, collections]);
-}
 
 function ExpensesPage() {
   const { rows: expenses } = useLive<Expense>("expenses");
@@ -206,27 +141,8 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
   // Per-source balance preview based on chosen splits
   const balanceWarnings = useMemo(() => {
     if (initial) return [] as string[]; // edit doesn't deduct again
-    const warns: string[] = [];
-    let usedInsta = 0, usedCash = 0;
-    const usedMerchant = new Map<string, number>();
-    for (const r of filterValidSplits(splits)) {
-      const a = Number(r.amount) || 0;
-      if (r.method === "company_instapay") usedInsta += a;
-      else if (r.method === "company_cash") usedCash += a;
-      else if (r.source === "merchant" && r.merchant_id) {
-        usedMerchant.set(r.merchant_id, (usedMerchant.get(r.merchant_id) || 0) + a);
-      }
-    }
-    if (usedInsta > balances.insta_company) warns.push(`رصيد إنستا الشركة غير كافٍ (المتاح: ${fmtDL(balances.insta_company)})`);
-    if (usedCash > balances.cash_company) warns.push(`رصيد نقدي الشركة غير كافٍ (المتاح: ${fmtDL(balances.cash_company)})`);
-    for (const [mid, amt] of usedMerchant) {
-      const bal = balances.merchantBalance.get(mid) || 0;
-      if (amt > bal) {
-        const name = merchants.find((m) => m.id === mid)?.merchant_name || "تاجر";
-        warns.push(`رصيد ${name} غير كافٍ (المتاح: ${fmtDL(bal)})`);
-      }
-    }
-    return warns;
+    const err = validateSplitOutflows(filterValidSplits(splits), balances, merchants);
+    return err ? [err] : [];
   }, [splits, balances, initial, merchants]);
 
   const save = async () => {
@@ -269,7 +185,6 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     if (Math.abs(splitsDiff) > 0.5) {
       return toast.error(`إجمالي وسائل الدفع (${fmtDL(splitsTotal)}) لا يساوي إجمالي المصروف (${fmtDL(totalAmount)})`);
     }
-    const { validateSplitOutflows } = await import("@/lib/balanceGuard");
     const balanceErr = validateSplitOutflows(valid, balances, merchants);
     if (balanceErr) return toast.error(balanceErr);
 
@@ -325,8 +240,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           funding_source: r.method === "company_instapay" ? "insta_company" : "cash_company",
           currency: r.currency || "EGP",
         });
-        const boxName = r.method === "company_instapay" ? "خزينة إنستا الشركة" : "خزينة نقدي الشركة";
-        const box = cashBoxes.find((b) => b.name === boxName && b.currency === (r.currency || "EGP"));
+        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency || "EGP", r.method);
         engineSplits.push({
           method: r.method === "company_instapay" ? "إنستاباي" : "نقدي",
           currency: (r.currency || "EGP") as any,
