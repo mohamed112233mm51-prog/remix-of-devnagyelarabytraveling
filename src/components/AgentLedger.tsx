@@ -340,7 +340,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
         <div className="card">
           <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div className="card-title">كشف حساب الوكيل</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <span>العملة:</span>
+                <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)} style={{ minWidth: 120 }}>
+                  <option value="">الكل</option>
+                  {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
               {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} />}
