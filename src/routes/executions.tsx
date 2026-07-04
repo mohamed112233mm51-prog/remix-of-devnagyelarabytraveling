@@ -564,18 +564,24 @@ function ExecutionForm({
   const agentCurrencies = Array.from(new Set(agentServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
   const companyCurrency = companyCurrencies.length === 1 ? companyCurrencies[0] : null;
   const agentCurrency = agentCurrencies.length === 1 ? agentCurrencies[0] : null;
-  // Per-currency profit: never sum across currencies.
+  // Per-currency totals & profit: never sum across currencies.
+  const companyTotalByCurrency: Record<string, number> = {};
+  const agentTotalByCurrency: Record<string, number> = {};
   const profitByCurrency: Record<string, number> = {};
   for (const { s } of companyServices) {
     const cur = ((s as any).currency || "EGP") as string;
     const cnt = Number(s.count) || 1;
     const cv = Number(s.company_value) || 0;
     const cp = Number(s.company_price) || 0;
-    profitByCurrency[cur] = (profitByCurrency[cur] || 0) - (cv > 0 ? cv : cp * cnt);
+    const amt = cv > 0 ? cv : cp * cnt;
+    companyTotalByCurrency[cur] = (companyTotalByCurrency[cur] || 0) + amt;
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) - amt;
   }
   for (const { s } of agentServices) {
     const cur = ((s as any).currency || "EGP") as string;
-    profitByCurrency[cur] = (profitByCurrency[cur] || 0) + ((Number(s.agent_price) || 0) * (Number(s.count) || 1));
+    const amt = (Number(s.agent_price) || 0) * (Number(s.count) || 1);
+    agentTotalByCurrency[cur] = (agentTotalByCurrency[cur] || 0) + amt;
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) + amt;
   }
   const profitCurrencies = Object.keys(profitByCurrency);
   const singleProfitCurrency = profitCurrencies.length === 1 ? profitCurrencies[0] : null;
@@ -921,24 +927,42 @@ function ExecutionForm({
       {canViewNetProfit && (
       <div style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ padding: 12, borderRadius: 10, background: "#eef2ff", border: "1px solid #c7d2fe" }}>
-          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي تكاليف الشركات الصادرة</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>
-            {companyCurrency
-              ? `${companyTotal.toLocaleString("ar")} ${currencyShortLabel(companyCurrency)}`
-              : companyCurrencies.length > 1
-                ? "عملات متعددة"
-                : companyTotal.toLocaleString("ar")}
+          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
+            {companyCurrency ? "إجمالي تكاليف الشركات الصادرة" : "إجمالي تكاليف الشركة حسب العملة"}
           </div>
+          {companyCurrency ? (
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>
+              {companyTotal.toLocaleString("ar")} {currencyShortLabel(companyCurrency)}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+              {Object.keys(companyTotalByCurrency).map((cur) => (
+                <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: "#1e3a8a" }}>
+                  <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
+                  <span>{(companyTotalByCurrency[cur] || 0).toLocaleString("ar")}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ padding: 12, borderRadius: 10, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
-          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي بيع الوكيل</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>
-            {agentCurrency
-              ? `${agentTotal.toLocaleString("ar")} ${currencyShortLabel(agentCurrency)}`
-              : agentCurrencies.length > 1
-                ? "عملات متعددة"
-                : agentTotal.toLocaleString("ar")}
+          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
+            {agentCurrency ? "إجمالي بيع الوكيل" : "إجمالي بيع الوكيل حسب العملة"}
           </div>
+          {agentCurrency ? (
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>
+              {agentTotal.toLocaleString("ar")} {currencyShortLabel(agentCurrency)}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+              {Object.keys(agentTotalByCurrency).map((cur) => (
+                <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: "#047857" }}>
+                  <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
+                  <span>{(agentTotalByCurrency[cur] || 0).toLocaleString("ar")}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ padding: 12, borderRadius: 10, background: profitCurrency ? (profit >= 0 ? "#fffbeb" : "#fef2f2") : "#f8fafc", border: `1px solid ${profitCurrency ? (profit >= 0 ? "#fde68a" : "#fecaca") : "#e2e8f0"}` }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
