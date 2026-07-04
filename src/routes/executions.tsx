@@ -23,7 +23,7 @@ import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/ap
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
-import { resolveAgentPrice } from "@/lib/pricingMatch";
+import { resolveAgentPrice, currencyShortLabel } from "@/lib/pricingMatch";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
