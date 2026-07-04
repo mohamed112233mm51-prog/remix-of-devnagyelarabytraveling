@@ -32,7 +32,9 @@ type CashBoxRow = {
   currency: string;
   balance: number | string | null;
   is_active?: boolean | null;
+  method_key?: string | null;
 };
+
 
 type PaymentSplitBalanceRow = {
   id: string;
