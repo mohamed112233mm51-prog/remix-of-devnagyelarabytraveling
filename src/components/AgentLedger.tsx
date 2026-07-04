@@ -184,16 +184,24 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return result;
   }, [liveSplits]);
   const ledger = useMemo(() => buildLedger(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
+  const currencyOptions = useMemo(
+    () => Array.from(new Set(ledger.map((e) => e.currency || "EGP"))).sort(),
+    [ledger],
+  );
+  const filteredLedger = useMemo(
+    () => (currencyFilter ? ledger.filter((e) => (e.currency || "EGP") === currencyFilter) : ledger),
+    [ledger, currencyFilter],
+  );
   const ledgerWithBalance = useMemo(() => {
     // Per-currency running balance: EGP, USD, LYD, ... never mix.
     const bals = new Map<string, number>();
-    return ledger.map((e) => {
+    return filteredLedger.map((e) => {
       const cur = e.currency || "EGP";
       const next = (bals.get(cur) || 0) + (e.debit - e.credit);
       bals.set(cur, next);
       return { ...e, balance: next };
     });
-  }, [ledger]);
+  }, [filteredLedger]);
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
     methodLabel: e.paymentMethod,
