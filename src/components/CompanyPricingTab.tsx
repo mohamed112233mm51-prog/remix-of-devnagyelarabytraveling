@@ -8,11 +8,18 @@ import { confirmDialog } from "@/lib/confirm";
 import { checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
 import type { PricingRule } from "@/lib/pricingMatch";
+import { currencyShortLabel, PRICING_CURRENCIES } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
 import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
+
+const CURRENCY_LABEL: Record<string, string> = {
+  EGP: "جنيه مصري (EGP)",
+  USD: "دولار أمريكي (USD)",
+  LYD: "دينار ليبي (LYD)",
+};
 
 const EMPTY = (companyId: string, defaultService: string, defaultTier: string): Row => ({
   company_id: companyId,
@@ -27,6 +34,7 @@ const EMPTY = (companyId: string, defaultService: string, defaultTier: string): 
   company_price: 0,
   commission_type: "percentage",
   commission_value: 0,
+  currency: "EGP",
 });
 
 function computeAgentPrice(r: Pick<Row, "company_price" | "commission_type" | "commission_value">): number {
@@ -110,6 +118,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       ...draft,
       company_price: Number(draft.company_price) || 0,
       commission_value: Number(draft.commission_value) || 0,
+      currency: (draft.currency || "EGP").toUpperCase(),
     };
     delete payload.id;
 
@@ -269,6 +278,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                   <th style={{ padding: 6 }}>نوع العمولة</th>
                   <th style={{ padding: 6 }}>قيمة الربح</th>
                   <th style={{ padding: 6 }}>سعر الوكيل</th>
+                  <th style={{ padding: 6 }}>العملة</th>
                   <th style={{ padding: 6 }}>إجراءات</th>
                 </tr>
               </thead>
@@ -277,7 +287,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                   const displayRules = filtersActive ? filteredRules : rules;
                   if (displayRules.length === 0) {
                     return (
-                      <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
+                      <tr><td colSpan={14} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
                         {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
                       </td></tr>
                     );
@@ -291,11 +301,12 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                       <td style={{ padding: 6 }}>{approvalCompanies.find((c) => c.id === r.approval_company_id)?.company_name || "—"}</td>
                       <td style={{ padding: 6 }}>{r.status || "—"}</td>
                       <td style={{ padding: 6 }}>{r.passenger_type || "—"}</td>
-                      <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)}</td>
+                      <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>
                       <td style={{ padding: 6 }}>{r.agent_tier}</td>
                       <td style={{ padding: 6 }}>{r.commission_type === "fixed" ? "مبلغ" : "نسبة"}</td>
-                      <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}</td>
-                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
+                      <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}{r.commission_type === "fixed" ? ` ${currencyShortLabel(r.currency)}` : "%"}</td>
+                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>
+                      <td style={{ padding: 6, fontWeight: 600 }}>{(r.currency || "EGP").toUpperCase()}</td>
                       <td style={{ padding: 6 }}>
                         <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
                           {perm.edit && (
@@ -430,7 +441,14 @@ function DraftEditor(props: {
           <div className="form-group"><label>نوع المسافر</label>
             <SearchableSelect value={draft.passenger_type || ""} onChange={(v) => upd({ passenger_type: v || null })} options={["", ...props.passengers] as string[]} />
           </div>
-          <div className="form-group"><label>سعر الشركة</label>
+          <div className="form-group"><label>العملة *</label>
+            <select value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })}>
+              {PRICING_CURRENCIES.map((c) => (
+                <option key={c} value={c}>{CURRENCY_LABEL[c] || c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group"><label>سعر الشركة ({currencyShortLabel(draft.currency)})</label>
             <NumberInput value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} />
           </div>
           <div className="form-group"><label>نوع العمولة</label>
@@ -439,11 +457,11 @@ function DraftEditor(props: {
               <option value="fixed">مبلغ ثابت</option>
             </select>
           </div>
-          <div className="form-group"><label>{draft.commission_type === "fixed" ? "قيمة الربح" : "نسبة الربح %"}</label>
+          <div className="form-group"><label>{draft.commission_type === "fixed" ? `قيمة الربح (${currencyShortLabel(draft.currency)})` : "نسبة الربح %"}</label>
             <NumberInput value={Number(draft.commission_value) || 0} onChange={(n) => upd({ commission_value: n })} min={0} />
           </div>
           <div className="form-group"><label>سعر الوكيل (محسوب)</label>
-            <input value={agentPrice} disabled readOnly style={{ background: "var(--card)", fontWeight: 700 }} />
+            <input value={`${agentPrice} ${currencyShortLabel(draft.currency)}`} disabled readOnly style={{ background: "var(--card)", fontWeight: 700 }} />
           </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>

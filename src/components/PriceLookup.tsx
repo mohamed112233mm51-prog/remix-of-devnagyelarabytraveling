@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 // SearchableSelect not needed here — native selects suffice for cascading filters.
 import { useLive, type IssuingCompany } from "@/lib/db";
 import type { PricingRule } from "@/lib/pricingMatch";
+import { currencyShortLabel } from "@/lib/pricingMatch";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, X, Pencil } from "lucide-react";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -269,6 +270,7 @@ export function PriceLookup(props: {
                   {mode === "company" && <th style={{ padding: 6 }}>سعر الشركة</th>}
                   {mode === "company" && !agentTier && <th style={{ padding: 6 }}>الشريحة</th>}
                   <th style={{ padding: 6 }}>سعر الوكيل</th>
+                  <th style={{ padding: 6 }}>العملة</th>
                   {mode === "company" && onOpenRule && <th style={{ padding: 6 }}>إجراءات</th>}
                 </tr>
               </thead>
@@ -287,9 +289,10 @@ export function PriceLookup(props: {
                       <td style={{ padding: 6 }}>{companyNameOf(r.approval_company_id)}</td>
                       <td style={{ padding: 6 }}>{r.status || NA_LABEL}</td>
                       <td style={{ padding: 6 }}>{r.passenger_type || NA_LABEL}</td>
-                      {mode === "company" && <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)}</td>}
+                      {mode === "company" && <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>}
                       {mode === "company" && !agentTier && <td style={{ padding: 6 }}>{r.agent_tier}</td>}
-                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
+                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>
+                      <td style={{ padding: 6, fontWeight: 600 }}>{(r.currency || "EGP").toUpperCase()}</td>
                       {mode === "company" && onOpenRule && (
                         <td style={{ padding: 6 }}>
                           <button
