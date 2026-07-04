@@ -278,6 +278,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                   <th style={{ padding: 6 }}>نوع العمولة</th>
                   <th style={{ padding: 6 }}>قيمة الربح</th>
                   <th style={{ padding: 6 }}>سعر الوكيل</th>
+                  <th style={{ padding: 6 }}>العملة</th>
                   <th style={{ padding: 6 }}>إجراءات</th>
                 </tr>
               </thead>
@@ -286,7 +287,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                   const displayRules = filtersActive ? filteredRules : rules;
                   if (displayRules.length === 0) {
                     return (
-                      <tr><td colSpan={13} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
+                      <tr><td colSpan={14} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
                         {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
                       </td></tr>
                     );
@@ -300,11 +301,12 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                       <td style={{ padding: 6 }}>{approvalCompanies.find((c) => c.id === r.approval_company_id)?.company_name || "—"}</td>
                       <td style={{ padding: 6 }}>{r.status || "—"}</td>
                       <td style={{ padding: 6 }}>{r.passenger_type || "—"}</td>
-                      <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)}</td>
+                      <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>
                       <td style={{ padding: 6 }}>{r.agent_tier}</td>
                       <td style={{ padding: 6 }}>{r.commission_type === "fixed" ? "مبلغ" : "نسبة"}</td>
-                      <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}</td>
-                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
+                      <td style={{ padding: 6 }}>{Number(r.commission_value).toFixed(2)}{r.commission_type === "fixed" ? ` ${currencyShortLabel(r.currency)}` : "%"}</td>
+                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>
+                      <td style={{ padding: 6, fontWeight: 600 }}>{(r.currency || "EGP").toUpperCase()}</td>
                       <td style={{ padding: 6 }}>
                         <div style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
                           {perm.edit && (
