@@ -251,16 +251,22 @@ function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups, au
   let from: string | null = null;
   let to: string | null = null;
   let method: string | null = derivePaymentMethod(ctx);
-  const isPayIn = ["دفعة", "in", "buy", "شراء"].includes(String(ctx.tx_type || ctx.type || ""));
 
   const svc = String(ctx.service_type || "");
   const src = String(ctx.source_service_type || "");
+  const txType = String(ctx.tx_type || "");
+  const operationType = String(ctx.type || ctx.kind || "");
   const stmt = String(ctx.statement || "");
-  const hay = `${svc} ${src} ${stmt}`;
+  // Direction is derived from operation/type fields only — never from amount sign.
+  // `statement` is kept only as a legacy operation label fallback for old rows.
+  const hay = `${svc} ${src} ${txType} ${operationType} ${stmt}`;
   const isCashOutToAgent =
+    src === "agent_cash_out" ||
     src === "merchant_cash_out_to_agent" ||
     /صرف\s*نقدية\s*لوكيل|صرف\s*لوكيل|دفع\s*لوكيل/.test(hay);
-  const isCashOutToMerchant = /صرف\s*نقدية\s*لتاجر|صرف\s*لتاجر\s*الكاش/.test(hay);
+  const isCashOutToMerchant =
+    src === "merchant_cash_out" ||
+    /صرف\s*نقدية\s*لتاجر|صرف\s*لتاجر\s*الكاش/.test(hay);
   const isAgentPayment =
     src === "payment" ||
     /دفعة\s*من\s*الوكيل|استلام\s*من\s*الوكيل|تحصيل\s*من\s*الوكيل/.test(hay);
@@ -294,9 +300,8 @@ function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups, au
       break;
     case "currency_supplier_transactions": {
       // buy → company pays supplier; sell → supplier pays company
-      const type = String(ctx.tx_type || "");
-      const buying = type.includes("buy") || /شراء/.test(hay);
-      const selling = type.includes("sell") || /بيع/.test(hay);
+      const buying = txType.includes("buy") || /شراء/.test(hay);
+      const selling = txType.includes("sell") || /بيع/.test(hay);
       if (buying) { from = cashBox || COMPANY_TREASURY_LABEL; to = supplier; }
       else if (selling) { from = supplier; to = cashBox || COMPANY_TREASURY_LABEL; }
       else { from = cashBox || COMPANY_TREASURY_LABEL; to = supplier; }
@@ -357,7 +362,6 @@ function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups, au
     to: to || "—",
     amount,
     currency,
-    _isPayIn: isPayIn,
   };
 }
 
