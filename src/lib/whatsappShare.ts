@@ -84,6 +84,6 @@ export async function shareStatementViaWhatsApp(opts: {
   // and open WhatsApp alongside so user can attach the saved PDF manually.
   await exportStatementToPDF(opts.data);
   toast.message("تم فتح نافذة PDF. احفظ الملف ثم أرفقه في محادثة واتساب.");
-  openWhatsapp(phone, message);
+  setTimeout(() => openWhatsapp(phone, message), 1000);
   void baseName;
 }
