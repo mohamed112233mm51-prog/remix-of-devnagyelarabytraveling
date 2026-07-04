@@ -15,6 +15,7 @@ import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, 
 import { MerchantCashOutForm } from "@/components/CashMovementForms";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
+import CurrencyFilter from "@/components/CurrencyFilter";
 import {
   PaymentSplits,
   newPaymentSplitRow,
