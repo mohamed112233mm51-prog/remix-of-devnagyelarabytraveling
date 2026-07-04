@@ -138,10 +138,10 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("executions")
-        .select("id, created_at, operation_status, submission_id, services")
+        .select("id, created_at, operation_status, submission_id, services, destination")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null; submission_id: string | null; services: any }[];
+      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null; submission_id: string | null; services: any; destination: string | null }[];
     },
   });
   const executionMetrics = executionMetricsQuery.data ?? [];
