@@ -8,11 +8,18 @@ import { confirmDialog } from "@/lib/confirm";
 import { checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
 import type { PricingRule } from "@/lib/pricingMatch";
+import { currencyShortLabel, PRICING_CURRENCIES } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
 import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
+
+const CURRENCY_LABEL: Record<string, string> = {
+  EGP: "جنيه مصري (EGP)",
+  USD: "دولار أمريكي (USD)",
+  LYD: "دينار ليبي (LYD)",
+};
 
 const EMPTY = (companyId: string, defaultService: string, defaultTier: string): Row => ({
   company_id: companyId,
@@ -27,6 +34,7 @@ const EMPTY = (companyId: string, defaultService: string, defaultTier: string): 
   company_price: 0,
   commission_type: "percentage",
   commission_value: 0,
+  currency: "EGP",
 });
 
 function computeAgentPrice(r: Pick<Row, "company_price" | "commission_type" | "commission_value">): number {
