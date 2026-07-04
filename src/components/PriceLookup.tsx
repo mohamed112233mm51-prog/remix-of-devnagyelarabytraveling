@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 // SearchableSelect not needed here — native selects suffice for cascading filters.
 import { useLive, type IssuingCompany } from "@/lib/db";
 import type { PricingRule } from "@/lib/pricingMatch";
+import { currencyShortLabel } from "@/lib/pricingMatch";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, X, Pencil } from "lucide-react";
 import { usePersistentState } from "@/hooks/usePersistentState";
