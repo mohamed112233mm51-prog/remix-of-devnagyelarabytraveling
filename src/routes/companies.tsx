@@ -12,6 +12,7 @@ import {
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
+import CurrencyFilter from "@/components/CurrencyFilter";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { usePerm, checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
