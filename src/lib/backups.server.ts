@@ -166,8 +166,24 @@ const UPSERT_CONFLICT_KEY: Record<string, string> = {
 // Performs full restore. Reference tables are upserted (no wipe). Other tables
 // are wiped then re-inserted in chunks. Bypasses RLS via service role.
 // Caller MUST be admin (enforced upstream).
+// Duplicate/unique-violation SQL codes and message fragments that mean
+// "already exists" — treated as SKIPPED for reference/lookup tables, never
+// as errors. Operational tables (executions, transactions, ...) still
+// surface these as real errors.
+function isDuplicateError(err: any): boolean {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  if (code === "23505" || code === "23503") return true;
+  return (
+    msg.includes("duplicate key") ||
+    msg.includes("already exists") ||
+    msg.includes("unique constraint") ||
+    msg.includes("violates unique")
+  );
+}
+
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+  const summary: Record<string, { restored: number; skipped?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
 
   // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
@@ -303,6 +319,7 @@ export async function restoreFromPayload(payload: BackupPayload) {
 
       const CHUNK = 500;
       let written = 0;
+      let skipped = 0;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
@@ -310,10 +327,27 @@ export async function restoreFromPayload(payload: BackupPayload) {
         const res = isReference
           ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
           : await (supabaseAdmin.from as any)(t).insert(slice);
-        if (res.error) throw new Error(`${isReference ? "upsert" : "insert"}: ${res.error.message}`);
-        written += slice.length;
+        if (res.error) {
+          // Reference tables: retry row-by-row so duplicates count as
+          // "skipped (already exists)" instead of failing the whole chunk.
+          if (isReference) {
+            for (const row of slice) {
+              const r2 = await (supabaseAdmin.from as any)(t).upsert(row, { onConflict });
+              if (r2.error) {
+                if (isDuplicateError(r2.error)) skipped++;
+                else throw new Error(`upsert: ${r2.error.message}`);
+              } else {
+                written++;
+              }
+            }
+          } else {
+            throw new Error(`insert: ${res.error.message}`);
+          }
+        } else {
+          written += slice.length;
+        }
       }
-      summary[t] = { restored: written, mode: isReference ? "upsert" : "wipe-insert" };
+      summary[t] = { restored: written, skipped, mode: isReference ? "upsert" : "wipe-insert" };
     } catch (e: any) {
       summary[t] = { restored: 0, mode: isReference ? "upsert" : "wipe-insert", error: e?.message ?? String(e) };
     }
