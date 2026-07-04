@@ -19,6 +19,7 @@ import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatem
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCashBoxOpeningBalance } from "@/lib/openingBalance";
+import { postMovement } from "@/lib/financialEngine";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import {
