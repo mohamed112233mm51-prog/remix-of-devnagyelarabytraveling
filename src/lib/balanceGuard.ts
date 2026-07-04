@@ -31,14 +31,80 @@ type CashBoxRow = {
   name: string;
   currency: string;
   balance: number | string | null;
+  is_active?: boolean | null;
+};
+
+type PaymentSplitBalanceRow = {
+  id: string;
+  cash_box_id: string | null;
+  currency: string | null;
+  amount: number | string | null;
+  direction: "in" | "out" | string | null;
+  cancelled_at?: string | null;
+};
+
+export type CashBoxBalanceInfo = {
+  cashBoxId: string;
+  cashBoxName: string;
+  currency: string;
+  currencyName: string;
+  balance: number;
+  calculatedBalance: number;
 };
 
 export type SourceBalances = {
   insta_company: number;
   cash_company: number;
   usd_treasury: number;
+  companyBalanceByMethodCurrency: Map<string, CashBoxBalanceInfo>;
+  cashBoxBalanceByIdCurrency: Map<string, CashBoxBalanceInfo>;
   merchantBalance: Map<string, number>;
 };
+
+const CURRENCY_NAMES: Record<string, string> = {
+  EGP: "الجنيه المصري",
+  USD: "الدولار الأمريكي",
+  LYD: "الدينار الليبي",
+};
+
+const companySourceKey = (method: string, currency: unknown) =>
+  `${method}|${normalizeCurrency(String(currency || "EGP"))}`;
+
+const cashBoxKey = (cashBoxId: string, currency: unknown) =>
+  `${cashBoxId}|${normalizeCurrency(String(currency || "EGP"))}`;
+
+const num = (v: unknown) => Math.round(Number(v || 0));
+const num2 = (v: unknown) => Math.round(Number(v || 0) * 100) / 100;
+
+export function resolveCompanyCashBoxForSplit<T extends { id: string; name: string; currency: string; is_active?: boolean | null }>(
+  cashBoxes: T[],
+  currency: unknown,
+  method: string,
+): T | null {
+  const code = normalizeCurrency(String(currency || "EGP"));
+  const active = cashBoxes.filter((b) => b.currency === code && b.is_active !== false);
+  if (code === "EGP") {
+    if (method === "company_instapay") {
+      return active.find((b) => b.name.includes("إنستا") && b.name.includes("الشركة")) || null;
+    }
+    if (method === "company_cash") {
+      return active.find((b) => b.name.includes("نقدي") && b.name.includes("الشركة")) || null;
+    }
+  }
+  return active.find((b) => b.name.includes("الرئيسية")) || active[0] || null;
+}
+
+function debugCashBoxBalance(info: CashBoxBalanceInfo) {
+  if (!import.meta.env.DEV) return;
+  console.debug("[cash-box-balance:calculation]", {
+    "Cash Box ID": info.cashBoxId,
+    "Cash Box Name": info.cashBoxName,
+    "Currency ID": info.currency,
+    "Currency Name": info.currencyName,
+    "Calculated Balance": info.calculatedBalance,
+    "Stored Balance": info.balance,
+  });
+}
 
 /**
  * Canonical per-source balances.
@@ -52,6 +118,7 @@ export type SourceBalances = {
  */
 export function useSourceBalances(): SourceBalances {
   const { rows: cashBoxes } = useLive<CashBoxRow>("cash_boxes");
+  const { rows: paymentSplits } = useLive<PaymentSplitBalanceRow>("payment_splits");
   const { rows: agentTxns } = useLive<Transaction>("transactions");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
@@ -61,15 +128,48 @@ export function useSourceBalances(): SourceBalances {
   void deductions;
 
   return useMemo(() => {
-    const boxByKey = (name: string, currency: string) =>
-      cashBoxes.find((b) => b.name === name && b.currency === currency);
+    const calculatedByBoxCurrency = new Map<string, number>();
+    for (const split of paymentSplits) {
+      if (!split.cash_box_id || split.cancelled_at) continue;
+      const currency = normalizeCurrency(String(split.currency || "EGP"));
+      const amount = Number(split.amount || 0);
+      const delta = split.direction === "out" ? -amount : amount;
+      const key = cashBoxKey(split.cash_box_id, currency);
+      calculatedByBoxCurrency.set(key, num2((calculatedByBoxCurrency.get(key) || 0) + delta));
+    }
 
-    const insta = boxByKey("خزينة إنستا الشركة", "EGP");
-    const cash = boxByKey("خزينة نقدي الشركة", "EGP");
-    const usd = boxByKey("الخزينة الرئيسية - دولار", "USD");
+    const cashBoxBalanceByIdCurrency = new Map<string, CashBoxBalanceInfo>();
+    for (const box of cashBoxes) {
+      const currency = normalizeCurrency(String(box.currency || "EGP"));
+      const info: CashBoxBalanceInfo = {
+        cashBoxId: box.id,
+        cashBoxName: box.name,
+        currency,
+        currencyName: CURRENCY_NAMES[currency] || currency,
+        balance: num2(box.balance),
+        calculatedBalance: num2(calculatedByBoxCurrency.get(cashBoxKey(box.id, currency)) || 0),
+      };
+      cashBoxBalanceByIdCurrency.set(cashBoxKey(box.id, currency), info);
+      debugCashBoxBalance(info);
+    }
 
-    const num = (v: unknown) => Math.round(Number(v || 0));
-    const num2 = (v: unknown) => Math.round(Number(v || 0) * 100) / 100;
+    const balanceInfoFor = (box: CashBoxRow | null): CashBoxBalanceInfo | undefined => {
+      if (!box) return undefined;
+      return cashBoxBalanceByIdCurrency.get(cashBoxKey(box.id, box.currency));
+    };
+
+    const companyBalanceByMethodCurrency = new Map<string, CashBoxBalanceInfo>();
+    for (const method of ["company_cash", "company_instapay"]) {
+      for (const box of cashBoxes) {
+        const resolved = resolveCompanyCashBoxForSplit(cashBoxes, box.currency, method);
+        const info = balanceInfoFor(resolved);
+        if (info) companyBalanceByMethodCurrency.set(companySourceKey(method, box.currency), info);
+      }
+    }
+
+    const insta = balanceInfoFor(resolveCompanyCashBoxForSplit(cashBoxes, "EGP", "company_instapay"));
+    const cash = balanceInfoFor(resolveCompanyCashBoxForSplit(cashBoxes, "EGP", "company_cash"));
+    const usd = balanceInfoFor(resolveCompanyCashBoxForSplit(cashBoxes, "USD", "company_cash"));
 
     // Merchant balances (no cash_box mapping — aggregate raw movements)
     const merchantBalance = new Map<string, number>();
@@ -128,9 +228,11 @@ export function useSourceBalances(): SourceBalances {
       insta_company: num(insta?.balance),
       cash_company: num(cash?.balance),
       usd_treasury: num2(usd?.balance),
+      companyBalanceByMethodCurrency,
+      cashBoxBalanceByIdCurrency,
       merchantBalance,
     };
-  }, [cashBoxes, agentTxns, cTxns, usdRows, collections]);
+  }, [cashBoxes, paymentSplits, agentTxns, cTxns, usdRows, collections]);
 }
 
 
@@ -164,15 +266,23 @@ export function validateSplitOutflows(
   merchants: Merchant[],
 ): string | null {
   const usedInsta = new Map<string, number>(); // key: "company"
-  let usedCompanyInsta = 0;
-  let usedCompanyCash = 0;
+  const usedCompany = new Map<string, { method: string; currency: string; amount: number; row: PaymentSplitRow }>();
   const usedMerchant = new Map<string, { merchantId: string; currency: string; amount: number; row: PaymentSplitRow }>();
 
   for (const r of splits) {
     const a = Number(r.amount) || 0;
     if (a <= 0) continue;
-    if (r.method === "company_instapay") usedCompanyInsta += a;
-    else if (r.method === "company_cash") usedCompanyCash += a;
+    if (r.method === "company_instapay" || r.method === "company_cash") {
+      const currency = normalizeCurrency(r.currency);
+      const key = companySourceKey(r.method, currency);
+      const current = usedCompany.get(key);
+      usedCompany.set(key, {
+        method: r.method,
+        currency,
+        amount: (current?.amount || 0) + a,
+        row: current?.row || r,
+      });
+    }
     else if (r.source === "merchant" && r.merchant_id) {
       const currency = normalizeCurrency(r.currency);
       const key = `${r.merchant_id}|${currency}`;
@@ -187,11 +297,16 @@ export function validateSplitOutflows(
   }
   void usedInsta;
 
-  if (usedCompanyInsta > balances.insta_company) {
-    return `رصيد وسيلة الدفع (إنستا الشركة) غير كافٍ. الرصيد الحالي: ${fmt(balances.insta_company)}، المبلغ المطلوب: ${fmt(usedCompanyInsta)}`;
-  }
-  if (usedCompanyCash > balances.cash_company) {
-    return `رصيد وسيلة الدفع (نقدي الشركة) غير كافٍ. الرصيد الحالي: ${fmt(balances.cash_company)}، المبلغ المطلوب: ${fmt(usedCompanyCash)}`;
+  for (const [key, used] of usedCompany) {
+    const info = balances.companyBalanceByMethodCurrency.get(key);
+    if (!info) {
+      const label = methodSourceLabel(used.method);
+      return `لا توجد خزنة مطابقة لوسيلة الدفع (${label}) بعملة ${used.currency}`;
+    }
+    debugCashBoxBalance(info);
+    if (used.amount > info.balance) {
+      return `رصيد وسيلة الدفع (${info.cashBoxName}) غير كافٍ. الرصيد الحالي: ${fmt(info.balance)}، المبلغ المطلوب: ${fmt(used.amount)}`;
+    }
   }
   for (const [key, used] of usedMerchant) {
     const bal = balances.merchantBalance.get(key) || 0;
