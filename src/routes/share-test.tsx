@@ -100,6 +100,21 @@ function ShareTestPage() {
     await runShare(new File([blob], "test.txt", { type: "text/plain" }));
   };
 
+  const testShare = async () => {
+    const nav: any = navigator;
+    const blob = new Blob(["test"], { type: "application/pdf" });
+    const file = new File([blob], "test.pdf", { type: "application/pdf" });
+    const result: Record<string, unknown> = {
+      hasShare: typeof nav.share === "function",
+      hasCanShare: typeof nav.canShare === "function",
+    };
+    try { result.canShareFiles = nav.canShare({ files: [file] }); }
+    catch (e: any) { result.canShareFiles = `threw: ${e?.message || e}`; }
+    try { result.canShareText = nav.canShare({ text: "test" }); }
+    catch (e: any) { result.canShareText = `threw: ${e?.message || e}`; }
+    alert(JSON.stringify(result, null, 2));
+  };
+
   const btn: React.CSSProperties = {
     padding: "12px 16px", color: "#fff", border: "none", borderRadius: 8,
     fontSize: 15, fontWeight: 700, cursor: "pointer",
