@@ -371,13 +371,7 @@ function CurrencySupplierStatementPage() {
             <option value="رصيد سابق">رصيد سابق</option>
           </select>
         </div>
-        <div className="form-group" style={{ minWidth: 180 }}>
-          <label>العملة</label>
-          <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
-            <option value="">الكل</option>
-            {ALL_FILTER_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL_AR[c] || c}</option>)}
-          </select>
-        </div>
+        <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={ALL_FILTER_CURRENCIES as unknown as string[]} minWidth={200} />
         {(from || to || typeFilter || currencyFilter) && (
           <button className="action-btn" style={{ alignSelf: "end" }} onClick={() => { setFrom(""); setTo(""); setTypeFilter(""); setCurrencyFilter(""); }}>
             مسح الفلاتر
