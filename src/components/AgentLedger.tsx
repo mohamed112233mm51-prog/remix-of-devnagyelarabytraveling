@@ -228,8 +228,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return true;
   }), [rowsWithMethodLabel, safeFilters]);
 
-  const totalServices = ledger.reduce((s, e) => s + e.debit, 0);
-  const totalPayments = ledger.reduce((s, e) => s + e.credit, 0);
+  const totalServices = filteredLedger.reduce((s, e) => s + e.debit, 0);
+  const totalPayments = filteredLedger.reduce((s, e) => s + e.credit, 0);
   const net = totalServices - totalPayments;
   const accountStatus = net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن";
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
@@ -239,7 +239,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     const debits = new Map<string, number>();
     const credits = new Map<string, number>();
     const counts = new Map<string, number>();
-    for (const e of ledger) {
+    for (const e of filteredLedger) {
       const c = e.currency || "EGP";
       debits.set(c, (debits.get(c) || 0) + e.debit);
       credits.set(c, (credits.get(c) || 0) + e.credit);
@@ -251,7 +251,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       const cr = credits.get(c) || 0;
       return { currency: c, debit: d, credit: cr, net: d - cr, count: counts.get(c) || 0 };
     });
-  }, [ledger]);
+  }, [filteredLedger]);
 
   const buildExportData = () => ({
     title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}`,
