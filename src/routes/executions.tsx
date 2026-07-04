@@ -394,8 +394,12 @@ function ExecutionsPage() {
                 <tbody>
                   {pageRows.length === 0 ? (
                     <tr><td colSpan={visibleColumns.length + 2} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
-                  ) : pageRows.map((e, i) => (
-                    <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                  ) : pageRows.map((e, i) => {
+                    const ageBg = paxAgeBg(e.dob, e.created_at);
+                    const defaultBg = i % 2 ? "#fafbfd" : "#fff";
+                    return (
+                    <tr key={e.id} style={{ background: ageBg || defaultBg, borderBottom: "1px solid #f1f5f9" }}>
+
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
                       {visibleColumns.map((c) => {
                         if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>;
@@ -418,7 +422,9 @@ function ExecutionsPage() {
                         {perm.delete && <button title="حذف" onClick={() => onDelete(e)} style={{ ...iconBtn, color: "#b91c1c" }}><Trash2 size={14} /></button>}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
+
                 </tbody>
               </table>
             </div>
@@ -1010,6 +1016,19 @@ function statusBadge(status: string): React.CSSProperties {
   if (k.includes("ملغي")) return { padding: "3px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" };
   if (k.includes("مؤجل")) return { padding: "3px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" };
   return { padding: "3px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" };
+}
+
+function paxAgeBg(dob: string | null | undefined, execDate: string | null | undefined): string | null {
+  if (!dob || !execDate) return null;
+  const b = new Date(dob);
+  const e = new Date(execDate);
+  if (isNaN(b.getTime()) || isNaN(e.getTime())) return null;
+  let years = e.getFullYear() - b.getFullYear();
+  const m = e.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && e.getDate() < b.getDate())) years--;
+  if (years < 2) return "#dcfce7";
+  if (years < 8) return "#fef9c3";
+  return null;
 }
 
 function approvalBadge(status: string): React.CSSProperties {
