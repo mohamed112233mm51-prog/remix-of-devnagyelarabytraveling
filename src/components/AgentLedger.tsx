@@ -115,6 +115,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [currencyFilter, setCurrencyFilter] = useState<string>("");
 
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => ({
@@ -183,16 +184,24 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return result;
   }, [liveSplits]);
   const ledger = useMemo(() => buildLedger(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
+  const currencyOptions = useMemo(
+    () => Array.from(new Set(ledger.map((e) => e.currency || "EGP"))).sort(),
+    [ledger],
+  );
+  const filteredLedger = useMemo(
+    () => (currencyFilter ? ledger.filter((e) => (e.currency || "EGP") === currencyFilter) : ledger),
+    [ledger, currencyFilter],
+  );
   const ledgerWithBalance = useMemo(() => {
     // Per-currency running balance: EGP, USD, LYD, ... never mix.
     const bals = new Map<string, number>();
-    return ledger.map((e) => {
+    return filteredLedger.map((e) => {
       const cur = e.currency || "EGP";
       const next = (bals.get(cur) || 0) + (e.debit - e.credit);
       bals.set(cur, next);
       return { ...e, balance: next };
     });
-  }, [ledger]);
+  }, [filteredLedger]);
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
     methodLabel: e.paymentMethod,
@@ -219,8 +228,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return true;
   }), [rowsWithMethodLabel, safeFilters]);
 
-  const totalServices = ledger.reduce((s, e) => s + e.debit, 0);
-  const totalPayments = ledger.reduce((s, e) => s + e.credit, 0);
+  const totalServices = filteredLedger.reduce((s, e) => s + e.debit, 0);
+  const totalPayments = filteredLedger.reduce((s, e) => s + e.credit, 0);
   const net = totalServices - totalPayments;
   const accountStatus = net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن";
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
@@ -230,7 +239,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     const debits = new Map<string, number>();
     const credits = new Map<string, number>();
     const counts = new Map<string, number>();
-    for (const e of ledger) {
+    for (const e of filteredLedger) {
       const c = e.currency || "EGP";
       debits.set(c, (debits.get(c) || 0) + e.debit);
       credits.set(c, (credits.get(c) || 0) + e.credit);
@@ -242,12 +251,12 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       const cr = credits.get(c) || 0;
       return { currency: c, debit: d, credit: cr, net: d - cr, count: counts.get(c) || 0 };
     });
-  }, [ledger]);
+  }, [filteredLedger]);
 
   const buildExportData = () => ({
-    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}`,
+    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
     subtitle: agent?.name || "",
-    fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name),
+    fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name, currencyFilter),
     summary: [
       ...byCurrency.flatMap((b) => [
         { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
@@ -331,7 +340,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
         <div className="card">
           <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div className="card-title">كشف حساب الوكيل</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <span>العملة:</span>
+                <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)} style={{ minWidth: 120 }}>
+                  <option value="">الكل</option>
+                  {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
               {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} />}

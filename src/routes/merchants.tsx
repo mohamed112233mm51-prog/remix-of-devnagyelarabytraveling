@@ -820,6 +820,7 @@ function MerchantStatementTab({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "cashout" | "conversion">("all");
+  const [currencyFilter, setCurrencyFilter] = useState<string>("");
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
@@ -909,9 +910,14 @@ function MerchantStatementTab({
     if (typeFilter === "collection" && m.type !== "تحصيل نقدية من التاجر") return false;
     if (typeFilter === "cashout" && m.type !== "صرف نقدية للتاجر") return false;
     if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
+    if (currencyFilter && (m.currency || "EGP") !== currencyFilter) return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  }), [movements, from, to, typeFilter, debouncedSearch]);
+  }), [movements, from, to, typeFilter, currencyFilter, debouncedSearch]);
+  const currencyOptions = useMemo(
+    () => Array.from(new Set(movements.map((m) => m.currency || "EGP"))).sort(),
+    [movements],
+  );
 
   // Per-currency running balance. Each currency accumulates independently so
   // EGP, USD, LYD, ... never mix into a single total.
@@ -961,9 +967,9 @@ function MerchantStatementTab({
   const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
 
   const buildExport = () => ({
-    title: `كشف حساب تاجر الكاش${merchant?.merchant_name ? ` — ${merchant.merchant_name}` : ""}`,
+    title: `كشف حساب تاجر الكاش${merchant?.merchant_name ? ` — ${merchant.merchant_name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
     subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
-    fileName: buildArabicFileName("كشف حساب تاجر الكاش", merchant?.merchant_name),
+    fileName: buildArabicFileName("كشف حساب تاجر الكاش", merchant?.merchant_name, currencyFilter),
     summary: (() => {
       const CUR_NAMES: Record<string, string> = {
         EGP: "الجنيه المصري",
@@ -1050,6 +1056,13 @@ function MerchantStatementTab({
                 ]}
                 allowClear={false}
               />
+            </div>
+            <div className="form-group">
+              <label>العملة</label>
+              <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
+                <option value="">الكل</option>
+                {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div className="form-group full"><label><Search size={12} /> بحث سريع</label><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في البيان أو نوع الحركة..." /></div>
           </div>

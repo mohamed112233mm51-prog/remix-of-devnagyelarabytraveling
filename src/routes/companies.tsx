@@ -363,19 +363,29 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     };
   }), [myTxnsAll, splitCurrencyByTxnId]);
 
+  const currencyOptions = useMemo(
+    () => Array.from(new Set(allEntries.map((e) => e.currency || "EGP"))).sort(),
+    [allEntries],
+  );
+  const [currencyFilter, setCurrencyFilter] = useState<string>("");
+  const filteredEntries = useMemo(
+    () => (currencyFilter ? allEntries.filter((e) => (e.currency || "EGP") === currencyFilter) : allEntries),
+    [allEntries, currencyFilter],
+  );
+
   // Per-currency running balance: EGP, USD, LYD, ... never mix.
   const allWithBalance = useMemo(() => {
     const bals = new Map<string, number>();
-    return allEntries.map((e) => {
+    return filteredEntries.map((e) => {
       const cur = e.currency || "EGP";
       const next = (bals.get(cur) || 0) + (e.debit - e.credit);
       bals.set(cur, next);
       return { ...e, balance: next };
     });
-  }, [allEntries]);
+  }, [filteredEntries]);
 
-  const totalServices = allEntries.reduce((s, e) => s + e.debit, 0);
-  const totalPaid = allEntries.reduce((s, e) => s + e.credit, 0);
+  const totalServices = filteredEntries.reduce((s, e) => s + e.debit, 0);
+  const totalPaid = filteredEntries.reduce((s, e) => s + e.credit, 0);
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مستحق للشركة" : balance < 0 ? "مستحق على الشركة" : "متوازن";
 
@@ -383,7 +393,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     const debits = new Map<string, number>();
     const credits = new Map<string, number>();
     const counts = new Map<string, number>();
-    for (const e of allEntries) {
+    for (const e of filteredEntries) {
       const c = e.currency || "EGP";
       debits.set(c, (debits.get(c) || 0) + e.debit);
       credits.set(c, (credits.get(c) || 0) + e.credit);
@@ -395,7 +405,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       const cr = credits.get(c) || 0;
       return { currency: c, debit: d, credit: cr, net: d - cr, count: counts.get(c) || 0 };
     });
-  }, [allEntries]);
+  }, [filteredEntries]);
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
@@ -448,9 +458,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   }), [rowsWithMethodLabel, safeFilters]);
 
   const buildData = () => ({
-    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""}`,
+    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
     subtitle: company ? company.company_name : "كل الشركات",
-    fileName: buildArabicFileName("كشف حساب الشركة", company?.company_name),
+    fileName: buildArabicFileName("كشف حساب الشركة", company?.company_name, currencyFilter),
     summary: [
       ...byCurrency.flatMap((b) => [
         { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
@@ -498,7 +508,14 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     <div className="card">
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div className="card-title">كشف حساب الشركة الصادرة</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <span>العملة:</span>
+            <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)} style={{ minWidth: 120 }}>
+              <option value="">الكل</option>
+              {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
           {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
           <ColumnVisibility columns={COMPANY_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
           {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} />}
