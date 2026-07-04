@@ -141,27 +141,8 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
   // Per-source balance preview based on chosen splits
   const balanceWarnings = useMemo(() => {
     if (initial) return [] as string[]; // edit doesn't deduct again
-    const warns: string[] = [];
-    let usedInsta = 0, usedCash = 0;
-    const usedMerchant = new Map<string, number>();
-    for (const r of filterValidSplits(splits)) {
-      const a = Number(r.amount) || 0;
-      if (r.method === "company_instapay") usedInsta += a;
-      else if (r.method === "company_cash") usedCash += a;
-      else if (r.source === "merchant" && r.merchant_id) {
-        usedMerchant.set(r.merchant_id, (usedMerchant.get(r.merchant_id) || 0) + a);
-      }
-    }
-    if (usedInsta > balances.insta_company) warns.push(`رصيد إنستا الشركة غير كافٍ (المتاح: ${fmtDL(balances.insta_company)})`);
-    if (usedCash > balances.cash_company) warns.push(`رصيد نقدي الشركة غير كافٍ (المتاح: ${fmtDL(balances.cash_company)})`);
-    for (const [mid, amt] of usedMerchant) {
-      const bal = balances.merchantBalance.get(mid) || 0;
-      if (amt > bal) {
-        const name = merchants.find((m) => m.id === mid)?.merchant_name || "تاجر";
-        warns.push(`رصيد ${name} غير كافٍ (المتاح: ${fmtDL(bal)})`);
-      }
-    }
-    return warns;
+    const err = validateSplitOutflows(filterValidSplits(splits), balances, merchants);
+    return err ? [err] : [];
   }, [splits, balances, initial, merchants]);
 
   const save = async () => {
