@@ -32,13 +32,37 @@ function downloadBlob(blob: Blob, fileName: string) {
  */
 async function tryShareFile(file: File, title: string): Promise<boolean> {
   const nav: any = typeof navigator !== "undefined" ? navigator : null;
-  if (!nav || typeof nav.share !== "function") return false;
-  if (typeof nav.canShare !== "function" || !nav.canShare({ files: [file] })) return false;
+  console.log("[WA-Share] isSecureContext =", typeof window !== "undefined" ? window.isSecureContext : "n/a", "UA =", nav?.userAgent);
+  console.log("[WA-Share] navigator.share =", nav?.share);
+  console.log("[WA-Share] navigator.canShare =", nav?.canShare);
+  console.log("[WA-Share] file instanceof File =", file instanceof File, "name=", file.name, "size=", file.size, "type=", file.type);
+  if (!nav || typeof nav.share !== "function") {
+    console.warn("[WA-Share] FALLBACK reason: navigator.share is not a function");
+    return false;
+  }
+  if (typeof nav.canShare !== "function") {
+    console.warn("[WA-Share] FALLBACK reason: navigator.canShare is not a function");
+    return false;
+  }
+  let canShareFiles = false;
+  try { canShareFiles = nav.canShare({ files: [file] }); }
+  catch (e) { console.warn("[WA-Share] canShare threw:", e); }
+  console.log("[WA-Share] canShare({files:[file]}) =", canShareFiles);
+  if (!canShareFiles) {
+    console.warn("[WA-Share] FALLBACK reason: canShare({files}) returned false (likely non-HTTPS/insecure context, desktop browser, or unsupported MIME)");
+    return false;
+  }
   try {
+    console.log("[WA-Share] SHARE PATH → calling navigator.share(...)");
     await nav.share({ title, files: [file] });
+    console.log("[WA-Share] navigator.share resolved OK");
     return true;
   } catch (e: any) {
-    if (e?.name === "AbortError") return true; // user cancelled — don't fall back
+    if (e?.name === "AbortError") {
+      console.log("[WA-Share] User cancelled share (AbortError) — no fallback");
+      return true;
+    }
+    console.warn("[WA-Share] FALLBACK reason: navigator.share threw:", e);
     return false;
   }
 }
