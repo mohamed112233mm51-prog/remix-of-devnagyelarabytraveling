@@ -9,6 +9,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
+import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
@@ -199,11 +200,11 @@ export function AgentPaymentForm({
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
         methodLabel = "إنستاباي";
-        const box = cashBoxes.find((bb) => bb.currency === r.currency && bb.name.includes("إنستا") && bb.name.includes("الشركة"));
+        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
         cashBoxId = box?.id || null;
       } else if (r.method === "company_cash") {
         methodLabel = "نقدي";
-        const box = cashBoxes.find((bb) => bb.currency === r.currency && bb.name.includes("نقدي") && bb.name.includes("الشركة"));
+        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
         cashBoxId = box?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "انستا";
       else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";

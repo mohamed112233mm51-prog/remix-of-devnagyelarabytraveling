@@ -11,6 +11,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
+import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -37,11 +38,11 @@ function mapSplitsForEngine(
     let cashBoxId: string | null = null;
     if (r.method === "company_instapay") {
       methodLabel = "إنستاباي";
-      const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("إنستا") && b.name.includes("الشركة"));
+      const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
       cashBoxId = box?.id || null;
     } else if (r.method === "company_cash") {
       methodLabel = "نقدي";
-      const box = cashBoxes.find((b) => b.currency === r.currency && b.name.includes("نقدي") && b.name.includes("الشركة"));
+      const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
       cashBoxId = box?.id || null;
     } else if (r.method === "merchant_instapay") methodLabel = "انستا";
     else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";

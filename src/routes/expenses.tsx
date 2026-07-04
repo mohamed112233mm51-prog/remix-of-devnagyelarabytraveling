@@ -26,7 +26,7 @@ import {
 } from "@/components/PaymentSplits";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
-import { useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
+import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
@@ -259,8 +259,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           funding_source: r.method === "company_instapay" ? "insta_company" : "cash_company",
           currency: r.currency || "EGP",
         });
-        const boxName = r.method === "company_instapay" ? "خزينة إنستا الشركة" : "خزينة نقدي الشركة";
-        const box = cashBoxes.find((b) => b.name === boxName && b.currency === (r.currency || "EGP"));
+        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency || "EGP", r.method);
         engineSplits.push({
           method: r.method === "company_instapay" ? "إنستاباي" : "نقدي",
           currency: (r.currency || "EGP") as any,
