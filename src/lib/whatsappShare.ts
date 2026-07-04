@@ -2,6 +2,9 @@ import { toast } from "sonner";
 import { buildStatementExcelBlob, exportStatementToPDF, type StatementExportData } from "./exportStatement";
 import { loadBranding, DEFAULT_COMPANY_NAME } from "./branding";
 
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const MIME_PDF = "application/pdf";
+
 /**
  * Normalize a phone number for use with wa.me.
  * Strips everything except digits. Adds default country code (20 = EG) if the
@@ -12,9 +15,7 @@ export function normalizeWhatsappPhone(raw?: string | null): string | null {
   let d = String(raw).replace(/\D+/g, "");
   if (!d) return null;
   if (d.startsWith("00")) d = d.slice(2);
-  // If a local Egyptian number (starts with 0 → 010/011/012/015...), replace 0 with 20.
   if (d.startsWith("0")) d = "20" + d.slice(1);
-  // 10 digits starting with 1 → Egyptian mobile without leading 0.
   else if (d.length === 10 && d.startsWith("1")) d = "20" + d;
   return d;
 }
@@ -28,6 +29,41 @@ function buildMessage(companyName: string, title: string, fileName: string): str
     `مع تحيات`,
     companyName,
   ].join("\n");
+}
+
+function openWaFallback(phone: string, message: string) {
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Try to share a File via Web Share API. Returns true if the share dialog was
+ * shown (or completed / cancelled). Returns false if file sharing is not
+ * supported and the caller should fall back to download + wa.me link.
+ */
+async function tryShareFile(file: File, title: string, text: string): Promise<boolean> {
+  const nav: any = typeof navigator !== "undefined" ? navigator : null;
+  if (!nav || typeof nav.share !== "function") return false;
+  if (typeof nav.canShare !== "function" || !nav.canShare({ files: [file] })) return false;
+  try {
+    await nav.share({ title, text, files: [file] });
+    return true;
+  } catch (e: any) {
+    // User cancelled — treat as handled, don't fall back to download.
+    if (e?.name === "AbortError") return true;
+    return false;
+  }
 }
 
 /** Share a statement via WhatsApp. Reuses the existing PDF/Excel export pipeline. */
@@ -50,39 +86,36 @@ export async function shareStatementViaWhatsApp(opts: {
   const message = buildMessage(companyName, opts.data.title, fullName);
 
   if (opts.kind === "excel") {
+    let blob: Blob;
+    let baseFileName: string;
     try {
-      const { blob, fileName } = await buildStatementExcelBlob(opts.data);
-      const file = new File([blob], `${fileName}.xlsx`, { type: blob.type });
-      const nav: any = typeof navigator !== "undefined" ? navigator : null;
-      if (nav?.canShare && nav.canShare({ files: [file] })) {
-        try {
-          await nav.share({ files: [file], text: message, title: opts.data.title });
-          return;
-        } catch (e: any) {
-          if (e?.name === "AbortError") return;
-        }
-      }
-      // Fallback: download the file, then open WhatsApp with the text.
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${fileName}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.message("تم تنزيل الملف. برجاء إرفاقه في محادثة واتساب التي ستفتح الآن.");
+      const built = await buildStatementExcelBlob(opts.data);
+      blob = built.blob;
+      baseFileName = built.fileName;
     } catch (e) {
       toast.error("تعذر تجهيز ملف Excel للإرسال: " + (e as Error).message);
       return;
     }
-  } else {
-    // PDF uses a print window; there is no Blob to share, so we open the print
-    // window for the user to save/print, and open WhatsApp with the text.
-    await exportStatementToPDF(opts.data);
-    toast.message("تم فتح نافذة PDF. برجاء حفظ الملف ثم إرفاقه في محادثة واتساب.");
+    const fileName = `${baseFileName}.xlsx`;
+    // Rebuild the Blob with the correct MIME type to guarantee Web Share
+    // recognizes it as an Excel spreadsheet (not application/octet-stream).
+    const typedBlob = new Blob([blob], { type: MIME_XLSX });
+    const file = new File([typedBlob], fileName, { type: MIME_XLSX });
+
+    const shared = await tryShareFile(file, opts.data.title, message);
+    if (shared) return;
+
+    // Fallback: download the file so the user can attach it manually.
+    toast.message("مشاركة الملفات غير مدعومة على هذا الجهاز. سيتم تنزيل الملف لإرفاقه يدوياً في واتساب.");
+    downloadBlob(typedBlob, fileName);
+    openWaFallback(phone, message);
+    return;
   }
 
-  const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+  // PDF path — the existing PDF export uses a print window (no Blob is
+  // produced). We keep that pipeline unchanged and always fall back to the
+  // download/print flow + wa.me link with the message.
+  await exportStatementToPDF(opts.data);
+  toast.message("تم فتح نافذة PDF. برجاء حفظ الملف ثم إرفاقه في محادثة واتساب.");
+  openWaFallback(phone, message);
 }
