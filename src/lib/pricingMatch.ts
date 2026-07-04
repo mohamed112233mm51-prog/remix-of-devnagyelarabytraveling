@@ -15,7 +15,25 @@ export type PricingRule = {
   commission_type: "percentage" | "fixed";
   commission_value: number;
   agent_price: number;
+  currency: string;
 };
+
+export const PRICING_CURRENCIES = ["EGP", "USD", "LYD"] as const;
+export type PricingCurrency = (typeof PRICING_CURRENCIES)[number];
+
+/** Short currency symbol used inline next to a price value. */
+export function currencyShortLabel(code?: string | null): string {
+  const c = (code || "EGP").toUpperCase();
+  if (c === "USD") return "$";
+  if (c === "LYD") return "د.ل";
+  return "ج.م";
+}
+
+/** Format a numeric price + currency symbol together (e.g. "100.00 $"). */
+export function fmtPriceWithCurrency(value: number | null | undefined, currency?: string | null): string {
+  const n = Number(value) || 0;
+  return `${n.toFixed(2)} ${currencyShortLabel(currency)}`;
+}
 
 export type ResolveContext = {
   company_id: string;
