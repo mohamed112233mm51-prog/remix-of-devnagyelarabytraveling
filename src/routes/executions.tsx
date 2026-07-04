@@ -554,6 +554,11 @@ function ExecutionForm({
     return sum + (cv > 0 ? cv : cp * cnt);
   }, 0);
   const agentTotal = agentServices.reduce((sum, { s }) => sum + ((Number(s.agent_price) || 0) * (Number(s.count) || 1)), 0);
+  const companyCurrencies = Array.from(new Set(companyServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
+  const agentCurrencies = Array.from(new Set(agentServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
+  const companyCurrency = companyCurrencies.length === 1 ? companyCurrencies[0] : null;
+  const agentCurrency = agentCurrencies.length === 1 ? agentCurrencies[0] : null;
+  const profitCurrency = companyCurrency && agentCurrency && companyCurrency === agentCurrency ? companyCurrency : null;
   const profit = agentTotal - companyTotal;
 
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
