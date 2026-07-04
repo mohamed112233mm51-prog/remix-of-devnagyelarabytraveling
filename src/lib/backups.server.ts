@@ -205,7 +205,36 @@ function isMissingAuthUserError(err: any): boolean {
 
 
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; skipped?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+  const summary: Record<string, { restored: number; skipped?: number; skippedMissingUser?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+
+  // Disable user triggers (incl. cash-box negative-balance guard) for the
+  // duration of the restore so historical rows insert cleanly. Always
+  // re-enabled in the finally block so protection returns after restore.
+  let guardsDisabled = false;
+  try {
+    const { error: dErr } = await (supabaseAdmin as any).rpc("restore_disable_guards");
+    if (!dErr) guardsDisabled = true;
+    else console.error("[restore] disable_guards failed", dErr);
+  } catch (e) {
+    console.error("[restore] disable_guards exception", e);
+  }
+  try {
+  return await _restoreInner(payload, summary);
+  } finally {
+    if (guardsDisabled) {
+      try {
+        await (supabaseAdmin as any).rpc("restore_enable_guards");
+      } catch (e) {
+        console.error("[restore] enable_guards failed", e);
+      }
+    }
+  }
+}
+
+async function _restoreInner(
+  payload: BackupPayload,
+  summary: Record<string, { restored: number; skipped?: number; skippedMissingUser?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }>,
+) {
 
   // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
