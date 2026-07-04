@@ -167,20 +167,21 @@ const UPSERT_CONFLICT_KEY: Record<string, string> = {
 // are wiped then re-inserted in chunks. Bypasses RLS via service role.
 // Caller MUST be admin (enforced upstream).
 // Duplicate/unique-violation SQL codes and message fragments that mean
-// "already exists" — treated as SKIPPED for reference/lookup tables, never
-// as errors. Operational tables (executions, transactions, ...) still
-// surface these as real errors.
+// "already exists" — treated as SKIPPED for reference/lookup tables only.
+// Foreign key (23503), NOT NULL (23502), check constraint (23514), and any
+// other error class remain real errors even on reference tables.
 function isDuplicateError(err: any): boolean {
   const code = String(err?.code ?? "");
   const msg = String(err?.message ?? err ?? "").toLowerCase();
-  if (code === "23505" || code === "23503") return true;
+  if (code === "23505") return true; // unique_violation ONLY
   return (
     msg.includes("duplicate key") ||
     msg.includes("already exists") ||
-    msg.includes("unique constraint") ||
+    (msg.includes("unique constraint") && !msg.includes("foreign key")) ||
     msg.includes("violates unique")
   );
 }
+
 
 export async function restoreFromPayload(payload: BackupPayload) {
   const summary: Record<string, { restored: number; skipped?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
