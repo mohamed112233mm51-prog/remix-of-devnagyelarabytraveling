@@ -945,7 +945,7 @@ function ExecutionForm({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {Object.keys(companyTotalByCurrency).map((cur) => (
+              {sortCurrencies(Object.keys(companyTotalByCurrency)).map((cur) => (
                 <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: "#1e3a8a" }}>
                   <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
                   <span>{(companyTotalByCurrency[cur] || 0).toLocaleString("ar")}</span>
