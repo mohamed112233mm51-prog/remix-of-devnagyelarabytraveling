@@ -100,10 +100,13 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
           merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
           total_paid: 0,
+          currency,
+          payment_currency: currency,
           note: itemNote,
           source_service_id: linkId,
           source_service_type: "execution",
         });
+
       }
       return; // لا يُسجَّل أي شيء على الوكيل
     }
