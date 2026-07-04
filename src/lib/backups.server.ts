@@ -182,9 +182,59 @@ function isDuplicateError(err: any): boolean {
   );
 }
 
+// FK violations from tables that reference auth.users. auth.users is not
+// included in backups, so rows referring to users that no longer exist
+// should be SKIPPED (Missing Auth User), not counted as Failed.
+const TABLES_REFERENCING_AUTH_USER: ReadonlySet<string> = new Set([
+  "profiles",
+  "user_roles",
+  "activity_logs",
+]);
+
+function isMissingAuthUserError(err: any): boolean {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? err?.details ?? err ?? "").toLowerCase();
+  if (code !== "23503") return false;
+  return (
+    msg.includes("auth.users") ||
+    msg.includes("users") && msg.includes("foreign key") ||
+    msg.includes("user_id") ||
+    msg.includes("profiles_id_fkey")
+  );
+}
+
 
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; skipped?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+  const summary: Record<string, { restored: number; skipped?: number; skippedMissingUser?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+
+  // Disable user triggers (incl. cash-box negative-balance guard) for the
+  // duration of the restore so historical rows insert cleanly. Always
+  // re-enabled in the finally block so protection returns after restore.
+  let guardsDisabled = false;
+  try {
+    const { error: dErr } = await (supabaseAdmin as any).rpc("restore_disable_guards");
+    if (!dErr) guardsDisabled = true;
+    else console.error("[restore] disable_guards failed", dErr);
+  } catch (e) {
+    console.error("[restore] disable_guards exception", e);
+  }
+  try {
+  return await _restoreInner(payload, summary);
+  } finally {
+    if (guardsDisabled) {
+      try {
+        await (supabaseAdmin as any).rpc("restore_enable_guards");
+      } catch (e) {
+        console.error("[restore] enable_guards failed", e);
+      }
+    }
+  }
+}
+
+async function _restoreInner(
+  payload: BackupPayload,
+  summary: Record<string, { restored: number; skipped?: number; skippedMissingUser?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }>,
+) {
 
   // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
@@ -321,34 +371,41 @@ export async function restoreFromPayload(payload: BackupPayload) {
       const CHUNK = 500;
       let written = 0;
       let skipped = 0;
+      let skippedMissingUser = 0;
+      const refsAuthUser = TABLES_REFERENCING_AUTH_USER.has(t);
+      // Row-by-row is needed when we must classify per-row skips
+      // (duplicates on reference tables, missing auth.users on user-linked tables).
+      const needsRowRetry = isReference || refsAuthUser;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
         const onConflict = UPSERT_CONFLICT_KEY[t] ?? "id";
-        const res = isReference
+        const res = needsRowRetry
           ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
           : await (supabaseAdmin.from as any)(t).insert(slice);
         if (res.error) {
-          // Reference tables: retry row-by-row so duplicates count as
-          // "skipped (already exists)" instead of failing the whole chunk.
-          if (isReference) {
+          if (needsRowRetry) {
             for (const row of slice) {
-              const r2 = await (supabaseAdmin.from as any)(t).upsert(row, { onConflict });
+              const r2 = isReference
+                ? await (supabaseAdmin.from as any)(t).upsert(row, { onConflict })
+                : await (supabaseAdmin.from as any)(t).insert(row);
               if (r2.error) {
-                if (isDuplicateError(r2.error)) skipped++;
-                else throw new Error(`upsert: ${r2.error.message}`);
+                if (isReference && isDuplicateError(r2.error)) skipped++;
+                else if (refsAuthUser && isMissingAuthUserError(r2.error)) skippedMissingUser++;
+                else throw new Error(`${isReference ? "upsert" : "insert"}: ${r2.error.message}`);
               } else {
                 written++;
               }
             }
           } else {
             throw new Error(`insert: ${res.error.message}`);
+
           }
         } else {
           written += slice.length;
         }
       }
-      summary[t] = { restored: written, skipped, mode: isReference ? "upsert" : "wipe-insert" };
+      summary[t] = { restored: written, skipped, skippedMissingUser, mode: isReference ? "upsert" : "wipe-insert" };
     } catch (e: any) {
       summary[t] = { restored: 0, mode: isReference ? "upsert" : "wipe-insert", error: e?.message ?? String(e) };
     }

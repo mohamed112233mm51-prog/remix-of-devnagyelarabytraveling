@@ -1461,6 +1461,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      restore_disable_guards: { Args: never; Returns: undefined }
+      restore_enable_guards: { Args: never; Returns: undefined }
       run_auto_expense_deductions: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

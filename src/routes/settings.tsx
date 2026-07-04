@@ -2025,6 +2025,8 @@ function BackupsTab() {
       const inserted: number = r.inserted ?? 0;
       const skipped: number = r.skipped ?? 0;
       const skippedTables: Array<{ table: string; skipped: number }> = r.skippedTables ?? [];
+      const skippedMissingUser: number = r.skippedMissingUser ?? 0;
+      const skippedMissingUserTables: Array<{ table: string; skipped: number }> = r.skippedMissingUserTables ?? [];
       const tablesProcessed: number = r.tablesProcessed ?? 0;
 
       if (failed.length > 0) {
@@ -2036,14 +2038,17 @@ function BackupsTab() {
         );
         return;
       }
-      if (inserted === 0 && skipped === 0) {
+      if (inserted === 0 && skipped === 0 && skippedMissingUser === 0) {
         toast.warning("لم يتم استيراد أي بيانات. يرجى التحقق من ملف النسخة الاحتياطية.");
         return;
       }
       const skipLine = skipped > 0
         ? `\n⏭ تم التخطي: ${skipped} سجل (موجودة مسبقاً${skippedTables.length ? ` — ${skippedTables.map(s => s.table).join("، ")}` : ""})`
         : "";
-      const baseMsg = `✅ تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}${skipLine}\n❌ الفشل: 0`;
+      const missingUserLine = skippedMissingUser > 0
+        ? `\n⏭ تم التخطي: ${skippedMissingUser} سجل (مستخدم غير موجود${skippedMissingUserTables.length ? ` — ${skippedMissingUserTables.map(s => s.table).join("، ")}` : ""})`
+        : "";
+      const baseMsg = `✅ تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}${skipLine}${missingUserLine}\n❌ الفشل: 0`;
       if (r?.versionMismatch) {
         toast.warning(baseMsg + "\nملاحظة: النسخة من إصدار مختلف، قد تحتاج لتحديث قاعدة البيانات.", { duration: 12000 });
       } else {
