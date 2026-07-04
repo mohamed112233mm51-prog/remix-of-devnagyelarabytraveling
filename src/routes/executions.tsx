@@ -1018,6 +1018,19 @@ function statusBadge(status: string): React.CSSProperties {
   return { padding: "3px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" };
 }
 
+function paxAgeBg(dob: string | null | undefined, execDate: string | null | undefined): string | null {
+  if (!dob || !execDate) return null;
+  const b = new Date(dob);
+  const e = new Date(execDate);
+  if (isNaN(b.getTime()) || isNaN(e.getTime())) return null;
+  let years = e.getFullYear() - b.getFullYear();
+  const m = e.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && e.getDate() < b.getDate())) years--;
+  if (years < 2) return "#dcfce7";
+  if (years < 8) return "#fef9c3";
+  return null;
+}
+
 function approvalBadge(status: string): React.CSSProperties {
   const k = status || "";
   if (k.includes("رفض")) return { padding: "3px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" };
