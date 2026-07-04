@@ -82,7 +82,7 @@ function ShareTestPage() {
     reset();
     push("=== PNG test ===");
     const bytes = b64ToBytes(PNG_BASE64);
-    const blob = new Blob([bytes], { type: "image/png" });
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/png" });
     await runShare(new File([blob], "test.png", { type: "image/png" }));
   };
 
