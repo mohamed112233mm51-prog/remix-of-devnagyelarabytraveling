@@ -69,12 +69,11 @@ export function ColumnVisibility({
       <button
         ref={btnRef}
         type="button"
-        className="action-btn"
+        className="btn btn-toolbar"
         onClick={() => setOpen((v) => !v)}
         title="إظهار / إخفاء الأعمدة"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
       >
-        <Columns3 size={14} />
+        <Columns3 size={15} />
         <span>الأعمدة{hiddenCount > 0 ? ` (${hiddenCount} مخفي)` : ""}</span>
       </button>
       {open && pos && typeof document !== "undefined" && createPortal(

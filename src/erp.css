@@ -2430,4 +2430,23 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   pointer-events: none;
 }
 
+/* Toolbar ghost button (columns visibility etc.) — matches .btn height/radius */
+.btn.btn-toolbar {
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  color: var(--text2, #555);
+  font-weight: 600;
+  font-size: 13px;
+  transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
+}
+.btn.btn-toolbar:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary3, rgba(0,0,0,0.02));
+}
+.btn.btn-toolbar:active {
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
+}
+
+
 
