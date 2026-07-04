@@ -817,7 +817,7 @@ function ExecutionForm({
                       >🔄</button>
                     </div>
                   </Field>
-                  <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
+                  <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
                 <div style={{ marginTop: 8, textAlign: "end" }}>
