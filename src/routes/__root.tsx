@@ -171,7 +171,7 @@ function AuthGate() {
   const { session, loading, profileLoaded, profileError, needsPassword, blocked, setPasswordDone, refreshProfile } = useAuth();
   const brandingReady = useBrandingReady();
   useGlobalKeyboardNav();
-  useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); }, []);
+  useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); import("@/lib/dragScroll").then(m => m.installDragScroll()).catch(() => {}); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
 
