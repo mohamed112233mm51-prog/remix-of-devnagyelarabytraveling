@@ -226,6 +226,7 @@ export type Database = {
           company_id: string
           company_price: number
           created_at: string
+          currency: string
           departure_from: string | null
           destination: string | null
           id: string
@@ -244,6 +245,7 @@ export type Database = {
           company_id: string
           company_price?: number
           created_at?: string
+          currency?: string
           departure_from?: string | null
           destination?: string | null
           id?: string
@@ -262,6 +264,7 @@ export type Database = {
           company_id?: string
           company_price?: number
           created_at?: string
+          currency?: string
           departure_from?: string | null
           destination?: string | null
           id?: string
