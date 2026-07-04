@@ -534,22 +534,22 @@ function Dashboard() {
   }, [executedRows]);
   const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
 
-  // 4. Travel authorities — executions only; submission used only as reference for the authority field
+  // 4. Travel destinations — executions only; fallback to submission's destination when execution lacks one
   const topAuthorities = useMemo(() => {
-    const authOfSub = new Map<string, string>();
+    const destOfSub = new Map<string, string>();
     for (const s of submissions) {
-      const a = ((s as any).approval_authority || "").trim();
-      if (a) authOfSub.set(s.id, a);
+      const d = ((s as any).destination || "").trim();
+      if (d) destOfSub.set(s.id, d);
     }
-    const byAuth = new Map<string, number>();
+    const byDest = new Map<string, number>();
     for (const ex of executedRows) {
-      const direct = ((ex as any).approval_authority || "").trim();
-      const a = direct || (ex.submission_id ? authOfSub.get(ex.submission_id) || "" : "");
-      if (!a) continue;
-      byAuth.set(a, (byAuth.get(a) || 0) + 1);
+      const direct = ((ex as any).destination || "").trim();
+      const d = direct || (ex.submission_id ? destOfSub.get(ex.submission_id) || "" : "");
+      if (!d) continue;
+      byDest.set(d, (byDest.get(d) || 0) + 1);
     }
-    const total = Array.from(byAuth.values()).reduce((s, n) => s + n, 0) || 1;
-    return Array.from(byAuth.entries())
+    const total = Array.from(byDest.values()).reduce((s, n) => s + n, 0) || 1;
+    return Array.from(byDest.entries())
       .map(([name, count]) => ({ name, count, pct: Math.round((count / total) * 100) }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
