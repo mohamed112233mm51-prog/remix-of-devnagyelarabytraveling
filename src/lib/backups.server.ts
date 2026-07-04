@@ -371,28 +371,35 @@ async function _restoreInner(
       const CHUNK = 500;
       let written = 0;
       let skipped = 0;
+      let skippedMissingUser = 0;
+      const refsAuthUser = TABLES_REFERENCING_AUTH_USER.has(t);
+      // Row-by-row is needed when we must classify per-row skips
+      // (duplicates on reference tables, missing auth.users on user-linked tables).
+      const needsRowRetry = isReference || refsAuthUser;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
         const onConflict = UPSERT_CONFLICT_KEY[t] ?? "id";
-        const res = isReference
+        const res = needsRowRetry
           ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
           : await (supabaseAdmin.from as any)(t).insert(slice);
         if (res.error) {
-          // Reference tables: retry row-by-row so duplicates count as
-          // "skipped (already exists)" instead of failing the whole chunk.
-          if (isReference) {
+          if (needsRowRetry) {
             for (const row of slice) {
-              const r2 = await (supabaseAdmin.from as any)(t).upsert(row, { onConflict });
+              const r2 = isReference
+                ? await (supabaseAdmin.from as any)(t).upsert(row, { onConflict })
+                : await (supabaseAdmin.from as any)(t).insert(row);
               if (r2.error) {
-                if (isDuplicateError(r2.error)) skipped++;
-                else throw new Error(`upsert: ${r2.error.message}`);
+                if (isReference && isDuplicateError(r2.error)) skipped++;
+                else if (refsAuthUser && isMissingAuthUserError(r2.error)) skippedMissingUser++;
+                else throw new Error(`${isReference ? "upsert" : "insert"}: ${r2.error.message}`);
               } else {
                 written++;
               }
             }
           } else {
             throw new Error(`insert: ${res.error.message}`);
+
           }
         } else {
           written += slice.length;
