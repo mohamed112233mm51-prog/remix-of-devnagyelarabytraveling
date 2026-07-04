@@ -2367,9 +2367,9 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   height: 38px;
-  padding: 0 34px 0 12px; /* right = icon+label space, left = chevron space */
+  padding: 0 10px 0 30px; /* left reserves space for chevron in RTL */
   background: var(--card, #fff);
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -2378,8 +2378,10 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   color: var(--text, #111);
   min-width: 220px;
   max-width: 260px;
+  width: 240px;
   transition: border-color .15s, box-shadow .15s, background .15s;
   cursor: pointer;
+  box-sizing: border-box;
 }
 .currency-filter:hover {
   border-color: var(--primary);
@@ -2390,23 +2392,16 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 .currency-filter__icon {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
   color: var(--primary);
-  pointer-events: none;
+  flex: 0 0 auto;
 }
 .currency-filter__label {
-  position: absolute;
-  right: 32px;
-  top: 50%;
-  transform: translateY(-50%);
   font-size: 12px;
   font-weight: 600;
   color: var(--text2, #555);
-  pointer-events: none;
   white-space: nowrap;
+  cursor: pointer;
+  margin: 0;
 }
 .currency-filter__select {
   appearance: none;
@@ -2416,8 +2411,9 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   outline: 0;
   background: transparent;
   height: 100%;
-  width: 100%;
-  padding: 0 0 0 68px; /* leave room for icon+label on the right */
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -2433,4 +2429,5 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   color: var(--text3, #888);
   pointer-events: none;
 }
+
 
