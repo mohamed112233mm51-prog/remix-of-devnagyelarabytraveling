@@ -422,12 +422,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-export async function exportStatementToPDF(data: StatementExportData) {
-  const w = window.open("", "_blank", "width=1024,height=768");
-  if (!w) {
-    toast.error("برجاء السماح بفتح النوافذ المنبثقة لتصدير PDF");
-    return;
-  }
+async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
@@ -501,12 +496,103 @@ ${summaryHtml}
     .join("")}</tbody></table></div>
 <div class="foot">${esc(companyName)} • تم التوليد آليًا</div>
 </div>
-<script>window.onload=()=>{setTimeout(()=>{window.print()},400)}</script>
 </body></html>`;
+  return { html, landscape: useLandscape };
+}
+
+export async function exportStatementToPDF(data: StatementExportData) {
+  const w = window.open("", "_blank", "width=1024,height=768");
+  if (!w) {
+    toast.error("برجاء السماح بفتح النوافذ المنبثقة لتصدير PDF");
+    return;
+  }
+  const { html } = await buildStatementPdfHtml(data);
+  const withPrint = html.replace(
+    "</body>",
+    `<script>window.onload=()=>{setTimeout(()=>{window.print()},400)}</script></body>`,
+  );
   w.document.open();
-  w.document.write(html);
+  w.document.write(withPrint);
   w.document.close();
 }
+
+/**
+ * Build a real PDF Blob from the same HTML used by exportStatementToPDF.
+ * Renders the HTML into an off-screen iframe, snapshots it with html2canvas,
+ * and packs the image into a jsPDF document — preserves Arabic text rendering.
+ */
+export async function buildStatementPdfBlob(
+  data: StatementExportData,
+): Promise<{ blob: Blob; fileName: string }> {
+  const [{ jsPDF }, html2canvasMod] = await Promise.all([
+    import("jspdf"),
+    import("html2canvas"),
+  ]);
+  const html2canvas = (html2canvasMod as any).default || html2canvasMod;
+  const { html, landscape } = await buildStatementPdfHtml(data);
+
+  const pxWidth = landscape ? 1414 : 1000;
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = `position:fixed;left:-10000px;top:0;width:${pxWidth}px;height:10px;border:0;visibility:hidden;`;
+  document.body.appendChild(iframe);
+  try {
+    const doc = iframe.contentDocument!;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    await new Promise((r) => setTimeout(r, 300));
+    try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
+    iframe.style.height = `${doc.body.scrollHeight}px`;
+
+    const canvas = await html2canvas(doc.body, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      windowWidth: pxWidth,
+    });
+
+    const pdf = new jsPDF({
+      orientation: landscape ? "landscape" : "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
+    } else {
+      const pageCanvasH = Math.floor((pageH * canvas.width) / imgW);
+      let y = 0;
+      let first = true;
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageCanvasH, canvas.height - y);
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = sliceH;
+        const ctx = slice.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceData = slice.toDataURL("image/jpeg", 0.92);
+        const sliceImgH = (sliceH * imgW) / canvas.width;
+        if (!first) pdf.addPage();
+        pdf.addImage(sliceData, "JPEG", 0, 0, imgW, sliceImgH);
+        first = false;
+        y += sliceH;
+      }
+    }
+
+    const blob = pdf.output("blob") as Blob;
+    return { blob, fileName: data.fileName || data.title };
+  } finally {
+    iframe.remove();
+  }
+}
+
 
 export function ExportMenuStyles() {
   return null;
