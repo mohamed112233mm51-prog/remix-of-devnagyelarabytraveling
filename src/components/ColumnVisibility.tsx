@@ -69,16 +69,9 @@ export function ColumnVisibility({
       <button
         ref={btnRef}
         type="button"
-        className="btn"
+        className="btn btn-toolbar"
         onClick={() => setOpen((v) => !v)}
         title="إظهار / إخفاء الأعمدة"
-        style={{
-          background: "var(--card, #fff)",
-          border: "1px solid var(--border)",
-          color: "var(--text2, #555)",
-          fontWeight: 600,
-          fontSize: 13,
-        }}
       >
         <Columns3 size={15} />
         <span>الأعمدة{hiddenCount > 0 ? ` (${hiddenCount} مخفي)` : ""}</span>
