@@ -18,6 +18,7 @@ import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
+import CurrencyFilter from "@/components/CurrencyFilter";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
