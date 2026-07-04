@@ -394,8 +394,12 @@ function ExecutionsPage() {
                 <tbody>
                   {pageRows.length === 0 ? (
                     <tr><td colSpan={visibleColumns.length + 2} style={{ padding: 40, textAlign: "center", color: "#64748b" }}>لا توجد عمليات تنفيذ</td></tr>
-                  ) : pageRows.map((e, i) => (
-                    <tr key={e.id} style={{ background: i % 2 ? "#fafbfd" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                  ) : pageRows.map((e, i) => {
+                    const ageBg = paxAgeBg(e.dob, e.created_at);
+                    const defaultBg = i % 2 ? "#fafbfd" : "#fff";
+                    return (
+                    <tr key={e.id} style={{ background: ageBg || defaultBg, borderBottom: "1px solid #f1f5f9" }}>
+
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
                       {visibleColumns.map((c) => {
                         if (c.key === "name") return <td key={c.key} style={{ ...tdStyle, fontWeight: 700 }}>{e.passenger_name}</td>;
