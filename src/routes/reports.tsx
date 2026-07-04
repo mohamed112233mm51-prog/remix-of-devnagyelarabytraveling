@@ -1554,6 +1554,7 @@ function TreasuriesReport() {
   }));
 
   const [editBox, setEditBox] = useState<CashBoxRow | null>(null);
+  const [reconcileBox, setReconcileBox] = useState<CashBoxRow | null>(null);
 
   return (
     <div className="card">
