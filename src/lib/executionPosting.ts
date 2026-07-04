@@ -77,9 +77,12 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     // قيمة الشركة الفعلية: company_value إن أُدخل، وإلا count × company_price
     const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
     const kind = s.kind; // "company" | "agent" | undefined (legacy)
+    // العملة تُشتق من الخدمة كما جُلبت من ملف التسعير — لا تُستبدل بأي قيمة افتراضية إلا إذا كانت غير موجودة أصلاً.
+    const currency = (s.currency && String(s.currency).trim()) ? String(s.currency).trim().toUpperCase() : "EGP";
     const serviceNote = (s.note && String(s.note).trim()) ? String(s.note).trim() : null;
     // الملاحظات على السطر = ملاحظة الخدمة أو ملاحظات التنفيذ أو اسم المسافر — بدون توليد نص.
     const itemNote = serviceNote || execNotes || passenger;
+
 
     // ── سطر شركة صادرة فقط (شراء من شركة) ──
     if (kind === "company") {
