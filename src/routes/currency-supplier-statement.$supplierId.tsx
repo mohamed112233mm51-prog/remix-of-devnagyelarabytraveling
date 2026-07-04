@@ -70,7 +70,7 @@ type Tx = {
   opening_currency?: string | null;
   created_at: string;
 };
-type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean; method_key?: string | null };
 
 // Foreign currency codes allowed — EGP is always the other side. All storage
 // uses the canonical code (EGP/USD/LYD); Arabic labels are display-only.
@@ -452,27 +452,46 @@ function CurrencySupplierStatementPage() {
 }
 
 // Resolve the target cash_box for a currency code (foreign leg).
+// Prefers the stable `method_key` (company_usd / company_lyd); falls back
+// to the legacy "الرئيسية" name match for backwards compatibility.
 function resolveForeignBox(boxes: CashBox[], currencyCode: string): CashBox | null {
   const code = currencyCode;
   if (!code) return null;
+  const active = boxes.filter((b) => b.currency === code && b.is_active !== false);
+  const expectedKey = code === "USD" ? "company_usd" : code === "LYD" ? "company_lyd" : null;
+  if (expectedKey) {
+    const byKey = active.find((b) => (b.method_key || "") === expectedKey);
+    if (byKey) return byKey;
+  }
   return (
-    boxes.find((b) => b.currency === code && b.is_active !== false && b.name.includes("الرئيسية")) ||
-    boxes.find((b) => b.currency === code && b.is_active !== false) ||
+    active.find((b) => b.name.includes("الرئيسية")) ||
+    active[0] ||
     null
   );
 }
 
 
 // Resolve the company EGP cash_box for a split method (company_cash | company_instapay).
+// Prefers `method_key`; legacy name matching kept as fallback.
 function resolveCompanyEgpBox(boxes: CashBox[], method: string): CashBox | null {
+  const active = boxes.filter((b) => b.currency === "EGP" && b.is_active !== false);
   if (method === "company_cash") {
-    return boxes.find((b) => b.currency === "EGP" && b.name.includes("نقدي") && b.name.includes("الشركة")) || null;
+    return (
+      active.find((b) => (b.method_key || "") === "company_cash") ||
+      active.find((b) => b.name.includes("نقدي") && b.name.includes("الشركة")) ||
+      null
+    );
   }
   if (method === "company_instapay") {
-    return boxes.find((b) => b.currency === "EGP" && b.name.includes("إنستا") && b.name.includes("الشركة")) || null;
+    return (
+      active.find((b) => (b.method_key || "") === "company_instapay") ||
+      active.find((b) => b.name.includes("إنستا") && b.name.includes("الشركة")) ||
+      null
+    );
   }
   return null;
 }
+
 
 // Method labels stored in payment_splits (kept consistent with CashMovementForms).
 function methodLabelFor(s: SplitJson): string {

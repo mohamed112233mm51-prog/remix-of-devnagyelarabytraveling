@@ -180,6 +180,7 @@ export type Database = {
           currency: string
           id: string
           is_active: boolean
+          method_key: string | null
           name: string
           opening_balance: number
           opening_date: string | null
@@ -192,6 +193,7 @@ export type Database = {
           currency: string
           id?: string
           is_active?: boolean
+          method_key?: string | null
           name: string
           opening_balance?: number
           opening_date?: string | null
@@ -204,6 +206,7 @@ export type Database = {
           currency?: string
           id?: string
           is_active?: boolean
+          method_key?: string | null
           name?: string
           opening_balance?: number
           opening_date?: string | null

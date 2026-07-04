@@ -32,7 +32,9 @@ type CashBoxRow = {
   currency: string;
   balance: number | string | null;
   is_active?: boolean | null;
+  method_key?: string | null;
 };
+
 
 type PaymentSplitBalanceRow = {
   id: string;
@@ -76,13 +78,47 @@ const cashBoxKey = (cashBoxId: string, currency: unknown) =>
 const num = (v: unknown) => Math.round(Number(v || 0));
 const num2 = (v: unknown) => Math.round(Number(v || 0) * 100) / 100;
 
-export function resolveCompanyCashBoxForSplit<T extends { id: string; name: string; currency: string; is_active?: boolean | null }>(
-  cashBoxes: T[],
-  currency: unknown,
-  method: string,
-): T | null {
+/**
+ * Resolve which cash_box a payment split should hit.
+ *
+ * PRIMARY: match by the stable `method_key` column on cash_boxes
+ * (`company_cash`, `company_instapay`, `company_usd`, `company_lyd`).
+ * FALLBACK: legacy name-substring matching, kept 100% intact so older
+ * databases without the `method_key` backfill keep working.
+ *
+ * Renaming any cash box no longer affects resolution once method_key is set.
+ */
+export function resolveCompanyCashBoxForSplit<
+  T extends {
+    id: string;
+    name: string;
+    currency: string;
+    is_active?: boolean | null;
+    method_key?: string | null;
+  },
+>(cashBoxes: T[], currency: unknown, method: string): T | null {
   const code = normalizeCurrency(String(currency || "EGP"));
   const active = cashBoxes.filter((b) => b.currency === code && b.is_active !== false);
+
+  // 1) Stable method_key lookup (independent of the box name).
+  let expectedKey: string | null = null;
+  if (code === "EGP") {
+    if (method === "company_instapay") expectedKey = "company_instapay";
+    else if (method === "company_cash") expectedKey = "company_cash";
+  } else if (code === "USD") {
+    expectedKey = "company_usd";
+  } else if (code === "LYD") {
+    expectedKey = "company_lyd";
+  }
+  if (expectedKey) {
+    const byKey = active.find((b) => (b.method_key || "") === expectedKey);
+    if (byKey) return byKey;
+  }
+
+  // 2) Legacy fallback — name-based matching for databases where method_key
+  //    has not been backfilled yet. DO NOT remove: required for backwards
+  //    compatibility. Note: "الخزينة الرئيسية - جنيه" is intentionally NOT
+  //    matched here (legacy orphan box, kept in DB, never routed to).
   if (code === "EGP") {
     if (method === "company_instapay") {
       return active.find((b) => b.name.includes("إنستا") && b.name.includes("الشركة")) || null;
@@ -93,6 +129,7 @@ export function resolveCompanyCashBoxForSplit<T extends { id: string; name: stri
   }
   return active.find((b) => b.name.includes("الرئيسية")) || active[0] || null;
 }
+
 
 function debugCashBoxBalance(info: CashBoxBalanceInfo, ready: boolean = true) {
   if (!import.meta.env.DEV) return;
