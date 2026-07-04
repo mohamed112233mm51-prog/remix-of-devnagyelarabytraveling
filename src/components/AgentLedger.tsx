@@ -244,9 +244,9 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   }, [ledger]);
 
   const buildExportData = () => ({
-    title: "كشف حساب الوكيل",
+    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}`,
     subtitle: agent?.name || "",
-    fileName: `كشف-حساب-${agent?.name || "الوكيل"}`,
+    fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name),
     summary: [
       ...byCurrency.flatMap((b) => [
         { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
