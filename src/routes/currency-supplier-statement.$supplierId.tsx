@@ -10,6 +10,7 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
 import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet } from "lucide-react";
 import { buildArabicFileName, arabicCurrencyName, type StatementExportData } from "@/lib/exportStatement";
+import CurrencyFilter from "@/components/CurrencyFilter";
 import {
   PaymentSplits,
   type PaymentSplitRow,
