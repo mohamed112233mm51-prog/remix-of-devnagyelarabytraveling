@@ -77,9 +77,12 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     // قيمة الشركة الفعلية: company_value إن أُدخل، وإلا count × company_price
     const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
     const kind = s.kind; // "company" | "agent" | undefined (legacy)
+    // العملة تُشتق من الخدمة كما جُلبت من ملف التسعير — لا تُستبدل بأي قيمة افتراضية إلا إذا كانت غير موجودة أصلاً.
+    const currency = (s.currency && String(s.currency).trim()) ? String(s.currency).trim().toUpperCase() : "EGP";
     const serviceNote = (s.note && String(s.note).trim()) ? String(s.note).trim() : null;
     // الملاحظات على السطر = ملاحظة الخدمة أو ملاحظات التنفيذ أو اسم المسافر — بدون توليد نص.
     const itemNote = serviceNote || execNotes || passenger;
+
 
     // ── سطر شركة صادرة فقط (شراء من شركة) ──
     if (kind === "company") {
@@ -97,10 +100,13 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
           merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
           total_paid: 0,
+          currency,
+          payment_currency: currency,
           note: itemNote,
           source_service_id: linkId,
           source_service_type: "execution",
         });
+
       }
       return; // لا يُسجَّل أي شيء على الوكيل
     }
@@ -124,10 +130,12 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           payment_method: "نقدي",
           total_paid: 0,
           paid: 0,
+          currency,
           note: itemNote,
           source_service_id: linkId,
           source_service_type: "execution",
         });
+
       }
       return; // لا يُسجَّل أي شيء على الشركة
     }
@@ -162,8 +170,11 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
         merchant_id: s.merchant_id || null,
         payment_method: pm || "نقدي",
         total_paid: totalPaid, paid: totalPaid,
+        currency,
         note: itemNote,
         source_service_id: linkId, source_service_type: "execution",
+
+
       });
     }
     if (s.company_id && companyValue > 0) {
@@ -177,8 +188,11 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
         arabic_tourism_cash_amount: 0, arabic_tourism_cash_net_amount: 0,
         merchant_cash_amount: 0, merchant_cash_net_amount: 0, merchant_cash_physical_amount: 0,
         total_paid: 0,
+        currency,
+        payment_currency: currency,
         note: itemNote,
         source_service_id: linkId, source_service_type: "execution",
+
       });
     }
   });

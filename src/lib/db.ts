@@ -372,11 +372,14 @@ export type ExecutionServiceItem = {
   agent_price?: number;
   company_price?: number;
   company_value?: number;
+  /** عملة السعر كما جُلبت من ملف تسعير الشركة (EGP / USD / LYD). */
+  currency?: string | null;
   note?: string | null;
   payment_method?: string | null;
   paid_amount?: number;
   merchant_id?: string | null;
 };
+
 
 export type Submission = {
   id: string;
