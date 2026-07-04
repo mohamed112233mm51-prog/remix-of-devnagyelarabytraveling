@@ -26,11 +26,9 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 function openWhatsapp(phone?: string | null, text?: string) {
-  const params = new URLSearchParams();
-  if (phone) params.set("phone", phone);
-  if (text) params.set("text", text);
-  const qs = params.toString();
-  window.location.href = `whatsapp://send${qs ? `?${qs}` : ""}`;
+  const base = phone ? `https://wa.me/${phone}` : "https://wa.me/";
+  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
+  window.location.href = `${base}${qs}`;
 }
 
 /**
@@ -50,8 +48,10 @@ async function shareOrFallback(file: File, blob: Blob, fileName: string, phone: 
   }
   downloadBlob(blob, fileName);
   toast.message("تم تنزيل الملف. سيتم فتح واتساب لإرفاقه يدوياً في المحادثة.");
-  setTimeout(() => openWhatsapp(phone, message), 1000);
+  setTimeout(() => openWhatsapp(phone, message), 2000);
+  return;
 }
+
 
 export async function shareStatementViaWhatsApp(opts: {
   kind: "pdf" | "excel";
@@ -84,6 +84,6 @@ export async function shareStatementViaWhatsApp(opts: {
   // and open WhatsApp alongside so user can attach the saved PDF manually.
   await exportStatementToPDF(opts.data);
   toast.message("تم فتح نافذة PDF. احفظ الملف ثم أرفقه في محادثة واتساب.");
-  setTimeout(() => openWhatsapp(phone, message), 1000);
+  setTimeout(() => openWhatsapp(phone, message), 2000);
   void baseName;
 }
