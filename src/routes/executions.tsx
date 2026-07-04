@@ -901,15 +901,35 @@ function ExecutionForm({
       <div style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ padding: 12, borderRadius: 10, background: "#eef2ff", border: "1px solid #c7d2fe" }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي تكاليف الشركات الصادرة</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>{companyTotal.toLocaleString("ar")}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>
+            {companyCurrency
+              ? `${companyTotal.toLocaleString("ar")} ${currencyShortLabel(companyCurrency)}`
+              : companyCurrencies.length > 1
+                ? "عملات متعددة"
+                : companyTotal.toLocaleString("ar")}
+          </div>
         </div>
         <div style={{ padding: 12, borderRadius: 10, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي بيع الوكيل</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>{agentTotal.toLocaleString("ar")}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>
+            {agentCurrency
+              ? `${agentTotal.toLocaleString("ar")} ${currencyShortLabel(agentCurrency)}`
+              : agentCurrencies.length > 1
+                ? "عملات متعددة"
+                : agentTotal.toLocaleString("ar")}
+          </div>
         </div>
-        <div style={{ padding: 12, borderRadius: 10, background: profit >= 0 ? "#fffbeb" : "#fef2f2", border: `1px solid ${profit >= 0 ? "#fde68a" : "#fecaca"}` }}>
+        <div style={{ padding: 12, borderRadius: 10, background: profitCurrency ? (profit >= 0 ? "#fffbeb" : "#fef2f2") : "#f8fafc", border: `1px solid ${profitCurrency ? (profit >= 0 ? "#fde68a" : "#fecaca") : "#e2e8f0"}` }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>صافي الربح</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>{profit.toLocaleString("ar")}</div>
+          {profitCurrency ? (
+            <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
+              {profit.toLocaleString("ar")} {currencyShortLabel(profitCurrency)}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309", marginTop: 4 }}>
+              لا يمكن حساب الربح — عملات مختلفة بين الشراء والبيع
+            </div>
+          )}
         </div>
       </div>
       )}
