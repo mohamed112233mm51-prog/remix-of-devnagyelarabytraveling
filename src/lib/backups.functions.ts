@@ -281,7 +281,9 @@ export const importBackup = createServerFn({ method: "POST" })
     const versionMismatch = payload.meta.version !== 1;
     return {
       path, logId, size: gzBuf.byteLength, versionMismatch, meta: payload.meta,
-      summary, inserted, skipped, skippedTables, tablesProcessed,
+      summary, inserted, skipped, skippedTables,
+      skippedMissingUser, skippedMissingUserTables,
+      tablesProcessed,
       tablesWithData: tablesWithData.length,
       failed, emergencyPath,
     };
