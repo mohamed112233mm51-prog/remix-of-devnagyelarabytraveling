@@ -910,9 +910,14 @@ function MerchantStatementTab({
     if (typeFilter === "collection" && m.type !== "تحصيل نقدية من التاجر") return false;
     if (typeFilter === "cashout" && m.type !== "صرف نقدية للتاجر") return false;
     if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
+    if (currencyFilter && (m.currency || "EGP") !== currencyFilter) return false;
     if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  }), [movements, from, to, typeFilter, debouncedSearch]);
+  }), [movements, from, to, typeFilter, currencyFilter, debouncedSearch]);
+  const currencyOptions = useMemo(
+    () => Array.from(new Set(movements.map((m) => m.currency || "EGP"))).sort(),
+    [movements],
+  );
 
   // Per-currency running balance. Each currency accumulates independently so
   // EGP, USD, LYD, ... never mix into a single total.
