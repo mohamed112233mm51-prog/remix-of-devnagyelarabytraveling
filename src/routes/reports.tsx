@@ -1590,6 +1590,7 @@ function TreasuriesReport() {
                   <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(b.balance || 0))}</td>
                   <td data-label="إجراءات">
                     <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>
+                    <button type="button" className="action-btn" style={{ marginInlineStart: 6 }} onClick={() => setReconcileBox(b)}>⚖️ تسوية الخزنة</button>
                   </td>
                 </tr>
               ))}
@@ -1597,6 +1598,7 @@ function TreasuriesReport() {
           </table>
         </div>
         {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}
+        {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}
       </div>
     </div>
   );
