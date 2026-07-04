@@ -11,6 +11,7 @@ import {
   type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
+import { buildArabicFileName } from "@/lib/exportStatement";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { usePerm, checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
@@ -447,9 +448,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   }), [rowsWithMethodLabel, safeFilters]);
 
   const buildData = () => ({
-    title: "كشف حساب الشركة الصادرة",
+    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""}`,
     subtitle: company ? company.company_name : "كل الشركات",
-    fileName: `كشف-حساب-${company?.company_name || "الشركات"}`,
+    fileName: buildArabicFileName("كشف حساب الشركة", company?.company_name),
     summary: [
       ...byCurrency.flatMap((b) => [
         { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },

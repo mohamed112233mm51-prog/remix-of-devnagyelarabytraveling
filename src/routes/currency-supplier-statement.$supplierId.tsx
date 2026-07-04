@@ -9,7 +9,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
 import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet } from "lucide-react";
-import type { StatementExportData } from "@/lib/exportStatement";
+import { buildArabicFileName, arabicCurrencyName, type StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
   type PaymentSplitRow,
@@ -283,8 +283,8 @@ function CurrencySupplierStatementPage() {
 
 
   const exportData = (): StatementExportData => ({
-    title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
-    subtitle: currencyFilter ? `العملة: ${currencyFilter}` : undefined,
+    title: `كشف حساب مورد العملة${supplier?.name ? ` — ${supplier.name}` : ""}${currencyFilter ? ` (${arabicCurrencyName(currencyFilter)})` : ""}`,
+    subtitle: currencyFilter ? `العملة: ${arabicCurrencyName(currencyFilter)}` : undefined,
     summary: summary.map((s) => ({ label: s.currency, value: `${fmtNum(s.net)}` })),
     columns: ([
       { header: "التاريخ", key: "date" },
@@ -306,7 +306,7 @@ function CurrencySupplierStatementPage() {
       desc: r.description || "",
       balance: Number(r.balance || 0),
     })),
-    fileName: `currency-supplier-${supplier?.name || supplierId}`,
+    fileName: buildArabicFileName("كشف حساب مورد العملة", supplier?.name, currencyFilter),
   });
 
   if (loading) return <div className="section active"><div className="card"><div className="card-body"><div className="empty">جارٍ التحميل...</div></div></div></div>;

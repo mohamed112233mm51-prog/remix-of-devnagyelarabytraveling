@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
+import { buildArabicFileName } from "@/lib/exportStatement";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { Briefcase, ArrowDownCircle, ArrowUpCircle, Wallet, UserPlus, Users, Receipt, FileText, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
@@ -266,9 +267,9 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
   const balance = totalDeposit - totalWithdraw;
 
   const buildData = () => ({
-    title: "كشف حساب المستثمر",
+    title: `كشف حساب المستثمر${investor?.investor_name ? ` — ${investor.investor_name}` : ""}`,
     subtitle: investor ? investor.investor_name : "كل المستثمرين",
-    fileName: `كشف-حساب-${investor?.investor_name || "المستثمرين"}`,
+    fileName: buildArabicFileName("كشف حساب المستثمر", investor?.investor_name),
     summary: [
       { label: "إجمالي التوريد", value: fmtDL(totalDeposit) },
       { label: "إجمالي الصرف", value: fmtDL(totalWithdraw) },

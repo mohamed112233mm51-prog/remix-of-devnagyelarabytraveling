@@ -646,7 +646,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الوكلاء", columns: cols, rows, fileName: "agents-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير الوكلاء", columns: cols, rows, fileName: "تقرير الوكلاء" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الوكلاء", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -783,7 +783,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الشركات الصادرة", columns: cols, rows, fileName: "companies-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير الشركات الصادرة", columns: cols, rows, fileName: "تقرير الشركات الصادرة" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الشركات الصادرة", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -897,7 +897,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير تاجر الكاش", columns: cols, rows, fileName: "merchants-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير تاجر الكاش", columns: cols, rows, fileName: "تقرير تاجر الكاش" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير تاجر الكاش", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -1005,7 +1005,7 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير المستثمرين", columns: cols, rows, fileName: "investors-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير المستثمرين", columns: cols, rows, fileName: "تقرير المستثمرين" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير المستثمرين", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -1074,7 +1074,7 @@ function FlightsReport({ inRange, data: rd }: SectionProps) {
       <div className="card-header"><div className="card-title">✈️ تقرير التنفيذات</div></div>
       <div className="card-body">
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير التنفيذات", columns: cols, rows, fileName: "flights-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير التنفيذات", columns: cols, rows, fileName: "تقرير التنفيذات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير التنفيذات", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -1143,7 +1143,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
       <div className="card-header"><div className="card-title">📋 تقرير التقديمات</div></div>
       <div className="card-body">
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير التقديمات", columns: cols, rows, fileName: "approvals-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير التقديمات", columns: cols, rows, fileName: "تقرير التقديمات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير التقديمات", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -1261,7 +1261,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير المصروفات", columns: cols, rows, summary, fileName: "expenses-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير المصروفات", columns: cols, rows, summary, fileName: "تقرير المصروفات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير المصروفات", columns: cols, rows, summary })}
         />
         <div className="table-wrap">
@@ -1443,7 +1443,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الخزينة الدولارية", columns: cols, rows, fileName: "usd-treasury-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير الخزينة الدولارية", columns: cols, rows, fileName: "تقرير الخزينة الدولارية" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الخزينة الدولارية", columns: cols, rows })}
         />
         <div className="table-wrap">
@@ -1571,7 +1571,7 @@ function TreasuriesReport() {
           { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows, fileName: "treasuries-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows, fileName: "تقرير الخزائن" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows })}
         />
         <div className="table-wrap">
@@ -1719,7 +1719,7 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
       <div className="card-body">
         <KpiRow items={kpiItems} />
         <ExportBar
-          onExcel={() => exportStatementToExcel({ title: "تقرير شراء وبيع العملات", columns: cols, rows, fileName: "currency-suppliers-report" })}
+          onExcel={() => exportStatementToExcel({ title: "تقرير شراء وبيع العملات", columns: cols, rows, fileName: "تقرير شراء وبيع العملات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير شراء وبيع العملات", columns: cols, rows })}
         />
         <div className="table-wrap">

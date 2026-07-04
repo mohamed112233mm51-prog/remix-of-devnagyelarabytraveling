@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ExportButton } from "@/components/ExportButton";
+import { buildArabicFileName } from "@/lib/exportStatement";
 import {
   badgeFor, fmtDL, fmtNum, fmtCurrency, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
   useLive, GOVERNORATES,
@@ -244,9 +245,9 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   }, [ledger]);
 
   const buildExportData = () => ({
-    title: "كشف حساب الوكيل",
+    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}`,
     subtitle: agent?.name || "",
-    fileName: `كشف-حساب-${agent?.name || "الوكيل"}`,
+    fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name),
     summary: [
       ...byCurrency.flatMap((b) => [
         { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },

@@ -452,7 +452,7 @@ function AuditLogPage() {
   const buildExportData = () => ({
     title: "سجل تدقيق الحركات المالية",
     subtitle: `عدد العمليات: ${filtered.length}`,
-    fileName: `audit-log-${new Date().toISOString().slice(0, 10)}`,
+    fileName: `سجل تدقيق الحركات المالية ${new Date().toISOString().slice(0, 10)}`,
     columns: [
       { header: "التاريخ والوقت", key: "when" },
       { header: "المستخدم", key: "user" },

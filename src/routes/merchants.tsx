@@ -14,6 +14,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone, ArrowUpFromLine } from "lucide-react";
 import { MerchantCashOutForm } from "@/components/CashMovementForms";
 import { ExportButton } from "@/components/ExportButton";
+import { buildArabicFileName } from "@/lib/exportStatement";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -960,9 +961,9 @@ function MerchantStatementTab({
   const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
 
   const buildExport = () => ({
-    title: "كشف حساب التاجر",
+    title: `كشف حساب تاجر الكاش${merchant?.merchant_name ? ` — ${merchant.merchant_name}` : ""}`,
     subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
-    fileName: `كشف-حساب-${merchant?.merchant_name || "التاجر"}`,
+    fileName: buildArabicFileName("كشف حساب تاجر الكاش", merchant?.merchant_name),
     summary: (() => {
       const CUR_NAMES: Record<string, string> = {
         EGP: "الجنيه المصري",
