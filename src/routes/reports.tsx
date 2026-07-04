@@ -1649,6 +1649,98 @@ function CashBoxOpeningModal({ box, onClose }: { box: CashBoxRow; onClose: () =>
   );
 }
 
+function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () => void }) {
+  const currentBalance = Number(box.balance || 0);
+  const currencyLabel = CURRENCY_LABEL[box.currency] || box.currency;
+  const [physical, setPhysical] = useState<string>("");
+  const [reason, setReason] = useState<string>("");
+  const [note, setNote] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  const physicalNum = Number(physical);
+  const hasPhysical = physical.trim() !== "" && !Number.isNaN(physicalNum);
+  const diff = hasPhysical ? physicalNum - currentBalance : 0;
+  const diffLabel = diff > 0 ? "تسوية زيادة خزنة" : diff < 0 ? "تسوية عجز خزنة" : "لا يوجد فرق";
+
+  const save = async () => {
+    if (!hasPhysical) { toast.error("أدخل الرصيد الفعلي بعد الجرد"); return; }
+    if (!reason.trim()) { toast.error("سبب التسوية إجباري"); return; }
+    if (diff === 0) { toast.error("لا يوجد فرق لتسويته"); return; }
+    setSaving(true);
+    try {
+      const amount = Math.abs(diff);
+      const direction: "in" | "out" = diff > 0 ? "in" : "out";
+      const method = diff > 0 ? "تسوية زيادة خزنة" : "تسوية عجز خزنة";
+      const statement = `${method} — الرصيد قبل: ${currentBalance} ${box.currency} | الرصيد بعد: ${physicalNum} ${box.currency} | الفرق: ${diff} ${box.currency} | السبب: ${reason.trim()}${note.trim() ? ` | ملاحظات: ${note.trim()}` : ""}`;
+      const res = await postMovement({
+        partyType: "treasury",
+        partyId: null,
+        kind: "settlement",
+        date: new Date().toISOString().slice(0, 10),
+        note: note.trim() || undefined,
+        statement,
+        splits: [{
+          method,
+          currency: box.currency as "EGP" | "USD" | "LYD",
+          cashBoxId: box.id,
+          amount,
+          direction,
+        }],
+      });
+      if (!res.ok) throw new Error(res.error || "فشل حفظ التسوية");
+      toast.success("تم حفظ تسوية الخزنة");
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل حفظ التسوية");
+    } finally { setSaving(false); }
+  };
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 520, width: "100%", margin: 0 }}>
+        <div className="card-header"><div className="card-title">⚖️ تسوية الخزنة — {box.name}</div></div>
+        <div className="form-grid">
+          <div className="form-group"><label>اسم الخزنة</label>
+            <input value={box.name} readOnly />
+          </div>
+          <div className="form-group"><label>العملة</label>
+            <input value={currencyLabel} readOnly />
+          </div>
+          <div className="form-group"><label>الرصيد الحالي</label>
+            <input value={fmtNum(currentBalance)} readOnly />
+          </div>
+          <div className="form-group"><label>الرصيد الفعلي بعد الجرد *</label>
+            <input type="number" value={physical} onChange={(e) => setPhysical(e.target.value)} />
+          </div>
+          <div className="form-group full"><label>سبب التسوية *</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: عجز جرد، فرق تقريب، خطأ إدخال..." />
+          </div>
+          <div className="form-group full"><label>ملاحظات</label>
+            <input value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          {hasPhysical && (
+            <div className="form-group full">
+              <div className="card" style={{ margin: 0, padding: 10, background: "var(--surface, #f8f9fb)" }}>
+                <div><strong>نوع الحركة:</strong> {diffLabel}</div>
+                <div><strong>قيمة الفرق:</strong> {fmtNum(diff)} {box.currency}</div>
+                <div><strong>الرصيد المتوقع بعد التسوية:</strong> {fmtNum(physicalNum)} {box.currency}</div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button type="button" className="btn btn-gold" onClick={save} disabled={saving || !hasPhysical || !reason.trim() || diff === 0}>💾 حفظ التسوية</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+
+
 
 // ---------- CURRENCY SUPPLIERS (buy / sell currency) ----------
 type CurrencySupplierTx = {
