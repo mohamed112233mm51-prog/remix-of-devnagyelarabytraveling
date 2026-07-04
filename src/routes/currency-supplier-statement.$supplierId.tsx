@@ -283,8 +283,8 @@ function CurrencySupplierStatementPage() {
 
 
   const exportData = (): StatementExportData => ({
-    title: `كشف حساب مورد عملة — ${supplier?.name || ""}`,
-    subtitle: currencyFilter ? `العملة: ${currencyFilter}` : undefined,
+    title: `كشف حساب مورد العملة${supplier?.name ? ` — ${supplier.name}` : ""}${currencyFilter ? ` (${arabicCurrencyName(currencyFilter)})` : ""}`,
+    subtitle: currencyFilter ? `العملة: ${arabicCurrencyName(currencyFilter)}` : undefined,
     summary: summary.map((s) => ({ label: s.currency, value: `${fmtNum(s.net)}` })),
     columns: ([
       { header: "التاريخ", key: "date" },
