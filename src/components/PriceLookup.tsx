@@ -270,6 +270,7 @@ export function PriceLookup(props: {
                   {mode === "company" && <th style={{ padding: 6 }}>سعر الشركة</th>}
                   {mode === "company" && !agentTier && <th style={{ padding: 6 }}>الشريحة</th>}
                   <th style={{ padding: 6 }}>سعر الوكيل</th>
+                  <th style={{ padding: 6 }}>العملة</th>
                   {mode === "company" && onOpenRule && <th style={{ padding: 6 }}>إجراءات</th>}
                 </tr>
               </thead>
