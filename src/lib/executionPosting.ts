@@ -170,8 +170,11 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
         merchant_id: s.merchant_id || null,
         payment_method: pm || "نقدي",
         total_paid: totalPaid, paid: totalPaid,
+        currency,
+        payment_currency: currency,
         note: itemNote,
         source_service_id: linkId, source_service_type: "execution",
+
       });
     }
     if (s.company_id && companyValue > 0) {
