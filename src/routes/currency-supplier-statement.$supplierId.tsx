@@ -9,7 +9,7 @@ import { usePerm } from "@/hooks/usePerm";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExportButton } from "@/components/ExportButton";
 import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet } from "lucide-react";
-import type { StatementExportData } from "@/lib/exportStatement";
+import { buildArabicFileName, arabicCurrencyName, type StatementExportData } from "@/lib/exportStatement";
 import {
   PaymentSplits,
   type PaymentSplitRow,
