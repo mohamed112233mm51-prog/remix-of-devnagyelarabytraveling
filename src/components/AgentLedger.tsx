@@ -115,6 +115,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [currencyFilter, setCurrencyFilter] = useState<string>("");
 
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => ({
