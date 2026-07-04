@@ -439,7 +439,7 @@ export async function exportStatementToPDF(data: StatementExportData) {
   const useLandscape = colCount > 6;
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
   const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
-  const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.title)}</title>
+  const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
