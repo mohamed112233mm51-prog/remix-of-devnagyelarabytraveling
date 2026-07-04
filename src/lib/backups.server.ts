@@ -319,6 +319,7 @@ export async function restoreFromPayload(payload: BackupPayload) {
 
       const CHUNK = 500;
       let written = 0;
+      let skipped = 0;
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
@@ -326,10 +327,27 @@ export async function restoreFromPayload(payload: BackupPayload) {
         const res = isReference
           ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
           : await (supabaseAdmin.from as any)(t).insert(slice);
-        if (res.error) throw new Error(`${isReference ? "upsert" : "insert"}: ${res.error.message}`);
-        written += slice.length;
+        if (res.error) {
+          // Reference tables: retry row-by-row so duplicates count as
+          // "skipped (already exists)" instead of failing the whole chunk.
+          if (isReference) {
+            for (const row of slice) {
+              const r2 = await (supabaseAdmin.from as any)(t).upsert(row, { onConflict });
+              if (r2.error) {
+                if (isDuplicateError(r2.error)) skipped++;
+                else throw new Error(`upsert: ${r2.error.message}`);
+              } else {
+                written++;
+              }
+            }
+          } else {
+            throw new Error(`insert: ${res.error.message}`);
+          }
+        } else {
+          written += slice.length;
+        }
       }
-      summary[t] = { restored: written, mode: isReference ? "upsert" : "wipe-insert" };
+      summary[t] = { restored: written, skipped, mode: isReference ? "upsert" : "wipe-insert" };
     } catch (e: any) {
       summary[t] = { restored: 0, mode: isReference ? "upsert" : "wipe-insert", error: e?.message ?? String(e) };
     }
