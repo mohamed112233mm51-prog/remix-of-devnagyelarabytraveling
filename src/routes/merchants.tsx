@@ -14,6 +14,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, Users, Receipt, ArrowDownLeft, ArrowUpRight, ListChecks, FileText, Search, Calendar, Percent, Phone, ArrowUpFromLine } from "lucide-react";
 import { MerchantCashOutForm } from "@/components/CashMovementForms";
 import { ExportButton } from "@/components/ExportButton";
+import { buildArabicFileName } from "@/lib/exportStatement";
 import {
   PaymentSplits,
   newPaymentSplitRow,
