@@ -267,9 +267,9 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
   const balance = totalDeposit - totalWithdraw;
 
   const buildData = () => ({
-    title: "كشف حساب المستثمر",
+    title: `كشف حساب المستثمر${investor?.investor_name ? ` — ${investor.investor_name}` : ""}`,
     subtitle: investor ? investor.investor_name : "كل المستثمرين",
-    fileName: `كشف-حساب-${investor?.investor_name || "المستثمرين"}`,
+    fileName: buildArabicFileName("كشف حساب المستثمر", investor?.investor_name),
     summary: [
       { label: "إجمالي التوريد", value: fmtDL(totalDeposit) },
       { label: "إجمالي الصرف", value: fmtDL(totalWithdraw) },
