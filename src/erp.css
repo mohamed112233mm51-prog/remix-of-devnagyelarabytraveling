@@ -2361,3 +2361,73 @@ div[style*="position:fixed"][style*="inset:0"] > div:not([style*="position"]) {
   .erp-loader-overlay { background: color-mix(in srgb, #000 45%, transparent); }
   .erp-loader-overlay__label { color: #f0f0f0; }
 }
+
+/* ===== Currency Filter (unified toolbar control) ===== */
+.currency-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px 0 30px; /* left reserves space for chevron in RTL */
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  color: var(--text, #111);
+  min-width: 220px;
+  max-width: 260px;
+  width: 240px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.currency-filter:hover {
+  border-color: var(--primary);
+  background: var(--primary3, rgba(0,0,0,0.02));
+}
+.currency-filter:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.currency-filter__icon {
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+.currency-filter__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2, #555);
+  white-space: nowrap;
+  cursor: pointer;
+  margin: 0;
+}
+.currency-filter__select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  height: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: right;
+  direction: rtl;
+}
+.currency-filter__select::-ms-expand { display: none; }
+.currency-filter__chevron {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text3, #888);
+  pointer-events: none;
+}
+
+

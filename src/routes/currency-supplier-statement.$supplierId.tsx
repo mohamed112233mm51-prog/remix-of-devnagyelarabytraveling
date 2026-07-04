@@ -371,7 +371,7 @@ function CurrencySupplierStatementPage() {
             <option value="رصيد سابق">رصيد سابق</option>
           </select>
         </div>
-        <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={ALL_FILTER_CURRENCIES as unknown as string[]} minWidth={200} />
+        <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={ALL_FILTER_CURRENCIES as unknown as string[]} />
         {(from || to || typeFilter || currencyFilter) && (
           <button className="action-btn" style={{ alignSelf: "end" }} onClick={() => { setFrom(""); setTo(""); setTypeFilter(""); setCurrencyFilter(""); }}>
             مسح الفلاتر

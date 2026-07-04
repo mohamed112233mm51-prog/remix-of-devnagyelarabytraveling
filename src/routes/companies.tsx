@@ -510,7 +510,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div className="card-title">كشف حساب الشركة الصادرة</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} minWidth={180} />
+          <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
           {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
           <ColumnVisibility columns={COMPANY_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
           {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} />}
