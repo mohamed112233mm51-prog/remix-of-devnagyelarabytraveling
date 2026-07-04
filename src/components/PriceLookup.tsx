@@ -287,9 +287,10 @@ export function PriceLookup(props: {
                       <td style={{ padding: 6 }}>{companyNameOf(r.approval_company_id)}</td>
                       <td style={{ padding: 6 }}>{r.status || NA_LABEL}</td>
                       <td style={{ padding: 6 }}>{r.passenger_type || NA_LABEL}</td>
-                      {mode === "company" && <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)}</td>}
+                      {mode === "company" && <td style={{ padding: 6 }}>{Number(r.company_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>}
                       {mode === "company" && !agentTier && <td style={{ padding: 6 }}>{r.agent_tier}</td>}
-                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)}</td>
+                      <td style={{ padding: 6, fontWeight: 700, color: "var(--gold, #b8860b)" }}>{Number(r.agent_price).toFixed(2)} {currencyShortLabel(r.currency)}</td>
+                      <td style={{ padding: 6, fontWeight: 600 }}>{(r.currency || "EGP").toUpperCase()}</td>
                       {mode === "company" && onOpenRule && (
                         <td style={{ padding: 6 }}>
                           <button
