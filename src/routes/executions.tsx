@@ -23,7 +23,7 @@ import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/ap
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
-import { resolveAgentPrice } from "@/lib/pricingMatch";
+import { resolveAgentPrice, currencyShortLabel } from "@/lib/pricingMatch";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -554,6 +554,11 @@ function ExecutionForm({
     return sum + (cv > 0 ? cv : cp * cnt);
   }, 0);
   const agentTotal = agentServices.reduce((sum, { s }) => sum + ((Number(s.agent_price) || 0) * (Number(s.count) || 1)), 0);
+  const companyCurrencies = Array.from(new Set(companyServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
+  const agentCurrencies = Array.from(new Set(agentServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
+  const companyCurrency = companyCurrencies.length === 1 ? companyCurrencies[0] : null;
+  const agentCurrency = agentCurrencies.length === 1 ? agentCurrencies[0] : null;
+  const profitCurrency = companyCurrency && agentCurrency && companyCurrency === agentCurrency ? companyCurrency : null;
   const profit = agentTotal - companyTotal;
 
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
@@ -781,7 +786,7 @@ function ExecutionForm({
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
-                  <Field label="سعر الشركة (للوحدة)">
+                  <Field label={`سعر الشركة (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} />
                       <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
@@ -812,7 +817,7 @@ function ExecutionForm({
                       >🔄</button>
                     </div>
                   </Field>
-                  <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
+                  <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
                 <div style={{ marginTop: 8, textAlign: "end" }}>
@@ -850,7 +855,7 @@ function ExecutionForm({
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
-                  <Field label="سعر البيع للوكيل (للوحدة)">
+                  <Field label={`سعر البيع للوكيل (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} />
                       <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
@@ -880,7 +885,7 @@ function ExecutionForm({
                       >🔄</button>
                     </div>
                   </Field>
-                  <Field label="الإجمالي"><input value={total.toLocaleString("ar")} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
+                  <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
                 </div>
                 <div style={{ marginTop: 8, textAlign: "end" }}>
@@ -896,15 +901,35 @@ function ExecutionForm({
       <div style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ padding: 12, borderRadius: 10, background: "#eef2ff", border: "1px solid #c7d2fe" }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي تكاليف الشركات الصادرة</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>{companyTotal.toLocaleString("ar")}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a8a", marginTop: 4 }}>
+            {companyCurrency
+              ? `${companyTotal.toLocaleString("ar")} ${currencyShortLabel(companyCurrency)}`
+              : companyCurrencies.length > 1
+                ? "عملات متعددة"
+                : companyTotal.toLocaleString("ar")}
+          </div>
         </div>
         <div style={{ padding: 12, borderRadius: 10, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>إجمالي بيع الوكيل</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>{agentTotal.toLocaleString("ar")}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#047857", marginTop: 4 }}>
+            {agentCurrency
+              ? `${agentTotal.toLocaleString("ar")} ${currencyShortLabel(agentCurrency)}`
+              : agentCurrencies.length > 1
+                ? "عملات متعددة"
+                : agentTotal.toLocaleString("ar")}
+          </div>
         </div>
-        <div style={{ padding: 12, borderRadius: 10, background: profit >= 0 ? "#fffbeb" : "#fef2f2", border: `1px solid ${profit >= 0 ? "#fde68a" : "#fecaca"}` }}>
+        <div style={{ padding: 12, borderRadius: 10, background: profitCurrency ? (profit >= 0 ? "#fffbeb" : "#fef2f2") : "#f8fafc", border: `1px solid ${profitCurrency ? (profit >= 0 ? "#fde68a" : "#fecaca") : "#e2e8f0"}` }}>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>صافي الربح</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>{profit.toLocaleString("ar")}</div>
+          {profitCurrency ? (
+            <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
+              {profit.toLocaleString("ar")} {currencyShortLabel(profitCurrency)}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309", marginTop: 4 }}>
+              لا يمكن حساب الربح — عملات مختلفة بين الشراء والبيع
+            </div>
+          )}
         </div>
       </div>
       )}
