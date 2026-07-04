@@ -182,6 +182,27 @@ function isDuplicateError(err: any): boolean {
   );
 }
 
+// FK violations from tables that reference auth.users. auth.users is not
+// included in backups, so rows referring to users that no longer exist
+// should be SKIPPED (Missing Auth User), not counted as Failed.
+const TABLES_REFERENCING_AUTH_USER: ReadonlySet<string> = new Set([
+  "profiles",
+  "user_roles",
+  "activity_logs",
+]);
+
+function isMissingAuthUserError(err: any): boolean {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? err?.details ?? err ?? "").toLowerCase();
+  if (code !== "23503") return false;
+  return (
+    msg.includes("auth.users") ||
+    msg.includes("users") && msg.includes("foreign key") ||
+    msg.includes("user_id") ||
+    msg.includes("profiles_id_fkey")
+  );
+}
+
 
 export async function restoreFromPayload(payload: BackupPayload) {
   const summary: Record<string, { restored: number; skipped?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
