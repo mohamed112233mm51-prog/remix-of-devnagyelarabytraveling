@@ -35,14 +35,12 @@ export const arabicCurrencyName = (code?: string | null) =>
  *   -> "كشف حساب الوكيل أحمد محمد (الدولار الأمريكي)"
  */
 export function buildArabicFileName(kind: string, entityName?: string | null, currency?: string | null): string {
-  const parts = [kind.trim()];
+  const parts: string[] = [kind.trim()];
   const name = (entityName || "").trim();
   if (name) parts.push(name);
-  let base = parts.join(" ");
   const cur = arabicCurrencyName(currency || "");
-  if (cur) base += ` (${cur})`;
-  // Strip characters illegal in most filesystems; keep Arabic + spaces + parens + dashes
-  return base.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
+  if (cur) parts.push(cur);
+  return parts.join(" - ").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
 }
 
 function dataUrlToExcelImage(dataUrl: string): { base64: string; ext: "png" | "jpeg" | "gif" } | null {
