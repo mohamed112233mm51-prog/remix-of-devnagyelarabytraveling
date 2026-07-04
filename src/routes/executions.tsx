@@ -564,8 +564,23 @@ function ExecutionForm({
   const agentCurrencies = Array.from(new Set(agentServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
   const companyCurrency = companyCurrencies.length === 1 ? companyCurrencies[0] : null;
   const agentCurrency = agentCurrencies.length === 1 ? agentCurrencies[0] : null;
-  const profitCurrency = companyCurrency && agentCurrency && companyCurrency === agentCurrency ? companyCurrency : null;
-  const profit = agentTotal - companyTotal;
+  // Per-currency profit: never sum across currencies.
+  const profitByCurrency: Record<string, number> = {};
+  for (const { s } of companyServices) {
+    const cur = ((s as any).currency || "EGP") as string;
+    const cnt = Number(s.count) || 1;
+    const cv = Number(s.company_value) || 0;
+    const cp = Number(s.company_price) || 0;
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) - (cv > 0 ? cv : cp * cnt);
+  }
+  for (const { s } of agentServices) {
+    const cur = ((s as any).currency || "EGP") as string;
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) + ((Number(s.agent_price) || 0) * (Number(s.count) || 1));
+  }
+  const profitCurrencies = Object.keys(profitByCurrency);
+  const singleProfitCurrency = profitCurrencies.length === 1 ? profitCurrencies[0] : null;
+  const profit = singleProfitCurrency ? profitByCurrency[singleProfitCurrency] : 0;
+  const profitCurrency = singleProfitCurrency;
 
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
@@ -926,14 +941,24 @@ function ExecutionForm({
           </div>
         </div>
         <div style={{ padding: 12, borderRadius: 10, background: profitCurrency ? (profit >= 0 ? "#fffbeb" : "#fef2f2") : "#f8fafc", border: `1px solid ${profitCurrency ? (profit >= 0 ? "#fde68a" : "#fecaca") : "#e2e8f0"}` }}>
-          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>صافي الربح</div>
+          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
+            {profitCurrency ? "صافي الربح" : "صافي الأرباح حسب العملة"}
+          </div>
           {profitCurrency ? (
             <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
               {profit.toLocaleString("ar")} {currencyShortLabel(profitCurrency)}
             </div>
           ) : (
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309", marginTop: 4 }}>
-              لا يمكن حساب الربح — عملات مختلفة بين الشراء والبيع
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+              {profitCurrencies.map((cur) => {
+                const val = profitByCurrency[cur] || 0;
+                return (
+                  <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c" }}>
+                    <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
+                    <span>{val.toLocaleString("ar")}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
