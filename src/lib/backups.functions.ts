@@ -246,12 +246,19 @@ export const importBackup = createServerFn({ method: "POST" })
     // 6) Restore for real
     const summary = await restoreFromPayload(payload);
     const failed: Array<{ table: string; error: string }> = [];
+    const skippedTables: Array<{ table: string; skipped: number }> = [];
     let inserted = 0;
+    let skipped = 0;
     let tablesProcessed = 0;
     for (const [t, v] of Object.entries(summary)) {
       tablesProcessed++;
       if (v.error) failed.push({ table: t, error: v.error });
       else inserted += v.restored ?? 0;
+      const s = (v as any).skipped ?? 0;
+      if (s > 0) {
+        skipped += s;
+        skippedTables.push({ table: t, skipped: s });
+      }
     }
 
     await logBackupRow({
@@ -267,7 +274,7 @@ export const importBackup = createServerFn({ method: "POST" })
     const versionMismatch = payload.meta.version !== 1;
     return {
       path, logId, size: gzBuf.byteLength, versionMismatch, meta: payload.meta,
-      summary, inserted, tablesProcessed,
+      summary, inserted, skipped, skippedTables, tablesProcessed,
       tablesWithData: tablesWithData.length,
       failed, emergencyPath,
     };
