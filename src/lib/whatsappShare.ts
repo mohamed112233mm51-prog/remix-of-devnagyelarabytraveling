@@ -26,14 +26,17 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 function openWhatsapp(phone?: string | null, text?: string) {
-  const msg = text ? `?text=${encodeURIComponent(text)}` : "";
-  const url = phone ? `https://wa.me/${phone}${msg}` : `https://wa.me/${msg}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+  const params = new URLSearchParams();
+  if (phone) params.set("phone", phone);
+  if (text) params.set("text", text);
+  const qs = params.toString();
+  window.location.href = `whatsapp://send${qs ? `?${qs}` : ""}`;
 }
 
 /**
- * Try native share first (without pre-checking canShare, which is unreliable
- * for some MIME types). On any failure, download the file + open WhatsApp.
+ * Try native share first (canShare is unreliable for some MIME types).
+ * On any failure: download the file, wait 1s so it lands in Downloads,
+ * then open the installed WhatsApp app via the whatsapp:// scheme.
  */
 async function shareOrFallback(file: File, blob: Blob, fileName: string, phone: string | null, message: string) {
   const nav: any = typeof navigator !== "undefined" ? navigator : null;
@@ -43,12 +46,11 @@ async function shareOrFallback(file: File, blob: Blob, fileName: string, phone: 
       return;
     } catch (e: any) {
       if (e?.name === "AbortError") return; // user cancelled — don't fall back
-      // fall through to download + wa.me
     }
   }
   downloadBlob(blob, fileName);
   toast.message("تم تنزيل الملف. سيتم فتح واتساب لإرفاقه يدوياً في المحادثة.");
-  openWhatsapp(phone, message);
+  setTimeout(() => openWhatsapp(phone, message), 1000);
 }
 
 export async function shareStatementViaWhatsApp(opts: {
