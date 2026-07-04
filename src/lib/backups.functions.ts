@@ -247,8 +247,10 @@ export const importBackup = createServerFn({ method: "POST" })
     const summary = await restoreFromPayload(payload);
     const failed: Array<{ table: string; error: string }> = [];
     const skippedTables: Array<{ table: string; skipped: number }> = [];
+    const skippedMissingUserTables: Array<{ table: string; skipped: number }> = [];
     let inserted = 0;
     let skipped = 0;
+    let skippedMissingUser = 0;
     let tablesProcessed = 0;
     for (const [t, v] of Object.entries(summary)) {
       tablesProcessed++;
@@ -258,6 +260,11 @@ export const importBackup = createServerFn({ method: "POST" })
       if (s > 0) {
         skipped += s;
         skippedTables.push({ table: t, skipped: s });
+      }
+      const sm = (v as any).skippedMissingUser ?? 0;
+      if (sm > 0) {
+        skippedMissingUser += sm;
+        skippedMissingUserTables.push({ table: t, skipped: sm });
       }
     }
 
