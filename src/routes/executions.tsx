@@ -803,9 +803,10 @@ function ExecutionForm({
                           });
                           const cp = res.rule ? Number(res.rule.company_price) : null;
                           if (cp == null) return toast.error(res.reason || "لا يوجد سعر مطابق");
-                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: cp } : x));
                           const cur = res.rule?.currency || "EGP";
+                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: cp, currency: cur } : x));
                           toast.success(`تم جلب السعر: ${cp.toFixed(2)} (${cur})`);
+
                         }}
                         style={{ padding: "4px 8px", fontSize: 11 }}
                       >🔄</button>
