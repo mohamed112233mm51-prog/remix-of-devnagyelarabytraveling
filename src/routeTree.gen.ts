@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubmissionsRouteImport } from './routes/submissions'
+import { Route as ShareTestRouteImport } from './routes/share-test'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ServicePricingRouteImport } from './routes/service-pricing'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -32,6 +33,11 @@ import { Route as ApiPublicHooksBackupRouteImport } from './routes/api/public/ho
 const SubmissionsRoute = SubmissionsRouteImport.update({
   id: '/submissions',
   path: '/submissions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareTestRoute = ShareTestRouteImport.update({
+  id: '/share-test',
+  path: '/share-test',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/service-pricing': typeof ServicePricingRoute
   '/settings': typeof SettingsRoute
+  '/share-test': typeof ShareTestRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/currency-supplier-statement/$supplierId': typeof CurrencySupplierStatementSupplierIdRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/service-pricing': typeof ServicePricingRoute
   '/settings': typeof SettingsRoute
+  '/share-test': typeof ShareTestRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/currency-supplier-statement/$supplierId': typeof CurrencySupplierStatementSupplierIdRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/service-pricing': typeof ServicePricingRoute
   '/settings': typeof SettingsRoute
+  '/share-test': typeof ShareTestRoute
   '/submissions': typeof SubmissionsRoute
   '/agent-statement/$agentId': typeof AgentStatementAgentIdRoute
   '/currency-supplier-statement/$supplierId': typeof CurrencySupplierStatementSupplierIdRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/service-pricing'
     | '/settings'
+    | '/share-test'
     | '/submissions'
     | '/agent-statement/$agentId'
     | '/currency-supplier-statement/$supplierId'
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/service-pricing'
     | '/settings'
+    | '/share-test'
     | '/submissions'
     | '/agent-statement/$agentId'
     | '/currency-supplier-statement/$supplierId'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/service-pricing'
     | '/settings'
+    | '/share-test'
     | '/submissions'
     | '/agent-statement/$agentId'
     | '/currency-supplier-statement/$supplierId'
@@ -272,6 +284,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ServicePricingRoute: typeof ServicePricingRoute
   SettingsRoute: typeof SettingsRoute
+  ShareTestRoute: typeof ShareTestRoute
   SubmissionsRoute: typeof SubmissionsRoute
   AgentStatementAgentIdRoute: typeof AgentStatementAgentIdRoute
   CurrencySupplierStatementSupplierIdRoute: typeof CurrencySupplierStatementSupplierIdRoute
@@ -285,6 +298,13 @@ declare module '@tanstack/react-router' {
       path: '/submissions'
       fullPath: '/submissions'
       preLoaderRoute: typeof SubmissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share-test': {
+      id: '/share-test'
+      path: '/share-test'
+      fullPath: '/share-test'
+      preLoaderRoute: typeof ShareTestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -432,6 +452,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ServicePricingRoute: ServicePricingRoute,
   SettingsRoute: SettingsRoute,
+  ShareTestRoute: ShareTestRoute,
   SubmissionsRoute: SubmissionsRoute,
   AgentStatementAgentIdRoute: AgentStatementAgentIdRoute,
   CurrencySupplierStatementSupplierIdRoute:
