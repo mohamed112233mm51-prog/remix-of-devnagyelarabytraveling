@@ -49,39 +49,37 @@ async function tryNativeShare(file: File): Promise<boolean> {
 }
 
 async function shareExcel(data: StatementExportData, phone: string | null, message: string) {
-  // 1) Open WhatsApp FIRST (same user gesture) as a fallback anchor.
-  const waWin = window.open(buildWhatsappUrl(phone, message), "_blank");
   try {
     const built = await buildStatementExcelBlob(data);
     const fileName = `${built.fileName}.xlsx`;
     const typedBlob = new Blob([built.blob], { type: MIME_XLSX });
     const file = new File([typedBlob], fileName, { type: MIME_XLSX });
 
-    if (await tryNativeShare(file)) {
-      if (waWin && !waWin.closed) waWin.close();
-      return;
-    }
+    // Try native share with FILES ONLY (no text — some devices ignore the
+    // file when text is present and only send the message).
+    if (await tryNativeShare(file)) return;
+
+    // Fallback: download the file + open wa.me with a text hint.
     downloadBlob(typedBlob, fileName);
     toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
+    window.open(buildWhatsappUrl(phone, message), "_blank");
   } catch (e) {
     toast.error("تعذر تجهيز ملف Excel: " + (e as Error).message);
   }
 }
 
 async function sharePdf(data: StatementExportData, phone: string | null, message: string) {
-  const waWin = window.open(buildWhatsappUrl(phone, message), "_blank");
   try {
     const built = await buildStatementPdfBlob(data);
     const fileName = `${built.fileName}.pdf`;
     const typedBlob = new Blob([built.blob], { type: MIME_PDF });
     const file = new File([typedBlob], fileName, { type: MIME_PDF });
 
-    if (await tryNativeShare(file)) {
-      if (waWin && !waWin.closed) waWin.close();
-      return;
-    }
+    if (await tryNativeShare(file)) return;
+
     downloadBlob(typedBlob, fileName);
     toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
+    window.open(buildWhatsappUrl(phone, message), "_blank");
   } catch (e) {
     toast.error("تعذر تجهيز ملف PDF: " + (e as Error).message);
   }
