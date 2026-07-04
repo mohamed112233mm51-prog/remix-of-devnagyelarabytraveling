@@ -405,7 +405,7 @@ async function _restoreInner(
           written += slice.length;
         }
       }
-      summary[t] = { restored: written, skipped, mode: isReference ? "upsert" : "wipe-insert" };
+      summary[t] = { restored: written, skipped, skippedMissingUser, mode: isReference ? "upsert" : "wipe-insert" };
     } catch (e: any) {
       summary[t] = { restored: 0, mode: isReference ? "upsert" : "wipe-insert", error: e?.message ?? String(e) };
     }
