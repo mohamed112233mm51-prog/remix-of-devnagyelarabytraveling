@@ -983,7 +983,7 @@ function ExecutionForm({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {profitCurrencies.map((cur) => {
+              {sortCurrencies(profitCurrencies).map((cur) => {
                 const val = profitByCurrency[cur] || 0;
                 return (
                   <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c" }}>
