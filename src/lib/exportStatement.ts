@@ -160,7 +160,24 @@ async function getCurrentUserLabel(): Promise<string> {
 }
 
 // ---------- Excel ----------
+export async function buildStatementExcelBlob(data: StatementExportData): Promise<{ blob: Blob; fileName: string }> {
+  const { blob, fileName } = await _buildExcel(data);
+  return { blob, fileName };
+}
+
 export async function exportStatementToExcel(data: StatementExportData) {
+  const { blob, fileName } = await _buildExcel(data);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileName}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function _buildExcel(data: StatementExportData): Promise<{ blob: Blob; fileName: string }> {
   debugStatementExportValues(data);
 
   const branding = await loadBranding();
@@ -385,14 +402,7 @@ export async function exportStatementToExcel(data: StatementExportData) {
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${data.fileName || "report"}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { blob, fileName: data.fileName || "report" };
 }
 
 function colLetter(n: number): string {

@@ -513,7 +513,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
           <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
           {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
           <ColumnVisibility columns={COMPANY_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
-          {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} />}
+          {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildData} whatsapp={{ phone: (company as any)?.whatsapp || (company as any)?.phone || null, recipientName: (company as any)?.company_name || null }} />}
         </div>
       </div>
       <div className="card-body">
