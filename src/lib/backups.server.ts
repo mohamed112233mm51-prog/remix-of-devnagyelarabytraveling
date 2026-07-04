@@ -166,8 +166,24 @@ const UPSERT_CONFLICT_KEY: Record<string, string> = {
 // Performs full restore. Reference tables are upserted (no wipe). Other tables
 // are wiped then re-inserted in chunks. Bypasses RLS via service role.
 // Caller MUST be admin (enforced upstream).
+// Duplicate/unique-violation SQL codes and message fragments that mean
+// "already exists" — treated as SKIPPED for reference/lookup tables, never
+// as errors. Operational tables (executions, transactions, ...) still
+// surface these as real errors.
+function isDuplicateError(err: any): boolean {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  if (code === "23505" || code === "23503") return true;
+  return (
+    msg.includes("duplicate key") ||
+    msg.includes("already exists") ||
+    msg.includes("unique constraint") ||
+    msg.includes("violates unique")
+  );
+}
+
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+  const summary: Record<string, { restored: number; skipped?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
 
   // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
