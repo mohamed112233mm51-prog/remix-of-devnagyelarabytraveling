@@ -786,7 +786,7 @@ function ExecutionForm({
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
-                  <Field label="سعر الشركة (للوحدة)">
+                  <Field label={`سعر الشركة (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} />
                       <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
