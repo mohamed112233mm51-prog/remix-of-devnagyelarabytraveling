@@ -52,10 +52,6 @@ async function shareOrFallback(file: File, blob: Blob, fileName: string, phone: 
   return;
 }
 
-async function _unused_delayShim() {
-  toast.message("تم تنزيل الملف. سيتم فتح واتساب لإرفاقه يدوياً في المحادثة.");
-  setTimeout(() => openWhatsapp(phone, message), 1000);
-}
 
 export async function shareStatementViaWhatsApp(opts: {
   kind: "pdf" | "excel";
