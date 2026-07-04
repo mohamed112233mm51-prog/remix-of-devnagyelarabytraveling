@@ -94,8 +94,9 @@ export function resolveCompanyCashBoxForSplit<T extends { id: string; name: stri
   return active.find((b) => b.name.includes("الرئيسية")) || active[0] || null;
 }
 
-function debugCashBoxBalance(info: CashBoxBalanceInfo) {
+function debugCashBoxBalance(info: CashBoxBalanceInfo, ready: boolean = true) {
   if (!import.meta.env.DEV) return;
+  if (!ready) return;
   console.debug("[cash-box-balance:calculation]", {
     "Cash Box ID": info.cashBoxId,
     "Cash Box Name": info.cashBoxName,
@@ -117,8 +118,8 @@ function debugCashBoxBalance(info: CashBoxBalanceInfo) {
  * transactions + collections + USD conversions.
  */
 export function useSourceBalances(): SourceBalances {
-  const { rows: cashBoxes } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: paymentSplits } = useLive<PaymentSplitBalanceRow>("payment_splits");
+  const { rows: cashBoxes, loading: cashBoxesLoading } = useLive<CashBoxRow>("cash_boxes");
+  const { rows: paymentSplits, loading: paymentSplitsLoading } = useLive<PaymentSplitBalanceRow>("payment_splits");
   const { rows: agentTxns } = useLive<Transaction>("transactions");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
@@ -128,6 +129,7 @@ export function useSourceBalances(): SourceBalances {
   void deductions;
 
   return useMemo(() => {
+    const balancesReady = !cashBoxesLoading && !paymentSplitsLoading;
     const calculatedByBoxCurrency = new Map<string, number>();
     for (const split of paymentSplits) {
       if (!split.cash_box_id || split.cancelled_at) continue;
@@ -150,7 +152,7 @@ export function useSourceBalances(): SourceBalances {
         calculatedBalance: num2(calculatedByBoxCurrency.get(cashBoxKey(box.id, currency)) || 0),
       };
       cashBoxBalanceByIdCurrency.set(cashBoxKey(box.id, currency), info);
-      debugCashBoxBalance(info);
+      debugCashBoxBalance(info, balancesReady);
     }
 
     const balanceInfoFor = (box: CashBoxRow | null): CashBoxBalanceInfo | undefined => {
@@ -232,7 +234,7 @@ export function useSourceBalances(): SourceBalances {
       cashBoxBalanceByIdCurrency,
       merchantBalance,
     };
-  }, [cashBoxes, paymentSplits, agentTxns, cTxns, usdRows, collections]);
+  }, [cashBoxes, paymentSplits, cashBoxesLoading, paymentSplitsLoading, agentTxns, cTxns, usdRows, collections]);
 }
 
 
