@@ -35,14 +35,32 @@ function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+async function tryNativeShare(file: File): Promise<boolean> {
+  const nav: any = typeof navigator !== "undefined" ? navigator : null;
+  if (!nav || typeof nav.share !== "function" || typeof nav.canShare !== "function") return false;
+  try {
+    if (!nav.canShare({ files: [file] })) return false;
+    await nav.share({ files: [file] });
+    return true;
+  } catch (e: any) {
+    if (e?.name === "AbortError") return true; // user cancelled — don't fall back
+    return false;
+  }
+}
+
 async function shareExcel(data: StatementExportData, phone: string | null, message: string) {
-  // 1) Open WhatsApp FIRST (same user gesture)
-  window.open(buildWhatsappUrl(phone, message), "_blank");
-  // 2) Then build + download the file
+  // 1) Open WhatsApp FIRST (same user gesture) as a fallback anchor.
+  const waWin = window.open(buildWhatsappUrl(phone, message), "_blank");
   try {
     const built = await buildStatementExcelBlob(data);
     const fileName = `${built.fileName}.xlsx`;
     const typedBlob = new Blob([built.blob], { type: MIME_XLSX });
+    const file = new File([typedBlob], fileName, { type: MIME_XLSX });
+
+    if (await tryNativeShare(file)) {
+      if (waWin && !waWin.closed) waWin.close();
+      return;
+    }
     downloadBlob(typedBlob, fileName);
     toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
   } catch (e) {
@@ -51,12 +69,17 @@ async function shareExcel(data: StatementExportData, phone: string | null, messa
 }
 
 async function sharePdf(data: StatementExportData, phone: string | null, message: string) {
-  // Mirrors shareExcel exactly — only MIME type and extension differ.
-  window.open(buildWhatsappUrl(phone, message), "_blank");
+  const waWin = window.open(buildWhatsappUrl(phone, message), "_blank");
   try {
     const built = await buildStatementPdfBlob(data);
     const fileName = `${built.fileName}.pdf`;
     const typedBlob = new Blob([built.blob], { type: MIME_PDF });
+    const file = new File([typedBlob], fileName, { type: MIME_PDF });
+
+    if (await tryNativeShare(file)) {
+      if (waWin && !waWin.closed) waWin.close();
+      return;
+    }
     downloadBlob(typedBlob, fileName);
     toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
   } catch (e) {
