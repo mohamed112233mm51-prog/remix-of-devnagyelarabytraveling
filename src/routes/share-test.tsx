@@ -131,6 +131,7 @@ function ShareTestPage() {
         <button type="button" onClick={testPng}   style={{ ...btn, background: "#0F1B3D" }}>اختبار مشاركة صورة PNG</button>
         <button type="button" onClick={testPdf}   style={{ ...btn, background: "#a63737" }}>اختبار مشاركة PDF</button>
         <button type="button" onClick={testText}  style={{ ...btn, background: "#6b7280" }}>اختبار مشاركة نص TXT</button>
+        <button type="button" onClick={testShare} style={{ ...btn, background: "#C9A84C", color: "#1F1A0A" }}>canShare snapshot</button>
       </div>
       <pre style={{ marginTop: 20, padding: 14, background: "#0F1B3D", color: "#E6F0FF", borderRadius: 8, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13, lineHeight: 1.6, direction: "ltr", textAlign: "left", minHeight: 160 }}>
         {log.length ? log.join("\n") : "اضغط زر لبدء الاختبار…"}
