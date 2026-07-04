@@ -458,9 +458,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   }), [rowsWithMethodLabel, safeFilters]);
 
   const buildData = () => ({
-    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""}`,
+    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
     subtitle: company ? company.company_name : "كل الشركات",
-    fileName: buildArabicFileName("كشف حساب الشركة", company?.company_name),
+    fileName: buildArabicFileName("كشف حساب الشركة", company?.company_name, currencyFilter),
     summary: [
       ...byCurrency.flatMap((b) => [
         { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
