@@ -14,6 +14,11 @@ export function normalizeWhatsappPhone(raw?: string | null): string | null {
   return d;
 }
 
+function buildWhatsappUrl(phone?: string | null, text?: string) {
+  const base = phone ? `https://wa.me/${phone}` : "https://wa.me/";
+  return text ? `${base}?text=${encodeURIComponent(text)}` : base;
+}
+
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -25,65 +30,43 @@ function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function openWhatsapp(phone?: string | null, text?: string) {
-  const base = phone ? `https://wa.me/${phone}` : "https://wa.me/";
-  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
-  window.location.href = `${base}${qs}`;
-}
-
 /**
- * Try native share first (canShare is unreliable for some MIME types).
- * On any failure: download the file, wait 1s so it lands in Downloads,
- * then open the installed WhatsApp app via the whatsapp:// scheme.
+ * Called synchronously from the click handler — opens WhatsApp in a new tab
+ * FIRST so the browser accepts it as a user-gesture-driven popup. Then does
+ * the async export work and downloads the file so it's ready in Downloads.
  */
-async function shareOrFallback(file: File, blob: Blob, fileName: string, phone: string | null, message: string) {
-  const nav: any = typeof navigator !== "undefined" ? navigator : null;
-  if (nav && typeof nav.share === "function") {
-    try {
-      await nav.share({ files: [file] });
-      return;
-    } catch (e: any) {
-      if (e?.name === "AbortError") return; // user cancelled — don't fall back
-    }
-  }
-  downloadBlob(blob, fileName);
-  toast.message("تم تنزيل الملف. سيتم فتح واتساب لإرفاقه يدوياً في المحادثة.");
-  setTimeout(() => openWhatsapp(phone, message), 2000);
-  return;
-}
-
-
 export async function shareStatementViaWhatsApp(opts: {
   kind: "pdf" | "excel";
   data: StatementExportData;
   phone?: string | null;
 }): Promise<void> {
   const phone = normalizeWhatsappPhone(opts.phone);
-  const baseName = opts.data.fileName || opts.data.title;
   const message = `مرفق ${opts.data.title}`;
 
+  // 1) MUST be the first line — open WhatsApp inside the click gesture,
+  //    before any await/setTimeout, or mobile browsers block the popup.
+  const waWin = window.open(buildWhatsappUrl(phone, message), "_blank");
+
+  // 2) Now do the async export + download.
   if (opts.kind === "excel") {
-    let blob: Blob;
-    let baseFileName: string;
     try {
       const built = await buildStatementExcelBlob(opts.data);
-      blob = built.blob;
-      baseFileName = built.fileName;
+      const fileName = `${built.fileName}.xlsx`;
+      const typedBlob = new Blob([built.blob], { type: MIME_XLSX });
+      downloadBlob(typedBlob, fileName);
+      toast.message("تم تنزيل الملف. أرفقه في محادثة واتساب.");
     } catch (e) {
-      toast.error("تعذر تجهيز ملف Excel للمشاركة: " + (e as Error).message);
-      return;
+      toast.error("تعذر تجهيز ملف Excel: " + (e as Error).message);
     }
-    const fileName = `${baseFileName}.xlsx`;
-    const typedBlob = new Blob([blob], { type: MIME_XLSX });
-    const file = new File([typedBlob], fileName, { type: MIME_XLSX });
-    await shareOrFallback(file, typedBlob, fileName, phone, message);
     return;
   }
 
-  // PDF export uses a print window (no Blob available). Keep that pipeline
-  // and open WhatsApp alongside so user can attach the saved PDF manually.
-  await exportStatementToPDF(opts.data);
-  toast.message("تم فتح نافذة PDF. احفظ الملف ثم أرفقه في محادثة واتساب.");
-  setTimeout(() => openWhatsapp(phone, message), 2000);
-  void baseName;
+  // PDF path — existing exporter opens a print window (no Blob). Keep it.
+  try {
+    await exportStatementToPDF(opts.data);
+    toast.message("احفظ ملف PDF ثم أرفقه في محادثة واتساب.");
+  } catch (e) {
+    toast.error("تعذر تصدير PDF: " + (e as Error).message);
+    if (waWin && !waWin.closed) waWin.close();
+  }
 }
