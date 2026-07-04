@@ -564,18 +564,24 @@ function ExecutionForm({
   const agentCurrencies = Array.from(new Set(agentServices.map(({ s }) => ((s as any).currency || "EGP")).filter(Boolean)));
   const companyCurrency = companyCurrencies.length === 1 ? companyCurrencies[0] : null;
   const agentCurrency = agentCurrencies.length === 1 ? agentCurrencies[0] : null;
-  // Per-currency profit: never sum across currencies.
+  // Per-currency totals & profit: never sum across currencies.
+  const companyTotalByCurrency: Record<string, number> = {};
+  const agentTotalByCurrency: Record<string, number> = {};
   const profitByCurrency: Record<string, number> = {};
   for (const { s } of companyServices) {
     const cur = ((s as any).currency || "EGP") as string;
     const cnt = Number(s.count) || 1;
     const cv = Number(s.company_value) || 0;
     const cp = Number(s.company_price) || 0;
-    profitByCurrency[cur] = (profitByCurrency[cur] || 0) - (cv > 0 ? cv : cp * cnt);
+    const amt = cv > 0 ? cv : cp * cnt;
+    companyTotalByCurrency[cur] = (companyTotalByCurrency[cur] || 0) + amt;
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) - amt;
   }
   for (const { s } of agentServices) {
     const cur = ((s as any).currency || "EGP") as string;
-    profitByCurrency[cur] = (profitByCurrency[cur] || 0) + ((Number(s.agent_price) || 0) * (Number(s.count) || 1));
+    const amt = (Number(s.agent_price) || 0) * (Number(s.count) || 1);
+    agentTotalByCurrency[cur] = (agentTotalByCurrency[cur] || 0) + amt;
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) + amt;
   }
   const profitCurrencies = Object.keys(profitByCurrency);
   const singleProfitCurrency = profitCurrencies.length === 1 ? profitCurrencies[0] : null;
