@@ -253,45 +253,96 @@ function deriveFlow(tableName: string, ctx: Record<string, any>, lk: Lookups, au
   let method: string | null = derivePaymentMethod(ctx);
   const isPayIn = ["دفعة", "in", "buy", "شراء"].includes(String(ctx.tx_type || ctx.type || ""));
 
+  const svc = String(ctx.service_type || "");
+  const src = String(ctx.source_service_type || "");
+  const stmt = String(ctx.statement || "");
+  const hay = `${svc} ${src} ${stmt}`;
+  const isCashOutToAgent =
+    src === "merchant_cash_out_to_agent" ||
+    /صرف\s*نقدية\s*لوكيل|صرف\s*لوكيل|دفع\s*لوكيل/.test(hay);
+  const isCashOutToMerchant = /صرف\s*نقدية\s*لتاجر|صرف\s*لتاجر\s*الكاش/.test(hay);
+  const isAgentPayment =
+    src === "payment" ||
+    /دفعة\s*من\s*الوكيل|استلام\s*من\s*الوكيل|تحصيل\s*من\s*الوكيل/.test(hay);
+  const isCompanyPayment =
+    /دفع\s*لشركة|صادر\s*لشركة|سداد\s*لشركة/.test(hay) || src === "merchant_cash_out_to_company";
+  const isMerchantCollection = /استلام\s*من\s*تاجر|تحصيل\s*من\s*تاجر/.test(hay);
+
   switch (tableName) {
     case "transactions":
-      from = agent;
-      to = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      // Determine direction from OPERATION TYPE, never from amount sign.
+      if (isCashOutToAgent) {
+        from = cashBox || COMPANY_TREASURY_LABEL;
+        to = agent || "الوكيل";
+      } else {
+        // Default agent-side flow: money coming FROM agent INTO company treasury
+        // (ticket sale posting, payment received, opening balance, etc.)
+        from = agent;
+        to = cashBox || COMPANY_TREASURY_LABEL;
+      }
       break;
     case "company_transactions":
-      from = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      // Company transactions represent money paid TO the issuing company.
+      from = merchant ? `تاجر الكاش ${merchant}` : (cashBox || COMPANY_TREASURY_LABEL);
       to = company;
       break;
     case "merchant_cash_collections":
+      // Explicit collection: merchant → company treasury
       from = merchant ? `تاجر الكاش ${merchant}` : null;
-      to = COMPANY_TREASURY_LABEL;
+      to = cashBox || COMPANY_TREASURY_LABEL;
       if (!method) method = "نقدي";
       break;
     case "currency_supplier_transactions": {
-      const buying = String(ctx.tx_type || "").includes("buy") || Number(ctx.bought_amount) > 0;
-      if (buying) { from = COMPANY_TREASURY_LABEL; to = supplier; }
-      else { from = supplier; to = COMPANY_TREASURY_LABEL; }
+      // buy → company pays supplier; sell → supplier pays company
+      const type = String(ctx.tx_type || "");
+      const buying = type.includes("buy") || /شراء/.test(hay);
+      const selling = type.includes("sell") || /بيع/.test(hay);
+      if (buying) { from = cashBox || COMPANY_TREASURY_LABEL; to = supplier; }
+      else if (selling) { from = supplier; to = cashBox || COMPANY_TREASURY_LABEL; }
+      else { from = cashBox || COMPANY_TREASURY_LABEL; to = supplier; }
       break;
     }
     case "usd_treasury_transactions":
+      // Explicit from/to boxes when present (transfers between treasuries).
       from = fromBox || cashBox || COMPANY_TREASURY_LABEL;
       to = toBox || company || (merchant ? `تاجر الكاش ${merchant}` : null) || COMPANY_TREASURY_LABEL;
       break;
     case "expense_deductions":
-      from = merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL;
+      from = cashBox || (merchant ? `تاجر الكاش ${merchant}` : COMPANY_TREASURY_LABEL);
       to = "مصروف";
       break;
     case "payment_splits": {
+      // `direction` on payment_splits is the movement direction, authoritative.
       const outflow = String(ctx.direction || "in") === "out";
       const box = cashBox || COMPANY_TREASURY_LABEL;
-      from = outflow ? box : null;
-      to = outflow ? null : box;
+      const counterparty =
+        agent || (merchant ? `تاجر الكاش ${merchant}` : null) || supplier || company;
+      if (outflow) { from = box; to = counterparty; }
+      else { from = counterparty; to = box; }
       break;
     }
     default:
       from = agent || merchant || supplier || cashBox;
       to = company || cashBox;
   }
+
+  // Cross-case operation-type overrides (e.g. keyword-only signals).
+  if (isAgentPayment && tableName === "transactions") {
+    from = agent; to = cashBox || COMPANY_TREASURY_LABEL;
+  }
+  if (isMerchantCollection) {
+    from = merchant ? `تاجر الكاش ${merchant}` : from;
+    to = cashBox || COMPANY_TREASURY_LABEL;
+  }
+  if (isCashOutToMerchant) {
+    from = cashBox || COMPANY_TREASURY_LABEL;
+    to = merchant ? `تاجر الكاش ${merchant}` : to;
+  }
+  if (isCompanyPayment && tableName === "company_transactions") {
+    from = merchant ? `تاجر الكاش ${merchant}` : (cashBox || COMPANY_TREASURY_LABEL);
+    to = company;
+  }
+
 
   // Fallbacks — never leave everything empty when we do have entities.
   if (!from && !to) {
