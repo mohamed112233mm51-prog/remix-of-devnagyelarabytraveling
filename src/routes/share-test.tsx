@@ -100,6 +100,21 @@ function ShareTestPage() {
     await runShare(new File([blob], "test.txt", { type: "text/plain" }));
   };
 
+  const testShare = async () => {
+    const nav: any = navigator;
+    const blob = new Blob(["test"], { type: "application/pdf" });
+    const file = new File([blob], "test.pdf", { type: "application/pdf" });
+    const result: Record<string, unknown> = {
+      hasShare: typeof nav.share === "function",
+      hasCanShare: typeof nav.canShare === "function",
+    };
+    try { result.canShareFiles = nav.canShare({ files: [file] }); }
+    catch (e: any) { result.canShareFiles = `threw: ${e?.message || e}`; }
+    try { result.canShareText = nav.canShare({ text: "test" }); }
+    catch (e: any) { result.canShareText = `threw: ${e?.message || e}`; }
+    alert(JSON.stringify(result, null, 2));
+  };
+
   const btn: React.CSSProperties = {
     padding: "12px 16px", color: "#fff", border: "none", borderRadius: 8,
     fontSize: 15, fontWeight: 700, cursor: "pointer",
@@ -116,6 +131,7 @@ function ShareTestPage() {
         <button type="button" onClick={testPng}   style={{ ...btn, background: "#0F1B3D" }}>اختبار مشاركة صورة PNG</button>
         <button type="button" onClick={testPdf}   style={{ ...btn, background: "#a63737" }}>اختبار مشاركة PDF</button>
         <button type="button" onClick={testText}  style={{ ...btn, background: "#6b7280" }}>اختبار مشاركة نص TXT</button>
+        <button type="button" onClick={testShare} style={{ ...btn, background: "#C9A84C", color: "#1F1A0A" }}>canShare snapshot</button>
       </div>
       <pre style={{ marginTop: 20, padding: 14, background: "#0F1B3D", color: "#E6F0FF", borderRadius: 8, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13, lineHeight: 1.6, direction: "ltr", textAlign: "left", minHeight: 160 }}>
         {log.length ? log.join("\n") : "اضغط زر لبدء الاختبار…"}
