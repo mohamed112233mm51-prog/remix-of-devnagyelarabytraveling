@@ -441,7 +441,14 @@ function DraftEditor(props: {
           <div className="form-group"><label>نوع المسافر</label>
             <SearchableSelect value={draft.passenger_type || ""} onChange={(v) => upd({ passenger_type: v || null })} options={["", ...props.passengers] as string[]} />
           </div>
-          <div className="form-group"><label>سعر الشركة</label>
+          <div className="form-group"><label>العملة *</label>
+            <select value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })}>
+              {PRICING_CURRENCIES.map((c) => (
+                <option key={c} value={c}>{CURRENCY_LABEL[c] || c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group"><label>سعر الشركة ({currencyShortLabel(draft.currency)})</label>
             <NumberInput value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} />
           </div>
           <div className="form-group"><label>نوع العمولة</label>
@@ -450,11 +457,11 @@ function DraftEditor(props: {
               <option value="fixed">مبلغ ثابت</option>
             </select>
           </div>
-          <div className="form-group"><label>{draft.commission_type === "fixed" ? "قيمة الربح" : "نسبة الربح %"}</label>
+          <div className="form-group"><label>{draft.commission_type === "fixed" ? `قيمة الربح (${currencyShortLabel(draft.currency)})` : "نسبة الربح %"}</label>
             <NumberInput value={Number(draft.commission_value) || 0} onChange={(n) => upd({ commission_value: n })} min={0} />
           </div>
           <div className="form-group"><label>سعر الوكيل (محسوب)</label>
-            <input value={agentPrice} disabled readOnly style={{ background: "var(--card)", fontWeight: 700 }} />
+            <input value={`${agentPrice} ${currencyShortLabel(draft.currency)}`} disabled readOnly style={{ background: "var(--card)", fontWeight: 700 }} />
           </div>
         </div>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
