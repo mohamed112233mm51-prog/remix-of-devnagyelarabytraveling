@@ -587,6 +587,15 @@ function ExecutionForm({
   const singleProfitCurrency = profitCurrencies.length === 1 ? profitCurrencies[0] : null;
   const profit = singleProfitCurrency ? profitByCurrency[singleProfitCurrency] : 0;
   const profitCurrency = singleProfitCurrency;
+  // Fixed display order for currencies across all cards.
+  const CURRENCY_ORDER = ["EGP", "USD", "LYD"];
+  const sortCurrencies = (curs: string[]) => {
+    const rank = (c: string) => {
+      const i = CURRENCY_ORDER.indexOf(c);
+      return i === -1 ? CURRENCY_ORDER.length : i;
+    };
+    return [...curs].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  };
 
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
@@ -936,7 +945,7 @@ function ExecutionForm({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {Object.keys(companyTotalByCurrency).map((cur) => (
+              {sortCurrencies(Object.keys(companyTotalByCurrency)).map((cur) => (
                 <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: "#1e3a8a" }}>
                   <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
                   <span>{(companyTotalByCurrency[cur] || 0).toLocaleString("ar")}</span>
@@ -955,7 +964,7 @@ function ExecutionForm({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {Object.keys(agentTotalByCurrency).map((cur) => (
+              {sortCurrencies(Object.keys(agentTotalByCurrency)).map((cur) => (
                 <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: "#047857" }}>
                   <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
                   <span>{(agentTotalByCurrency[cur] || 0).toLocaleString("ar")}</span>
@@ -974,7 +983,7 @@ function ExecutionForm({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {profitCurrencies.map((cur) => {
+              {sortCurrencies(profitCurrencies).map((cur) => {
                 const val = profitByCurrency[cur] || 0;
                 return (
                   <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c" }}>
