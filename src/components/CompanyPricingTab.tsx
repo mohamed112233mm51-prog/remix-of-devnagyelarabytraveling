@@ -118,6 +118,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
       ...draft,
       company_price: Number(draft.company_price) || 0,
       commission_value: Number(draft.commission_value) || 0,
+      currency: (draft.currency || "EGP").toUpperCase(),
     };
     delete payload.id;
 
