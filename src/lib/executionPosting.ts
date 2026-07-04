@@ -130,10 +130,12 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           payment_method: "نقدي",
           total_paid: 0,
           paid: 0,
+          currency,
           note: itemNote,
           source_service_id: linkId,
           source_service_type: "execution",
         });
+
       }
       return; // لا يُسجَّل أي شيء على الشركة
     }
