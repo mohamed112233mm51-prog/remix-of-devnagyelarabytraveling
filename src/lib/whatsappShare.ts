@@ -48,6 +48,12 @@ async function shareOrFallback(file: File, blob: Blob, fileName: string, phone: 
   }
   downloadBlob(blob, fileName);
   toast.message("تم تنزيل الملف. سيتم فتح واتساب لإرفاقه يدوياً في المحادثة.");
+  setTimeout(() => openWhatsapp(phone, message), 2000);
+  return;
+}
+
+async function _unused_delayShim() {
+  toast.message("تم تنزيل الملف. سيتم فتح واتساب لإرفاقه يدوياً في المحادثة.");
   setTimeout(() => openWhatsapp(phone, message), 1000);
 }
 
