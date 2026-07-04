@@ -871,9 +871,10 @@ function ExecutionForm({
                             passenger_type: form.passenger_type || null,
                           });
                           if (res.agentPrice == null) return toast.error(res.reason || "لا يوجد سعر مطابق");
-                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: res.agentPrice as number } : x));
                           const cur = res.rule?.currency || "EGP";
+                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: res.agentPrice as number, currency: cur } : x));
                           toast.success(`تم جلب السعر: ${(res.agentPrice as number).toFixed(2)} (${cur})`);
+
                         }}
                         style={{ padding: "4px 8px", fontSize: 11 }}
                       >🔄</button>
