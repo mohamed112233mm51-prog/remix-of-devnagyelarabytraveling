@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
+import { buildArabicFileName } from "@/lib/exportStatement";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 import { Briefcase, ArrowDownCircle, ArrowUpCircle, Wallet, UserPlus, Users, Receipt, FileText, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
