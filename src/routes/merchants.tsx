@@ -15,6 +15,7 @@ import { Handshake, ArrowDownCircle, ArrowUpCircle, Banknote, Wallet, UserPlus, 
 import { MerchantCashOutForm } from "@/components/CashMovementForms";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
+import CurrencyFilter from "@/components/CurrencyFilter";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -1057,13 +1058,7 @@ function MerchantStatementTab({
                 allowClear={false}
               />
             </div>
-            <div className="form-group">
-              <label>العملة</label>
-              <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
-                <option value="">الكل</option>
-                {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
+            <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
             <div className="form-group full"><label><Search size={12} /> بحث سريع</label><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في البيان أو نوع الحركة..." /></div>
           </div>
 
