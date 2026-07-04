@@ -306,7 +306,7 @@ function CurrencySupplierStatementPage() {
       desc: r.description || "",
       balance: Number(r.balance || 0),
     })),
-    fileName: `currency-supplier-${supplier?.name || supplierId}`,
+    fileName: buildArabicFileName("كشف حساب مورد العملة", supplier?.name, currencyFilter),
   });
 
   if (loading) return <div className="section active"><div className="card"><div className="card-body"><div className="empty">جارٍ التحميل...</div></div></div></div>;
