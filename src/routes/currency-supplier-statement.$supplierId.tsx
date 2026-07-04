@@ -70,7 +70,7 @@ type Tx = {
   opening_currency?: string | null;
   created_at: string;
 };
-type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean; method_key?: string | null };
 
 // Foreign currency codes allowed — EGP is always the other side. All storage
 // uses the canonical code (EGP/USD/LYD); Arabic labels are display-only.
