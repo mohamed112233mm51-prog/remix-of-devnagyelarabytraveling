@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
+import { useInvestorsSummary, useInvestorsTotals, summarizeInvestor } from "@/lib/financialSummary";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
@@ -26,17 +27,10 @@ function InvestorsPage() {
   const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
   const [tab, setTab] = useState<Tab>("history");
 
-  const totalDeposit = useMemo(
-    () => txns.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0),
-    [txns],
-  );
-  const totalWithdraw = useMemo(
-    () => txns.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0),
-    [txns],
-  );
-  const balance = totalDeposit - totalWithdraw;
+  const { deposit: totalDeposit, withdraw: totalWithdraw, balance } = useInvestorsTotals();
 
   const investorName = (id: string) => investors.find((i) => i.id === id)?.investor_name || "—";
+
 
   return (
     <div className="section active fin-page accounts-page">
@@ -262,9 +256,11 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
     (!from || t.date >= from) &&
     (!to || t.date <= to)
   );
-  const totalDeposit = filtered.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalWithdraw = filtered.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-  const balance = totalDeposit - totalWithdraw;
+  const { deposit: totalDeposit, withdraw: totalWithdraw, balance } = useMemo(
+    () => summarizeInvestor(filtered),
+    [filtered],
+  );
+
 
   const buildData = () => ({
     title: `كشف حساب المستثمر${investor?.investor_name ? ` — ${investor.investor_name}` : ""}`,
@@ -366,18 +362,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
   );
 }
 
-function InvestorsListTab({ investors, txns }: { investors: Investor[]; txns: InvestorTransaction[] }) {
+function InvestorsListTab({ investors, txns: _txns }: { investors: Investor[]; txns: InvestorTransaction[] }) {
   const [edit, setEdit] = useState<Investor | null>(null);
-  const totals = useMemo(() => {
-    const map = new Map<string, { dep: number; wd: number }>();
-    for (const t of txns) {
-      const v = map.get(t.investor_id) || { dep: 0, wd: 0 };
-      if (t.transaction_type === "توريد نقدية") v.dep += Number(t.amount || 0);
-      else if (t.transaction_type === "صرف نقدية") v.wd += Number(t.amount || 0);
-      map.set(t.investor_id, v);
-    }
-    return map;
-  }, [txns]);
+  const totals = useInvestorsSummary();
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">🧑‍💼 قائمة المستثمرين</div></div>
@@ -389,21 +377,22 @@ function InvestorsListTab({ investors, txns }: { investors: Investor[]; txns: In
               {investors.length === 0 ? (
                 <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🧑‍💼</div><div className="empty-text">لا يوجد مستثمرين</div></div></td></tr>
               ) : investors.map((inv, i) => {
-                const t = totals.get(inv.id) || { dep: 0, wd: 0 };
-                const bal = t.dep - t.wd;
+                const t = totals.get(inv.id) || { deposit: 0, withdraw: 0, balance: 0, count: 0 };
+                const bal = t.balance;
                 return (
                   <tr key={inv.id}>
                     <td data-label="#">{i + 1}</td>
                     <td className="bold" data-label="اسم المستثمر">{inv.investor_name}</td>
                     <td data-label="الهاتف">{inv.phone || "—"}</td>
                     <td data-label="الواتساب">{inv.whatsapp || "—"}</td>
-                    <td className="num-col" data-label="إجمالي التوريد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.dep)}</td>
-                    <td className="num-col" data-label="إجمالي الصرف" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.wd)}</td>
+                    <td className="num-col" data-label="إجمالي التوريد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.deposit)}</td>
+                    <td className="num-col" data-label="إجمالي الصرف" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.withdraw)}</td>
                     <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
                     <td data-label="إجراءات"><button className="action-btn" onClick={() => setEdit(inv)}>✏️ تعديل</button></td>
                   </tr>
                 );
               })}
+
             </tbody>
           </table>
         </div>
