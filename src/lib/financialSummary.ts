@@ -844,3 +844,104 @@ export function formatCurrencyAmount(amount: number, currency: Currency): string
 export function formatCurrencyLines(map: CurrencyMap): string[] {
   return map.entries().map(({ currency, amount }) => formatCurrencyAmount(amount, currency));
 }
+
+/* ============================================================
+ *  Treasury (cash_boxes + latest exchange rates)
+ *  مصدر واحد للحساب المستخدم في Dashboard و Reports.
+ * ============================================================ */
+
+export type CashBoxLike = {
+  currency: string;
+  balance: number | string | null;
+  is_active?: boolean;
+};
+
+export type RateTx = {
+  id?: string | null;
+  tx_type?: string | null;
+  bought_currency?: string | null;
+  exchange_rate?: number | string | null;
+  tx_date?: string | null;
+  created_at?: string | null;
+  supplier_id?: string | null;
+};
+
+/** أسماء العملات كما تُخزَّن في حركات مورد العملة (aliases → code). */
+const RATE_CURRENCY_ALIASES: Record<string, string[]> = {
+  USD: ["دولار", "دولار أمريكي", "USD", "$"],
+  LYD: ["دينار ليبي", "دينار", "LYD"],
+};
+
+/** مجموع أرصدة الخزائن النشطة لكل عملة. */
+export function sumCashBoxesByCurrency(boxes: CashBoxLike[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const b of boxes) {
+    if (b.is_active === false) continue;
+    const cur = (b.currency || "").toString().trim().toUpperCase() || EGP_CODE_;
+    out[cur] = (out[cur] || 0) + (Number(b.balance) || 0);
+  }
+  return out;
+}
+
+export type LatestRateInfo = {
+  rate: number;
+  date: string | null;
+  id: string | null;
+  txType: string | null;
+  supplierId: string | null;
+};
+
+/** آخر سعر صرف مسجَّل لعملية شراء عملة معيَّنة (بالكود مثل USD/LYD). */
+export function latestPurchaseRate(txns: RateTx[], code: string): LatestRateInfo {
+  const aliases = RATE_CURRENCY_ALIASES[code] || [code];
+  const rows = (txns || [])
+    .filter((t) => {
+      const bc = (t.bought_currency || "").toString().trim();
+      const isPurchase = (t.tx_type || "").toString().trim() === "شراء عملة";
+      return isPurchase && aliases.some((a) => bc === a) && Number(t.exchange_rate || 0) > 0;
+    })
+    .sort((a, b) =>
+      new Date(b.tx_date || b.created_at || "").getTime() -
+      new Date(a.tx_date || a.created_at || "").getTime(),
+    );
+  const row = rows[0];
+  return {
+    rate: row ? Number(row.exchange_rate || 0) : 0,
+    date: row?.tx_date || null,
+    id: row?.id || null,
+    txType: row?.tx_type || null,
+    supplierId: row?.supplier_id || null,
+  };
+}
+
+export type TreasurySummary = {
+  egp: number;
+  usd: number;
+  lyd: number;
+  byCurrency: Record<string, number>;
+  usdRate: number;
+  lydRate: number;
+  totalEgp: number;
+  usdInfo: LatestRateInfo;
+  lydInfo: LatestRateInfo;
+};
+
+/**
+ * ملخص الخزائن: أرصدة كل عملة + آخر أسعار شراء + الإجمالي بالجنيه.
+ * تُستخدم في Dashboard وتقرير الخزائن — لا يُكرَّر المنطق في أي مكان آخر.
+ */
+export function computeTreasurySummary(
+  boxes: CashBoxLike[],
+  currencyTxns: RateTx[],
+): TreasurySummary {
+  const byCurrency = sumCashBoxesByCurrency(boxes);
+  const egp = byCurrency[EGP_CODE_] || 0;
+  const usd = byCurrency.USD || 0;
+  const lyd = byCurrency.LYD || 0;
+  const usdInfo = latestPurchaseRate(currencyTxns, "USD");
+  const lydInfo = latestPurchaseRate(currencyTxns, "LYD");
+  const usdRate = usdInfo.rate;
+  const lydRate = lydInfo.rate;
+  const totalEgp = egp + usd * usdRate + lyd * lydRate;
+  return { egp, usd, lyd, byCurrency, usdRate, lydRate, totalEgp, usdInfo, lydInfo };
+}
