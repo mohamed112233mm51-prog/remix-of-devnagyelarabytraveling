@@ -822,12 +822,8 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
     const inc = txns.filter((t) => t.merchant_id === m.id && inRange(t.date));
     const out = cTxns.filter((t) => t.merchant_id === m.id && inRange(t.date));
     const col = collections.filter((c) => c.merchant_id === m.id && inRange(c.date));
-    const incomingNet = inc.reduce((s, t) => s + merchantCashNet(t), 0);
-    const incomingGross = inc.reduce((s, t) => s + merchantCashGross(t), 0);
-    const outgoing = out.reduce((s, t) => s + Number(t.merchant_cash_amount || 0), 0);
-    const collected = col.reduce((s, c) => s + Number(c.amount || 0), 0);
-    const fee = incomingGross - incomingNet;
-    return { name: m.merchant_name, incoming: incomingNet, outgoing, collected, fee, balance: incomingNet - outgoing - collected };
+    const s = summarizeMerchantMovements({ incomingTxns: inc, outgoingCTxns: out, collections: col });
+    return { name: m.merchant_name, incoming: s.incoming, outgoing: s.outgoing, collected: s.collected, fee: s.fee, balance: s.balance };
   }), [merchants, txns, cTxns, collections, inRange]);
 
   const flow = data.map((d) => ({ name: d.name, "وارد": d.incoming, "صادر": d.outgoing }));
