@@ -298,43 +298,11 @@ function Dashboard() {
 
 
   // Treasury balances (per currency from cash_boxes) + latest exchange rates
-  const treasury = useMemo(() => {
-    const sumBy = (code: string) =>
-      cashBoxes.filter((b) => b.currency === code && b.is_active !== false).reduce((s, b) => s + Number(b.balance || 0), 0);
-    const egp = sumBy("EGP");
-    const usd = sumBy("USD");
-    const lyd = sumBy("LYD");
-    // Map cash-box currency code -> Arabic name used in currency_supplier_transactions
-    const nameAliases: Record<string, string[]> = {
-      USD: ["دولار", "دولار أمريكي", "USD", "$"],
-      LYD: ["دينار ليبي", "دينار", "LYD"],
-    };
-    // Read latest purchase rate per currency (tx_type = 'شراء عملة', bought_currency matches alias)
-    const latestRateInfo = (code: string) => {
-      const aliases = nameAliases[code] || [code];
-      const rows = (currencyTxns || [])
-        .filter((t) => {
-          const bc = (t.bought_currency || "").trim();
-          const isPurchase = (t.tx_type || "").trim() === "شراء عملة";
-          const matches = aliases.some((a) => bc === a);
-          return isPurchase && matches && Number(t.exchange_rate || 0) > 0;
-        })
-        .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
-      const row = rows[0];
-      return {
-        rate: row ? Number(row.exchange_rate || 0) : 0,
-        date: row?.tx_date || null,
-        id: row?.id || null,
-        field: "exchange_rate",
-      };
-    };
-    const usdInfo = latestRateInfo("USD");
-    const lydInfo = latestRateInfo("LYD");
-    const usdRate = usdInfo.rate;
-    const lydRate = lydInfo.rate;
-    const totalEgp = egp + usd * usdRate + lyd * lydRate;
-    return { egp, usd, lyd, usdRate, lydRate, totalEgp, usdInfo, lydInfo };
-  }, [cashBoxes, currencyTxns]);
+  // — كل الحساب من المحرك الموحد في src/lib/financialSummary.ts.
+  const treasury = useMemo(
+    () => computeTreasurySummary(cashBoxes, currencyTxns as any),
+    [cashBoxes, currencyTxns],
+  );
 
   // ===== Period-based aggregates — single pass per range =====
   const computeAgg = (range: { start: Date; end: Date }) => {
