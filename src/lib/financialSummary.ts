@@ -129,20 +129,17 @@ function companyTxnCurrency(t: Partial<CompanyTransaction>): Currency {
 }
 
 /**
- * تحويل صف transactions إلى (بيع، مدفوع) بنفس الحساب المستخدم في
- * الشاشات الحالية (السعر × العدد للبيع، total_paid|paid للمدفوع).
+ * تحويل صف transactions إلى (بيع، مدفوع) — نستخدم نفس الدوال المشتركة
+ * (`tripValue` و `txnTotalPaid` من `@/lib/db`) لضمان تطابق الأرقام مع
+ * جميع الشاشات القديمة (accounts / reports / dashboard).
  */
 function txnSaleAndPaid(t: Partial<Transaction>): { sale: number; paid: number } {
-  const count = Number(t.count || 0);
-  const price = Number(t.price || 0);
-  const paid = Number(t.total_paid ?? t.paid ?? 0);
-  // إشارة paid في transactions قد تكون سالبة (صرف) أو موجبة (قبض) —
-  // نعتمد على القيمة المطلقة عند التعبير عن "المدفوع".
   return {
-    sale: count * price,
-    paid: Math.abs(paid),
+    sale: tripValue(t as any),
+    paid: txnTotalPaid(t),
   };
 }
+
 
 /* ============================================================
  *  AGENTS — ملخص الوكلاء
