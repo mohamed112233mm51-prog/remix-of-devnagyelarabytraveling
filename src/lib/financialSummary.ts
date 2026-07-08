@@ -945,3 +945,58 @@ export function computeTreasurySummary(
   const totalEgp = egp + usd * usdRate + lyd * lydRate;
   return { egp, usd, lyd, byCurrency, usdRate, lydRate, totalEgp, usdInfo, lydInfo };
 }
+
+/* ============================================================
+ *  Ledger helpers — عناصر مشتركة بين كشف الوكيل وكشف الشركة.
+ * ============================================================ */
+
+type SplitCurrencyRow = {
+  source_table: string | null;
+  source_id: string | null;
+  transaction_id?: string | null;
+  currency: string | null;
+};
+
+/**
+ * يبني خريطة txn.id → currency من `payment_splits`، فقط عندما تكون كل
+ * الـ splits لنفس الحركة بعملة واحدة (وإلا نتجنّب افتراض عملة خاطئة).
+ * تُستخدم في كشوف الوكلاء والشركات لتحديد عملة كل صف.
+ */
+export function resolveSplitCurrencyByRef(
+  splits: readonly SplitCurrencyRow[] | null | undefined,
+  sourceTable: string,
+): Map<string, string> {
+  const buckets = new Map<string, Set<string>>();
+  for (const s of splits || []) {
+    if (s.source_table !== sourceTable) continue;
+    const id = s.source_id || s.transaction_id;
+    if (!id || !s.currency) continue;
+    const set = buckets.get(id) || new Set<string>();
+    set.add(s.currency);
+    buckets.set(id, set);
+  }
+  const result = new Map<string, string>();
+  buckets.forEach((set, id) => {
+    if (set.size === 1) result.set(id, Array.from(set)[0]);
+  });
+  return result;
+}
+
+/**
+ * وسم وسيلة الدفع لصف حركة (وكيل أو شركة) بناءً على المبالغ الفعلية.
+ * يجمع الوسائل المستخدمة بالفعل بفاصل " + "، أو "—" إن لم توجد أي دفعة.
+ */
+export function paymentMethodLabel(t: {
+  instapay_amount?: number | string | null;
+  cash_amount?: number | string | null;
+  merchant_cash_amount?: number | string | null;
+  merchant_cash_physical_amount?: number | string | null;
+  payment_method?: string | null;
+}): string {
+  const parts: string[] = [];
+  if (Number(t.instapay_amount || 0) > 0) parts.push("إنستاباي");
+  if (Number(t.cash_amount || 0) > 0) parts.push("نقدي");
+  if (Number(t.merchant_cash_amount || 0) > 0) parts.push("تاجر محفظة");
+  if (Number(t.merchant_cash_physical_amount || 0) > 0) parts.push("تاجر نقدي");
+  return parts.length ? parts.join(" + ") : (t.payment_method || "—");
+}
