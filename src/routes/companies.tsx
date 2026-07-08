@@ -295,14 +295,6 @@ type CompanyLedgerEntry = {
   paymentMethod: string; note: string; currency: string; raw: CompanyTransaction;
 };
 
-function companyPaymentMethodLabel(t: CompanyTransaction): string {
-  const parts: string[] = [];
-  if (Number(t.instapay_amount || 0) > 0) parts.push("إنستاباي");
-  if (Number(t.cash_amount || 0) > 0) parts.push("نقدي");
-  if (Number(t.merchant_cash_amount || 0) > 0) parts.push("تاجر محفظة");
-  if (Number(t.merchant_cash_physical_amount || 0) > 0) parts.push("تاجر نقدي");
-  return parts.length ? parts.join(" + ") : "—";
-}
 
 function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: { companies: IssuingCompany[]; txns: CompanyTransaction[]; initialCompanyId: string; canExport: boolean }) {
   const safeCompanies = Array.isArray(companies) ? companies : [];
