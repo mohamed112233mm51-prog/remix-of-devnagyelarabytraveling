@@ -365,61 +365,116 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
 
 /* ============================================================
  *  CURRENCY SUPPLIERS — موردو العملات
+ * ============================================================
+ *  نموذج الرصيد (مطابق تماماً لكشف حساب المورد في الشاشة):
+ *    - شراء عملة  → EGP residual = splitsTotal - sold_amount   (سالب: نحن مدينون)
+ *    - بيع  عملة  → EGP residual = bought_amount - splitsTotal (موجب: المورد مدين)
+ *    - دفع نقدية للمورد  → +amount في عملة المدفوع
+ *    - استلام نقدية      → -amount في عملة المستلم
+ *    - رصيد سابق         → bought - sold  في opening_currency
+ *  موجب = المورد يستحق للنظام، سالب = النظام يستحق للمورد.
  * ============================================================ */
 
-type CurrencySupplierTxn = {
-  id: string;
-  supplier_id: string | null;
-  amount: number | string | null;
-  currency: string | null;
-  direction?: string | null;
-  transaction_type?: string | null;
-  created_at?: string | null;
+const EGP_CODE_ = "EGP";
+function _normCur(c: string | null | undefined): string {
+  const v = (c || "").toString().trim().toUpperCase();
+  return v || EGP_CODE_;
+}
+
+export type CurrencySupplierTx = {
+  tx_type: "شراء عملة" | "بيع عملة" | "رصيد سابق" | "دفع نقدية" | "استلام نقدية" | string;
+  bought_currency: string;
+  bought_amount: number | string | null;
+  sold_currency: string;
+  sold_amount: number | string | null;
+  opening_currency?: string | null;
+  payment_splits?: Array<{ amount?: number | string | null }> | null;
 };
 
-export function summarizeCurrencySupplier(rows: CurrencySupplierTxn[]): EntitySummary {
-  const s = empty();
-  s.count = rows.length;
-  for (const t of rows) {
-    const cur = (t.currency || "EGP").toString().toUpperCase();
-    const amt = Math.abs(Number(t.amount) || 0);
-    const dir = (t.direction || t.transaction_type || "").toString();
-    const isOut = /out|شراء|صرف|purchase/i.test(dir);
-    if (isOut) {
-      s.totalDebit.add(cur, amt);
-      s.balance.add(cur, amt);
-    } else {
-      s.totalCredit.add(cur, amt);
-      s.balance.add(cur, -amt);
-    }
+/** الدلتا الفعلية لصف واحد في كشف مورد العملة. */
+export function currencySupplierDelta(t: CurrencySupplierTx): { currency: string; delta: number } {
+  const splitsTotal = (t.payment_splits || []).reduce(
+    (s, x) => s + (Number(x?.amount) || 0), 0,
+  );
+  if (t.tx_type === "شراء عملة") {
+    const egp = Number(t.sold_amount || 0);
+    return { currency: EGP_CODE_, delta: splitsTotal - egp };
   }
-  return s;
+  if (t.tx_type === "بيع عملة") {
+    const egp = Number(t.bought_amount || 0);
+    return { currency: EGP_CODE_, delta: egp - splitsTotal };
+  }
+  if (t.tx_type === "دفع نقدية") {
+    return { currency: _normCur(t.sold_currency), delta: Number(t.sold_amount || 0) };
+  }
+  if (t.tx_type === "استلام نقدية") {
+    return { currency: _normCur(t.bought_currency), delta: -Number(t.bought_amount || 0) };
+  }
+  // رصيد سابق
+  return {
+    currency: _normCur(t.opening_currency || t.bought_currency),
+    delta: Number(t.bought_amount || 0) - Number(t.sold_amount || 0),
+  };
 }
 
-export function useCurrencySupplierSummary(
-  supplierId: string | null | undefined,
-): EntitySummary {
-  const { rows } = useLive<CurrencySupplierTxn>("currency_supplier_transactions");
-  return useMemo(() => {
-    if (!supplierId) return empty();
-    return summarizeCurrencySupplier(rows.filter((r) => r.supplier_id === supplierId));
-  }, [rows, supplierId]);
+/** إجماليات كشف مورد العملة مُجمَّعة بالعملة (تُطابق CurrencyTotalsCards). */
+export type CurrencySupplierCurrencyTotal = {
+  currency: string;
+  debit: number;
+  credit: number;
+  net: number;
+  count: number;
+};
+
+export function summarizeCurrencySupplierStatement(
+  rows: CurrencySupplierTx[],
+): CurrencySupplierCurrencyTotal[] {
+  const map = new Map<string, { debit: number; credit: number; count: number }>();
+  const bump = (cur: string, d: number, c: number) => {
+    const k = cur || EGP_CODE_;
+    const g = map.get(k) || { debit: 0, credit: 0, count: 0 };
+    g.debit += d; g.credit += c; g.count += 1;
+    map.set(k, g);
+  };
+  for (const t of rows) {
+    const { currency, delta } = currencySupplierDelta(t);
+    if (delta === 0) { bump(currency, 0, 0); continue; }
+    if (delta > 0) bump(currency, delta, 0); else bump(currency, 0, -delta);
+  }
+  return Array.from(map.entries())
+    .map(([currency, v]) => ({
+      currency,
+      debit: v.debit,
+      credit: v.credit,
+      net: v.debit - v.credit,
+      count: v.count,
+    }))
+    .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
 }
 
-export function useCurrencySuppliersSummary(): Map<string, EntitySummary> {
-  const { rows } = useLive<CurrencySupplierTxn>("currency_supplier_transactions");
-  return useMemo(() => {
-    const grouped = new Map<string, CurrencySupplierTxn[]>();
-    for (const t of rows) {
-      if (!t.supplier_id) continue;
-      let arr = grouped.get(t.supplier_id);
-      if (!arr) grouped.set(t.supplier_id, (arr = []));
-      arr.push(t);
-    }
-    const out = new Map<string, EntitySummary>();
-    for (const [id, list] of grouped) out.set(id, summarizeCurrencySupplier(list));
-    return out;
-  }, [rows]);
+/** رصيد جارٍ عبر الصفوف بترتيبها (للعمود "الرصيد" في الكشف). */
+export function attachRunningBalances<T extends CurrencySupplierTx>(
+  rows: T[],
+): Array<T & { balance: number; balanceCurrency: string }> {
+  const bals = new Map<string, number>();
+  return rows.map((t) => {
+    const { currency, delta } = currencySupplierDelta(t);
+    const next = (bals.get(currency) || 0) + delta;
+    bals.set(currency, next);
+    return { ...t, balance: next, balanceCurrency: currency };
+  });
+}
+
+/** ملخص "صافي بالعملة" — يُستخدم في التصدير. */
+export function summarizeCurrencySupplierNetByCurrency(
+  rows: CurrencySupplierTx[],
+): Array<{ currency: string; net: number }> {
+  const map = new Map<string, number>();
+  for (const t of rows) {
+    map.set(t.bought_currency, (map.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
+    map.set(t.sold_currency, (map.get(t.sold_currency) || 0) - Number(t.sold_amount || 0));
+  }
+  return Array.from(map.entries()).map(([currency, net]) => ({ currency, net }));
 }
 
 /* ============================================================
