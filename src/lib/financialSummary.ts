@@ -34,6 +34,7 @@ import {
 import type {
   Agent,
   CompanyTransaction,
+  Expense,
   IssuingCompany,
   Investor,
   InvestorTransaction,
