@@ -10,6 +10,7 @@ import {
   merchantCashNet,
   tripValue,
   txnTotalPaid,
+  txnCollectedAmount,
   useLive,
   type CompanyTransaction,
   type UsdTreasuryTransaction,
