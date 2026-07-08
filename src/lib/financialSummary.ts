@@ -24,14 +24,23 @@
  */
 
 import { useMemo } from "react";
-import { useLive, tripValue, txnTotalPaid } from "@/lib/db";
+import {
+  useLive,
+  tripValue,
+  txnTotalPaid,
+  merchantCashNet,
+  merchantCompanyOutflowAmount,
+} from "@/lib/db";
 import type {
   Agent,
   CompanyTransaction,
   IssuingCompany,
   Merchant,
+  MerchantCashCollection,
   Transaction,
+  UsdTreasuryTransaction,
 } from "@/lib/db";
+
 
 
 /* ============================================================
@@ -360,6 +369,117 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
     return out;
   }, [merchants, splits, txns, coll]);
 }
+
+/* ============================================================
+ *  MERCHANT AGGREGATES — تجميعات صفحة تجار الكاش (EGP-only)
+ * ============================================================
+ *  خمس دلاء (buckets) لكل تاجر تُطابق منطق شاشة `/merchants`:
+ *    - incoming   = الوارد من الوكلاء (net wallet + physical)
+ *    - outgoing   = الصادر للشركات (من company_transactions ومن
+ *                    transactions.source_service_type = merchant_cash_out_to_*)
+ *    - collected  = ما تم تحصيله نقداً من التاجر (merchant_cash_collections)
+ *    - paidOut    = ما صُرف نقداً للتاجر (source_service_type = merchant_cash_out)
+ *    - converted  = ما حُوّل إلى USD (usd_treasury_transactions conversion)
+ *
+ *  balance = incoming + paidOut − collected − outgoing − converted
+ *  (موجب = رصيد لدى النظام لصالح التاجر / سالب = دَين على التاجر).
+ * ============================================================ */
+
+export type MerchantAggregate = {
+  incoming: number;
+  outgoing: number;
+  collected: number;
+  paidOut: number;
+  converted: number;
+};
+
+const emptyMerchantAgg = (): MerchantAggregate => ({
+  incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0,
+});
+
+export function computeMerchantAggregates(input: {
+  txns: Transaction[];
+  companyTxns: CompanyTransaction[];
+  collections: MerchantCashCollection[];
+  usdRows: UsdTreasuryTransaction[];
+}): Map<string, MerchantAggregate> {
+  const { txns, companyTxns, collections, usdRows } = input;
+  const map = new Map<string, MerchantAggregate>();
+  const get = (id: string) => {
+    let v = map.get(id);
+    if (!v) { v = emptyMerchantAgg(); map.set(id, v); }
+    return v;
+  };
+  // Company-outflow rows already mirrored into transactions must not be double-counted.
+  const merchantCompanyOutSourceIds = new Set<string>();
+  for (const t of txns) {
+    if (t.merchant_id && t.source_service_type === "merchant_cash_out_to_company") {
+      const src = (t as any).source_service_id;
+      if (src) merchantCompanyOutSourceIds.add(src);
+    }
+  }
+  for (const t of txns) {
+    if (!t.merchant_id) continue;
+    if (t.source_service_type === "merchant_cash_out") {
+      get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
+      continue;
+    }
+    if (
+      t.source_service_type === "merchant_cash_out_to_company" ||
+      t.source_service_type === "merchant_cash_out_to_agent"
+    ) {
+      get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
+      continue;
+    }
+    get(t.merchant_id).incoming +=
+      merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+  }
+  for (const t of companyTxns) {
+    if (!(t as any).merchant_id) continue;
+    if (merchantCompanyOutSourceIds.has(t.id)) continue;
+    get((t as any).merchant_id).outgoing += merchantCompanyOutflowAmount(t);
+  }
+  for (const c of collections) {
+    get(c.merchant_id).collected += Number(c.amount || 0);
+  }
+  for (const r of usdRows) {
+    if (r.type !== "conversion" || !(r as any).merchant_id) continue;
+    const src = (r as any).source_type;
+    if (src !== "merchant_wallet" && src !== "merchant_physical") continue;
+    get((r as any).merchant_id).converted += Number((r as any).egp_amount || 0);
+  }
+  return map;
+}
+
+/** Hook حي لتجميعات كل التجار (EGP). */
+export function useMerchantAggregates(): Map<string, MerchantAggregate> {
+  const { rows: txns } = useLive<Transaction>("transactions");
+  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  return useMemo(
+    () => computeMerchantAggregates({ txns, companyTxns, collections, usdRows }),
+    [txns, companyTxns, collections, usdRows],
+  );
+}
+
+/** المجموع الكلي (كل التجار) + الرصيد الصافي — يُستخدم في كروت KPI. */
+export function useMerchantTotals(): MerchantAggregate & { balance: number } {
+  const per = useMerchantAggregates();
+  return useMemo(() => {
+    const t = emptyMerchantAgg();
+    for (const v of per.values()) {
+      t.incoming += v.incoming;
+      t.outgoing += v.outgoing;
+      t.collected += v.collected;
+      t.paidOut += v.paidOut;
+      t.converted += v.converted;
+    }
+    const balance = t.incoming + t.paidOut - t.collected - t.outgoing - t.converted;
+    return { ...t, balance };
+  }, [per]);
+}
+
 
 /* ============================================================
  *  CURRENCY SUPPLIERS — موردو العملات

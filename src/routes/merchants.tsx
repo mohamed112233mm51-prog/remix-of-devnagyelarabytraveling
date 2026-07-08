@@ -8,6 +8,8 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
+import { useMerchantAggregates, useMerchantTotals } from "@/lib/financialSummary";
+
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
@@ -64,56 +66,26 @@ function MerchantsPage() {
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "cashout" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
-  const merchantCompanyOutTxns = useMemo(
-    () => txns.filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company"),
+  // Unified financial engine — نفس النتائج السابقة، مصدر واحد للحساب.
+  const merchantTotals = useMerchantAggregates();
+  const kpi = useMerchantTotals();
+  const totalIncoming = kpi.incoming;
+  const totalOutgoing = kpi.outgoing;
+  const totalCollected = kpi.collected;
+  const totalPaidOut = kpi.paidOut;
+  const totalConverted = kpi.converted;
+  const balance = kpi.balance;
+
+  // Local helpers still needed by list/history sub-sections (filters only, not KPIs).
+  const merchantCompanyOutSourceIds = useMemo(
+    () => new Set(
+      txns
+        .filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
+        .map((t) => (t as any).source_service_id)
+        .filter(Boolean),
+    ),
     [txns],
   );
-  const merchantCompanyOutSourceIds = useMemo(
-    () => new Set(merchantCompanyOutTxns.map((t) => (t as any).source_service_id).filter(Boolean)),
-    [merchantCompanyOutTxns],
-  );
-
-  // Per-merchant rollup (incoming from agents, outgoing to companies, cash collected, conversions to USD).
-  // Includes both wallet (net after 1% commission) and physical cash, plus USD treasury conversions.
-  const merchantTotals = useMemo(() => {
-    const map = new Map<string, { incoming: number; outgoing: number; collected: number; paidOut: number; converted: number }>();
-    const get = (id: string) => {
-      let v = map.get(id);
-      if (!v) { v = { incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0 }; map.set(id, v); }
-      return v;
-    };
-    for (const t of txns) {
-      if (!t.merchant_id) continue;
-      if (t.source_service_type === "merchant_cash_out") {
-        get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
-        continue;
-      }
-      if (t.source_service_type === "merchant_cash_out_to_company") {
-        get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
-        continue;
-      }
-      if (t.source_service_type === "merchant_cash_out_to_agent") {
-        get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
-        continue;
-      }
-      get(t.merchant_id).incoming += merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-    }
-    for (const t of cTxns) {
-      if (!t.merchant_id) continue;
-      if (merchantCompanyOutSourceIds.has(t.id)) continue;
-      get(t.merchant_id).outgoing += merchantCompanyOutflowAmount(t);
-    }
-    for (const c of collections) {
-      get(c.merchant_id).collected += Number(c.amount || 0);
-    }
-    for (const r of usdRows) {
-      if (r.type !== "conversion" || !r.merchant_id) continue;
-      if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
-      get(r.merchant_id).converted += Number(r.egp_amount || 0);
-    }
-    return map;
-  }, [txns, cTxns, collections, usdRows, merchantCompanyOutSourceIds]);
-
   const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
   const outgoingTxns = useMemo(
     () => cTxns.filter((t) => merchantCompanyOutflowAmount(t) > 0),
@@ -128,17 +100,6 @@ function MerchantsPage() {
     [txns],
   );
 
-  // Headline KPIs aggregate per-merchant rollups so they always equal the sum of statements.
-  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0, totalPaidOut = 0, totalConverted = 0;
-  for (const v of merchantTotals.values()) {
-    totalIncoming += v.incoming;
-    totalOutgoing += v.outgoing;
-    totalCollected += v.collected;
-    totalPaidOut += v.paidOut;
-    totalConverted += v.converted;
-  }
-  // balance = الوارد من الوكلاء + الصرف للتاجر − التحصيل من التاجر − الصادر للشركات − التحويلات
-  const balance = totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted;
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name || "—";
   const companyName = (id: string) => companies.find((c) => c.id === id)?.company_name || "—";
