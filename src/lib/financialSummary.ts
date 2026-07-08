@@ -653,6 +653,39 @@ export function useInvestorsTotals(): InvestorSummary {
 }
 
 /* ============================================================
+ *  EXPENSES — ملخص المصروفات (EGP فقط)
+ * ============================================================
+ *  إجماليات مطابقة تماماً لكروت شاشة `/expenses`:
+ *    - total = مجموع كل المصروفات
+ *    - fixed = expense_type === "ثابت"
+ *    - variable = expense_type === "متغير"
+ * ============================================================ */
+
+export type ExpensesTotals = {
+  total: number;
+  fixed: number;
+  variable: number;
+  count: number;
+};
+
+export function summarizeExpenses(rows: Expense[]): ExpensesTotals {
+  const t: ExpensesTotals = { total: 0, fixed: 0, variable: 0, count: rows.length };
+  for (const e of rows) {
+    const amt = Number((e as any).amount || 0);
+    t.total += amt;
+    if ((e as any).expense_type === "ثابت") t.fixed += amt;
+    else if ((e as any).expense_type === "متغير") t.variable += amt;
+  }
+  return t;
+}
+
+/** Hook حي لإجماليات المصروفات. */
+export function useExpensesTotals(): ExpensesTotals {
+  const { rows } = useLive<Expense>("expenses");
+  return useMemo(() => summarizeExpenses(rows), [rows]);
+}
+
+/* ============================================================
  *  DASHBOARD — إجماليات النظام (Live، بالعملة)
  * ============================================================ */
 
