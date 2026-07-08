@@ -184,59 +184,20 @@ function CurrencySupplierStatementPage() {
   }, [txns, from, to, typeFilter, currencyFilter]);
 
 
-  const summary = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const t of filtered) {
-      map.set(t.bought_currency, (map.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
-      map.set(t.sold_currency, (map.get(t.sold_currency) || 0) - Number(t.sold_amount || 0));
-    }
-    return Array.from(map.entries()).map(([cur, net]) => ({ currency: cur, net }));
-  }, [filtered]);
+  // ============================================================
+  // جميع الحسابات المالية أدناه تعتمد على المحرك الموحد
+  // (Financial Summary Engine) في src/lib/financialSummary.ts
+  // — ممنوع تكرار المنطق الحسابي محلياً هنا.
+  // ============================================================
 
-  // ============================================================
-  // Balance model (positive = supplier owes us, negative = we owe supplier).
-  // For شراء/بيع we ONLY affect EGP by the residual (owed − paid); the
-  // foreign leg is a contra-entry and does NOT create phantom debt.
-  //   Buy  paid fully → residual 0.
-  //   Buy  paid part  → residual negative (we owe supplier the rest).
-  //   Sell paid fully → 0. Sell paid part → positive (supplier owes us).
-  // Opening balance: bought=debit, sold=credit in opening_currency.
-  // Cash payment TO supplier: +amount in paid currency (supplier now owes us).
-  // Cash collection FROM supplier: −amount (supplier owes us less).
-  // ============================================================
-  function deltaFor(t: Tx): { currency: string; delta: number } {
-    const splitsTotal = (t.payment_splits || []).reduce(
-      (s, x) => s + (Number(x?.amount) || 0), 0,
-    );
-    if (t.tx_type === "شراء عملة") {
-      const egp = Number(t.sold_amount || 0);
-      return { currency: EGP_CODE, delta: splitsTotal - egp };
-    }
-    if (t.tx_type === "بيع عملة") {
-      const egp = Number(t.bought_amount || 0);
-      return { currency: EGP_CODE, delta: egp - splitsTotal };
-    }
-    if (t.tx_type === "دفع نقدية") {
-      return {
-        currency: normalizeCurrency(t.sold_currency),
-        delta: Number(t.sold_amount || 0),
-      };
-    }
-    if (t.tx_type === "استلام نقدية") {
-      return {
-        currency: normalizeCurrency(t.bought_currency),
-        delta: -Number(t.bought_amount || 0),
-      };
-    }
-    // opening
-    const cur = normalizeCurrency(t.opening_currency || t.bought_currency);
-    return { currency: cur, delta: Number(t.bought_amount || 0) - Number(t.sold_amount || 0) };
-  }
+  const summary = useMemo(
+    () => summarizeCurrencySupplierNetByCurrency(filtered),
+    [filtered],
+  );
 
   const rowsWithBalance = useMemo(() => {
-    const bals = new Map<string, number>();
-    return filtered.map((t) => {
-      // Display fields
+    const withBal = attachRunningBalances(filtered);
+    return withBal.map((t) => {
       const isBuy = t.tx_type === "شراء عملة";
       const isSell = t.tx_type === "بيع عملة";
       const isCashOut = t.tx_type === "دفع نقدية";
@@ -261,32 +222,17 @@ function CurrencySupplierStatementPage() {
         (isBuy || isSell)
           ? (Number(t.exchange_rate || 0) || (foreignAmount > 0 ? egpAmount / foreignAmount : 0))
           : 0;
-
-      const { currency: balCur, delta } = deltaFor(t);
-      const next = (bals.get(balCur) || 0) + delta;
-      bals.set(balCur, next);
-      return { ...t, balance: next, balanceCurrency: balCur, foreignCurrency, foreignAmount, egpAmount, rate };
+      return { ...t, foreignCurrency, foreignAmount, egpAmount, rate };
     });
   }, [filtered]);
 
-  // Per-currency totals for the cards row.
-  const byCurrency = useMemo<CurrencyTotal[]>(() => {
-    const map = new Map<string, { debit: number; credit: number; count: number }>();
-    const bump = (cur: string, d: number, c: number) => {
-      const k = cur || "EGP";
-      const g = map.get(k) || { debit: 0, credit: 0, count: 0 };
-      g.debit += d; g.credit += c; g.count += 1;
-      map.set(k, g);
-    };
-    for (const t of filtered) {
-      const { currency, delta } = deltaFor(t);
-      if (delta === 0) { bump(currency, 0, 0); continue; }
-      if (delta > 0) bump(currency, delta, 0); else bump(currency, 0, -delta);
-    }
-    return Array.from(map.entries())
-      .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
-      .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
-  }, [filtered]);
+  // كروت الإجماليات لكل عملة — من المحرك الموحد مباشرة.
+  const byCurrency = useMemo<CurrencyTotal[]>(
+    () => summarizeCurrencySupplierStatement(filtered),
+    [filtered],
+  );
+
+
 
 
   const exportData = (): StatementExportData => ({
