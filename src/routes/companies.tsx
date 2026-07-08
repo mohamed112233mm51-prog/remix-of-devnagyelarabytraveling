@@ -97,10 +97,8 @@ function CompaniesPage() {
     let tTrips = 0;
     let tPaid = 0;
     for (const [id, sum] of companiesSummary) {
-      let trips = 0;
-      let paid = 0;
-      for (const { amount } of sum.totalDebit.entries()) trips += amount;
-      for (const { amount } of sum.totalCredit.entries()) paid += amount;
+      const trips = sum.totalDebit.total();
+      const paid = sum.totalCredit.total();
       map.set(id, { trips, paid });
       tTrips += trips;
       tPaid += paid;
