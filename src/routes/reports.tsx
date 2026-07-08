@@ -1800,8 +1800,8 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
     { label: "عدد حركات الشراء", value: fmtNum(totals.buyCount), tone: "green" },
     { label: "عدد حركات البيع", value: fmtNum(totals.sellCount), tone: "red" },
   ];
-  totals.boughtByCur.forEach((v, k) => kpiItems.push({ label: `إجمالي ${k} (شراء)`, value: fmtNum(v), tone: "gold" }));
-  totals.soldByCur.forEach((v, k) => kpiItems.push({ label: `إجمالي ${k} (بيع)`, value: fmtNum(v) }));
+  totals.boughtByCurrency.entries().forEach(({ currency, amount }) => kpiItems.push({ label: `إجمالي ${currency} (شراء)`, value: fmtNum(amount), tone: "gold" }));
+  totals.soldByCurrency.entries().forEach(({ currency, amount }) => kpiItems.push({ label: `إجمالي ${currency} (بيع)`, value: fmtNum(amount) }));
 
   return (
     <div className="card">
