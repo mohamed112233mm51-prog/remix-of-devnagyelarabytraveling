@@ -62,14 +62,6 @@ function classifyTxn(t: Transaction): LedgerKind {
 }
 
 
-function paymentMethodLabel(t: Transaction): string {
-  const parts: string[] = [];
-  if (Number(t.instapay_amount || 0) > 0) parts.push("إنستاباي");
-  if (Number(t.cash_amount || 0) > 0) parts.push("نقدي");
-  if (merchantCashGross(t) > 0) parts.push("تاجر محفظة");
-  if (merchantCashPhysical(t) > 0) parts.push("تاجر نقدي");
-  return parts.length ? parts.join(" + ") : (t.payment_method || "—");
-}
 
 function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
   const safeTxns = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
