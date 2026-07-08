@@ -377,21 +377,22 @@ function InvestorsListTab({ investors, txns: _txns }: { investors: Investor[]; t
               {investors.length === 0 ? (
                 <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🧑‍💼</div><div className="empty-text">لا يوجد مستثمرين</div></div></td></tr>
               ) : investors.map((inv, i) => {
-                const t = totals.get(inv.id) || { dep: 0, wd: 0 };
-                const bal = t.dep - t.wd;
+                const t = totals.get(inv.id) || { deposit: 0, withdraw: 0, balance: 0, count: 0 };
+                const bal = t.balance;
                 return (
                   <tr key={inv.id}>
                     <td data-label="#">{i + 1}</td>
                     <td className="bold" data-label="اسم المستثمر">{inv.investor_name}</td>
                     <td data-label="الهاتف">{inv.phone || "—"}</td>
                     <td data-label="الواتساب">{inv.whatsapp || "—"}</td>
-                    <td className="num-col" data-label="إجمالي التوريد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.dep)}</td>
-                    <td className="num-col" data-label="إجمالي الصرف" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.wd)}</td>
+                    <td className="num-col" data-label="إجمالي التوريد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.deposit)}</td>
+                    <td className="num-col" data-label="إجمالي الصرف" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.withdraw)}</td>
                     <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
                     <td data-label="إجراءات"><button className="action-btn" onClick={() => setEdit(inv)}>✏️ تعديل</button></td>
                   </tr>
                 );
               })}
+
             </tbody>
           </table>
         </div>
