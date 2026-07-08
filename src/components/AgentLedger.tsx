@@ -17,7 +17,7 @@ import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibi
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
-import { summarizeLedgerByCurrency, attachLedgerRunningBalance } from "@/lib/financialSummary";
+import { summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, paymentMethodLabel } from "@/lib/financialSummary";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import CurrencyFilter from "@/components/CurrencyFilter";
 
@@ -62,14 +62,6 @@ function classifyTxn(t: Transaction): LedgerKind {
 }
 
 
-function paymentMethodLabel(t: Transaction): string {
-  const parts: string[] = [];
-  if (Number(t.instapay_amount || 0) > 0) parts.push("إنستاباي");
-  if (Number(t.cash_amount || 0) > 0) parts.push("نقدي");
-  if (merchantCashGross(t) > 0) parts.push("تاجر محفظة");
-  if (merchantCashPhysical(t) > 0) parts.push("تاجر نقدي");
-  return parts.length ? parts.join(" + ") : (t.payment_method || "—");
-}
 
 function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
   const safeTxns = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
@@ -169,22 +161,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const myFlights = useMemo(() => flights.filter((f) => f.agent_id === selectedAgentId), [flights, selectedAgentId]);
 
   const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
-  const splitCurrencyByTxnId = useMemo(() => {
-    const buckets = new Map<string, Set<string>>();
-    for (const s of liveSplits || []) {
-      if (s.source_table !== "transactions") continue;
-      const id = s.source_id || s.transaction_id;
-      if (!id || !s.currency) continue;
-      const set = buckets.get(id) || new Set<string>();
-      set.add(s.currency);
-      buckets.set(id, set);
-    }
-    const result = new Map<string, string>();
-    buckets.forEach((set, id) => {
-      if (set.size === 1) result.set(id, Array.from(set)[0]);
-    });
-    return result;
-  }, [liveSplits]);
+  const splitCurrencyByTxnId = useMemo(
+    () => resolveSplitCurrencyByRef(liveSplits, "transactions"),
+    [liveSplits],
+  );
   const ledger = useMemo(() => buildLedger(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
   const currencyOptions = useMemo(
     () => Array.from(new Set(ledger.map((e) => e.currency || "EGP"))).sort(),

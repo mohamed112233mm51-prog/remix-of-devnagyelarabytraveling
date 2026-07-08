@@ -25,7 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
-import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance } from "@/lib/financialSummary";
+import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, paymentMethodLabel } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -295,14 +295,6 @@ type CompanyLedgerEntry = {
   paymentMethod: string; note: string; currency: string; raw: CompanyTransaction;
 };
 
-function companyPaymentMethodLabel(t: CompanyTransaction): string {
-  const parts: string[] = [];
-  if (Number(t.instapay_amount || 0) > 0) parts.push("إنستاباي");
-  if (Number(t.cash_amount || 0) > 0) parts.push("نقدي");
-  if (Number(t.merchant_cash_amount || 0) > 0) parts.push("تاجر محفظة");
-  if (Number(t.merchant_cash_physical_amount || 0) > 0) parts.push("تاجر نقدي");
-  return parts.length ? parts.join(" + ") : "—";
-}
 
 function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: { companies: IssuingCompany[]; txns: CompanyTransaction[]; initialCompanyId: string; canExport: boolean }) {
   const safeCompanies = Array.isArray(companies) ? companies : [];
@@ -326,22 +318,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [safeTxns, companyId],
   );
 
-  const splitCurrencyByTxnId = useMemo(() => {
-    const buckets = new Map<string, Set<string>>();
-    for (const s of liveSplits || []) {
-      if (s.source_table !== "company_transactions") continue;
-      const id = s.source_id || s.transaction_id;
-      if (!id || !s.currency) continue;
-      const set = buckets.get(id) || new Set<string>();
-      set.add(s.currency);
-      buckets.set(id, set);
-    }
-    const result = new Map<string, string>();
-    buckets.forEach((set, id) => {
-      if (set.size === 1) result.set(id, Array.from(set)[0]);
-    });
-    return result;
-  }, [liveSplits]);
+  const splitCurrencyByTxnId = useMemo(
+    () => resolveSplitCurrencyByRef(liveSplits, "company_transactions"),
+    [liveSplits],
+  );
 
   const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
     const serviceValue = Math.round(Number(t.trip_value || 0));
@@ -361,7 +341,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       payment,
       debit: serviceValue,
       credit: payment,
-      paymentMethod: payment > 0 ? companyPaymentMethodLabel(t) : "—",
+      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
       note: t.note || "—",
       currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
       raw: t,
