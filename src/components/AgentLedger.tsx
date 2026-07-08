@@ -236,23 +236,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
 
   // Per-currency totals for the footer (final balance per currency).
-  const byCurrency = useMemo(() => {
-    const debits = new Map<string, number>();
-    const credits = new Map<string, number>();
-    const counts = new Map<string, number>();
-    for (const e of filteredLedger) {
-      const c = e.currency || "EGP";
-      debits.set(c, (debits.get(c) || 0) + e.debit);
-      credits.set(c, (credits.get(c) || 0) + e.credit);
-      counts.set(c, (counts.get(c) || 0) + 1);
-    }
-    const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
-    return currencies.map((c) => {
-      const d = debits.get(c) || 0;
-      const cr = credits.get(c) || 0;
-      return { currency: c, debit: d, credit: cr, net: d - cr, count: counts.get(c) || 0 };
-    });
-  }, [filteredLedger]);
+  // Per-currency totals for the footer — via Financial Summary Engine.
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredLedger), [filteredLedger]);
 
   const buildExportData = () => ({
     title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
