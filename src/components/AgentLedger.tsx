@@ -17,6 +17,7 @@ import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibi
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
+import { summarizeLedgerByCurrency } from "@/lib/financialSummary";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import CurrencyFilter from "@/components/CurrencyFilter";
 
