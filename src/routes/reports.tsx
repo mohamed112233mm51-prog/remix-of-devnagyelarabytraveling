@@ -512,8 +512,10 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     const ts = txns.filter((t) => t.agent_id === a.id && inRange(t.date));
     const fl = flights.filter((f) => f.agent_id === a.id && inRange(f.travel_date));
     const ap = approvals.filter((p) => p.agent_id === a.id && inRange(p.submit_date));
-    const total = ts.reduce((s, t) => s + tripValue(t), 0);
-    const paid = ts.reduce((s, t) => s + txnTotalPaid(t), 0);
+    const s = summarizeAgent(ts);
+    let total = 0, paid = 0;
+    for (const { amount } of s.totalDebit.entries()) total += amount;
+    for (const { amount } of s.totalCredit.entries()) paid += amount;
     return { name: a.name, total, paid, due: total - paid, flights: fl.length, approvals: ap.length };
   }), [agents, txns, flights, approvals, inRange]);
 
