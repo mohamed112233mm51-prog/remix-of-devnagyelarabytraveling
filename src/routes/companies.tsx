@@ -353,7 +353,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       payment,
       debit: serviceValue,
       credit: payment,
-      paymentMethod: payment > 0 ? companyPaymentMethodLabel(t) : "—",
+      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
       note: t.note || "—",
       currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
       raw: t,
