@@ -727,6 +727,53 @@ export function useDashboardTotals(): DashboardTotals {
 }
 
 /* ============================================================
+ *  LEDGER — تجميعات كشوف الحسابات (وكيل / شركة) حسب العملة
+ * ============================================================
+ *  يُستخدم في:
+ *    - AgentLedger (كشف حساب الوكيل)
+ *    - CompanyStatementTab (كشف حساب الشركة الصادرة)
+ *  المدخلات: صفوف كشف تحتوي {currency, debit, credit}
+ *  المخرجات: مصفوفة {currency, debit, credit, net, count} مرتّبة
+ *  بترتيب CURRENCY_ORDER (EGP → USD → LYD → أبجدي).
+ * ============================================================ */
+
+export type LedgerCurrencyTotal = {
+  currency: string;
+  debit: number;
+  credit: number;
+  net: number;
+  count: number;
+};
+
+export function summarizeLedgerByCurrency(
+  rows: ReadonlyArray<{ currency?: string | null; debit: number; credit: number }>,
+): LedgerCurrencyTotal[] {
+  const map = new Map<string, { debit: number; credit: number; count: number }>();
+  for (const e of rows) {
+    const cur = (e.currency && String(e.currency)) || "EGP";
+    const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
+    g.debit += Number(e.debit) || 0;
+    g.credit += Number(e.credit) || 0;
+    g.count += 1;
+    map.set(cur, g);
+  }
+  const seen = new Set<string>();
+  const out: LedgerCurrencyTotal[] = [];
+  for (const cur of CURRENCY_ORDER) {
+    if (map.has(cur)) {
+      const g = map.get(cur)!;
+      out.push({ currency: cur, debit: g.debit, credit: g.credit, net: g.debit - g.credit, count: g.count });
+      seen.add(cur);
+    }
+  }
+  for (const cur of Array.from(map.keys()).filter((c) => !seen.has(c)).sort()) {
+    const g = map.get(cur)!;
+    out.push({ currency: cur, debit: g.debit, credit: g.credit, net: g.debit - g.credit, count: g.count });
+  }
+  return out;
+}
+
+/* ============================================================
  *  Formatting helper — لعرض قيمة مع عملتها.
  * ============================================================ */
 
