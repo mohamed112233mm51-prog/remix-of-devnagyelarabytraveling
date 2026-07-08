@@ -194,16 +194,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     () => (currencyFilter ? ledger.filter((e) => (e.currency || "EGP") === currencyFilter) : ledger),
     [ledger, currencyFilter],
   );
-  const ledgerWithBalance = useMemo(() => {
-    // Per-currency running balance: EGP, USD, LYD, ... never mix.
-    const bals = new Map<string, number>();
-    return filteredLedger.map((e) => {
-      const cur = e.currency || "EGP";
-      const next = (bals.get(cur) || 0) + (e.debit - e.credit);
-      bals.set(cur, next);
-      return { ...e, balance: next };
-    });
-  }, [filteredLedger]);
+  const ledgerWithBalance = useMemo(
+    () => attachLedgerRunningBalance(filteredLedger),
+    [filteredLedger],
+  );
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
     methodLabel: e.paymentMethod,
