@@ -599,8 +599,64 @@ export function summarizeCurrencySupplierNetByCurrency(
 }
 
 /* ============================================================
+ *  INVESTORS — ملخص المستثمرين (EGP فقط)
+ * ============================================================
+ *  توريد نقدية → deposit
+ *  صرف نقدية    → withdraw
+ *  balance = deposit − withdraw
+ * ============================================================ */
+
+export type InvestorSummary = {
+  deposit: number;
+  withdraw: number;
+  balance: number;
+  count: number;
+};
+
+const emptyInvestorSummary = (): InvestorSummary => ({
+  deposit: 0, withdraw: 0, balance: 0, count: 0,
+});
+
+export function summarizeInvestor(rows: InvestorTransaction[]): InvestorSummary {
+  const s = emptyInvestorSummary();
+  for (const t of rows) {
+    const amt = Number(t.amount || 0);
+    if (t.transaction_type === "توريد نقدية") s.deposit += amt;
+    else if (t.transaction_type === "صرف نقدية") s.withdraw += amt;
+  }
+  s.count = rows.length;
+  s.balance = s.deposit - s.withdraw;
+  return s;
+}
+
+/** Hook حي لملخصات كل المستثمرين (مفهرسة بالمعرِّف). */
+export function useInvestorsSummary(): Map<string, InvestorSummary> {
+  const { rows: investors } = useLive<Investor>("investors");
+  const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
+  return useMemo(() => {
+    const grouped = new Map<string, InvestorTransaction[]>();
+    for (const i of investors) grouped.set(i.id, []);
+    for (const t of txns) {
+      const arr = grouped.get(t.investor_id);
+      if (arr) arr.push(t);
+    }
+    const out = new Map<string, InvestorSummary>();
+    for (const [id, list] of grouped) out.set(id, summarizeInvestor(list));
+    return out;
+  }, [investors, txns]);
+}
+
+/** إجمالي كل المستثمرين مجمَّعاً — لكروت KPI في أعلى الصفحة. */
+export function useInvestorsTotals(): InvestorSummary {
+  const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
+  return useMemo(() => summarizeInvestor(txns), [txns]);
+}
+
+/* ============================================================
  *  DASHBOARD — إجماليات النظام (Live، بالعملة)
  * ============================================================ */
+
+
 
 export type DashboardTotals = {
   agentsSales: CurrencyMap;
