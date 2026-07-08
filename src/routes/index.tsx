@@ -426,22 +426,10 @@ function Dashboard() {
 
   // ===== ERP Analytics =====
   // 1. Top agents by collection
-  const topAgents = useMemo(() => {
-    const byAgent = new Map<string, { collected: number; count: number }>();
-    for (const t of txns) {
-      if (!t.agent_id) continue;
-      const collected = txnCollectedAmount(t);
-      const cur = byAgent.get(t.agent_id) || { collected: 0, count: 0 };
-      cur.collected += collected;
-      cur.count += 1;
-      byAgent.set(t.agent_id, cur);
-    }
-    const nameOf = new Map(agents.map((a) => [a.id, a.name]));
-    return Array.from(byAgent.entries())
-      .map(([id, v]) => ({ id, name: nameOf.get(id) || "—", ...v }))
-      .sort((a, b) => b.collected - a.collected)
-      .slice(0, 5);
-  }, [txns, agents]);
+  const topAgents = useMemo(
+    () => computeTopAgentsByCollected(txns, agents, 5),
+    [txns, agents],
+  );
 
   // 2. Top issuing companies by services provided — executions only (real executed work)
   const topCompanies = useMemo(() => {
