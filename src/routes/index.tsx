@@ -12,6 +12,7 @@ import {
   merchantCashNet,
   tripValue,
   txnTotalPaid,
+  txnCollectedAmount,
   useLive,
   type Agent,
   type CompanyTransaction,
@@ -250,7 +251,7 @@ function Dashboard() {
       else agentsOtherValue += v;
       agentsPaid += txnTotalPaid(t);
       const mcn = merchantCashNet(t);
-      agentCollectionsNet += Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + mcn;
+      agentCollectionsNet += txnCollectedAmount(t);
       merchantIncomingNet += mcn;
       merchantIncomingGross += merchantCashGross(t);
     }
@@ -260,7 +261,7 @@ function Dashboard() {
     let companyServices = 0, companyOutgoingNet = 0, merchantOutgoing = 0;
     for (const t of cTxns) {
       companyServices += Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0);
-      companyOutgoingNet += Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+      companyOutgoingNet += txnCollectedAmount(t);
       merchantOutgoing += Number(t.merchant_cash_amount || 0);
     }
     const companyPaid = companyOutgoingNet;
@@ -311,11 +312,11 @@ function Dashboard() {
     let collected = 0, compOut = 0, expSum = 0, expBase = 0, flightsCount = 0, approvalsCount = 0;
     for (const x of txns) {
       if (!inR(x.created_at)) continue;
-      collected += Number(x.instapay_amount || 0) + Number(x.cash_amount || 0) + Number(x.merchant_cash_physical_amount || 0) + merchantCashNet(x);
+      collected += txnCollectedAmount(x);
     }
     for (const x of cTxns) {
       if (!inR(x.created_at)) continue;
-      compOut += Number(x.instapay_amount || 0) + Number(x.cash_amount || 0) + merchantCashNet(x) + Number(x.merchant_cash_physical_amount || 0);
+      compOut += txnCollectedAmount(x);
     }
     for (const x of expenses) {
       if (!inR(x.created_at)) continue;
@@ -355,7 +356,7 @@ function Dashboard() {
     let collected = 0, value = 0, execCount = 0, subCount = 0;
     for (const t of txns) {
       if (!inToday(t.created_at)) continue;
-      collected += Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
+      collected += txnCollectedAmount(t);
       value += tripValue(t);
     }
     for (const x of executedRows) if (inToday(x.created_at)) execCount += 1;
@@ -412,7 +413,7 @@ function Dashboard() {
       // linear scan acceptable for small bucket counts (≤31)
       for (let i = 0; i < buckets.length; i++) {
         if (ts >= buckets[i].start && ts < buckets[i].end) {
-          buckets[i].value += Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
+          buckets[i].value += txnCollectedAmount(t);
           break;
         }
       }
@@ -429,7 +430,7 @@ function Dashboard() {
     const byAgent = new Map<string, { collected: number; count: number }>();
     for (const t of txns) {
       if (!t.agent_id) continue;
-      const collected = Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + Number(t.merchant_cash_physical_amount || 0) + merchantCashNet(t);
+      const collected = txnCollectedAmount(t);
       const cur = byAgent.get(t.agent_id) || { collected: 0, count: 0 };
       cur.collected += collected;
       cur.count += 1;

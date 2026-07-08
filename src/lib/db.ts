@@ -69,12 +69,19 @@ export const merchantCompanyOutflowAmount = (t: Partial<CompanyTransaction>) => 
   return Math.round(wallet + physical);
 };
 
+/**
+ * مجموع مكوّنات الدفع الفعلية للحركة (إنستا + كاش + محفظة تاجر صافية + كاش تاجر فعلي).
+ * بدون rounding وبدون fallback إلى total_paid/paid — يُستخدم في التجميعات
+ * (Dashboard، تقرير المحصّل، توزيع الشركات، إلخ). المصدر الوحيد لهذه الصيغة.
+ */
+export const txnCollectedAmount = (t: Partial<Transaction> & Partial<CompanyTransaction>) =>
+  Number(t.instapay_amount || 0) +
+  Number(t.cash_amount || 0) +
+  merchantCashNet(t) +
+  Number(t.merchant_cash_physical_amount || 0);
+
 export const txnTotalPaid = (t: Partial<Transaction>) => {
-  const computed =
-    Number(t.instapay_amount || 0) +
-    Number(t.cash_amount || 0) +
-    merchantCashNet(t) +
-    Number(t.merchant_cash_physical_amount || 0);
+  const computed = txnCollectedAmount(t);
   if (computed > 0) return Math.round(computed);
   if (Number(t.total_paid || 0) > 0) return Math.round(Number(t.total_paid || 0));
   return Math.round(Number(t.paid || 0));
