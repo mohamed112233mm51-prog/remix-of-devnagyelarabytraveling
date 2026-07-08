@@ -236,6 +236,9 @@ function Dashboard() {
   const profitExpensesAll = profitSummaryData?.expensesAll ?? 0;
 
   // ===== Lifetime totals — single pass per table =====
+  // Financial Summary Engine — إجماليات المصروفات موحّدة عبر المحرك.
+  const expensesTotals = useExpensesTotals();
+
   const lifetime = useMemo(() => {
     let agentsFlightsValue = 0, agentsApprovalsValue = 0, agentsOtherValue = 0;
     let agentsPaid = 0, agentCollectionsNet = 0;
@@ -268,13 +271,10 @@ function Dashboard() {
     const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
     const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
-    let expensesFixed = 0, expensesVariable = 0, expensesAll = 0;
-    for (const e of expenses) {
-      const a = Number(e.amount || 0);
-      expensesAll += a;
-      if (e.expense_type === "ثابت") expensesFixed += a;
-      else if (e.expense_type === "متغير") expensesVariable += a;
-    }
+    // المصروفات: من المحرك الموحّد (نفس المنطق تماماً).
+    const expensesFixed = expensesTotals.fixed;
+    const expensesVariable = expensesTotals.variable;
+    const expensesAll = expensesTotals.total;
     let expensesDeducted = 0;
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
@@ -286,7 +286,7 @@ function Dashboard() {
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
       companyOutgoingNet,
     };
-  }, [txns, cTxns, collections, expenses, expenseDeductions]);
+  }, [txns, cTxns, collections, expenseDeductions, expensesTotals]);
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
