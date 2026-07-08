@@ -932,9 +932,8 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
 
   const data = useMemo(() => investors.map((inv) => {
     const ts = invTxns.filter((t) => t.investor_id === inv.id && inRange(t.date));
-    const dep = ts.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-    const wd = ts.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-    return { name: inv.investor_name, deposit: dep, withdraw: wd, balance: dep - wd };
+    const s = summarizeInvestor(ts);
+    return { name: inv.investor_name, deposit: s.deposit, withdraw: s.withdraw, balance: s.balance };
   }), [investors, invTxns, inRange]);
 
   const fIT = invTxns.filter((t) => inRange(t.date));
