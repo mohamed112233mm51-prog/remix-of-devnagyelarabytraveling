@@ -15,7 +15,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeInvestor, summarizeExpenses, summarizeAgent, summarizeCurrencySupplierTrades } from "@/lib/financialSummary";
+import { summarizeInvestor, summarizeExpenses, summarizeAgent, summarizeCurrencySupplierTrades, computeTreasurySummary } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -1494,34 +1494,15 @@ function TreasuriesReport() {
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => boxes.filter((b) => b.is_active !== false), [boxes]);
-  const totals = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const b of active) map.set(b.currency, (map.get(b.currency) || 0) + Number(b.balance || 0));
-    return Array.from(map.entries()).map(([currency, total]) => ({ currency, total }));
-  }, [active]);
-
-  const nameAliases: Record<string, string[]> = {
-    USD: ["دولار", "دولار أمريكي", "USD", "$"],
-    LYD: ["دينار ليبي", "دينار", "LYD"],
-  };
-  const latestRateInfo = (code: string) => {
-    const aliases = nameAliases[code] || [code];
-    const rows = (cTxns || [])
-      .filter((t) => {
-        const bc = (t.bought_currency || "").trim();
-        const isPurchase = (t.tx_type || "").trim() === "شراء عملة";
-        return isPurchase && aliases.some((a) => bc === a) && Number(t.exchange_rate || 0) > 0;
-      })
-      .sort((a, b) => new Date(b.tx_date || b.created_at).getTime() - new Date(a.tx_date || a.created_at).getTime());
-    const row = rows[0];
-    return {
-      rate: row ? Number(row.exchange_rate || 0) : 0,
-      date: row?.tx_date || null,
-      id: row?.id || null,
-      txType: row?.tx_type || null,
-      supplierId: row?.supplier_id || null,
-    };
-  };
+  // كل حسابات الخزائن وأسعار الصرف من المحرك الموحد في src/lib/financialSummary.ts.
+  const summary = useMemo(
+    () => computeTreasurySummary(active, (cTxns || []) as any),
+    [active, cTxns],
+  );
+  const totals = useMemo(
+    () => Object.entries(summary.byCurrency).map(([currency, total]) => ({ currency, total })),
+    [summary],
+  );
   const formatRateSource = (info: { date: string | null; txType: string | null; supplierId: string | null }) => {
     const dateStr = info.date ? toDisplayDate(info.date) : "—";
     if (!info.txType && !info.supplierId) return `آخر سعر صرف مسجل - ${dateStr}`;
@@ -1530,15 +1511,7 @@ function TreasuriesReport() {
     if (!supplierName) return `آخر سعر صرف مسجل - ${dateStr}`;
     return `${action} ${supplierName} - ${dateStr}`;
   };
-  const sumBy = (code: string) => active.filter((b) => b.currency === code).reduce((s, b) => s + Number(b.balance || 0), 0);
-  const egp = sumBy("EGP");
-  const usd = sumBy("USD");
-  const lyd = sumBy("LYD");
-  const usdInfo = latestRateInfo("USD");
-  const lydInfo = latestRateInfo("LYD");
-  const usdRate = usdInfo.rate;
-  const lydRate = lydInfo.rate;
-  const totalEgp = egp + usd * usdRate + lyd * lydRate;
+  const { egp, usd, lyd, usdRate, lydRate, totalEgp, usdInfo, lydInfo } = summary;
 
   const cols = [
     { header: "اسم الخزينة", key: "name" },
