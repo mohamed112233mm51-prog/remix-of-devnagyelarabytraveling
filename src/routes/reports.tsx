@@ -682,8 +682,8 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
 function CompaniesReport({ inRange, data: rd }: SectionProps) {
   const { companies, companyTransactions: cTxns, approvals, loading } = rd;
 
-  const paidOf = (t: CompanyTransaction) =>
-    Number(t.instapay_amount || 0) + Number(t.cash_amount || 0) + merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+  const paidOf = (t: CompanyTransaction) => txnCollectedAmount(t);
+
 
   const data = useMemo(() => companies.map((c) => {
     const ts = cTxns.filter((t) => t.company_id === c.id && inRange(t.date));
