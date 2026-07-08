@@ -773,6 +773,23 @@ export function summarizeLedgerByCurrency(
   return out;
 }
 
+/**
+ * يضيف عمود `balance` لكل صف كشف حساب بحساب الرصيد الجاري **لكل عملة**
+ * على حدة (EGP/USD/LYD/...) — لا يُخلط بين العملات إطلاقاً.
+ * يُستخدم في كشوف حساب الوكيل والشركة.
+ */
+export function attachLedgerRunningBalance<
+  T extends { currency?: string | null; debit: number; credit: number }
+>(rows: T[]): Array<T & { balance: number }> {
+  const bals = new Map<string, number>();
+  return rows.map((e) => {
+    const cur = (e.currency && String(e.currency)) || "EGP";
+    const next = (bals.get(cur) || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0);
+    bals.set(cur, next);
+    return { ...e, balance: next };
+  });
+}
+
 /* ============================================================
  *  Formatting helper — لعرض قيمة مع عملتها.
  * ============================================================ */

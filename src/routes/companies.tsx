@@ -25,7 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
-import { useCompaniesSummary, summarizeLedgerByCurrency } from "@/lib/financialSummary";
+import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -378,16 +378,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [allEntries, currencyFilter],
   );
 
-  // Per-currency running balance: EGP, USD, LYD, ... never mix.
-  const allWithBalance = useMemo(() => {
-    const bals = new Map<string, number>();
-    return filteredEntries.map((e) => {
-      const cur = e.currency || "EGP";
-      const next = (bals.get(cur) || 0) + (e.debit - e.credit);
-      bals.set(cur, next);
-      return { ...e, balance: next };
-    });
-  }, [filteredEntries]);
+  // Per-currency running balance — via Financial Summary Engine.
+  const allWithBalance = useMemo(
+    () => attachLedgerRunningBalance(filteredEntries),
+    [filteredEntries],
+  );
 
   const totalServices = filteredEntries.reduce((s, e) => s + e.debit, 0);
   const totalPaid = filteredEntries.reduce((s, e) => s + e.credit, 0);
