@@ -1007,3 +1007,68 @@ export function paymentMethodLabel(t: {
   if (Number(t.merchant_cash_physical_amount || 0) > 0) parts.push("تاجر نقدي");
   return parts.length ? parts.join(" + ") : (t.payment_method || "—");
 }
+
+/* ============================================================
+ *  MERCHANT MOVEMENTS — تلخيص حركة تاجر واحد ضمن نطاق
+ *  (يُستخدم في تقرير التجار — مصدر واحد لحساب الوارد/الصادر/العمولة/الرصيد).
+ * ============================================================ */
+
+export type MerchantMovementSummary = {
+  incoming: number;      // net incoming (بعد خصم 1%)
+  incomingGross: number;
+  outgoing: number;
+  collected: number;
+  fee: number;           // عمولة 1%
+  balance: number;       // incoming - outgoing - collected
+};
+
+export function summarizeMerchantMovements(input: {
+  incomingTxns: Transaction[];
+  outgoingCTxns: CompanyTransaction[];
+  collections: MerchantCashCollection[];
+}): MerchantMovementSummary {
+  const { incomingTxns, outgoingCTxns, collections } = input;
+  let incoming = 0;
+  let incomingGross = 0;
+  for (const t of incomingTxns) {
+    incoming += merchantCashNet(t);
+    incomingGross += Number(t.merchant_cash_amount || 0);
+  }
+  let outgoing = 0;
+  for (const t of outgoingCTxns) outgoing += Number((t as any).merchant_cash_amount || 0);
+  let collected = 0;
+  for (const c of collections) collected += Number(c.amount || 0);
+  const fee = incomingGross - incoming;
+  return { incoming, incomingGross, outgoing, collected, fee, balance: incoming - outgoing - collected };
+}
+
+/* ============================================================
+ *  TOP AGENTS — ترتيب الوكلاء حسب المحصَّل
+ *  (Dashboard — مصدر واحد لحساب أفضل الوكلاء).
+ * ============================================================ */
+
+export type TopAgentRow = { id: string; name: string; collected: number; count: number };
+
+export function computeTopAgentsByCollected(
+  txns: Transaction[],
+  agents: Pick<Agent, "id" | "name">[],
+  limit = 5,
+): TopAgentRow[] {
+  const byAgent = new Map<string, { collected: number; count: number }>();
+  for (const t of txns) {
+    if (!t.agent_id) continue;
+    const cur = byAgent.get(t.agent_id) || { collected: 0, count: 0 };
+    cur.collected +=
+      Number(t.instapay_amount || 0) +
+      Number(t.cash_amount || 0) +
+      merchantCashNet(t) +
+      Number(t.merchant_cash_physical_amount || 0);
+    cur.count += 1;
+    byAgent.set(t.agent_id, cur);
+  }
+  const nameOf = new Map(agents.map((a) => [a.id, a.name]));
+  return Array.from(byAgent.entries())
+    .map(([id, v]) => ({ id, name: nameOf.get(id) || "—", ...v }))
+    .sort((a, b) => b.collected - a.collected)
+    .slice(0, limit);
+}
