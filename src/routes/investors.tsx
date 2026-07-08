@@ -256,9 +256,11 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
     (!from || t.date >= from) &&
     (!to || t.date <= to)
   );
-  const totalDeposit = filtered.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-  const totalWithdraw = filtered.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-  const balance = totalDeposit - totalWithdraw;
+  const { deposit: totalDeposit, withdraw: totalWithdraw, balance } = useMemo(
+    () => summarizeInvestor(filtered),
+    [filtered],
+  );
+
 
   const buildData = () => ({
     title: `كشف حساب المستثمر${investor?.investor_name ? ` — ${investor.investor_name}` : ""}`,
