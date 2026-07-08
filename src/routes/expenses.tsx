@@ -53,19 +53,8 @@ function ExpensesPage() {
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
   const [tab, setTab] = useState<Tab>("history");
 
-  const totalExpenses = useMemo(
-    () =>
-      expenses.reduce((s, e) => s + Number(e.amount || 0), 0),
-    [expenses],
-  );
-  const fixedTotal = useMemo(
-    () => expenses.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0),
-    [expenses],
-  );
-  const variableTotal = useMemo(
-    () => expenses.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0),
-    [expenses],
-  );
+  // Financial Summary Engine — نفس الأرقام، مصدر واحد.
+  const { total: totalExpenses, fixed: fixedTotal, variable: variableTotal } = useExpensesTotals();
   // keep deductions referenced so live subscription stays mounted for balance calcs
   void deductions;
 
