@@ -35,11 +35,14 @@ import type {
   Agent,
   CompanyTransaction,
   IssuingCompany,
+  Investor,
+  InvestorTransaction,
   Merchant,
   MerchantCashCollection,
   Transaction,
   UsdTreasuryTransaction,
 } from "@/lib/db";
+
 
 
 
