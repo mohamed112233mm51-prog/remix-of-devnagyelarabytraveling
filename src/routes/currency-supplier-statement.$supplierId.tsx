@@ -28,7 +28,6 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 import {
-  currencySupplierDelta,
   summarizeCurrencySupplierStatement,
   summarizeCurrencySupplierNetByCurrency,
   attachRunningBalances,
