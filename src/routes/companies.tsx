@@ -318,22 +318,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [safeTxns, companyId],
   );
 
-  const splitCurrencyByTxnId = useMemo(() => {
-    const buckets = new Map<string, Set<string>>();
-    for (const s of liveSplits || []) {
-      if (s.source_table !== "company_transactions") continue;
-      const id = s.source_id || s.transaction_id;
-      if (!id || !s.currency) continue;
-      const set = buckets.get(id) || new Set<string>();
-      set.add(s.currency);
-      buckets.set(id, set);
-    }
-    const result = new Map<string, string>();
-    buckets.forEach((set, id) => {
-      if (set.size === 1) result.set(id, Array.from(set)[0]);
-    });
-    return result;
-  }, [liveSplits]);
+  const splitCurrencyByTxnId = useMemo(
+    () => resolveSplitCurrencyByRef(liveSplits, "company_transactions"),
+    [liveSplits],
+  );
 
   const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
     const serviceValue = Math.round(Number(t.trip_value || 0));
