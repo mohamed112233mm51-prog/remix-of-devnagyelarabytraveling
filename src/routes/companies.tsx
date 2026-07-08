@@ -394,23 +394,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مستحق للشركة" : balance < 0 ? "مستحق على الشركة" : "متوازن";
 
-  const byCurrency = useMemo(() => {
-    const debits = new Map<string, number>();
-    const credits = new Map<string, number>();
-    const counts = new Map<string, number>();
-    for (const e of filteredEntries) {
-      const c = e.currency || "EGP";
-      debits.set(c, (debits.get(c) || 0) + e.debit);
-      credits.set(c, (credits.get(c) || 0) + e.credit);
-      counts.set(c, (counts.get(c) || 0) + 1);
-    }
-    const currencies = Array.from(new Set([...debits.keys(), ...credits.keys()]));
-    return currencies.map((c) => {
-      const d = debits.get(c) || 0;
-      const cr = credits.get(c) || 0;
-      return { currency: c, debit: d, credit: cr, net: d - cr, count: counts.get(c) || 0 };
-    });
-  }, [filteredEntries]);
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
