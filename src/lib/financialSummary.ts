@@ -598,6 +598,44 @@ export function summarizeCurrencySupplierNetByCurrency(
   return Array.from(map.entries()).map(([currency, net]) => ({ currency, net }));
 }
 
+/**
+ * ملخص حركات شراء/بيع العملات لتقرير `/reports` (تبويب "شراء وبيع العملات").
+ *  - buyCount / sellCount = عدد الحركات لكل نوع
+ *  - boughtByCurrency     = إجمالي المشترى مُجمَّعاً بالعملة
+ *  - soldByCurrency       = إجمالي المباع مُجمَّعاً بالعملة
+ * تُغلَّف بـ CurrencyMap للحفاظ على ترتيب EGP → USD → LYD → أبجدي.
+ */
+export type CurrencySupplierTradesSummary = {
+  buyCount: number;
+  sellCount: number;
+  boughtByCurrency: CurrencyMap;
+  soldByCurrency: CurrencyMap;
+};
+
+export function summarizeCurrencySupplierTrades(
+  rows: ReadonlyArray<{
+    tx_type?: string | null;
+    bought_currency?: string | null;
+    bought_amount?: number | string | null;
+    sold_currency?: string | null;
+    sold_amount?: number | string | null;
+  }>,
+): CurrencySupplierTradesSummary {
+  const s: CurrencySupplierTradesSummary = {
+    buyCount: 0,
+    sellCount: 0,
+    boughtByCurrency: new CurrencyMap(),
+    soldByCurrency: new CurrencyMap(),
+  };
+  for (const t of rows) {
+    if (t.tx_type === "شراء عملة") s.buyCount += 1;
+    else if (t.tx_type === "بيع عملة") s.sellCount += 1;
+    s.boughtByCurrency.add(t.bought_currency ?? null, Number(t.bought_amount || 0));
+    s.soldByCurrency.add(t.sold_currency ?? null, Number(t.sold_amount || 0));
+  }
+  return s;
+}
+
 /* ============================================================
  *  INVESTORS — ملخص المستثمرين (EGP فقط)
  * ============================================================
