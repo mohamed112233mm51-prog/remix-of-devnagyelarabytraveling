@@ -24,14 +24,23 @@
  */
 
 import { useMemo } from "react";
-import { useLive, tripValue, txnTotalPaid } from "@/lib/db";
+import {
+  useLive,
+  tripValue,
+  txnTotalPaid,
+  merchantCashNet,
+  merchantCompanyOutflowAmount,
+} from "@/lib/db";
 import type {
   Agent,
   CompanyTransaction,
   IssuingCompany,
   Merchant,
+  MerchantCashCollection,
   Transaction,
+  UsdTreasuryTransaction,
 } from "@/lib/db";
+
 
 
 /* ============================================================
