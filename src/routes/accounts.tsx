@@ -47,20 +47,24 @@ function AccountsPage() {
   const [showAgentLookup, setShowAgentLookup] = useState(false);
 
 
+  const agentsSummary = useAgentsSummary();
+
+  // نحوّل ملخصات العملات إلى أرقام موحّدة (EGP-only حالياً في هذه الشاشة)
+  // بجمع كل العملات — يطابق سلوك fmtDL القديم الذي يعرض قيمة واحدة.
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
-    for (const t of txns) {
-      const v = map.get(t.agent_id) || { trips: 0, paid: 0 };
-      v.trips += tripValue(t);
-      v.paid += txnTotalPaid(t);
-      map.set(t.agent_id, v);
+    for (const [id, s] of agentsSummary) {
+      const trips = s.totalDebit.entries().reduce((sum, e) => sum + e.amount, 0);
+      const paid = s.totalCredit.entries().reduce((sum, e) => sum + e.amount, 0);
+      map.set(id, { trips, paid });
     }
     return map;
-  }, [txns]);
+  }, [agentsSummary]);
 
-  const totalTrips = txns.reduce((s, t) => s + tripValue(t), 0);
-  const totalPaid = txns.reduce((s, t) => s + txnTotalPaid(t), 0);
+  const totalTrips = Array.from(stats.values()).reduce((s, v) => s + v.trips, 0);
+  const totalPaid = Array.from(stats.values()).reduce((s, v) => s + v.paid, 0);
   const totalDue = totalTrips - totalPaid;
+
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => agents.filter((a) =>
