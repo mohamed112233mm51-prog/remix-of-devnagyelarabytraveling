@@ -24,7 +24,7 @@
  */
 
 import { useMemo } from "react";
-import { useLive } from "@/lib/db";
+import { useLive, tripValue, txnTotalPaid } from "@/lib/db";
 import type {
   Agent,
   CompanyTransaction,
@@ -32,6 +32,7 @@ import type {
   Merchant,
   Transaction,
 } from "@/lib/db";
+
 
 /* ============================================================
  *  Types
