@@ -15,7 +15,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeInvestor, summarizeExpenses, summarizeAgent } from "@/lib/financialSummary";
+import { summarizeInvestor, summarizeExpenses, summarizeAgent, summarizeCurrencySupplierTrades } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
