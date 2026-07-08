@@ -25,6 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
+import { useCompaniesSummary } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -89,20 +90,23 @@ function CompaniesPage() {
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
   const [viewCompany, setViewCompany] = useState<IssuingCompany | null>(null);
 
-  const stats = useMemo(() => {
+  // Financial Summary Engine — نفس الأرقام، مصدر واحد.
+  const companiesSummary = useCompaniesSummary();
+  const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
-    for (const t of txns) {
-      const v = map.get(t.company_id) || { trips: 0, paid: 0 };
-      v.trips += Number(t.trip_value || 0);
-      v.paid += Number(t.total_paid || 0);
-      map.set(t.company_id, v);
+    let tTrips = 0;
+    let tPaid = 0;
+    for (const [id, sum] of companiesSummary) {
+      let trips = 0;
+      let paid = 0;
+      for (const { amount } of sum.totalDebit.entries()) trips += amount;
+      for (const { amount } of sum.totalCredit.entries()) paid += amount;
+      map.set(id, { trips, paid });
+      tTrips += trips;
+      tPaid += paid;
     }
-    return map;
-  }, [txns]);
-
-  const totalTrips = txns.reduce((s, t) => s + Number(t.trip_value || 0), 0);
-  const totalPaid = txns.reduce((s, t) => s + Number(t.total_paid || 0), 0);
-  const totalDue = totalTrips - totalPaid;
+    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tTrips - tPaid };
+  }, [companiesSummary]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => companies.filter((c) =>

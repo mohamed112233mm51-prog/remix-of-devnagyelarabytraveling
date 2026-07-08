@@ -207,13 +207,12 @@ export function summarizeCompany(rows: CompanyTransaction[]): EntitySummary {
   s.count = rows.length;
   for (const t of rows) {
     const cur = companyTxnCurrency(t);
-    const anyT = t as any;
-    // نستخدم نفس الحقول التي تعرضها شاشة الشركة حالياً:
-    // - amount = تكلفة الشركة (debit)
-    // - paid_amount / total_paid = المدفوع للشركة (credit)
-    const debit = Math.abs(Number(anyT.amount ?? 0));
-    const credit = Math.abs(
-      Number(anyT.paid_amount ?? anyT.total_paid ?? anyT.paid ?? 0),
+    // Match legacy /companies screen exactly:
+    //   debit  = trip_value (إجمالي الخدمات)
+    //   credit = total_paid (المدفوع)
+    const debit = Number((t as any).trip_value ?? (t as any).amount ?? 0);
+    const credit = Number(
+      (t as any).total_paid ?? (t as any).paid_amount ?? (t as any).paid ?? 0,
     );
     s.totalDebit.add(cur, debit);
     s.totalCredit.add(cur, credit);
