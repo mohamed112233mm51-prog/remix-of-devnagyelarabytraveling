@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
+import { useInvestorsSummary, useInvestorsTotals, summarizeInvestor } from "@/lib/financialSummary";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
@@ -26,17 +27,10 @@ function InvestorsPage() {
   const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
   const [tab, setTab] = useState<Tab>("history");
 
-  const totalDeposit = useMemo(
-    () => txns.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0),
-    [txns],
-  );
-  const totalWithdraw = useMemo(
-    () => txns.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0),
-    [txns],
-  );
-  const balance = totalDeposit - totalWithdraw;
+  const { deposit: totalDeposit, withdraw: totalWithdraw, balance } = useInvestorsTotals();
 
   const investorName = (id: string) => investors.find((i) => i.id === id)?.investor_name || "—";
+
 
   return (
     <div className="section active fin-page accounts-page">
