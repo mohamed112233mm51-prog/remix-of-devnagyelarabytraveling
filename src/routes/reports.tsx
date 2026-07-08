@@ -1178,9 +1178,10 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
 function ExpensesReport({ inRange, data: rd }: SectionProps) {
   const { expenses, loading } = rd;
   const data = useMemo(() => expenses.filter((e) => inRange(e.date)), [expenses, inRange]);
-  const totalAll = data.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const totalFixed = data.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const totalVar = data.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0);
+  const { total: totalAll, fixed: totalFixed, variable: totalVar } = useMemo(
+    () => summarizeExpenses(data),
+    [data],
+  );
 
   const typeSplit = [
     { name: "ثابت", value: totalFixed },
