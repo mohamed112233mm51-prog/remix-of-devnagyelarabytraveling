@@ -15,6 +15,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
+import { summarizeInvestor, summarizeExpenses } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -931,9 +932,8 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
 
   const data = useMemo(() => investors.map((inv) => {
     const ts = invTxns.filter((t) => t.investor_id === inv.id && inRange(t.date));
-    const dep = ts.filter((t) => t.transaction_type === "توريد نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-    const wd = ts.filter((t) => t.transaction_type === "صرف نقدية").reduce((s, t) => s + Number(t.amount || 0), 0);
-    return { name: inv.investor_name, deposit: dep, withdraw: wd, balance: dep - wd };
+    const s = summarizeInvestor(ts);
+    return { name: inv.investor_name, deposit: s.deposit, withdraw: s.withdraw, balance: s.balance };
   }), [investors, invTxns, inRange]);
 
   const fIT = invTxns.filter((t) => inRange(t.date));
@@ -1178,9 +1178,10 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
 function ExpensesReport({ inRange, data: rd }: SectionProps) {
   const { expenses, loading } = rd;
   const data = useMemo(() => expenses.filter((e) => inRange(e.date)), [expenses, inRange]);
-  const totalAll = data.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const totalFixed = data.filter((e) => e.expense_type === "ثابت").reduce((s, e) => s + Number(e.amount || 0), 0);
-  const totalVar = data.filter((e) => e.expense_type === "متغير").reduce((s, e) => s + Number(e.amount || 0), 0);
+  const { total: totalAll, fixed: totalFixed, variable: totalVar } = useMemo(
+    () => summarizeExpenses(data),
+    [data],
+  );
 
   const typeSplit = [
     { name: "ثابت", value: totalFixed },
