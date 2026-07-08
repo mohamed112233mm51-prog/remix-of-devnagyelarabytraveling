@@ -24,6 +24,7 @@ import {
   type Transaction,
 } from "@/lib/db";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
+import { useExpensesTotals } from "@/lib/financialSummary";
 import {
   Users,
   Building2,
