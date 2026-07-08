@@ -15,7 +15,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeInvestor, summarizeExpenses, summarizeAgent } from "@/lib/financialSummary";
+import { summarizeInvestor, summarizeExpenses, summarizeAgent, summarizeCurrencySupplierTrades } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -1768,17 +1768,8 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
 
   const filtered = useMemo(() => txns.filter((t) => inRange(t.tx_date)), [txns, inRange]);
 
-  const totals = useMemo(() => {
-    let buyCount = 0, sellCount = 0;
-    const boughtByCur = new Map<string, number>();
-    const soldByCur = new Map<string, number>();
-    for (const t of filtered) {
-      if (t.tx_type === "شراء عملة") buyCount += 1; else if (t.tx_type === "بيع عملة") sellCount += 1;
-      boughtByCur.set(t.bought_currency, (boughtByCur.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
-      soldByCur.set(t.sold_currency, (soldByCur.get(t.sold_currency) || 0) + Number(t.sold_amount || 0));
-    }
-    return { buyCount, sellCount, boughtByCur, soldByCur };
-  }, [filtered]);
+  const totals = useMemo(() => summarizeCurrencySupplierTrades(filtered), [filtered]);
+
 
   const cols = [
     { header: "التاريخ", key: "tx_date" },
@@ -1809,8 +1800,8 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
     { label: "عدد حركات الشراء", value: fmtNum(totals.buyCount), tone: "green" },
     { label: "عدد حركات البيع", value: fmtNum(totals.sellCount), tone: "red" },
   ];
-  totals.boughtByCur.forEach((v, k) => kpiItems.push({ label: `إجمالي ${k} (شراء)`, value: fmtNum(v), tone: "gold" }));
-  totals.soldByCur.forEach((v, k) => kpiItems.push({ label: `إجمالي ${k} (بيع)`, value: fmtNum(v) }));
+  totals.boughtByCurrency.entries().forEach(({ currency, amount }) => kpiItems.push({ label: `إجمالي ${currency} (شراء)`, value: fmtNum(amount), tone: "gold" }));
+  totals.soldByCurrency.entries().forEach(({ currency, amount }) => kpiItems.push({ label: `إجمالي ${currency} (بيع)`, value: fmtNum(amount) }));
 
   return (
     <div className="card">
