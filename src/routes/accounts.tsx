@@ -54,8 +54,8 @@ function AccountsPage() {
   const stats = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
     for (const [id, s] of agentsSummary) {
-      const trips = s.totalDebit.entries().reduce((sum, e) => sum + e.amount, 0);
-      const paid = s.totalCredit.entries().reduce((sum, e) => sum + e.amount, 0);
+      const trips = s.totalDebit.total();
+      const paid = s.totalCredit.total();
       map.set(id, { trips, paid });
     }
     return map;

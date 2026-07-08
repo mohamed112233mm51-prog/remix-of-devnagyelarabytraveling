@@ -104,6 +104,13 @@ export class CurrencyMap {
   isEmpty(): boolean {
     return this.entries().length === 0;
   }
+
+  /** مجموع القيم عبر كل العملات (بدون تحويل صرف). للاستخدام عندما تكون الحركات فعلياً بعملة واحدة. */
+  total(): number {
+    let t = 0;
+    for (const v of this.data.values()) t += v;
+    return t;
+  }
 }
 
 /** ملخص جهة (وكيل / شركة / تاجر / مورد عملة). */
