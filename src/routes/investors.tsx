@@ -362,18 +362,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
   );
 }
 
-function InvestorsListTab({ investors, txns }: { investors: Investor[]; txns: InvestorTransaction[] }) {
+function InvestorsListTab({ investors, txns: _txns }: { investors: Investor[]; txns: InvestorTransaction[] }) {
   const [edit, setEdit] = useState<Investor | null>(null);
-  const totals = useMemo(() => {
-    const map = new Map<string, { dep: number; wd: number }>();
-    for (const t of txns) {
-      const v = map.get(t.investor_id) || { dep: 0, wd: 0 };
-      if (t.transaction_type === "توريد نقدية") v.dep += Number(t.amount || 0);
-      else if (t.transaction_type === "صرف نقدية") v.wd += Number(t.amount || 0);
-      map.set(t.investor_id, v);
-    }
-    return map;
-  }, [txns]);
+  const totals = useInvestorsSummary();
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">🧑‍💼 قائمة المستثمرين</div></div>
