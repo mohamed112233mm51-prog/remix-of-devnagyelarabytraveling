@@ -27,6 +27,7 @@ import {
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
+import { useExpensesTotals } from "@/lib/financialSummary";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
