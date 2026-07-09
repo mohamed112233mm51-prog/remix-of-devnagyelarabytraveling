@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { useAgentsSummary } from "@/lib/financialSummary";
 
 
