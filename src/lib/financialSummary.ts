@@ -28,7 +28,9 @@ import {
   useLive,
   tripValue,
   txnTotalPaid,
+  txnCollectedAmount,
   merchantCashNet,
+  merchantCashGross,
   merchantCompanyOutflowAmount,
 } from "@/lib/db";
 import type {
@@ -772,6 +774,83 @@ export function useDashboardTotals(): DashboardTotals {
 }
 
 /* ============================================================
+ *  DASHBOARD LIFETIME — إجماليات مدى الحياة (EGP، pass واحدة لكل جدول)
+ * ============================================================
+ *  يوحّد الحلقات اليدوية في `src/routes/index.tsx` (memo `lifetime`).
+ *  يعتمد على نفس الدوال المشتركة (`tripValue`, `txnTotalPaid`,
+ *  `txnCollectedAmount`, `merchantCashNet`, `merchantCashGross`) —
+ *  لا يغيّر أي رقم عن السابق.
+ * ============================================================ */
+
+export type DashboardLifetimeTotals = {
+  agentsFlightsValue: number;
+  agentsApprovalsValue: number;
+  agentsOtherValue: number;
+  agentsTripValue: number;
+  agentsPaid: number;
+  agentsDue: number;
+  agentCollectionsNet: number;
+  merchantIncomingNet: number;
+  merchantIncomingGross: number;
+  merchantFee: number;
+  companyServices: number;
+  companyOutgoingNet: number;
+  companyPaid: number;
+  companyDue: number;
+  merchantOutgoing: number;
+  merchantCollected: number;
+  merchantBalance: number;
+};
+
+export function computeDashboardLifetime(input: {
+  txns: Transaction[];
+  cTxns: CompanyTransaction[];
+  collections: MerchantCashCollection[];
+}): DashboardLifetimeTotals {
+  const { txns, cTxns, collections } = input;
+  let agentsFlightsValue = 0, agentsApprovalsValue = 0, agentsOtherValue = 0;
+  let agentsPaid = 0, agentCollectionsNet = 0;
+  let merchantIncomingNet = 0, merchantIncomingGross = 0;
+  for (const t of txns) {
+    const v = tripValue(t as any);
+    if ((t as any).service_type === "تذاكر طيران") agentsFlightsValue += v;
+    else if ((t as any).service_type === "موافقة أمنية") agentsApprovalsValue += v;
+    else agentsOtherValue += v;
+    agentsPaid += txnTotalPaid(t);
+    agentCollectionsNet += txnCollectedAmount(t);
+    merchantIncomingNet += merchantCashNet(t);
+    merchantIncomingGross += merchantCashGross(t);
+  }
+  const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
+  const agentsDue = agentsTripValue - agentsPaid;
+
+  let companyServices = 0, companyOutgoingNet = 0, merchantOutgoing = 0;
+  for (const t of cTxns) {
+    companyServices +=
+      Number((t as any).trip_value || 0) ||
+      Number((t as any).count || 0) * Number((t as any).price || 0);
+    companyOutgoingNet += txnCollectedAmount(t);
+    merchantOutgoing += Number((t as any).merchant_cash_amount || 0);
+  }
+  const companyPaid = companyOutgoingNet;
+  const companyDue = companyServices - companyPaid;
+
+  let merchantCollected = 0;
+  for (const c of collections) merchantCollected += Number((c as any).amount || 0);
+  const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
+  const merchantFee = merchantIncomingGross - merchantIncomingNet;
+
+  return {
+    agentsFlightsValue, agentsApprovalsValue, agentsOtherValue, agentsTripValue,
+    agentsPaid, agentsDue, agentCollectionsNet,
+    merchantIncomingNet, merchantIncomingGross, merchantFee,
+    companyServices, companyOutgoingNet, companyPaid, companyDue,
+    merchantOutgoing, merchantCollected, merchantBalance,
+  };
+}
+
+/* ============================================================
+
  *  LEDGER — تجميعات كشوف الحسابات (وكيل / شركة) حسب العملة
  * ============================================================
  *  يُستخدم في:
