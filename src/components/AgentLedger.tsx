@@ -122,7 +122,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     () => resolveSplitCurrencyByRef(liveSplits, "transactions"),
     [liveSplits],
   );
-  const ledger = useMemo(() => buildLedger(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
+  const ledger = useMemo(() => buildAgentLedgerRows(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
   const currencyOptions = useMemo(
     () => Array.from(new Set(ledger.map((e) => e.currency || "EGP"))).sort(),
     [ledger],
