@@ -241,37 +241,7 @@ function Dashboard() {
   const expensesTotals = useExpensesTotals();
 
   const lifetime = useMemo(() => {
-    let agentsFlightsValue = 0, agentsApprovalsValue = 0, agentsOtherValue = 0;
-    let agentsPaid = 0, agentCollectionsNet = 0;
-    let merchantIncomingNet = 0, merchantIncomingGross = 0;
-    for (const t of txns) {
-      const v = tripValue(t);
-      if (t.service_type === "تذاكر طيران") agentsFlightsValue += v;
-      else if (t.service_type === "موافقة أمنية") agentsApprovalsValue += v;
-      else agentsOtherValue += v;
-      agentsPaid += txnTotalPaid(t);
-      const mcn = merchantCashNet(t);
-      agentCollectionsNet += txnCollectedAmount(t);
-      merchantIncomingNet += mcn;
-      merchantIncomingGross += merchantCashGross(t);
-    }
-    const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
-    const agentsDue = agentsTripValue - agentsPaid;
-
-    let companyServices = 0, companyOutgoingNet = 0, merchantOutgoing = 0;
-    for (const t of cTxns) {
-      companyServices += Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0);
-      companyOutgoingNet += txnCollectedAmount(t);
-      merchantOutgoing += Number(t.merchant_cash_amount || 0);
-    }
-    const companyPaid = companyOutgoingNet;
-    const companyDue = companyServices - companyPaid;
-
-    let merchantCollected = 0;
-    for (const c of collections) merchantCollected += Number(c.amount || 0);
-    const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
-    const merchantFee = merchantIncomingGross - merchantIncomingNet;
-
+    const base = computeDashboardLifetime({ txns, cTxns, collections });
     // المصروفات: من المحرك الموحّد (نفس المنطق تماماً).
     const expensesFixed = expensesTotals.fixed;
     const expensesVariable = expensesTotals.variable;
@@ -279,13 +249,9 @@ function Dashboard() {
     let expensesDeducted = 0;
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
     const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
-
     return {
-      agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
-      companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
-      merchantCollected,
+      ...base,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
-      companyOutgoingNet,
     };
   }, [txns, cTxns, collections, expenseDeductions, expensesTotals]);
 
