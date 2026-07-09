@@ -915,6 +915,116 @@ export function attachLedgerRunningBalance<
 }
 
 /* ============================================================
+ *  LEDGER ROW BUILDERS — بناء صفوف كشوف الحساب (وكيل/شركة)
+ * ============================================================
+ *  يوحّد المنطق المكرَّر بين `AgentLedger` و `CompanyStatementTab`.
+ *  المخرج نفس الشكل الذي يستهلكه العرض والتصدير — بدون تغيير أي رقم.
+ * ============================================================ */
+
+export type LedgerRowKind = "service" | "payment";
+
+export type LedgerRow<TRaw> = {
+  id: string;
+  date: string;
+  kind: LedgerRowKind;
+  description: string;
+  destination: string;
+  service: string;
+  count: number;
+  price: number;
+  serviceValue: number;
+  payment: number;
+  debit: number;
+  credit: number;
+  paymentMethod: string;
+  note: string;
+  currency: string;
+  raw: TRaw;
+};
+
+function classifyAgentTxn(t: Transaction): LedgerRowKind {
+  if ((t as any).source_service_type === "payment") return "payment";
+  return Number(t.count || 0) * Number(t.price || 0) > 0 ? "service" : "payment";
+}
+
+/**
+ * صفوف كشف حساب الوكيل — تُبنى من `transactions` الخاصة به.
+ * تستبعد الحركات الملغاة، وتُرتَّب بالتاريخ ثم `created_at`.
+ */
+export function buildAgentLedgerRows(
+  txns: Transaction[],
+  splitCurrencyByTxnId: Map<string, string>,
+): LedgerRow<Transaction>[] {
+  const safe = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
+  return [...safe]
+    .sort((a, b) =>
+      (a.date || "").localeCompare(b.date || "") ||
+      (a.created_at || "").localeCompare(b.created_at || ""),
+    )
+    .map((t) => {
+      const kind = classifyAgentTxn(t);
+      const serviceValue = tripValue(t as any);
+      const payment = txnTotalPaid(t);
+      const isPayment = kind === "payment";
+      const credit = isPayment ? (payment || serviceValue) : payment;
+      const description = String((t as any).statement || "").trim();
+      return {
+        id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
+        date: t.date || "",
+        kind,
+        description,
+        destination: t.destination || "—",
+        service: t.service_type || "—",
+        count: Number(t.count || 0),
+        price: Number(t.price || 0),
+        serviceValue,
+        payment: credit,
+        debit: isPayment ? 0 : serviceValue,
+        credit,
+        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
+        note: t.note || "—",
+        currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
+        raw: t,
+      };
+    });
+}
+
+/**
+ * صفوف كشف حساب الشركة الصادرة — تُبنى من `company_transactions`.
+ * لا يُعاد ترتيبها هنا (المُستدعي يمرّرها مُرتَّبة كما يريد).
+ */
+export function buildCompanyLedgerRows(
+  txns: CompanyTransaction[],
+  splitCurrencyByTxnId: Map<string, string>,
+): LedgerRow<CompanyTransaction>[] {
+  return (Array.isArray(txns) ? txns : []).map((t) => {
+    const serviceValue = Math.round(Number((t as any).trip_value || 0));
+    const payment = Math.round(Number((t as any).total_paid || 0));
+    const kind: LedgerRowKind = serviceValue > 0 ? "service" : "payment";
+    const description = String((t as any).statement || "").trim();
+    return {
+      id: t.id || `${t.created_at || "row"}-${(t as any).company_id || "company"}`,
+      date: t.date || "",
+      kind,
+      description,
+      destination: (t as any).destination || "—",
+      service: (t as any).service_type || "—",
+      count: Number((t as any).count || 0),
+      price: Number((t as any).price || 0),
+      serviceValue,
+      payment,
+      debit: serviceValue,
+      credit: payment,
+      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
+      note: (t as any).note || "—",
+      currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
+      raw: t,
+    };
+  });
+}
+
+
+/* ============================================================
  *  Formatting helper — لعرض قيمة مع عملتها.
  * ============================================================ */
 
