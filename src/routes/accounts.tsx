@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { useAgentsSummary } from "@/lib/financialSummary";
 
 
@@ -235,8 +235,9 @@ function AccountsPage() {
               { label: "الواتساب", value: viewAgent.whatsapp },
               { label: "المحافظة", value: viewAgent.governorate },
               { label: "شريحة الوكيل", value: a.tier || "—" },
-              { label: "رصيد سابق مدين", value: a.opening_debit ? fmtDL(Number(a.opening_debit)) : "—" },
-              { label: "رصيد سابق دائن", value: a.opening_credit ? fmtDL(Number(a.opening_credit)) : "—" },
+              { label: "رصيد سابق مدين", value: a.opening_debit ? fmtCurrency(Number(a.opening_debit), a.opening_currency || "EGP") : "—" },
+              { label: "رصيد سابق دائن", value: a.opening_credit ? fmtCurrency(Number(a.opening_credit), a.opening_currency || "EGP") : "—" },
+              { label: "عملة الرصيد السابق", value: a.opening_currency || "EGP" },
               { label: "تاريخ الرصيد السابق", value: a.opening_date || "—" },
               { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
             ]}
