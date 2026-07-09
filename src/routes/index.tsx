@@ -8,10 +8,7 @@ import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/
 import {
   fmtDL,
   fmtNum,
-  merchantCashGross,
-  merchantCashNet,
   tripValue,
-  txnTotalPaid,
   txnCollectedAmount,
   useLive,
   type Agent,
