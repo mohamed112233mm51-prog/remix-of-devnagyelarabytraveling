@@ -1021,6 +1021,8 @@ export function buildCompanyLedgerRows(
       raw: t,
     };
   });
+}
+
 
 /* ============================================================
  *  Formatting helper — لعرض قيمة مع عملتها.
