@@ -274,8 +274,9 @@ function CompaniesPage() {
               { label: "اسم الشركة", value: viewCompany.company_name },
               { label: "الهاتف", value: viewCompany.phone },
               { label: "الواتساب", value: (viewCompany as any).whatsapp },
-              { label: "رصيد سابق مدين", value: c.opening_debit ? fmtDL(Number(c.opening_debit)) : "—" },
-              { label: "رصيد سابق دائن", value: c.opening_credit ? fmtDL(Number(c.opening_credit)) : "—" },
+              { label: "رصيد سابق مدين", value: c.opening_debit ? fmtCurrency(Number(c.opening_debit), c.opening_currency || "EGP") : "—" },
+              { label: "رصيد سابق دائن", value: c.opening_credit ? fmtCurrency(Number(c.opening_credit), c.opening_currency || "EGP") : "—" },
+              { label: "عملة الرصيد السابق", value: c.opening_currency || "EGP" },
               { label: "تاريخ الرصيد السابق", value: c.opening_date || "—" },
               { label: "ملاحظات الرصيد السابق", value: c.opening_note || "—" },
             ]}
