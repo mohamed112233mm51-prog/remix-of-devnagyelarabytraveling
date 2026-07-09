@@ -42,12 +42,7 @@ const LEDGER_COLUMNS: ColumnDef[] = [
 
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 
-type LedgerKind = "service" | "payment";
-type LedgerEntry = {
-  id: string; date: string; kind: LedgerKind; description: string; destination: string; service: string;
-  count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; currency: string; raw: Transaction;
-};
+type LedgerEntry = LedgerRow<Transaction>;
 
 type AgentLedgerProps = {
   lockedAgentId?: string;
@@ -56,44 +51,6 @@ type AgentLedgerProps = {
   canExport?: boolean;
 };
 
-function classifyTxn(t: Transaction): LedgerKind {
-  if ((t as any).source_service_type === "payment") return "payment";
-  return Number(t.count || 0) * Number(t.price || 0) > 0 ? "service" : "payment";
-}
-
-
-
-function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
-  const safeTxns = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
-  return [...safeTxns]
-    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
-    .map((t) => {
-      const kind = classifyTxn(t);
-      const serviceValue = tripValue(t);
-      const payment = txnTotalPaid(t);
-      const isPayment = kind === "payment";
-      const credit = isPayment ? (payment || serviceValue) : payment;
-      const description = String((t as any).statement || "").trim();
-      return {
-        id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
-        date: t.date || "",
-        kind,
-        description,
-        destination: t.destination || "—",
-        service: t.service_type || "—",
-        count: Number(t.count || 0),
-        price: Number(t.price || 0),
-        serviceValue,
-        payment: credit,
-        debit: isPayment ? 0 : serviceValue,
-        credit,
-        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
-        note: t.note || "—",
-        currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
-        raw: t,
-      };
-    });
-}
 
 
 export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfile = false, canExport = true }: AgentLedgerProps) {
