@@ -28,7 +28,9 @@ import {
   useLive,
   tripValue,
   txnTotalPaid,
+  txnCollectedAmount,
   merchantCashNet,
+  merchantCashGross,
   merchantCompanyOutflowAmount,
 } from "@/lib/db";
 import type {
