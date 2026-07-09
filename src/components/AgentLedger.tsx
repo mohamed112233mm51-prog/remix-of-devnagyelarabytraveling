@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import {
-  badgeFor, fmtDL, fmtNum, fmtCurrency, tripValue, txnTotalPaid, merchantCashGross, merchantCashPhysical,
+  badgeFor, fmtDL, fmtNum, fmtCurrency,
   useLive, GOVERNORATES,
   type Agent, type Transaction, type Merchant,
 } from "@/lib/db";
@@ -17,7 +17,7 @@ import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibi
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
-import { summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, paymentMethodLabel } from "@/lib/financialSummary";
+import { summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildAgentLedgerRows, type LedgerRow } from "@/lib/financialSummary";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import CurrencyFilter from "@/components/CurrencyFilter";
 
@@ -42,12 +42,7 @@ const LEDGER_COLUMNS: ColumnDef[] = [
 
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
 
-type LedgerKind = "service" | "payment";
-type LedgerEntry = {
-  id: string; date: string; kind: LedgerKind; description: string; destination: string; service: string;
-  count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; currency: string; raw: Transaction;
-};
+type LedgerEntry = LedgerRow<Transaction>;
 
 type AgentLedgerProps = {
   lockedAgentId?: string;
@@ -56,44 +51,6 @@ type AgentLedgerProps = {
   canExport?: boolean;
 };
 
-function classifyTxn(t: Transaction): LedgerKind {
-  if ((t as any).source_service_type === "payment") return "payment";
-  return Number(t.count || 0) * Number(t.price || 0) > 0 ? "service" : "payment";
-}
-
-
-
-function buildLedger(txns: Transaction[], splitCurrencyByTxnId: Map<string, string>): LedgerEntry[] {
-  const safeTxns = Array.isArray(txns) ? txns.filter((t) => Boolean(t) && !(t as any).cancelled_at) : [];
-  return [...safeTxns]
-    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.created_at || "").localeCompare(b.created_at || ""))
-    .map((t) => {
-      const kind = classifyTxn(t);
-      const serviceValue = tripValue(t);
-      const payment = txnTotalPaid(t);
-      const isPayment = kind === "payment";
-      const credit = isPayment ? (payment || serviceValue) : payment;
-      const description = String((t as any).statement || "").trim();
-      return {
-        id: t.id || `${t.created_at || "row"}-${t.agent_id || "agent"}`,
-        date: t.date || "",
-        kind,
-        description,
-        destination: t.destination || "—",
-        service: t.service_type || "—",
-        count: Number(t.count || 0),
-        price: Number(t.price || 0),
-        serviceValue,
-        payment: credit,
-        debit: isPayment ? 0 : serviceValue,
-        credit,
-        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
-        note: t.note || "—",
-        currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
-        raw: t,
-      };
-    });
-}
 
 
 export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfile = false, canExport = true }: AgentLedgerProps) {
@@ -165,7 +122,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     () => resolveSplitCurrencyByRef(liveSplits, "transactions"),
     [liveSplits],
   );
-  const ledger = useMemo(() => buildLedger(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
+  const ledger = useMemo(() => buildAgentLedgerRows(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
   const currencyOptions = useMemo(
     () => Array.from(new Set(ledger.map((e) => e.currency || "EGP"))).sort(),
     [ledger],

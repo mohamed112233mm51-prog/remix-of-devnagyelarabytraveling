@@ -25,7 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
-import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, paymentMethodLabel } from "@/lib/financialSummary";
+import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, type LedgerRow } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -286,12 +286,7 @@ function CompaniesPage() {
   );
 }
 
-type CompanyLedgerKind = "service" | "payment";
-type CompanyLedgerEntry = {
-  id: string; date: string; kind: CompanyLedgerKind; description: string; destination: string; service: string;
-  count: number; price: number; serviceValue: number; payment: number; debit: number; credit: number;
-  paymentMethod: string; note: string; currency: string; raw: CompanyTransaction;
-};
+type CompanyLedgerEntry = LedgerRow<CompanyTransaction>;
 
 
 function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: { companies: IssuingCompany[]; txns: CompanyTransaction[]; initialCompanyId: string; canExport: boolean }) {
@@ -321,30 +316,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [liveSplits],
   );
 
-  const allEntries = useMemo<CompanyLedgerEntry[]>(() => myTxnsAll.map((t) => {
-    const serviceValue = Math.round(Number(t.trip_value || 0));
-    const payment = Math.round(Number(t.total_paid || 0));
-    const kind: CompanyLedgerKind = serviceValue > 0 ? "service" : "payment";
-    const description = String((t as any).statement || "").trim();
-    return {
-      id: t.id || `${t.created_at || "row"}-${t.company_id || "company"}`,
-      date: t.date || "",
-      kind,
-      description,
-      destination: t.destination || "—",
-      service: t.service_type || "—",
-      count: Number(t.count || 0),
-      price: Number(t.price || 0),
-      serviceValue,
-      payment,
-      debit: serviceValue,
-      credit: payment,
-      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
-      note: t.note || "—",
-      currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
-      raw: t,
-    };
-  }), [myTxnsAll, splitCurrencyByTxnId]);
+  const allEntries = useMemo<CompanyLedgerEntry[]>(
+    () => buildCompanyLedgerRows(myTxnsAll, splitCurrencyByTxnId),
+    [myTxnsAll, splitCurrencyByTxnId],
+  );
 
   const currencyOptions = useMemo(
     () => Array.from(new Set(allEntries.map((e) => e.currency || "EGP"))).sort(),
