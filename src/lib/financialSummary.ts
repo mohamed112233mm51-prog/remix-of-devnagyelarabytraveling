@@ -690,7 +690,18 @@ export type CurrencySupplierTx = {
   sold_amount: number | string | null;
   opening_currency?: string | null;
   payment_splits?: Array<{ amount?: number | string | null }> | null;
+  cancelled_at?: string | null;
 };
+
+/**
+ * Single Source of Truth: يستبعد الحركات الملغاة **مرة واحدة فقط** هنا.
+ * كل مُستهلك (الكشف، الرصيد الجاري، الإجماليات، تقرير شراء/بيع العملات)
+ * يجب أن يُمرّر صفوفه عبر هذه الدالة أولاً — بحيث يستحيل معمارياً أن
+ * تظهر حركة ملغاة في أي شاشة.
+ */
+export function buildCurrencySupplierLedgerRows<T extends CurrencySupplierTx>(rows: ReadonlyArray<T>): T[] {
+  return (Array.isArray(rows) ? rows : []).filter((t) => !(t as any).cancelled_at);
+}
 
 /** الدلتا الفعلية لصف واحد في كشف مورد العملة. */
 export function currencySupplierDelta(t: CurrencySupplierTx): { currency: string; delta: number } {
