@@ -33,6 +33,7 @@ import {
   merchantCashGross,
   merchantCompanyOutflowAmount,
   normalizeCurrency,
+  fmtCurrency,
 } from "@/lib/db";
 import type {
   Agent,
