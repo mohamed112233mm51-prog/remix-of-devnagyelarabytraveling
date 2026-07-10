@@ -214,7 +214,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   useRegisterStatementCapture(
     () => ({ data: buildExportData(), whatsapp: agent?.whatsapp || null, contextId: agent?.id || null }),
-    [agent, displayRows, totalServices, totalPayments, net, accountStatus, filters],
+    [agent, displayRows, byCurrency, accountStatus, filters],
   );
 
   if (agentsLoading && showAgentProfile) return null;
