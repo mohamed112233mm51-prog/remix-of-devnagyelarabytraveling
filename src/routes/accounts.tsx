@@ -49,21 +49,22 @@ function AccountsPage() {
 
   const agentsSummary = useAgentsSummary();
 
-  // نحوّل ملخصات العملات إلى أرقام موحّدة (EGP-only حالياً في هذه الشاشة)
-  // بجمع كل العملات — يطابق سلوك fmtDL القديم الذي يعرض قيمة واحدة.
-  const stats = useMemo(() => {
-    const map = new Map<string, { trips: number; paid: number }>();
+  // ⚠️ Currency-Safe: كل حقل CurrencyMap (لا خلط عبر EGP/USD/LYD).
+  // الكروت والصفوف تعرض سطراً لكل عملة عبر formatCurrencyMap.
+  const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
+    const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
+    const tTrips = new CurrencyMap();
+    const tPaid = new CurrencyMap();
+    const tDue = new CurrencyMap();
     for (const [id, s] of agentsSummary) {
-      const trips = s.totalDebit.total();
-      const paid = s.totalCredit.total();
-      map.set(id, { trips, paid });
+      map.set(id, { trips: s.totalDebit, paid: s.totalCredit, due: s.balance });
+      tTrips.merge(s.totalDebit);
+      tPaid.merge(s.totalCredit);
+      tDue.merge(s.balance);
     }
-    return map;
+    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tDue };
   }, [agentsSummary]);
 
-  const totalTrips = Array.from(stats.values()).reduce((s, v) => s + v.trips, 0);
-  const totalPaid = Array.from(stats.values()).reduce((s, v) => s + v.paid, 0);
-  const totalDue = totalTrips - totalPaid;
 
 
   const debouncedSearch = useDebouncedValue(search, 250);
