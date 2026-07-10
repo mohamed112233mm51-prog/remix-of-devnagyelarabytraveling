@@ -568,7 +568,7 @@ export function computeMerchantAggregates(input: {
   return map;
 }
 
-/** Hook حي لتجميعات كل التجار (EGP). */
+/** Hook حي لتجميعات كل التجار (لكل تاجر: CurrencyMap لكل حقل). */
 export function useMerchantAggregates(): Map<string, MerchantAggregate> {
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
@@ -580,20 +580,16 @@ export function useMerchantAggregates(): Map<string, MerchantAggregate> {
   );
 }
 
-/** المجموع الكلي (كل التجار) + الرصيد الصافي — يُستخدم في كروت KPI. */
-export function useMerchantTotals(): MerchantAggregate & { balance: number } {
+/**
+ * المجموع الكلي عبر كل التجار — كل حقل CurrencyMap (لا خلط بين العملات).
+ * الكروت تعرض سطراً لكل عملة عبر `formatCurrencyLines()`.
+ */
+export function useMerchantTotals(): MerchantAggregate {
   const per = useMerchantAggregates();
   return useMemo(() => {
     const t = emptyMerchantAgg();
-    for (const v of per.values()) {
-      t.incoming += v.incoming;
-      t.outgoing += v.outgoing;
-      t.collected += v.collected;
-      t.paidOut += v.paidOut;
-      t.converted += v.converted;
-      t.balance += v.balance;
-    }
-    return { ...t };
+    for (const v of per.values()) accumulateMerchantAgg(t, v);
+    return t;
   }, [per]);
 }
 
