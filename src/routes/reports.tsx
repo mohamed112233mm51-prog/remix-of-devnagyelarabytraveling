@@ -13,7 +13,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
