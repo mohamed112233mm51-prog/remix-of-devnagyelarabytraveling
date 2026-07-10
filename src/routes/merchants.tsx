@@ -190,22 +190,24 @@ function MerchantsPage() {
                   {merchants.length === 0 ? (
                     <tr><td colSpan={10}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
-                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0, balance: 0 };
-                    const bal = t.balance;
+                    const t = merchantTotals.get(m.id) || { incoming: new CurrencyMap(), outgoing: new CurrencyMap(), collected: new CurrencyMap(), paidOut: new CurrencyMap(), converted: new CurrencyMap(), balance: new CurrencyMap() };
+                    const outWithConverted = t.outgoing.clone();
+                    outWithConverted.merge(t.converted);
                     return (
                       <tr key={m.id}>
                         <td data-label="#">{i + 1}</td>
                         <td className="bold" data-label="اسم التاجر">{m.merchant_name}</td>
                         <td data-label="الهاتف">{m.phone || "—"}</td>
                         <td data-label="الواتساب">{m.whatsapp || "—"}</td>
-                        <td className="num-col" data-label="إجمالي الوارد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.incoming)}</td>
-                        <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing + t.converted)}</td>
-                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(t.collected)}</td>
-                        <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
+                        <td className="num-col" data-label="إجمالي الوارد" style={{ color: "#15803D", fontWeight: 700 }}>{formatCurrencyMap(t.incoming)}</td>
+                        <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{formatCurrencyMap(outWithConverted)}</td>
+                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{formatCurrencyMap(t.collected)}</td>
+                        <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800 }}>{formatCurrencyMap(t.balance)}</td>
                         <td data-label="الحالة"><span className={`badge pill-badge ${((m as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(m as any).status || "نشط"}</span></td>
                         <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditMerchant(m)}>✏️ تعديل</button> : null}</td>
                       </tr>
                     );
+
                   })}
                 </tbody>
               </table>
