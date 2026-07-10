@@ -258,8 +258,9 @@ function CompaniesPage() {
 
       {viewCompany && (() => {
         const c = viewCompany as any;
-        const s = stats.get(viewCompany.id) || { trips: 0, paid: 0 };
-        const due = s.trips - s.paid;
+        const s = stats.get(viewCompany.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
+        const dueSigns = new Set(s.due.entries().map((e) => Math.sign(e.amount)));
+        const dueTone: "red" | "default" = dueSigns.size !== 1 ? "default" : dueSigns.has(1) ? "red" : "default";
         return (
           <EntityProfileModal
             open={!!viewCompany}
@@ -270,10 +271,11 @@ function CompaniesPage() {
             editLabel="تعديل بيانات الشركة"
             onEdit={() => { setEditCompany(viewCompany); setViewCompany(null); }}
             kpis={[
-              { label: "إجمالي الخدمات", value: fmtDL(s.trips), tone: "gold" },
-              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
-              { label: "المتبقي", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+              { label: "إجمالي الخدمات", value: formatCurrencyMap(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: formatCurrencyMap(s.paid), tone: "green" },
+              { label: "المتبقي", value: formatCurrencyMap(s.due), tone: dueTone },
             ]}
+
             fields={[
               { label: "اسم الشركة", value: viewCompany.company_name },
               { label: "الهاتف", value: viewCompany.phone },
