@@ -108,7 +108,7 @@ function ChartsGrid({ children }: { children: React.ReactNode; cols?: number }) 
   return <div className="charts-grid">{children}</div>;
 }
 
-function KpiRow({ items }: { items: { label: string; value: string; tone?: "green" | "red" | "gold" | ""; icon?: React.ReactNode; sub?: string }[] }) {
+function KpiRow({ items }: { items: { label: string; value: React.ReactNode; tone?: "green" | "red" | "gold" | ""; icon?: React.ReactNode; sub?: string }[] }) {
   const defaultIcon = (tone?: string) => {
     if (tone === "green") return <TrendingUp size={20} strokeWidth={2} />;
     if (tone === "red") return <TrendingDown size={20} strokeWidth={2} />;
