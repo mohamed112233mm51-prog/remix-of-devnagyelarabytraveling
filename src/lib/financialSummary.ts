@@ -785,7 +785,7 @@ export function summarizeCurrencySupplierNetByCurrency(
   rows: CurrencySupplierTx[],
 ): Array<{ currency: string; net: number }> {
   const map = new Map<string, number>();
-  for (const t of rows) {
+  for (const t of buildCurrencySupplierLedgerRows(rows)) {
     map.set(t.bought_currency, (map.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
     map.set(t.sold_currency, (map.get(t.sold_currency) || 0) - Number(t.sold_amount || 0));
   }
