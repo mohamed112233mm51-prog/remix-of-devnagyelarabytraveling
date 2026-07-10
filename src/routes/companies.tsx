@@ -90,21 +90,22 @@ function CompaniesPage() {
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
   const [viewCompany, setViewCompany] = useState<IssuingCompany | null>(null);
 
-  // Financial Summary Engine — نفس الأرقام، مصدر واحد.
+  // ⚠️ Currency-Safe: كل حقل CurrencyMap مستقل بالعملة (لا خلط EGP/USD/LYD).
   const companiesSummary = useCompaniesSummary();
   const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
-    const map = new Map<string, { trips: number; paid: number }>();
-    let tTrips = 0;
-    let tPaid = 0;
+    const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
+    const tTrips = new CurrencyMap();
+    const tPaid = new CurrencyMap();
+    const tDue = new CurrencyMap();
     for (const [id, sum] of companiesSummary) {
-      const trips = sum.totalDebit.total();
-      const paid = sum.totalCredit.total();
-      map.set(id, { trips, paid });
-      tTrips += trips;
-      tPaid += paid;
+      map.set(id, { trips: sum.totalDebit, paid: sum.totalCredit, due: sum.balance });
+      tTrips.merge(sum.totalDebit);
+      tPaid.merge(sum.totalCredit);
+      tDue.merge(sum.balance);
     }
-    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tTrips - tPaid };
+    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tDue };
   }, [companiesSummary]);
+
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => companies.filter((c) =>
