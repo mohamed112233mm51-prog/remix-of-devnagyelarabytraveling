@@ -6,17 +6,14 @@ import {
   fmtDL,
   fmtNum,
   fmtUSD,
-  merchantCashGross,
-  merchantCashNet,
   tripValue,
   txnTotalPaid,
   txnCollectedAmount,
   useLive,
-  type CompanyTransaction,
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeInvestor, summarizeExpenses, summarizeAgent, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeMerchantMovements } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -509,23 +506,14 @@ function SubTabsBar({ tabs, current, onChange }: { tabs: { id: string; label: st
 function AgentsReport({ inRange, data: rd }: SectionProps) {
   const { agents, transactions: txns, flights, approvals, loading } = rd;
 
-  const data = useMemo(() => agents.map((a) => {
-    const ts = txns.filter((t) => t.agent_id === a.id && inRange(t.date));
-    const fl = flights.filter((f) => f.agent_id === a.id && inRange(f.travel_date));
-    const ap = approvals.filter((p) => p.agent_id === a.id && inRange(p.submit_date));
-    const s = summarizeAgent(ts);
-    const total = s.totalDebit.total();
-    const paid = s.totalCredit.total();
-    return { name: a.name, total, paid, due: total - paid, flights: fl.length, approvals: ap.length };
-  }), [agents, txns, flights, approvals, inRange]);
-
-  const fTxns = txns.filter((t) => inRange(t.date));
-  const fFlights = flights.filter((f) => inRange(f.travel_date));
-  const approvalDate = (a: typeof approvals[number]) =>
-    (a.submit_date && String(a.submit_date)) ||
-    (a.issue_date && String(a.issue_date)) ||
-    (a.created_at ? String(a.created_at).slice(0, 10) : null);
-  const fApp = approvals.filter((a) => inRange(approvalDate(a)));
+  const rpt = useMemo(
+    () => summarizeAgentReport({ agents, transactions: txns, flights, approvals, inRange }),
+    [agents, txns, flights, approvals, inRange],
+  );
+  const data = rpt.rows;
+  const fTxns = rpt.filteredTxns;
+  const fFlights = rpt.filteredFlights;
+  const fApp = rpt.filteredApprovals;
 
   const monthlyCollections = groupByMonth(fTxns, (t) => t.date, (t) => txnTotalPaid(t));
   const flightsByDestination = groupBy(fFlights, (f) => f.destination || "غير محدد");
@@ -541,8 +529,8 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
   const totalApprovals = approvalsByStatus.reduce((s, x) => s + (x.value || 0), 0);
   const topAgents = [...data].sort((a, b) => b.paid - a.paid).slice(0, 5).map((d) => ({ name: d.name, value: d.paid }));
 
-  const totalCollections = fTxns.reduce((s, t) => s + txnTotalPaid(t), 0);
-  const totalValue = fTxns.reduce((s, t) => s + tripValue(t), 0);
+  const totalCollections = rpt.totalCollections;
+  const totalValue = rpt.totalValue;
 
   const cols = [
     { header: "اسم الوكيل", key: "name" },
@@ -682,23 +670,17 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
 function CompaniesReport({ inRange, data: rd }: SectionProps) {
   const { companies, companyTransactions: cTxns, approvals, loading } = rd;
 
-  const paidOf = (t: CompanyTransaction) => txnCollectedAmount(t);
-
-
-  const data = useMemo(() => companies.map((c) => {
-    const ts = cTxns.filter((t) => t.company_id === c.id && inRange(t.date));
-    const ap = approvals.filter((a) => a.approval_company_id === c.id && inRange(a.submit_date));
-    const total = ts.reduce((s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)), 0);
-    const paid = ts.reduce((s, t) => s + paidOf(t), 0);
-    return { name: c.company_name, total, paid, due: total - paid, count: ts.length + ap.length };
-  }), [companies, cTxns, approvals, inRange]);
-
-  const fCT = cTxns.filter((t) => inRange(t.date));
-  const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => paidOf(t));
+  const rpt = useMemo(
+    () => summarizeCompanyReport({ companies, companyTransactions: cTxns, approvals, inRange }),
+    [companies, cTxns, approvals, inRange],
+  );
+  const data = rpt.rows;
+  const fCT = rpt.filteredTxns;
+  const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => txnCollectedAmount(t));
   const topCompanies = [...data].sort((a, b) => b.count - a.count).slice(0, 5).map((d) => ({ name: d.name, value: d.count }));
   const servicesByCompany = data.filter((d) => d.paid > 0).slice(0, 6).map((d) => ({ name: d.name, value: d.paid }));
 
-  const totalPaid = fCT.reduce((s, t) => s + paidOf(t), 0);
+  const totalPaid = rpt.totalPaid;
 
   const cols = [
     { header: "اسم الشركة", key: "name" },
@@ -818,21 +800,19 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 function MerchantsReport({ inRange, data: rd }: SectionProps) {
   const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, loading } = rd;
 
-  const data = useMemo(() => merchants.map((m) => {
-    const inc = txns.filter((t) => t.merchant_id === m.id && inRange(t.date));
-    const out = cTxns.filter((t) => t.merchant_id === m.id && inRange(t.date));
-    const col = collections.filter((c) => c.merchant_id === m.id && inRange(c.date));
-    const s = summarizeMerchantMovements({ incomingTxns: inc, outgoingCTxns: out, collections: col });
-    return { name: m.merchant_name, incoming: s.incoming, outgoing: s.outgoing, collected: s.collected, fee: s.fee, balance: s.balance };
-  }), [merchants, txns, cTxns, collections, inRange]);
+  const rpt = useMemo(
+    () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, inRange }),
+    [merchants, txns, cTxns, collections, inRange],
+  );
+  const data = rpt.rows;
 
   const flow = data.map((d) => ({ name: d.name, "وارد": d.incoming, "صادر": d.outgoing }));
   const fees = data.filter((d) => d.fee > 0).map((d) => ({ name: d.name, value: d.fee }));
   const balances = data.map((d) => ({ name: d.name, value: d.balance }));
 
-  const totIn = data.reduce((s, d) => s + d.incoming, 0);
-  const totOut = data.reduce((s, d) => s + d.outgoing, 0);
-  const totFee = data.reduce((s, d) => s + d.fee, 0);
+  const totIn = rpt.totalIn;
+  const totOut = rpt.totalOut;
+  const totFee = rpt.totalFee;
 
   const cols = [
     { header: "اسم التاجر", key: "name" },
@@ -928,13 +908,14 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
 function InvestorsReport({ inRange, data: rd }: SectionProps) {
   const { investors, investorTransactions: invTxns, loading } = rd;
 
-  const data = useMemo(() => investors.map((inv) => {
-    const ts = invTxns.filter((t) => t.investor_id === inv.id && inRange(t.date));
-    const s = summarizeInvestor(ts);
-    return { name: inv.investor_name, deposit: s.deposit, withdraw: s.withdraw, balance: s.balance };
-  }), [investors, invTxns, inRange]);
+  const rpt = useMemo(
+    () => summarizeInvestorReport({ investors, investorTransactions: invTxns, inRange }),
+    [investors, invTxns, inRange],
+  );
+  const data = rpt.rows;
+  const fIT = rpt.filteredTxns;
 
-  const fIT = invTxns.filter((t) => inRange(t.date));
+  // Chart-only shaping (monthly + running series).
   const monthlyMap = new Map<string, { month: string; deposit: number; withdraw: number }>();
   for (const t of fIT) {
     const k = (t.date || "").slice(0, 7);
@@ -951,9 +932,9 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
     return { month: m.month, value: running };
   });
 
-  const totDep = data.reduce((s, d) => s + d.deposit, 0);
-  const totWd = data.reduce((s, d) => s + d.withdraw, 0);
-  const totBal = data.reduce((s, d) => s + d.balance, 0);
+  const totDep = rpt.totalDeposit;
+  const totWd = rpt.totalWithdraw;
+  const totBal = rpt.totalBalance;
 
   const cols = [
     { header: "اسم المستثمر", key: "name" },
@@ -1310,42 +1291,16 @@ function usdMovementLabel(r: UsdTreasuryTransaction): string {
 function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
   const { usdTreasury, companyName, merchantName, loading } = rd;
 
-  // All-time sorted asc to build running balance, then filter for display
-  const allSorted = useMemo(() => {
-    return [...usdTreasury]
-      .filter((r) => !(r as any).cancelled_at)
-      .sort((a, b) => {
-        const da = (a.date || "") + " " + (a.created_at || "");
-        const db = (b.date || "") + " " + (b.created_at || "");
-        return da.localeCompare(db);
-      });
-  }, [usdTreasury]);
-
-  const withBalance = useMemo(() => {
-    let bal = 0;
-    return allSorted.map((r) => {
-      const amt = Number(r.usd_amount || 0);
-      bal += r.type === "company_payment" ? -amt : amt;
-      return { row: r, balance: bal };
-    });
-  }, [allSorted]);
-
-  const filtered = useMemo(
-    () => withBalance.filter((x) => inRange(x.row.date)).reverse(),
-    [withBalance, inRange],
+  const rpt = useMemo(
+    () => summarizeUsdTreasuryPeriod(usdTreasury, inRange),
+    [usdTreasury, inRange],
   );
-
-  // KPIs (period scope)
-  const periodConversions = filtered
-    .filter((x) => x.row.type === "conversion")
-    .reduce((s, x) => s + Number(x.row.usd_amount || 0), 0);
-  const periodPayments = filtered
-    .filter((x) => x.row.type === "company_payment")
-    .reduce((s, x) => s + Number(x.row.usd_amount || 0), 0);
-  const periodEgpUsed = filtered
-    .filter((x) => x.row.type === "conversion")
-    .reduce((s, x) => s + Number(x.row.egp_amount || 0), 0);
-  const currentBalance = withBalance.length ? withBalance[withBalance.length - 1].balance : 0;
+  void rpt.withBalance;
+  const filtered = rpt.filtered;
+  const periodConversions = rpt.periodConversions;
+  const periodPayments = rpt.periodPayments;
+  const periodEgpUsed = rpt.periodEgpUsed;
+  const currentBalance = rpt.currentBalance;
 
   // Monthly chart (period)
   const monthlyMap = new Map<string, { conv: number; pay: number }>();

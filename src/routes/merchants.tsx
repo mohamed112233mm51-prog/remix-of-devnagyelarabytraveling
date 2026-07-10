@@ -8,7 +8,7 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useMerchantAggregates, useMerchantTotals } from "@/lib/financialSummary";
+import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals } from "@/lib/financialSummary";
 
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -497,8 +497,10 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
 function HistoryTab({ collections, merchants }: { collections: MerchantCashCollection[]; merchants: Merchant[] }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const filtered = collections.filter((c) => (!from || c.date >= from) && (!to || c.date <= to));
-  const total = filtered.reduce((s, c) => s + Number(c.amount || 0), 0);
+  const { filtered, total } = useMemo(
+    () => summarizeMerchantCollectionsPeriod(collections, from, to),
+    [collections, from, to],
+  );
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">📜 سجل التحصيلات النقدية</div></div>
@@ -542,12 +544,10 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
   const [agentId, setAgentId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const filtered = txns.filter((t) =>
-    (!agentId || t.agent_id === agentId) &&
-    (!from || t.date >= from) &&
-    (!to || t.date <= to)
+  const { filtered, total } = useMemo(
+    () => summarizeMerchantIncomingPeriod(txns, agentId, from, to),
+    [txns, agentId, from, to],
   );
-  const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (تاجر الكاش)</div></div>
@@ -589,12 +589,10 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
   const [to, setTo] = useState("");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const mName = (id: string | null) => id ? (merchants.find((m) => m.id === id)?.merchant_name || "—") : "—";
-  const filtered = txns.filter((t) =>
-    (!companyId || t.company_id === companyId) &&
-    (!from || t.date >= from) &&
-    (!to || t.date <= to)
+  const { filtered, total } = useMemo(
+    () => summarizeMerchantOutgoingPeriod(txns, companyId, from, to),
+    [txns, companyId, from, to],
   );
-  const total = filtered.reduce((s, t) => s + merchantCompanyOutflowAmount(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
@@ -895,34 +893,22 @@ function MerchantStatementTab({
 
   const { pageRows: pageMovements, Controls, page, pageSize } = usePagination(withRunning, 50);
 
-  const totalIncoming = filtered.filter((m) => m.type === "وارد من وكيل").reduce((s, m) => s + m.net, 0);
-  const totalOutgoing = filtered.filter((m) => m.type === "صادر لشركة").reduce((s, m) => s + m.net, 0);
-  const totalCollected = filtered.filter((m) => m.type === "تحصيل نقدية من التاجر").reduce((s, m) => s + m.net, 0);
-  const totalPaidOut = filtered.filter((m) => m.type === "صرف نقدية للتاجر").reduce((s, m) => s + m.net, 0);
-  const totalConverted = filtered.filter((m) => m.type === "تحويل لـ USD").reduce((s, m) => s + m.net, 0);
-  const totalCommission = filtered.reduce((s, m) => s + m.commission, 0);
-  // Per-currency final balances (last row of each currency).
+  const totals = useMemo(() => summarizeMerchantMovementTotals(filtered), [filtered]);
+  const totalIncoming = totals.totalIncoming;
+  const totalOutgoing = totals.totalOutgoing;
+  const totalCollected = totals.totalCollected;
+  const totalPaidOut = totals.totalPaidOut;
+  const totalConverted = totals.totalConverted;
+  const totalCommission = totals.totalCommission;
+  const byCurrency = totals.byCurrency as CurrencyTotal[];
+
+  // Per-currency final balances (last row of each currency) — display-only.
   const finalByCurrency = useMemo(() => {
     const map = new Map<string, number>();
     for (const m of withRunning) map.set(m.currency || "EGP", m.balance);
     return Array.from(map.entries());
   }, [withRunning]);
   const finalBalance = finalByCurrency.find(([c]) => c === "EGP")?.[1] ?? 0;
-
-  // Per-currency debit/credit/net/count for the shared summary cards.
-  const byCurrency = useMemo<CurrencyTotal[]>(() => {
-    const map = new Map<string, { debit: number; credit: number; count: number }>();
-    for (const m of filtered) {
-      const cur = m.currency || "EGP";
-      const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
-      if (m.delta >= 0) g.debit += m.delta; else g.credit += -m.delta;
-      g.count += 1;
-      map.set(cur, g);
-    }
-    return Array.from(map.entries())
-      .map(([currency, v]) => ({ currency, debit: v.debit, credit: v.credit, net: v.debit - v.credit, count: v.count }))
-      .filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0);
-  }, [filtered]);
 
   const [visible, setVisible] = usePersistentColumnVisibility("merchant-statement", MERCHANT_STATEMENT_COLUMNS);
   const isVisible = (k: string) => visible[k] !== false;
@@ -1117,7 +1103,7 @@ function MerchantStatementTab({
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجمالي بالجنيه — المبلغ: {fmtDL(filtered.filter(m => m.currency === "EGP").reduce((s, m) => s + m.gross, 0))} · النسبة: {fmtDL(totalCommission)} · الصافي: {fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)}</td></tr>
+                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجمالي بالجنيه — المبلغ: {fmtDL(totals.egpGross)} · النسبة: {fmtDL(totalCommission)} · الصافي: {fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)}</td></tr>
                 <tr><td colSpan={visibleCount} style={{ fontWeight: 800, background: "var(--card)" }}>الرصيد الحالي حسب العملة — {finalByCurrency.length === 0 ? "—" : finalByCurrency.map(([c, v]) => fmtCurrency(v, c)).join(" · ")}</td></tr>
               </tfoot>
             </table>

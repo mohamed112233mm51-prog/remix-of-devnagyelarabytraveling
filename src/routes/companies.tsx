@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fmtDL, fmtNum, fmtUSD, fmtCurrency, useLive, useDropdownOptions, withSelected, useTreasuryBalances, merchantCashNet,
+  fmtDL, fmtNum, fmtUSD, fmtCurrency, useLive, useDropdownOptions, withSelected, useTreasuryBalances,
   type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { ExportButton } from "@/components/ExportButton";
@@ -25,7 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
-import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, type LedgerRow } from "@/lib/financialSummary";
+import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, type LedgerRow } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -338,12 +338,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [filteredEntries],
   );
 
-  const totalServices = filteredEntries.reduce((s, e) => s + e.debit, 0);
-  const totalPaid = filteredEntries.reduce((s, e) => s + e.credit, 0);
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
+  const totalServices = byCurrency.reduce((s, b) => s + b.debit, 0);
+  const totalPaid = byCurrency.reduce((s, b) => s + b.credit, 0);
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مستحق للشركة" : balance < 0 ? "مستحق على الشركة" : "متوازن";
-
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
@@ -1011,46 +1010,14 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
   const needsMerchant = form.source_type === "merchant_wallet" || form.source_type === "merchant_physical";
   const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
 
-  const sourceBalance = useMemo(() => {
-    const src = form.source_type;
-    if (!src) return 0;
-    const conversionsFor = (type: ConvertSource, mid?: string) =>
-      usdRows
-        .filter((r) => r.type === "conversion" && r.source_type === type && (mid ? r.merchant_id === mid : true))
-        .reduce((s, r) => s + Number(r.egp_amount || 0), 0);
-    if (src === "insta_company") {
-      const inn = agentTxns.reduce((s, t) => s + Number(t.instapay_amount || 0), 0);
-      const out = companyTxns.reduce((s, t) => s + Number(t.instapay_amount || 0), 0);
-      return Math.round(inn - out - conversionsFor("insta_company"));
-    }
-    if (src === "cash_company") {
-      const inn = agentTxns.reduce((s, t) => s + Number(t.cash_amount || 0), 0);
-      const out = companyTxns.reduce((s, t) => s + Number(t.cash_amount || 0), 0);
-      return Math.round(inn - out - conversionsFor("cash_company"));
-    }
-    const mid = form.merchant_id;
-    if (!mid) return 0;
-    if (src === "merchant_wallet") {
-      const inn = agentTxns
-        .filter((t) => t.merchant_id === mid)
-        .reduce((s, t) => s + merchantCashNet(t), 0);
-      const out = companyTxns
-        .filter((t) => t.merchant_id === mid)
-        .reduce((s, t) => s + merchantCashNet(t), 0);
-      const collected = collections
-        .filter((c) => c.merchant_id === mid)
-        .reduce((s, c) => s + Number(c.amount || 0), 0);
-      return Math.round(inn - out - collected - conversionsFor("merchant_wallet", mid));
-    }
-    // merchant_physical
-    const inn = agentTxns
-      .filter((t) => t.merchant_id === mid)
-      .reduce((s, t) => s + Number(t.merchant_cash_physical_amount || 0), 0);
-    const out = companyTxns
-      .filter((t) => t.merchant_id === mid)
-      .reduce((s, t) => s + Number(t.merchant_cash_physical_amount || 0), 0);
-    return Math.round(inn - out - conversionsFor("merchant_physical", mid));
-  }, [form.source_type, form.merchant_id, agentTxns, companyTxns, collections, usdRows]);
+  const sourceBalance = useMemo(
+    () => computeUsdConversionSourceBalance({
+      sourceType: (form.source_type || "") as any,
+      merchantId: form.merchant_id,
+      agentTxns, companyTxns, collections, usdRows,
+    }),
+    [form.source_type, form.merchant_id, agentTxns, companyTxns, collections, usdRows],
+  );
 
   // Need merchantCashNet helper imported
   const save = async () => {
