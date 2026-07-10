@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CurrencyLines } from "@/components/CurrencyLines";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
@@ -9,7 +9,6 @@ import { useAgentsSummary, formatCurrencyMap, CurrencyMap } from "@/lib/financia
 
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
 import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
-import { useEffect as useEffectOB } from "react";
 import { toast } from "sonner";
 import { usePerm, checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
