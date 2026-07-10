@@ -294,104 +294,31 @@ function isMerchantSplit(s: SplitRow): boolean {
 }
 
 export function useMerchantSummary(merchantId: string | null | undefined): EntitySummary {
-  const { rows: splits } = useLive<SplitRow>("payment_splits");
   const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: coll } = useLive<any>("merchant_cash_collections");
+  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   return useMemo(() => {
     if (!merchantId) return empty();
-    // معرّفات الصفوف الأم المرتبطة بهذا التاجر (transactions + collections)
-    const parentTxnIds = new Set(
-      txns.filter((t) => t.merchant_id === merchantId).map((t) => t.id),
-    );
-    const parentCollIds = new Set(
-      coll.filter((c: any) => c.merchant_id === merchantId).map((c: any) => c.id),
-    );
-    const s = empty();
-    let count = 0;
-    for (const sp of splits) {
-      if (sp.cancelled_at) continue;
-      const isTxn =
-        sp.source_table === "transactions" &&
-        sp.source_id &&
-        parentTxnIds.has(sp.source_id) &&
-        isMerchantSplit(sp);
-      const isColl =
-        sp.source_table === "merchant_cash_collections" &&
-        sp.source_id &&
-        parentCollIds.has(sp.source_id);
-      if (!isTxn && !isColl) continue;
-      count += 1;
-      const cur = (sp.currency || "EGP").toUpperCase();
-      const amt = Number(sp.amount) || 0;
-      if (sp.direction === "out") {
-        s.totalDebit.add(cur, amt);
-        s.balance.add(cur, amt);
-      } else {
-        s.totalCredit.add(cur, amt);
-        s.balance.add(cur, -amt);
-      }
-    }
-    s.count = count;
-    return s;
-  }, [splits, txns, coll, merchantId]);
+    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+    return summarizeMerchantMovementsAsEntity(buildMerchantMovements(merchantId, input));
+  }, [txns, companyTxns, collections, usdRows, merchantId]);
 }
 
 export function useMerchantsSummary(): Map<string, EntitySummary> {
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: splits } = useLive<SplitRow>("payment_splits");
   const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: coll } = useLive<any>("merchant_cash_collections");
+  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   return useMemo(() => {
-    // فهرسة الصفوف الأم لكل تاجر
-    const txnByMerchant = new Map<string, Set<string>>();
-    for (const t of txns) {
-      if (!t.merchant_id) continue;
-      let set = txnByMerchant.get(t.merchant_id);
-      if (!set) txnByMerchant.set(t.merchant_id, (set = new Set()));
-      set.add(t.id);
-    }
-    const collByMerchant = new Map<string, Set<string>>();
-    for (const c of coll as any[]) {
-      if (!c.merchant_id) continue;
-      let set = collByMerchant.get(c.merchant_id);
-      if (!set) collByMerchant.set(c.merchant_id, (set = new Set()));
-      set.add(c.id);
-    }
-
     const out = new Map<string, EntitySummary>();
-    for (const m of merchants) out.set(m.id, empty());
-
-    for (const sp of splits) {
-      if (sp.cancelled_at) continue;
-      if (!sp.source_table || !sp.source_id) continue;
-      const cur = (sp.currency || "EGP").toUpperCase();
-      const amt = Number(sp.amount) || 0;
-
-      let merchantId: string | null = null;
-      if (sp.source_table === "transactions" && isMerchantSplit(sp)) {
-        for (const [mid, ids] of txnByMerchant) {
-          if (ids.has(sp.source_id)) { merchantId = mid; break; }
-        }
-      } else if (sp.source_table === "merchant_cash_collections") {
-        for (const [mid, ids] of collByMerchant) {
-          if (ids.has(sp.source_id)) { merchantId = mid; break; }
-        }
-      }
-      if (!merchantId) continue;
-
-      const s = out.get(merchantId) ?? empty();
-      s.count += 1;
-      if (sp.direction === "out") {
-        s.totalDebit.add(cur, amt);
-        s.balance.add(cur, amt);
-      } else {
-        s.totalCredit.add(cur, amt);
-        s.balance.add(cur, -amt);
-      }
-      out.set(merchantId, s);
+    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+    for (const m of merchants) {
+      out.set(m.id, summarizeMerchantMovementsAsEntity(buildMerchantMovements(m.id, input)));
     }
     return out;
-  }, [merchants, splits, txns, coll]);
+  }, [merchants, txns, companyTxns, collections, usdRows]);
 }
 
 /* ============================================================
