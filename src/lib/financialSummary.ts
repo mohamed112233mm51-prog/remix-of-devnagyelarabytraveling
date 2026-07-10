@@ -1211,6 +1211,32 @@ export function formatCurrencyLines(map: CurrencyMap): string[] {
   return map.entries().map(({ currency, amount }) => formatCurrencyAmount(amount, currency));
 }
 
+/**
+ * صياغة CurrencyMap كسطر واحد قابل للعرض داخل كارت أو خلية جدول:
+ *   "1,000 ج.م · 500 $ · 2,000 د.ل"
+ * إذا كانت الخريطة فارغة يُعاد `"0 ج.م"` (سلوك افتراضي متوافق مع الكروت السابقة).
+ * لا تُدمج العملات أبداً — كل سطر مستقل بعملته الأصلية.
+ */
+export function formatCurrencyMap(
+  map: CurrencyMap,
+  opts: { separator?: string; emptyLabel?: string } = {},
+): string {
+  const sep = opts.separator ?? " · ";
+  const entries = map.entries();
+  if (entries.length === 0) return opts.emptyLabel ?? "0 ج.م";
+  return entries
+    .map(({ currency, amount }) => {
+      // نستخدم fmtCurrency من db.ts (يعرف الرموز العربية: ج.م / $ / د.ل)
+      // بدل الرمز اللاتيني، لتطابق العرض السابق للكروت.
+      const rounded = Math.round((Number(amount) || 0) * 100) / 100;
+      const n = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(rounded);
+      const sym = currency === "EGP" ? "ج.م" : currency === "USD" ? "$" : currency === "LYD" ? "د.ل" : currency;
+      return `${n} ${sym}`;
+    })
+    .join(sep);
+}
+
+
 /* ============================================================
  *  Treasury (cash_boxes + latest exchange rates)
  *  مصدر واحد للحساب المستخدم في Dashboard و Reports.
