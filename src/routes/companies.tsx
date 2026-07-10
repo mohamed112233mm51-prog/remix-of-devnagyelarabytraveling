@@ -92,18 +92,16 @@ function CompaniesPage() {
 
   // Financial Summary Engine — نفس الأرقام، مصدر واحد.
   const companiesSummary = useCompaniesSummary();
-  const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
+  // كارت الإجماليات = مجموع الرصيد الحالي لكل شركة، مُقسَّم حسب العملة.
+  const companiesBalanceByCurrency = useCompaniesBalanceByCurrency();
+  const { stats } = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
-    let tTrips = 0;
-    let tPaid = 0;
     for (const [id, sum] of companiesSummary) {
       const trips = sum.totalDebit.total();
       const paid = sum.totalCredit.total();
       map.set(id, { trips, paid });
-      tTrips += trips;
-      tPaid += paid;
     }
-    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tTrips - tPaid };
+    return { stats: map };
   }, [companiesSummary]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
