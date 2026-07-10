@@ -1291,42 +1291,16 @@ function usdMovementLabel(r: UsdTreasuryTransaction): string {
 function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
   const { usdTreasury, companyName, merchantName, loading } = rd;
 
-  // All-time sorted asc to build running balance, then filter for display
-  const allSorted = useMemo(() => {
-    return [...usdTreasury]
-      .filter((r) => !(r as any).cancelled_at)
-      .sort((a, b) => {
-        const da = (a.date || "") + " " + (a.created_at || "");
-        const db = (b.date || "") + " " + (b.created_at || "");
-        return da.localeCompare(db);
-      });
-  }, [usdTreasury]);
-
-  const withBalance = useMemo(() => {
-    let bal = 0;
-    return allSorted.map((r) => {
-      const amt = Number(r.usd_amount || 0);
-      bal += r.type === "company_payment" ? -amt : amt;
-      return { row: r, balance: bal };
-    });
-  }, [allSorted]);
-
-  const filtered = useMemo(
-    () => withBalance.filter((x) => inRange(x.row.date)).reverse(),
-    [withBalance, inRange],
+  const rpt = useMemo(
+    () => summarizeUsdTreasuryPeriod(usdTreasury, inRange),
+    [usdTreasury, inRange],
   );
-
-  // KPIs (period scope)
-  const periodConversions = filtered
-    .filter((x) => x.row.type === "conversion")
-    .reduce((s, x) => s + Number(x.row.usd_amount || 0), 0);
-  const periodPayments = filtered
-    .filter((x) => x.row.type === "company_payment")
-    .reduce((s, x) => s + Number(x.row.usd_amount || 0), 0);
-  const periodEgpUsed = filtered
-    .filter((x) => x.row.type === "conversion")
-    .reduce((s, x) => s + Number(x.row.egp_amount || 0), 0);
-  const currentBalance = withBalance.length ? withBalance[withBalance.length - 1].balance : 0;
+  const withBalance = rpt.withBalance;
+  const filtered = rpt.filtered;
+  const periodConversions = rpt.periodConversions;
+  const periodPayments = rpt.periodPayments;
+  const periodEgpUsed = rpt.periodEgpUsed;
+  const currentBalance = rpt.currentBalance;
 
   // Monthly chart (period)
   const monthlyMap = new Map<string, { conv: number; pay: number }>();
