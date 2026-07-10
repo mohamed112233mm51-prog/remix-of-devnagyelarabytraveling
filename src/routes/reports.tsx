@@ -509,23 +509,14 @@ function SubTabsBar({ tabs, current, onChange }: { tabs: { id: string; label: st
 function AgentsReport({ inRange, data: rd }: SectionProps) {
   const { agents, transactions: txns, flights, approvals, loading } = rd;
 
-  const data = useMemo(() => agents.map((a) => {
-    const ts = txns.filter((t) => t.agent_id === a.id && inRange(t.date));
-    const fl = flights.filter((f) => f.agent_id === a.id && inRange(f.travel_date));
-    const ap = approvals.filter((p) => p.agent_id === a.id && inRange(p.submit_date));
-    const s = summarizeAgent(ts);
-    const total = s.totalDebit.total();
-    const paid = s.totalCredit.total();
-    return { name: a.name, total, paid, due: total - paid, flights: fl.length, approvals: ap.length };
-  }), [agents, txns, flights, approvals, inRange]);
-
-  const fTxns = txns.filter((t) => inRange(t.date));
-  const fFlights = flights.filter((f) => inRange(f.travel_date));
-  const approvalDate = (a: typeof approvals[number]) =>
-    (a.submit_date && String(a.submit_date)) ||
-    (a.issue_date && String(a.issue_date)) ||
-    (a.created_at ? String(a.created_at).slice(0, 10) : null);
-  const fApp = approvals.filter((a) => inRange(approvalDate(a)));
+  const rpt = useMemo(
+    () => summarizeAgentReport({ agents, transactions: txns, flights, approvals, inRange }),
+    [agents, txns, flights, approvals, inRange],
+  );
+  const data = rpt.rows;
+  const fTxns = rpt.filteredTxns;
+  const fFlights = rpt.filteredFlights;
+  const fApp = rpt.filteredApprovals;
 
   const monthlyCollections = groupByMonth(fTxns, (t) => t.date, (t) => txnTotalPaid(t));
   const flightsByDestination = groupBy(fFlights, (f) => f.destination || "غير محدد");
@@ -541,8 +532,8 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
   const totalApprovals = approvalsByStatus.reduce((s, x) => s + (x.value || 0), 0);
   const topAgents = [...data].sort((a, b) => b.paid - a.paid).slice(0, 5).map((d) => ({ name: d.name, value: d.paid }));
 
-  const totalCollections = fTxns.reduce((s, t) => s + txnTotalPaid(t), 0);
-  const totalValue = fTxns.reduce((s, t) => s + tripValue(t), 0);
+  const totalCollections = rpt.totalCollections;
+  const totalValue = rpt.totalValue;
 
   const cols = [
     { header: "اسم الوكيل", key: "name" },
