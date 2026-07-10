@@ -537,38 +537,32 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     phone: company.phone || "",
     whatsapp: company.whatsapp || "",
     status: company.status || "نشط",
-    opening_debit: c.opening_debit ? String(c.opening_debit) : "",
-    opening_credit: c.opening_credit ? String(c.opening_credit) : "",
-    opening_currency: c.opening_currency || "EGP",
-    opening_date: c.opening_date || "",
-    opening_note: c.opening_note || "",
   });
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
+  useEffect(() => {
+    let alive = true;
+    readEntityOpeningEntries("company", company.id).then((rows) => { if (alive) setOpenings(rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [company.id]);
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
     if (!form.company_name.trim()) return toast.error("اسم الشركة مطلوب");
     setSaving(true);
-    const debit = Number(form.opening_debit) || 0;
-    const credit = Number(form.opening_credit) || 0;
     const { error } = await supabase.from("issuing_companies").update({
       company_name: form.company_name.trim(),
       phone: form.phone.trim() || null,
       whatsapp: form.whatsapp.trim() || null,
       status: form.status || "نشط",
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: form.opening_currency || "EGP",
-      opening_date: form.opening_date || null,
-      opening_note: form.opening_note.trim() || null,
     } as any).eq("id", company.id);
     if (error) { setSaving(false); return toast.error(error.message); }
-    await syncCompanyOpeningBalance(company.id, {
-      debit, credit,
-      currency: form.opening_currency || "EGP",
-      date: form.opening_date || null,
-      note: form.opening_note.trim() || null,
-    });
+    try {
+      await syncEntityOpeningEntries("company", company.id, openings);
+    } catch (e: any) {
+      setSaving(false);
+      return toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية");
+    }
     setSaving(false);
     toast.success("تم تحديث بيانات الشركة بنجاح");
     onClose();
