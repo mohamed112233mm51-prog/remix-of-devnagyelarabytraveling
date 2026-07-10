@@ -1199,11 +1199,9 @@ export function buildCompanyLedgerRows(
  * ============================================================ */
 
 export function formatCurrencyAmount(amount: number, currency: Currency): string {
-  const n = new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
-  }).format(Math.round((Number(amount) || 0) * 100) / 100);
-  return `${n} ${currency}`;
+  // المصدر الموحد لعرض العملات: fmtCurrency من db.ts (ج.م / $ / د.ل).
+  // لا نعرض رموز ISO (EGP/USD/LYD) للمستخدم النهائي.
+  return fmtCurrency(Number(amount) || 0, currency);
 }
 
 /** يُرجع قائمة أسطر جاهزة للعرض داخل كارت (EGP → USD → LYD، بدون العملات الصفرية). */
