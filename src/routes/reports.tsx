@@ -803,21 +803,19 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 function MerchantsReport({ inRange, data: rd }: SectionProps) {
   const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, loading } = rd;
 
-  const data = useMemo(() => merchants.map((m) => {
-    const inc = txns.filter((t) => t.merchant_id === m.id && inRange(t.date));
-    const out = cTxns.filter((t) => t.merchant_id === m.id && inRange(t.date));
-    const col = collections.filter((c) => c.merchant_id === m.id && inRange(c.date));
-    const s = summarizeMerchantMovements({ incomingTxns: inc, outgoingCTxns: out, collections: col });
-    return { name: m.merchant_name, incoming: s.incoming, outgoing: s.outgoing, collected: s.collected, fee: s.fee, balance: s.balance };
-  }), [merchants, txns, cTxns, collections, inRange]);
+  const rpt = useMemo(
+    () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, inRange }),
+    [merchants, txns, cTxns, collections, inRange],
+  );
+  const data = rpt.rows;
 
   const flow = data.map((d) => ({ name: d.name, "وارد": d.incoming, "صادر": d.outgoing }));
   const fees = data.filter((d) => d.fee > 0).map((d) => ({ name: d.name, value: d.fee }));
   const balances = data.map((d) => ({ name: d.name, value: d.balance }));
 
-  const totIn = data.reduce((s, d) => s + d.incoming, 0);
-  const totOut = data.reduce((s, d) => s + d.outgoing, 0);
-  const totFee = data.reduce((s, d) => s + d.fee, 0);
+  const totIn = rpt.totalIn;
+  const totOut = rpt.totalOut;
+  const totFee = rpt.totalFee;
 
   const cols = [
     { header: "اسم التاجر", key: "name" },
