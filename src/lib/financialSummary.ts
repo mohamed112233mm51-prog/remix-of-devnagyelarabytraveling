@@ -748,7 +748,7 @@ export function summarizeCurrencySupplierStatement(
     g.debit += d; g.credit += c; g.count += 1;
     map.set(k, g);
   };
-  for (const t of rows) {
+  for (const t of buildCurrencySupplierLedgerRows(rows)) {
     const { currency, delta } = currencySupplierDelta(t);
     if (delta === 0) { bump(currency, 0, 0); continue; }
     if (delta > 0) bump(currency, delta, 0); else bump(currency, 0, -delta);
