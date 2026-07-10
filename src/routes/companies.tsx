@@ -639,32 +639,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-          <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
-          <div className="card-body">
-            <div className="form-grid">
-              <div className="form-group"><label>رصيد سابق مدين</label>
-                <NumberInput value={Number(form.opening_debit) || 0} onChange={(n) => set("opening_debit", n === 0 ? "" : String(n))} min={0} />
-              </div>
-              <div className="form-group"><label>رصيد سابق دائن</label>
-                <NumberInput value={Number(form.opening_credit) || 0} onChange={(n) => set("opening_credit", n === 0 ? "" : String(n))} min={0} />
-              </div>
-              <div className="form-group"><label>تاريخ الرصيد السابق</label>
-                <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
-              </div>
-              <div className="form-group"><label>العملة</label>
-                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
-                  <option value="EGP">جنيه مصري</option>
-                  <option value="USD">دولار أمريكي</option>
-                  <option value="LYD">دينار ليبي</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
-                <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <OpeningEntriesEditor value={openings} onChange={setOpenings} />
 
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
