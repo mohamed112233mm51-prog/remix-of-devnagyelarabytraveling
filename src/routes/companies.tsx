@@ -213,17 +213,16 @@ function CompaniesPage() {
                       <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
                     ) : pageRows.map((c, i) => {
                       const idx = page * pageSize + i;
-                      const s = stats.get(c.id) || { trips: 0, paid: 0 };
-                      const due = s.trips - s.paid;
+                      const s = stats.get(c.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
                       return (
                         <tr key={c.id} onClick={() => setViewCompany(c)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
                           <td data-label="الواتساب">{c.whatsapp || "—"}</td>
-                          <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
-                          <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
-                          <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
+                          <td className="num-col" data-label="إجمالي الخدمات">{formatCurrencyMap(s.trips)}</td>
+                          <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{formatCurrencyMap(s.paid)}</td>
+                          <td className="num-col" data-label="المتبقي" style={{ fontWeight: 700 }}>{formatCurrencyMap(s.due)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${((c as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(c as any).status || "نشط"}</span></td>
                         </tr>
                       );
@@ -232,11 +231,12 @@ function CompaniesPage() {
                   <tfoot className="totals-foot">
                     <tr>
                       <td colSpan={4}>الإجمالي</td>
-                      <td className="num-col">{fmtDL(totalTrips)}</td>
-                      <td className="num-col">{fmtDL(totalPaid)}</td>
-                      <td className="num-col">{fmtDL(totalDue)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalTrips)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalPaid)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalDue)}</td>
                       <td></td>
                     </tr>
+
 
                   </tfoot>
                 </table>
