@@ -589,12 +589,10 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
   const [to, setTo] = useState("");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const mName = (id: string | null) => id ? (merchants.find((m) => m.id === id)?.merchant_name || "—") : "—";
-  const filtered = txns.filter((t) =>
-    (!companyId || t.company_id === companyId) &&
-    (!from || t.date >= from) &&
-    (!to || t.date <= to)
+  const { filtered, total } = useMemo(
+    () => summarizeMerchantOutgoingPeriod(txns, companyId, from, to),
+    [txns, companyId, from, to],
   );
-  const total = filtered.reduce((s, t) => s + merchantCompanyOutflowAmount(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬆️ مدفوعات صادرة لشركات (تاجر الكاش)</div></div>
