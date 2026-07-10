@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CurrencyLines } from "@/components/CurrencyLines";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CurrencyLines } from "@/components/CurrencyLines";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
