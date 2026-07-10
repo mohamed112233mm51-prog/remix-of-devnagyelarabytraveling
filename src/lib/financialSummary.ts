@@ -1589,12 +1589,23 @@ export function summarizeCompanyReport(input: {
   return { rows, totalPaid, filteredTxns };
 }
 
-/** تقرير التجار لفترة. */
+/**
+ * تقرير التجار لفترة — Currency-Safe: كل حقل CurrencyMap مستقل بالعملة،
+ * لا خلط بين EGP/USD/LYD في أي إجمالي.
+ */
 export type MerchantReportRow = {
-  name: string; incoming: number; outgoing: number; collected: number; fee: number; balance: number;
+  name: string;
+  incoming: CurrencyMap;
+  outgoing: CurrencyMap;
+  collected: CurrencyMap;
+  fee: CurrencyMap;
+  balance: CurrencyMap;
 };
 export type MerchantReportSummary = {
-  rows: MerchantReportRow[]; totalIn: number; totalOut: number; totalFee: number;
+  rows: MerchantReportRow[];
+  totalIn: CurrencyMap;
+  totalOut: CurrencyMap;
+  totalFee: CurrencyMap;
 };
 
 export function summarizeMerchantReport(input: {
@@ -1602,38 +1613,36 @@ export function summarizeMerchantReport(input: {
   transactions: Transaction[];
   companyTransactions: CompanyTransaction[];
   collections: MerchantCashCollection[];
+  usdRows?: UsdTreasuryTransaction[];
   inRange: InRange;
 }): MerchantReportSummary {
-  const { merchants, transactions, companyTransactions, collections, inRange } = input;
-  // Group inputs by merchant in one pass each.
-  const inc = new Map<string, Transaction[]>();
-  const out = new Map<string, CompanyTransaction[]>();
-  const col = new Map<string, MerchantCashCollection[]>();
-  for (const t of transactions) if (t.merchant_id && inRange(t.date)) {
-    const arr = inc.get(t.merchant_id) || []; arr.push(t); inc.set(t.merchant_id, arr);
-  }
-  for (const t of companyTransactions) {
-    const mid = (t as any).merchant_id;
-    if (mid && inRange(t.date)) { const arr = out.get(mid) || []; arr.push(t); out.set(mid, arr); }
-  }
-  for (const c of collections) if (c.merchant_id && inRange(c.date)) {
-    const arr = col.get(c.merchant_id) || []; arr.push(c); col.set(c.merchant_id, arr);
-  }
+  const { merchants, transactions, companyTransactions, collections, usdRows, inRange } = input;
+  // نستخدم buildMerchantMovements (نفس Ledger كشف الحساب) ثم نصفّي بـ inRange.
+  const movementInput = buildMerchantMovementInputs(
+    transactions, companyTransactions, collections, usdRows || [],
+  );
+  const totalIn = new CurrencyMap();
+  const totalOut = new CurrencyMap();
+  const totalFee = new CurrencyMap();
   const rows: MerchantReportRow[] = merchants.map((m) => {
-    const s = summarizeMerchantMovements({
-      incomingTxns: inc.get(m.id) || [],
-      outgoingCTxns: out.get(m.id) || [],
-      collections: col.get(m.id) || [],
-    });
+    const movs = buildMerchantMovements(m.id, movementInput)
+      .filter((mv) => inRange(mv.date));
+    const totals = summarizeMerchantMovementTotals(movs);
+    totalIn.merge(totals.totalIncoming);
+    totalOut.merge(totals.totalOutgoing);
+    totalFee.merge(totals.totalCommission);
     return {
       name: (m as any).merchant_name,
-      incoming: s.incoming, outgoing: s.outgoing, collected: s.collected, fee: s.fee, balance: s.balance,
+      incoming: totals.totalIncoming,
+      outgoing: totals.totalOutgoing,
+      collected: totals.totalCollected,
+      fee: totals.totalCommission,
+      balance: totals.balance,
     };
   });
-  let totalIn = 0, totalOut = 0, totalFee = 0;
-  for (const r of rows) { totalIn += r.incoming; totalOut += r.outgoing; totalFee += r.fee; }
   return { rows, totalIn, totalOut, totalFee };
 }
+
 
 /** تقرير المستثمرين لفترة. */
 export type InvestorReportRow = { name: string; deposit: number; withdraw: number; balance: number };
