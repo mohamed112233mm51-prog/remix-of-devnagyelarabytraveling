@@ -930,12 +930,13 @@ function MerchantStatementTab({
       };
       const LABELS = { debit: "مستحق على التاجر", credit: "مستحق للتاجر", balanced: "متوازن" };
       const base = [
-        { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
-        { label: "النقدية المحصلة من التاجر", value: fmtDL(totalCollected) },
-        { label: "إجمالي الصادر للشركات", value: fmtDL(totalOutgoing) },
-        { label: "النقدية المصروفة للتاجر", value: fmtDL(totalPaidOut) },
-        { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
+        { label: "إجمالي الوارد", value: formatCurrencyMap(totalIncoming) },
+        { label: "النقدية المحصلة من التاجر", value: formatCurrencyMap(totalCollected) },
+        { label: "إجمالي الصادر للشركات", value: formatCurrencyMap(totalOutgoing) },
+        { label: "النقدية المصروفة للتاجر", value: formatCurrencyMap(totalPaidOut) },
+        { label: "نسبة التاجر (1%)", value: formatCurrencyMap(totalCommission) },
       ];
+
       const perCurrency = byCurrency.flatMap((t) => {
         const name = CUR_NAMES[t.currency] || t.currency;
         const status = t.net > 0 ? LABELS.debit : t.net < 0 ? LABELS.credit : LABELS.balanced;
