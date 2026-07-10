@@ -459,14 +459,12 @@ export function buildMerchantMovements(
   );
 }
 
-export function computeMerchantAggregates(input: {
-  txns: Transaction[];
-  companyTxns: CompanyTransaction[];
-  collections: MerchantCashCollection[];
-  usdRows: UsdTreasuryTransaction[];
-}): Map<string, MerchantAggregate> {
-  const { txns, companyTxns, collections, usdRows } = input;
-  // Partition inputs EXACTLY like MerchantStatementTab does — نفس المصدر.
+function buildMerchantMovementInputs(
+  txns: Transaction[],
+  companyTxns: CompanyTransaction[],
+  collections: MerchantCashCollection[],
+  usdRows: UsdTreasuryTransaction[],
+): Parameters<typeof buildMerchantMovements>[1] {
   const incomingTxns = txns.filter((t) =>
     Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0,
   );
@@ -484,6 +482,30 @@ export function computeMerchantAggregates(input: {
     t.source_service_type === "merchant_cash_out_to_company" ||
     t.source_service_type === "merchant_cash_out_to_agent"
   ));
+  return { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows };
+}
+
+function summarizeMerchantMovementsAsEntity(rows: MerchantMovementRow[]): EntitySummary {
+  const s = empty();
+  s.count = rows.length;
+  for (const r of rows) {
+    const cur = r.currency || "EGP";
+    if (r.delta >= 0) s.totalDebit.add(cur, r.delta);
+    else s.totalCredit.add(cur, -r.delta);
+    s.balance.add(cur, r.delta);
+  }
+  return s;
+}
+
+export function computeMerchantAggregates(input: {
+  txns: Transaction[];
+  companyTxns: CompanyTransaction[];
+  collections: MerchantCashCollection[];
+  usdRows: UsdTreasuryTransaction[];
+}): Map<string, MerchantAggregate> {
+  const { txns, companyTxns, collections, usdRows } = input;
+  // Partition inputs EXACTLY like MerchantStatementTab does — نفس المصدر.
+  const movementInput = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
 
   const merchantIds = new Set<string>();
   for (const t of txns) if (t.merchant_id) merchantIds.add(t.merchant_id);
@@ -493,9 +515,7 @@ export function computeMerchantAggregates(input: {
 
   const map = new Map<string, MerchantAggregate>();
   for (const mid of merchantIds) {
-    const movs = buildMerchantMovements(mid, {
-      incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows,
-    });
+    const movs = buildMerchantMovements(mid, movementInput);
     const totals = summarizeMerchantMovementTotals(movs);
     map.set(mid, {
       incoming: totals.totalIncoming,
