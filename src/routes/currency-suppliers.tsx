@@ -226,35 +226,22 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
     phone: supplier?.phone || "",
     notes: supplier?.notes || "",
     status: supplier?.status || "نشط",
-    opening_kind: (Number(supplier?.opening_debit) > 0 ? "debit" : Number(supplier?.opening_credit) > 0 ? "credit" : "") as "" | "debit" | "credit",
-    opening_amount: Number(supplier?.opening_debit) > 0 ? String(supplier?.opening_debit) : Number(supplier?.opening_credit) > 0 ? String(supplier?.opening_credit) : "",
-    opening_currency: supplier?.opening_currency || "EGP",
-    opening_date: supplier?.opening_date || "",
-    opening_note: supplier?.opening_note || "",
   });
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
+  useEffect(() => {
+    if (!supplier?.id) return;
+    let alive = true;
+    readEntityOpeningEntries("currency_supplier", supplier.id).then((rows) => { if (alive) setOpenings(rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [supplier?.id]);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم المورد مطلوب");
-    const amount = Math.max(0, Number(form.opening_amount) || 0);
-    const hasOpening = !!form.opening_kind || amount > 0;
-    if (hasOpening) {
-      if (!form.opening_kind) return toast.error("اختر نوع الرصيد (مدين / دائن)");
-      if (!(amount > 0)) return toast.error("أدخل مبلغ الرصيد السابق");
-      if (!form.opening_currency) return toast.error("اختر عملة الرصيد السابق");
-      if (!form.opening_date) return toast.error("أدخل تاريخ الرصيد السابق");
-    }
-    const debit = form.opening_kind === "debit" ? amount : 0;
-    const credit = form.opening_kind === "credit" ? amount : 0;
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || null,
       notes: form.notes.trim() || null,
       status: form.status,
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: form.opening_currency || "EGP",
-      opening_date: form.opening_date || null,
-      opening_note: form.opening_note || null,
     };
     let id = supplier?.id;
     if (supplier) {
@@ -265,18 +252,11 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
       if (error) return toast.error(error.message);
       id = (data as any)?.id;
     }
-    if (id && (debit > 0 || credit > 0)) {
+    if (id) {
       try {
-        await syncCurrencySupplierOpeningBalance(id, {
-          debit, credit,
-          currency: form.opening_currency || "EGP",
-          date: form.opening_date || null,
-          note: form.opening_note || null,
-        });
+        await syncEntityOpeningEntries("currency_supplier", id, openings);
       } catch (e: any) {
-        return toast.error(String(e?.message || "").includes("ux_currency_supplier_opening_row")
-          ? "يوجد رصيد سابق لهذه الجهة بهذه العملة"
-          : (e?.message || "فشل حفظ الرصيد السابق"));
+        return toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية");
       }
     }
     toast.success(supplier ? "تم التحديث" : "تمت إضافة المورد");
@@ -285,7 +265,7 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
   if (typeof document === "undefined") return null;
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 640, width: "100%", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 720, width: "100%", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
         <div className="card-header"><div className="card-title">{supplier ? "✏️ تعديل المورد" : "➕ إضافة مورد"}</div></div>
         <div className="form-grid">
           <div className="form-group"><label>اسم المورد</label><input value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
@@ -296,32 +276,8 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier?: Supplier; on
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
             <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} />
           </div>
-          <div className="form-group full" style={{ gridColumn: "1 / -1", marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
-            <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق (اختياري)</label>
-            <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-              <div className="form-group full">
-                <label>نوع الرصيد</label>
-                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="cs-open-kind" checked={form.opening_kind === "debit"} onChange={() => set("opening_kind", "debit")} /> مدين</label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="cs-open-kind" checked={form.opening_kind === "credit"} onChange={() => set("opening_kind", "credit")} /> دائن</label>
-                  {form.opening_kind && (
-                    <button type="button" className="action-btn" onClick={() => set("opening_kind", "")}>مسح</button>
-                  )}
-                </div>
-              </div>
-              <div className="form-group"><label>المبلغ</label><input type="number" min={0} value={form.opening_amount} onChange={(e) => set("opening_amount", e.target.value)} /></div>
-              <div className="form-group"><label>العملة</label>
-                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
-                  <option value="EGP">جنيه مصري</option>
-                  <option value="USD">دولار أمريكي</option>
-                  <option value="LYD">دينار ليبي</option>
-                </select>
-              </div>
-              <div className="form-group"><label>التاريخ</label><input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} /></div>
-              <div className="form-group full"><label>ملاحظات</label><input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} /></div>
-            </div>
-          </div>
         </div>
+        <OpeningEntriesEditor value={openings} onChange={setOpenings} />
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
           <button data-confirm-save="تأكيد حفظ المورّد" className="btn btn-gold" onClick={save}>💾 حفظ</button>
