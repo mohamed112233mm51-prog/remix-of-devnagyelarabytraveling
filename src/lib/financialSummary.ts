@@ -1547,6 +1547,7 @@ export function summarizeCompanyReport(input: {
   let totalPaid = 0;
   const filteredTxns: CompanyTransaction[] = [];
   for (const t of companyTransactions) {
+    if ((t as any).cancelled_at) continue; // نفس مصدر buildCompanyLedgerRows
     if (!inRange(t.date)) continue;
     filteredTxns.push(t);
     const val = Number((t as any).trip_value || 0) || Number((t as any).count || 0) * Number((t as any).price || 0);
