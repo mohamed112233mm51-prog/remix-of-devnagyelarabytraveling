@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CurrencyLines } from "@/components/CurrencyLines";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
@@ -138,21 +139,21 @@ function CompaniesPage() {
           <div className="kpi-icon"><Briefcase size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي الخدمات</div>
-            <div className="val">{formatCurrencyMap(totalTrips)}</div>
+            <div className="val"><CurrencyLines map={totalTrips} /></div>
           </div>
         </div>
         <div className="sum-box green">
           <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي المدفوع</div>
-            <div className="val">{formatCurrencyMap(totalPaid)}</div>
+            <div className="val"><CurrencyLines map={totalPaid} /></div>
           </div>
         </div>
         <div className="sum-box red">
           <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">المتبقي للشركات</div>
-            <div className="val">{formatCurrencyMap(totalDue)}</div>
+            <div className="val"><CurrencyLines map={totalDue} /></div>
 
           </div>
         </div>
@@ -220,9 +221,9 @@ function CompaniesPage() {
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
                           <td data-label="الواتساب">{c.whatsapp || "—"}</td>
-                          <td className="num-col" data-label="إجمالي الخدمات">{formatCurrencyMap(s.trips)}</td>
-                          <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{formatCurrencyMap(s.paid)}</td>
-                          <td className="num-col" data-label="المتبقي" style={{ fontWeight: 700 }}>{formatCurrencyMap(s.due)}</td>
+                          <td className="num-col" data-label="إجمالي الخدمات"><CurrencyLines map={s.trips} /></td>
+                          <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}><CurrencyLines map={s.paid} /></td>
+                          <td className="num-col" data-label="المتبقي" style={{ fontWeight: 700 }}><CurrencyLines map={s.due} /></td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${((c as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(c as any).status || "نشط"}</span></td>
                         </tr>
                       );
@@ -231,9 +232,9 @@ function CompaniesPage() {
                   <tfoot className="totals-foot">
                     <tr>
                       <td colSpan={4}>الإجمالي</td>
-                      <td className="num-col">{formatCurrencyMap(totalTrips)}</td>
-                      <td className="num-col">{formatCurrencyMap(totalPaid)}</td>
-                      <td className="num-col">{formatCurrencyMap(totalDue)}</td>
+                      <td className="num-col"><CurrencyLines map={totalTrips} /></td>
+                      <td className="num-col"><CurrencyLines map={totalPaid} /></td>
+                      <td className="num-col"><CurrencyLines map={totalDue} /></td>
                       <td></td>
                     </tr>
 
@@ -271,9 +272,9 @@ function CompaniesPage() {
             editLabel="تعديل بيانات الشركة"
             onEdit={() => { setEditCompany(viewCompany); setViewCompany(null); }}
             kpis={[
-              { label: "إجمالي الخدمات", value: formatCurrencyMap(s.trips), tone: "gold" },
-              { label: "إجمالي المدفوعات", value: formatCurrencyMap(s.paid), tone: "green" },
-              { label: "المتبقي", value: formatCurrencyMap(s.due), tone: dueTone },
+              { label: "إجمالي الخدمات", value: <CurrencyLines map={s.trips} />, tone: "gold" },
+              { label: "إجمالي المدفوعات", value: <CurrencyLines map={s.paid} />, tone: "green" },
+              { label: "المتبقي", value: <CurrencyLines map={s.due} />, tone: dueTone },
             ]}
 
             fields={[

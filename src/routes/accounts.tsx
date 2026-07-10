@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CurrencyLines } from "@/components/CurrencyLines";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -98,21 +99,21 @@ function AccountsPage() {
           <div className="kpi-icon"><Plane size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">قيمة الرحلات</div>
-            <div className="val">{formatCurrencyMap(totalTrips)}</div>
+            <div className="val"><CurrencyLines map={totalTrips} /></div>
           </div>
         </div>
         <div className="sum-box green">
           <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي المدفوعات</div>
-            <div className="val">{formatCurrencyMap(totalPaid)}</div>
+            <div className="val"><CurrencyLines map={totalPaid} /></div>
           </div>
         </div>
         <div className="sum-box red">
           <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">الصافي المستحق</div>
-            <div className="val">{formatCurrencyMap(totalDue)}</div>
+            <div className="val"><CurrencyLines map={totalDue} /></div>
 
           </div>
         </div>
@@ -178,9 +179,9 @@ function AccountsPage() {
                           <td data-label="الهاتف">{a.phone || "—"}</td>
                           <td data-label="الواتساب">{a.whatsapp || "—"}</td>
                           <td data-label="المحافظة">{a.governorate || "—"}</td>
-                          <td className="num-col" data-label="قيمة الرحلات">{formatCurrencyMap(s.trips)}</td>
-                          <td className="num-col" data-label="المدفوعات">{formatCurrencyMap(s.paid)}</td>
-                          <td className="num-col" data-label="الصافي" style={{ fontWeight: 700 }}>{formatCurrencyMap(s.due)}</td>
+                          <td className="num-col" data-label="قيمة الرحلات"><CurrencyLines map={s.trips} /></td>
+                          <td className="num-col" data-label="المدفوعات"><CurrencyLines map={s.paid} /></td>
+                          <td className="num-col" data-label="الصافي" style={{ fontWeight: 700 }}><CurrencyLines map={s.due} /></td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
                         </tr>
                       );
@@ -189,9 +190,9 @@ function AccountsPage() {
                   <tfoot className="totals-foot">
                     <tr>
                       <td colSpan={6}>الإجمالي</td>
-                      <td className="num-col">{formatCurrencyMap(totalTrips)}</td>
-                      <td className="num-col">{formatCurrencyMap(totalPaid)}</td>
-                      <td className="num-col">{formatCurrencyMap(totalDue)}</td>
+                      <td className="num-col"><CurrencyLines map={totalTrips} /></td>
+                      <td className="num-col"><CurrencyLines map={totalPaid} /></td>
+                      <td className="num-col"><CurrencyLines map={totalDue} /></td>
                       <td></td>
                     </tr>
 
@@ -230,9 +231,9 @@ function AccountsPage() {
             editLabel="تعديل بيانات الوكيل"
             onEdit={() => { setEditAgent(viewAgent); setViewAgent(null); }}
             kpis={[
-              { label: "قيمة الرحلات", value: formatCurrencyMap(s.trips), tone: "gold" },
-              { label: "إجمالي المدفوعات", value: formatCurrencyMap(s.paid), tone: "green" },
-              { label: "الصافي المستحق", value: formatCurrencyMap(s.due), tone: dueTone },
+              { label: "قيمة الرحلات", value: <CurrencyLines map={s.trips} />, tone: "gold" },
+              { label: "إجمالي المدفوعات", value: <CurrencyLines map={s.paid} />, tone: "green" },
+              { label: "الصافي المستحق", value: <CurrencyLines map={s.due} />, tone: dueTone },
             ]}
 
             fields={[
