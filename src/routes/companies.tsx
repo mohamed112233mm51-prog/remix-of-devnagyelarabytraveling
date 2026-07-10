@@ -338,12 +338,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [filteredEntries],
   );
 
-  const totalServices = filteredEntries.reduce((s, e) => s + e.debit, 0);
-  const totalPaid = filteredEntries.reduce((s, e) => s + e.credit, 0);
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
+  const totalServices = byCurrency.reduce((s, b) => s + b.debit, 0);
+  const totalPaid = byCurrency.reduce((s, b) => s + b.credit, 0);
   const balance = totalServices - totalPaid;
   const accountStatus = balance > 0 ? "مستحق للشركة" : balance < 0 ? "مستحق على الشركة" : "متوازن";
-
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
