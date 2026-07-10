@@ -1488,6 +1488,7 @@ export function summarizeAgentReport(input: {
   let totalCollections = 0, totalValue = 0;
   const filteredTxns: Transaction[] = [];
   for (const t of transactions) {
+    if ((t as any).cancelled_at) continue; // نفس مصدر buildAgentLedgerRows
     if (!inRange(t.date)) continue;
     filteredTxns.push(t);
     const v = tripValue(t as any);
