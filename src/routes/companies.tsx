@@ -20,7 +20,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
+import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
+import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
@@ -281,11 +282,6 @@ function CompaniesPage() {
               { label: "اسم الشركة", value: viewCompany.company_name },
               { label: "الهاتف", value: viewCompany.phone },
               { label: "الواتساب", value: (viewCompany as any).whatsapp },
-              { label: "رصيد سابق مدين", value: c.opening_debit ? fmtCurrency(Number(c.opening_debit), c.opening_currency || "EGP") : "—" },
-              { label: "رصيد سابق دائن", value: c.opening_credit ? fmtCurrency(Number(c.opening_credit), c.opening_currency || "EGP") : "—" },
-              { label: "عملة الرصيد السابق", value: c.opening_currency || "EGP" },
-              { label: "تاريخ الرصيد السابق", value: c.opening_date || "—" },
-              { label: "ملاحظات الرصيد السابق", value: c.opening_note || "—" },
             ]}
           />
         );
