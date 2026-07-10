@@ -308,8 +308,9 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   const company = safeCompanies.find((c) => c.id === companyId);
   const myTxnsAll = useMemo(
+    // ملاحظة معمارية: لا نفلتر cancelled_at هنا — buildCompanyLedgerRows يفعل ذلك
+    // داخلياً كمصدر واحد للحقيقة. أي فلتر مكرر هنا يخالف قاعدة SoT.
     () => safeTxns
-      .filter((t) => !(t as any).cancelled_at)
       .filter((t) => !companyId || t.company_id === companyId)
       .slice()
       .sort((a, b) =>
