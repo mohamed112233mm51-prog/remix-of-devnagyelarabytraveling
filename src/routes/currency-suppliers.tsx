@@ -10,7 +10,8 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { Search, UserPlus, FileText, Coins, ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
-import { syncCurrencySupplierOpeningBalance } from "@/lib/openingBalance";
+import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
+import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
 
 export const Route = createFileRoute("/currency-suppliers")({
   component: () => <AppErrorBoundary><CurrencySuppliersPage /></AppErrorBoundary>,
