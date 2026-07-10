@@ -1034,33 +1034,34 @@ function MerchantStatementTab({
       <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
           <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <div className="kpi-text"><div className="label">الوارد من الوكلاء</div><div className="val">{formatCurrencyMap(totalIncoming)}</div></div>
         </div>
         <div className="sum-box gold">
           <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المحصلة من التاجر</div><div className="val">{fmtDL(totalCollected)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المحصلة من التاجر</div><div className="val">{formatCurrencyMap(totalCollected)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+          <div className="kpi-text"><div className="label">الصادر للشركات</div><div className="val">{formatCurrencyMap(totalOutgoing)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المصروفة للتاجر</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتاجر</div><div className="val">{formatCurrencyMap(totalPaidOut)}</div></div>
         </div>
         <div className="sum-box">
           <span className="kpi-icon"><Percent size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">نسبة التاجر (1%)</div><div className="val">{fmtDL(totalCommission)}</div></div>
+          <div className="kpi-text"><div className="label">نسبة التاجر (1%)</div><div className="val">{formatCurrencyMap(totalCommission)}</div></div>
         </div>
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
             <div className="label">صافي الرصيد</div>
-            <div className="val">{fmtDL(finalBalance)}</div>
-            <div className="kpi-sub">= الوارد + المصروف − المحصل − الصادر − التحويلات</div>
+            <div className="val">{formatCurrencyMap(totals.balance)}</div>
+            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات — كل عملة مستقلة</div>
           </div>
         </div>
       </div>
+
 
       <CurrencyTotalsCards totals={byCurrency} entityKind="merchant" />
 
