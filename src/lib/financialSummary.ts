@@ -769,7 +769,7 @@ export function attachRunningBalances<T extends CurrencySupplierTx>(
   rows: T[],
 ): Array<T & { balance: number; balanceCurrency: string }> {
   const bals = new Map<string, number>();
-  return rows.map((t) => {
+  return buildCurrencySupplierLedgerRows(rows).map((t) => {
     const { currency, delta } = currencySupplierDelta(t);
     const next = (bals.get(currency) || 0) + delta;
     bals.set(currency, next);
