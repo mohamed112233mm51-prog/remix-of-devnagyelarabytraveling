@@ -32,6 +32,7 @@ import {
   merchantCashNet,
   merchantCashGross,
   merchantCompanyOutflowAmount,
+  normalizeCurrency,
 } from "@/lib/db";
 import type {
   Agent,
@@ -165,18 +166,23 @@ function txnSaleAndPaid(t: Partial<Transaction>): { sale: number; paid: number }
 
 /* ============================================================
  *  AGENTS — ملخص الوكلاء
+ *  المصدر الوحيد للحساب هو نفس صفوف كشف الحساب (`buildAgentLedgerRows`)
+ *  التي يستخدمها `AgentLedger`. أي رقم يظهر في كارت "إجمالي الوكلاء"
+ *  = مجموع ما يظهر في كشف كل وكيل بالضبط (تعريفياً).
  * ============================================================ */
 
 /** ملخص وكيل واحد بناءً على صفوف transactions الخاصة به. */
-export function summarizeAgent(transactions: Transaction[]): EntitySummary {
+export function summarizeAgent(
+  transactions: Transaction[],
+  splitCurrencyByTxnId?: Map<string, string>,
+): EntitySummary {
+  const rows = buildAgentLedgerRows(transactions, splitCurrencyByTxnId ?? new Map());
   const s = empty();
-  s.count = transactions.length;
-  for (const t of transactions) {
-    const cur = txnCurrency(t);
-    const { sale, paid } = txnSaleAndPaid(t);
-    s.totalDebit.add(cur, sale);
-    s.totalCredit.add(cur, paid);
-    s.balance.add(cur, sale - paid);
+  s.count = rows.length;
+  for (const r of rows) {
+    s.totalDebit.add(r.currency, r.debit);
+    s.totalCredit.add(r.currency, r.credit);
+    s.balance.add(r.currency, r.debit - r.credit);
   }
   return s;
 }
@@ -184,16 +190,19 @@ export function summarizeAgent(transactions: Transaction[]): EntitySummary {
 /** Hook حي لملخص وكيل واحد. */
 export function useAgentSummary(agentId: string | null | undefined): EntitySummary {
   const { rows } = useLive<Transaction>("transactions");
+  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     if (!agentId) return empty();
-    return summarizeAgent(rows.filter((r) => r.agent_id === agentId));
-  }, [rows, agentId]);
+    const curMap = resolveSplitCurrencyByRef(splits, "transactions");
+    return summarizeAgent(rows.filter((r) => r.agent_id === agentId), curMap);
+  }, [rows, splits, agentId]);
 }
 
 /** Hook حي لملخصات جميع الوكلاء (مفهرسة بالمعرِّف). */
 export function useAgentsSummary(): Map<string, EntitySummary> {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: txns } = useLive<Transaction>("transactions");
+  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     const grouped = new Map<string, Transaction[]>();
     for (const a of agents) grouped.set(a.id, []);
@@ -202,46 +211,48 @@ export function useAgentsSummary(): Map<string, EntitySummary> {
       const arr = grouped.get(t.agent_id);
       if (arr) arr.push(t);
     }
+    const curMap = resolveSplitCurrencyByRef(splits, "transactions");
     const out = new Map<string, EntitySummary>();
-    for (const [id, list] of grouped) out.set(id, summarizeAgent(list));
+    for (const [id, list] of grouped) out.set(id, summarizeAgent(list, curMap));
     return out;
-  }, [agents, txns]);
+  }, [agents, txns, splits]);
 }
 
 /* ============================================================
  *  COMPANIES — ملخص الشركات المُصدِرة
+ *  المصدر الوحيد للحساب هو نفس صفوف كشف الحساب (`buildCompanyLedgerRows`)
+ *  التي يستخدمها `CompanyStatementTab`.
  * ============================================================ */
 
-export function summarizeCompany(rows: CompanyTransaction[]): EntitySummary {
+export function summarizeCompany(
+  rows: CompanyTransaction[],
+  splitCurrencyByTxnId?: Map<string, string>,
+): EntitySummary {
+  const built = buildCompanyLedgerRows(rows, splitCurrencyByTxnId ?? new Map());
   const s = empty();
-  s.count = rows.length;
-  for (const t of rows) {
-    const cur = companyTxnCurrency(t);
-    // Match legacy /companies screen exactly:
-    //   debit  = trip_value (إجمالي الخدمات)
-    //   credit = total_paid (المدفوع)
-    const debit = Number((t as any).trip_value ?? (t as any).amount ?? 0);
-    const credit = Number(
-      (t as any).total_paid ?? (t as any).paid_amount ?? (t as any).paid ?? 0,
-    );
-    s.totalDebit.add(cur, debit);
-    s.totalCredit.add(cur, credit);
-    s.balance.add(cur, debit - credit);
+  s.count = built.length;
+  for (const r of built) {
+    s.totalDebit.add(r.currency, r.debit);
+    s.totalCredit.add(r.currency, r.credit);
+    s.balance.add(r.currency, r.debit - r.credit);
   }
   return s;
 }
 
 export function useCompanySummary(companyId: string | null | undefined): EntitySummary {
   const { rows } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     if (!companyId) return empty();
-    return summarizeCompany(rows.filter((r) => (r as any).company_id === companyId));
-  }, [rows, companyId]);
+    const curMap = resolveSplitCurrencyByRef(splits, "company_transactions");
+    return summarizeCompany(rows.filter((r) => (r as any).company_id === companyId), curMap);
+  }, [rows, splits, companyId]);
 }
 
 export function useCompaniesSummary(): Map<string, EntitySummary> {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: txns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     const grouped = new Map<string, CompanyTransaction[]>();
     for (const c of companies) grouped.set(c.id, []);
@@ -251,10 +262,11 @@ export function useCompaniesSummary(): Map<string, EntitySummary> {
       const arr = grouped.get(cid);
       if (arr) arr.push(t);
     }
+    const curMap = resolveSplitCurrencyByRef(splits, "company_transactions");
     const out = new Map<string, EntitySummary>();
-    for (const [id, list] of grouped) out.set(id, summarizeCompany(list));
+    for (const [id, list] of grouped) out.set(id, summarizeCompany(list, curMap));
     return out;
-  }, [companies, txns]);
+  }, [companies, txns, splits]);
 }
 
 /* ============================================================
@@ -409,6 +421,115 @@ const emptyMerchantAgg = (): MerchantAggregate => ({
   incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0,
 });
 
+/**
+ * يبني حركات كشف حساب تاجر واحد بنفس المنطق المستخدم في
+ * `MerchantStatementTab`. مصدر واحد لكل الإجماليات والكشف — أي رقم في
+ * كارت "إجمالي تجار الكاش" = مجموع نفس القيمة عبر كل التجار تعريفياً.
+ */
+export type MerchantMovementRow = {
+  id: string;
+  date: string;
+  createdAt: string;
+  type:
+    | "وارد من وكيل" | "صادر لشركة" | "تحصيل نقدية من التاجر"
+    | "صرف نقدية للتاجر" | "صرف نقدية لوكيل" | "تحويل لـ USD" | "رصيد سابق";
+  statement: string;
+  gross: number;
+  commission: number;
+  net: number;
+  delta: number;
+  currency: string;
+  sourceTable: string;
+  sourceId: string;
+};
+
+export function buildMerchantMovements(
+  merchantId: string,
+  input: {
+    incomingTxns: Transaction[];
+    outgoingTxns: CompanyTransaction[];
+    cashMoveTxns: Transaction[];
+    collections: MerchantCashCollection[];
+    conversions: UsdTreasuryTransaction[];
+  },
+): MerchantMovementRow[] {
+  if (!merchantId) return [];
+  const { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions } = input;
+  const list: MerchantMovementRow[] = [];
+  for (const t of incomingTxns) {
+    if (t.merchant_id !== merchantId) continue;
+    if ((t as any).cancelled_at) continue;
+    const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
+    const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+    const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
+    list.push({
+      id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
+      statement: String((t as any).statement || "").trim(),
+      gross, commission: gross - net, net, delta: net, currency: cur,
+      sourceTable: "transactions", sourceId: t.id,
+    });
+  }
+  for (const t of outgoingTxns) {
+    if ((t as any).merchant_id !== merchantId) continue;
+    if ((t as any).cancelled_at) continue;
+    const gross = merchantCompanyOutflowAmount(t);
+    const net = merchantCompanyOutflowAmount(t);
+    const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
+    list.push({
+      id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
+      statement: String((t as any).statement || "").trim(),
+      gross, commission: gross - net, net, delta: -net, currency: cur,
+      sourceTable: "company_transactions", sourceId: t.id,
+    });
+  }
+  for (const c of collections) {
+    if (c.merchant_id !== merchantId) continue;
+    if ((c as any).cancelled_at) continue;
+    const amt = Number(c.amount || 0);
+    const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
+    const rowCurrency = normalizeCurrency(isOpening ? (c as any).opening_currency : (c as any).currency);
+    list.push({
+      id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
+      type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
+      statement: isOpening ? `رصيد سابق (${rowCurrency})` : String((c as any).statement || "").trim(),
+      gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt, currency: rowCurrency,
+      sourceTable: "merchant_cash_collections", sourceId: c.id,
+    });
+  }
+  for (const t of cashMoveTxns) {
+    if (t.merchant_id !== merchantId) continue;
+    if ((t as any).cancelled_at) continue;
+    const amt = Math.abs(Number(t.paid || 0));
+    if (amt <= 0) continue;
+    const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
+    const toCompany = t.source_service_type === "merchant_cash_out_to_company";
+    const toAgent = t.source_service_type === "merchant_cash_out_to_agent";
+    const type: MerchantMovementRow["type"] = toCompany ? "صادر لشركة" : toAgent ? "صرف نقدية لوكيل" : "صرف نقدية للتاجر";
+    const delta = (toCompany || toAgent) ? -amt : amt;
+    list.push({
+      id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type,
+      statement: String((t as any).statement || "").trim(),
+      gross: amt, commission: 0, net: amt, delta, currency: cur,
+      sourceTable: "transactions", sourceId: t.id,
+    });
+  }
+  for (const r of conversions) {
+    if (r.type !== "conversion" || (r as any).merchant_id !== merchantId) continue;
+    if ((r as any).cancelled_at) continue;
+    if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
+    const amt = Number((r as any).egp_amount || 0);
+    list.push({
+      id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
+      statement: String((r as any).statement || "").trim(),
+      gross: amt, commission: 0, net: amt, delta: -amt, currency: "EGP",
+      sourceTable: "usd_treasury_transactions", sourceId: r.id,
+    });
+  }
+  return list.sort((a, b) =>
+    (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt),
+  );
+}
+
 export function computeMerchantAggregates(input: {
   txns: Transaction[];
   companyTxns: CompanyTransaction[];
@@ -416,49 +537,44 @@ export function computeMerchantAggregates(input: {
   usdRows: UsdTreasuryTransaction[];
 }): Map<string, MerchantAggregate> {
   const { txns, companyTxns, collections, usdRows } = input;
-  const map = new Map<string, MerchantAggregate>();
-  const get = (id: string) => {
-    let v = map.get(id);
-    if (!v) { v = emptyMerchantAgg(); map.set(id, v); }
-    return v;
-  };
-  // Company-outflow rows already mirrored into transactions must not be double-counted.
-  const merchantCompanyOutSourceIds = new Set<string>();
+  // Partition inputs EXACTLY like MerchantStatementTab does — نفس المصدر.
+  const incomingTxns = txns.filter((t) =>
+    Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0,
+  );
+  const outgoingAll = companyTxns.filter((t) => merchantCompanyOutflowAmount(t) > 0);
+  const mirrorSourceIds = new Set<string>();
   for (const t of txns) {
     if (t.merchant_id && t.source_service_type === "merchant_cash_out_to_company") {
       const src = (t as any).source_service_id;
-      if (src) merchantCompanyOutSourceIds.add(src);
+      if (src) mirrorSourceIds.add(src);
     }
   }
-  for (const t of txns) {
-    if (!t.merchant_id) continue;
-    if (t.source_service_type === "merchant_cash_out") {
-      get(t.merchant_id).paidOut += Math.abs(Number(t.paid || 0));
-      continue;
-    }
-    if (
-      t.source_service_type === "merchant_cash_out_to_company" ||
-      t.source_service_type === "merchant_cash_out_to_agent"
-    ) {
-      get(t.merchant_id).outgoing += Math.abs(Number(t.paid || 0));
-      continue;
-    }
-    get(t.merchant_id).incoming +=
-      merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-  }
-  for (const t of companyTxns) {
-    if (!(t as any).merchant_id) continue;
-    if (merchantCompanyOutSourceIds.has(t.id)) continue;
-    get((t as any).merchant_id).outgoing += merchantCompanyOutflowAmount(t);
-  }
-  for (const c of collections) {
-    get(c.merchant_id).collected += Number(c.amount || 0);
-  }
-  for (const r of usdRows) {
-    if (r.type !== "conversion" || !(r as any).merchant_id) continue;
-    const src = (r as any).source_type;
-    if (src !== "merchant_wallet" && src !== "merchant_physical") continue;
-    get((r as any).merchant_id).converted += Number((r as any).egp_amount || 0);
+  const outgoingTxns = outgoingAll.filter((t) => !mirrorSourceIds.has(t.id));
+  const cashMoveTxns = txns.filter((t) => t.merchant_id && (
+    t.source_service_type === "merchant_cash_out" ||
+    t.source_service_type === "merchant_cash_out_to_company" ||
+    t.source_service_type === "merchant_cash_out_to_agent"
+  ));
+
+  const merchantIds = new Set<string>();
+  for (const t of txns) if (t.merchant_id) merchantIds.add(t.merchant_id);
+  for (const t of companyTxns as any[]) if (t.merchant_id) merchantIds.add(t.merchant_id);
+  for (const c of collections) if (c.merchant_id) merchantIds.add(c.merchant_id);
+  for (const r of usdRows as any[]) if ((r as any).merchant_id) merchantIds.add((r as any).merchant_id);
+
+  const map = new Map<string, MerchantAggregate>();
+  for (const mid of merchantIds) {
+    const movs = buildMerchantMovements(mid, {
+      incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows,
+    });
+    const totals = summarizeMerchantMovementTotals(movs);
+    map.set(mid, {
+      incoming: totals.totalIncoming,
+      outgoing: totals.totalOutgoing,
+      collected: totals.totalCollected,
+      paidOut: totals.totalPaidOut,
+      converted: totals.totalConverted,
+    });
   }
   return map;
 }
