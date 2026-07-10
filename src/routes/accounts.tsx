@@ -214,8 +214,10 @@ function AccountsPage() {
 
       {viewAgent && (() => {
         const a = viewAgent as any;
-        const s = stats.get(viewAgent.id) || { trips: 0, paid: 0 };
-        const due = s.trips - s.paid;
+        const s = stats.get(viewAgent.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
+        // لون "الصافي المستحق" — إذا كانت كل العملات موجبة نستخدم لوناً واحداً، وإلا لون محايد.
+        const dueSigns = new Set(s.due.entries().map((e) => Math.sign(e.amount)));
+        const dueTone: "red" | "green" | "default" = dueSigns.size !== 1 ? "default" : dueSigns.has(1) ? "red" : "default";
         return (
           <EntityProfileModal
             open={!!viewAgent}
@@ -228,10 +230,11 @@ function AccountsPage() {
             editLabel="تعديل بيانات الوكيل"
             onEdit={() => { setEditAgent(viewAgent); setViewAgent(null); }}
             kpis={[
-              { label: "قيمة الرحلات", value: fmtDL(s.trips), tone: "gold" },
-              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
-              { label: "الصافي المستحق", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+              { label: "قيمة الرحلات", value: formatCurrencyMap(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: formatCurrencyMap(s.paid), tone: "green" },
+              { label: "الصافي المستحق", value: formatCurrencyMap(s.due), tone: dueTone },
             ]}
+
             fields={[
               { label: "اسم الوكيل", value: viewAgent.name },
               { label: "الرقم القومي", value: viewAgent.national_id },
