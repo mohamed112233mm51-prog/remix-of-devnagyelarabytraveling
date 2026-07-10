@@ -768,10 +768,13 @@ export function summarizeCurrencySupplierStatement(
 export function attachRunningBalances<T extends CurrencySupplierTx>(
   rows: T[],
 ): Array<T & { balance: number; balanceCurrency: string }> {
+  // نحافظ على تطابق الطول مع المدخل (بعض المُستدعين يعتمدون على ذلك)،
+  // لكن نتجاهل تأثير الحركات الملغاة على الرصيد الجاري.
   const bals = new Map<string, number>();
-  return buildCurrencySupplierLedgerRows(rows).map((t) => {
+  return rows.map((t) => {
     const { currency, delta } = currencySupplierDelta(t);
-    const next = (bals.get(currency) || 0) + delta;
+    const effective = (t as any).cancelled_at ? 0 : delta;
+    const next = (bals.get(currency) || 0) + effective;
     bals.set(currency, next);
     return { ...t, balance: next, balanceCurrency: currency };
   });
