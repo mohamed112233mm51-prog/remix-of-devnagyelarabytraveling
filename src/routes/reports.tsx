@@ -1295,7 +1295,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
     () => summarizeUsdTreasuryPeriod(usdTreasury, inRange),
     [usdTreasury, inRange],
   );
-  const withBalance = rpt.withBalance;
+  void rpt.withBalance;
   const filtered = rpt.filtered;
   const periodConversions = rpt.periodConversions;
   const periodPayments = rpt.periodPayments;
