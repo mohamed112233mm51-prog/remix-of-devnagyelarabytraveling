@@ -789,81 +789,19 @@ function MerchantStatementTab({
   const [search, setSearch] = useState("");
 
   const merchant = merchants.find((m) => m.id === merchantId);
-  const movements: StatementMovement[] = useMemo(() => {
+  // Single Source of Truth: نستدعي `buildMerchantMovements` من المحرك بدلاً
+  // من إعادة كتابة نفس الحلقات هنا. أي تعديل مستقبلي على منطق كشف حساب
+  // التاجر (نوع حركة جديد، شرط استبعاد، ...) يحدث في مكان واحد فقط
+  // وينعكس تلقائياً على: الكشف + الكروت + قائمة التجار + التقارير.
+  const movements = useMemo<StatementMovement[]>(() => {
     if (!merchantId) return [];
-    const list: StatementMovement[] = [];
-    for (const t of incomingTxns) {
-      if (t.merchant_id !== merchantId) continue;
-      if ((t as any).cancelled_at) continue;
-      const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
-      const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
-      const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
-      list.push({
-        id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
-        statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: net, currency: cur,
-        sourceTable: "transactions", sourceId: t.id,
-      });
-    }
-    for (const t of outgoingTxns) {
-      if (t.merchant_id !== merchantId) continue;
-      if ((t as any).cancelled_at) continue;
-      const gross = merchantCompanyOutflowAmount(t);
-      const net = merchantCompanyOutflowAmount(t);
-      const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
-      list.push({
-        id: `out-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "صادر لشركة",
-        statement: String((t as any).statement || "").trim(),
-        gross, commission: gross - net, net, delta: -net, currency: cur,
-        sourceTable: "company_transactions", sourceId: t.id,
-      });
-    }
-    for (const c of collections) {
-      if (c.merchant_id !== merchantId) continue;
-      if ((c as any).cancelled_at) continue;
-      const amt = Number(c.amount || 0);
-      const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
-      const rowCurrency = normalizeCurrency(isOpening ? (c as any).opening_currency : (c as any).currency);
-      list.push({
-        id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
-        type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
-        statement: isOpening ? `رصيد سابق (${rowCurrency})` : String((c as any).statement || "").trim(),
-        gross: Math.abs(amt), commission: 0, net: Math.abs(amt), delta: -amt, currency: rowCurrency,
-        sourceTable: "merchant_cash_collections", sourceId: c.id,
-      });
-    }
-
-    for (const t of cashMoveTxns) {
-      if (t.merchant_id !== merchantId) continue;
-      if ((t as any).cancelled_at) continue;
-      const amt = Math.abs(Number(t.paid || 0));
-      if (amt <= 0) continue;
-      const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
-      const toCompany = t.source_service_type === "merchant_cash_out_to_company";
-      const toAgent = t.source_service_type === "merchant_cash_out_to_agent";
-      const type = toCompany ? "صادر لشركة" : toAgent ? "صرف نقدية لوكيل" : "صرف نقدية للتاجر";
-      const delta = (toCompany || toAgent) ? -amt : amt;
-      list.push({
-        id: `cashout-${t.id}`, date: t.date, createdAt: (t as any).created_at || "",
-        type,
-        statement: String((t as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta, currency: cur,
-        sourceTable: "transactions", sourceId: t.id,
-      });
-    }
-    for (const r of conversions) {
-      if (r.type !== "conversion" || r.merchant_id !== merchantId) continue;
-      if ((r as any).cancelled_at) continue;
-      if (r.source_type !== "merchant_wallet" && r.source_type !== "merchant_physical") continue;
-      const amt = Number(r.egp_amount || 0);
-      list.push({
-        id: `conv-${r.id}`, date: r.date, createdAt: (r as any).created_at || "", type: "تحويل لـ USD",
-        statement: String((r as any).statement || "").trim(),
-        gross: amt, commission: 0, net: amt, delta: -amt, currency: "EGP",
-        sourceTable: "usd_treasury_transactions", sourceId: r.id,
-      });
-    }
-    return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt));
+    return buildMerchantMovements(merchantId, {
+      incomingTxns,
+      outgoingTxns,
+      cashMoveTxns,
+      collections,
+      conversions,
+    }) as unknown as StatementMovement[];
   }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
