@@ -911,13 +911,14 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
 function InvestorsReport({ inRange, data: rd }: SectionProps) {
   const { investors, investorTransactions: invTxns, loading } = rd;
 
-  const data = useMemo(() => investors.map((inv) => {
-    const ts = invTxns.filter((t) => t.investor_id === inv.id && inRange(t.date));
-    const s = summarizeInvestor(ts);
-    return { name: inv.investor_name, deposit: s.deposit, withdraw: s.withdraw, balance: s.balance };
-  }), [investors, invTxns, inRange]);
+  const rpt = useMemo(
+    () => summarizeInvestorReport({ investors, investorTransactions: invTxns, inRange }),
+    [investors, invTxns, inRange],
+  );
+  const data = rpt.rows;
+  const fIT = rpt.filteredTxns;
 
-  const fIT = invTxns.filter((t) => inRange(t.date));
+  // Chart-only shaping (monthly + running series).
   const monthlyMap = new Map<string, { month: string; deposit: number; withdraw: number }>();
   for (const t of fIT) {
     const k = (t.date || "").slice(0, 7);
@@ -934,9 +935,9 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
     return { month: m.month, value: running };
   });
 
-  const totDep = data.reduce((s, d) => s + d.deposit, 0);
-  const totWd = data.reduce((s, d) => s + d.withdraw, 0);
-  const totBal = data.reduce((s, d) => s + d.balance, 0);
+  const totDep = rpt.totalDeposit;
+  const totWd = rpt.totalWithdraw;
+  const totBal = rpt.totalBalance;
 
   const cols = [
     { header: "اسم المستثمر", key: "name" },
