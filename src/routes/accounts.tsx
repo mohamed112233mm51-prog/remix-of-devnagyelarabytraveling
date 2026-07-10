@@ -49,6 +49,8 @@ function AccountsPage() {
 
 
   const agentsSummary = useAgentsSummary();
+  // كارت الإجماليات = مجموع الرصيد الحالي لكل وكيل، مُقسَّم حسب العملة.
+  const agentsBalanceByCurrency = useAgentsBalanceByCurrency();
 
   // نحوّل ملخصات العملات إلى أرقام موحّدة (EGP-only حالياً في هذه الشاشة)
   // بجمع كل العملات — يطابق سلوك fmtDL القديم الذي يعرض قيمة واحدة.
