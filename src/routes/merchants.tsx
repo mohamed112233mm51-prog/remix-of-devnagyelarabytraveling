@@ -75,6 +75,8 @@ function MerchantsPage() {
   const totalPaidOut = kpi.paidOut;
   const totalConverted = kpi.converted;
   const balance = kpi.balance;
+  // كارت الإجماليات = مجموع الرصيد الحالي لكل تاجر، مُقسَّم حسب العملة.
+  const merchantsBalanceByCurrency = useMerchantsBalanceByCurrency();
 
   // Local helpers still needed by list/history sub-sections (filters only, not KPIs).
   const merchantCompanyOutSourceIds = useMemo(
