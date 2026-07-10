@@ -283,18 +283,17 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     governorate: agent.governorate || "",
     tier: a.tier || "A",
     status: agent.status || "نشط",
-    opening_debit: a.opening_debit ? String(a.opening_debit) : "",
-    opening_credit: a.opening_credit ? String(a.opening_credit) : "",
-    opening_currency: a.opening_currency || "EGP",
-    opening_date: a.opening_date || "",
-    opening_note: a.opening_note || "",
   });
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
+  useEffect(() => {
+    let alive = true;
+    readEntityOpeningEntries("agent", agent.id).then((rows) => { if (alive) setOpenings(rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [agent.id]);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("برجاء إدخال اسم الوكيل");
     if (!form.phone.trim()) return toast.error("برجاء إدخال رقم الهاتف");
-    const debit = Number(form.opening_debit) || 0;
-    const credit = Number(form.opening_credit) || 0;
     const patch = {
       name: form.name.trim(),
       national_id: form.national_id.trim() || null,
@@ -303,23 +302,17 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       governorate: form.governorate || null,
       tier: form.tier || "A",
       status: form.status || "نشط",
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: form.opening_currency || "EGP",
-      opening_date: form.opening_date || null,
-      opening_note: form.opening_note.trim() || null,
     } as any;
     const { ok } = await applyOptimistic({
       table: "agents", type: "update", id: agent.id, patch,
       run: async () => await supabase.from("agents").update(patch).eq("id", agent.id),
     });
     if (!ok) return;
-    await syncAgentOpeningBalance(agent.id, {
-      debit, credit,
-      currency: form.opening_currency || "EGP",
-      date: form.opening_date || null,
-      note: form.opening_note.trim() || null,
-    });
+    try {
+      await syncEntityOpeningEntries("agent", agent.id, openings);
+    } catch (e: any) {
+      return toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية");
+    }
     toast.success("تم تحديث بيانات الوكيل بنجاح");
     onClose();
   };
