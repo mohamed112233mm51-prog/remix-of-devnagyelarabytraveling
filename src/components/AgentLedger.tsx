@@ -163,10 +163,17 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   // Per-currency totals for the footer — via Financial Summary Engine.
   const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredLedger), [filteredLedger]);
-  const totalServices = byCurrency.reduce((s, b) => s + b.debit, 0);
-  const totalPayments = byCurrency.reduce((s, b) => s + b.credit, 0);
-  const net = totalServices - totalPayments;
-  const accountStatus = net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن";
+  // ⚠️ Currency-Safe: لا يجوز جمع debit/credit عبر عملات مختلفة.
+  // حالة الحساب تُحسب لكل عملة على حدة (سطر مستقل في التصدير).
+  const statusPerCurrency = byCurrency.map((b) => ({
+    currency: b.currency,
+    net: b.net,
+    status: b.net > 0 ? "مستحق على الوكيل" : b.net < 0 ? "مستحق للوكيل" : "متوازن",
+  }));
+  const accountStatus = statusPerCurrency.length === 0
+    ? "متوازن"
+    : statusPerCurrency.map((s) => `${s.status} (${s.currency})`).join(" · ");
+
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
 
   const buildExportData = () => ({
