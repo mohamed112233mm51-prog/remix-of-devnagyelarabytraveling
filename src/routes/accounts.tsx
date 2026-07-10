@@ -169,7 +169,7 @@ function AccountsPage() {
                       <tr><td colSpan={10}><div className="empty"><div className="empty-icon">👥</div><div className="empty-text">أضف وكلاء من تبويب "وكيل جديد"</div></div></td></tr>
                     ) : pageRows.map((a, i) => {
                       const idx = page * pageSize + i;
-                      const s = stats.get(a.id) || { trips: 0, paid: 0 };
+                      const s = stats.get(a.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
                       return (
                         <tr key={a.id} onClick={() => setViewAgent(a)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
@@ -178,9 +178,9 @@ function AccountsPage() {
                           <td data-label="الهاتف">{a.phone || "—"}</td>
                           <td data-label="الواتساب">{a.whatsapp || "—"}</td>
                           <td data-label="المحافظة">{a.governorate || "—"}</td>
-                          <td className="num-col" data-label="قيمة الرحلات">{fmtDL(s.trips)}</td>
-                          <td className="num-col" data-label="المدفوعات">{fmtDL(s.paid)}</td>
-                          <td className="num-col" data-label="الصافي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(s.trips - s.paid)}</td>
+                          <td className="num-col" data-label="قيمة الرحلات">{formatCurrencyMap(s.trips)}</td>
+                          <td className="num-col" data-label="المدفوعات">{formatCurrencyMap(s.paid)}</td>
+                          <td className="num-col" data-label="الصافي" style={{ fontWeight: 700 }}>{formatCurrencyMap(s.due)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
                         </tr>
                       );
@@ -189,11 +189,12 @@ function AccountsPage() {
                   <tfoot className="totals-foot">
                     <tr>
                       <td colSpan={6}>الإجمالي</td>
-                      <td className="num-col">{fmtDL(totalTrips)}</td>
-                      <td className="num-col">{fmtDL(totalPaid)}</td>
-                      <td className="num-col">{fmtDL(totalDue)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalTrips)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalPaid)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalDue)}</td>
                       <td></td>
                     </tr>
+
 
                   </tfoot>
                 </table>
