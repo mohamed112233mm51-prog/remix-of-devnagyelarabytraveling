@@ -813,6 +813,7 @@ export function summarizeCurrencySupplierTrades(
     bought_amount?: number | string | null;
     sold_currency?: string | null;
     sold_amount?: number | string | null;
+    cancelled_at?: string | null;
   }>,
 ): CurrencySupplierTradesSummary {
   const s: CurrencySupplierTradesSummary = {
@@ -822,6 +823,7 @@ export function summarizeCurrencySupplierTrades(
     soldByCurrency: new CurrencyMap(),
   };
   for (const t of rows) {
+    if ((t as any).cancelled_at) continue; // نفس مصدر buildCurrencySupplierLedgerRows
     if (t.tx_type === "شراء عملة") s.buyCount += 1;
     else if (t.tx_type === "بيع عملة") s.sellCount += 1;
     s.boughtByCurrency.add(t.bought_currency ?? null, Number(t.bought_amount || 0));
