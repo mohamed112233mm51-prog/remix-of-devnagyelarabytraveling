@@ -1394,38 +1394,12 @@ export function paymentMethodLabel(t: {
 }
 
 /* ============================================================
- *  MERCHANT MOVEMENTS — تلخيص حركة تاجر واحد ضمن نطاق
- *  (يُستخدم في تقرير التجار — مصدر واحد لحساب الوارد/الصادر/العمولة/الرصيد).
+ *  MERCHANT MOVEMENTS — الدالة القديمة `summarizeMerchantMovements`
+ *  تم حذفها لأنها كانت تجمع القيم عبر العملات (EGP+USD+LYD → رقم واحد).
+ *  الاستبدال: `summarizeMerchantReport` / `buildMerchantMovements` +
+ *  `summarizeMerchantMovementTotals` — كل حقل CurrencyMap مستقل بالعملة.
  * ============================================================ */
 
-export type MerchantMovementSummary = {
-  incoming: number;      // net incoming (بعد خصم 1%)
-  incomingGross: number;
-  outgoing: number;
-  collected: number;
-  fee: number;           // عمولة 1%
-  balance: number;       // incoming - outgoing - collected
-};
-
-export function summarizeMerchantMovements(input: {
-  incomingTxns: Transaction[];
-  outgoingCTxns: CompanyTransaction[];
-  collections: MerchantCashCollection[];
-}): MerchantMovementSummary {
-  const { incomingTxns, outgoingCTxns, collections } = input;
-  let incoming = 0;
-  let incomingGross = 0;
-  for (const t of incomingTxns) {
-    incoming += merchantCashNet(t);
-    incomingGross += Number(t.merchant_cash_amount || 0);
-  }
-  let outgoing = 0;
-  for (const t of outgoingCTxns) outgoing += Number((t as any).merchant_cash_amount || 0);
-  let collected = 0;
-  for (const c of collections) collected += Number(c.amount || 0);
-  const fee = incomingGross - incoming;
-  return { incoming, incomingGross, outgoing, collected, fee, balance: incoming - outgoing - collected };
-}
 
 /* ============================================================
  *  TOP AGENTS — ترتيب الوكلاء حسب المحصَّل
