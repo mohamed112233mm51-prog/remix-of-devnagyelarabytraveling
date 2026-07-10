@@ -8,7 +8,7 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals } from "@/lib/financialSummary";
+import { useMerchantAggregates, useMerchantTotals, useMerchantsBalanceByCurrency, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals } from "@/lib/financialSummary";
 
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
