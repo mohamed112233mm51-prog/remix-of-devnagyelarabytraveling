@@ -673,23 +673,17 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
 function CompaniesReport({ inRange, data: rd }: SectionProps) {
   const { companies, companyTransactions: cTxns, approvals, loading } = rd;
 
-  const paidOf = (t: CompanyTransaction) => txnCollectedAmount(t);
-
-
-  const data = useMemo(() => companies.map((c) => {
-    const ts = cTxns.filter((t) => t.company_id === c.id && inRange(t.date));
-    const ap = approvals.filter((a) => a.approval_company_id === c.id && inRange(a.submit_date));
-    const total = ts.reduce((s, t) => s + (Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0)), 0);
-    const paid = ts.reduce((s, t) => s + paidOf(t), 0);
-    return { name: c.company_name, total, paid, due: total - paid, count: ts.length + ap.length };
-  }), [companies, cTxns, approvals, inRange]);
-
-  const fCT = cTxns.filter((t) => inRange(t.date));
-  const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => paidOf(t));
+  const rpt = useMemo(
+    () => summarizeCompanyReport({ companies, companyTransactions: cTxns, approvals, inRange }),
+    [companies, cTxns, approvals, inRange],
+  );
+  const data = rpt.rows;
+  const fCT = rpt.filteredTxns;
+  const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => txnCollectedAmount(t));
   const topCompanies = [...data].sort((a, b) => b.count - a.count).slice(0, 5).map((d) => ({ name: d.name, value: d.count }));
   const servicesByCompany = data.filter((d) => d.paid > 0).slice(0, 6).map((d) => ({ name: d.name, value: d.paid }));
 
-  const totalPaid = fCT.reduce((s, t) => s + paidOf(t), 0);
+  const totalPaid = rpt.totalPaid;
 
   const cols = [
     { header: "اسم الشركة", key: "name" },
