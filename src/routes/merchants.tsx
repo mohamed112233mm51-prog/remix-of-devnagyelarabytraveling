@@ -497,8 +497,10 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
 function HistoryTab({ collections, merchants }: { collections: MerchantCashCollection[]; merchants: Merchant[] }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const filtered = collections.filter((c) => (!from || c.date >= from) && (!to || c.date <= to));
-  const total = filtered.reduce((s, c) => s + Number(c.amount || 0), 0);
+  const { filtered, total } = useMemo(
+    () => summarizeMerchantCollectionsPeriod(collections, from, to),
+    [collections, from, to],
+  );
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">📜 سجل التحصيلات النقدية</div></div>
