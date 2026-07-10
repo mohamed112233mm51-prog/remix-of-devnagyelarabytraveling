@@ -690,7 +690,18 @@ export type CurrencySupplierTx = {
   sold_amount: number | string | null;
   opening_currency?: string | null;
   payment_splits?: Array<{ amount?: number | string | null }> | null;
+  cancelled_at?: string | null;
 };
+
+/**
+ * Single Source of Truth: يستبعد الحركات الملغاة **مرة واحدة فقط** هنا.
+ * كل مُستهلك (الكشف، الرصيد الجاري، الإجماليات، تقرير شراء/بيع العملات)
+ * يجب أن يُمرّر صفوفه عبر هذه الدالة أولاً — بحيث يستحيل معمارياً أن
+ * تظهر حركة ملغاة في أي شاشة.
+ */
+export function buildCurrencySupplierLedgerRows<T extends CurrencySupplierTx>(rows: ReadonlyArray<T>): T[] {
+  return (Array.isArray(rows) ? rows : []).filter((t) => !(t as any).cancelled_at);
+}
 
 /** الدلتا الفعلية لصف واحد في كشف مورد العملة. */
 export function currencySupplierDelta(t: CurrencySupplierTx): { currency: string; delta: number } {
@@ -737,7 +748,7 @@ export function summarizeCurrencySupplierStatement(
     g.debit += d; g.credit += c; g.count += 1;
     map.set(k, g);
   };
-  for (const t of rows) {
+  for (const t of buildCurrencySupplierLedgerRows(rows)) {
     const { currency, delta } = currencySupplierDelta(t);
     if (delta === 0) { bump(currency, 0, 0); continue; }
     if (delta > 0) bump(currency, delta, 0); else bump(currency, 0, -delta);
@@ -757,10 +768,13 @@ export function summarizeCurrencySupplierStatement(
 export function attachRunningBalances<T extends CurrencySupplierTx>(
   rows: T[],
 ): Array<T & { balance: number; balanceCurrency: string }> {
+  // نحافظ على تطابق الطول مع المدخل (بعض المُستدعين يعتمدون على ذلك)،
+  // لكن نتجاهل تأثير الحركات الملغاة على الرصيد الجاري.
   const bals = new Map<string, number>();
   return rows.map((t) => {
     const { currency, delta } = currencySupplierDelta(t);
-    const next = (bals.get(currency) || 0) + delta;
+    const effective = (t as any).cancelled_at ? 0 : delta;
+    const next = (bals.get(currency) || 0) + effective;
     bals.set(currency, next);
     return { ...t, balance: next, balanceCurrency: currency };
   });
@@ -771,7 +785,7 @@ export function summarizeCurrencySupplierNetByCurrency(
   rows: CurrencySupplierTx[],
 ): Array<{ currency: string; net: number }> {
   const map = new Map<string, number>();
-  for (const t of rows) {
+  for (const t of buildCurrencySupplierLedgerRows(rows)) {
     map.set(t.bought_currency, (map.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
     map.set(t.sold_currency, (map.get(t.sold_currency) || 0) - Number(t.sold_amount || 0));
   }
@@ -799,6 +813,7 @@ export function summarizeCurrencySupplierTrades(
     bought_amount?: number | string | null;
     sold_currency?: string | null;
     sold_amount?: number | string | null;
+    cancelled_at?: string | null;
   }>,
 ): CurrencySupplierTradesSummary {
   const s: CurrencySupplierTradesSummary = {
@@ -808,6 +823,7 @@ export function summarizeCurrencySupplierTrades(
     soldByCurrency: new CurrencyMap(),
   };
   for (const t of rows) {
+    if ((t as any).cancelled_at) continue; // نفس مصدر buildCurrencySupplierLedgerRows
     if (t.tx_type === "شراء عملة") s.buyCount += 1;
     else if (t.tx_type === "بيع عملة") s.sellCount += 1;
     s.boughtByCurrency.add(t.bought_currency ?? null, Number(t.bought_amount || 0));
@@ -1488,6 +1504,7 @@ export function summarizeAgentReport(input: {
   let totalCollections = 0, totalValue = 0;
   const filteredTxns: Transaction[] = [];
   for (const t of transactions) {
+    if ((t as any).cancelled_at) continue; // نفس مصدر buildAgentLedgerRows
     if (!inRange(t.date)) continue;
     filteredTxns.push(t);
     const v = tripValue(t as any);
