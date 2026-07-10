@@ -1712,36 +1712,39 @@ export type MerchantMovementItem = {
 };
 
 export type MerchantMovementTotals = {
-  totalIncoming: number;
-  totalOutgoing: number;
-  totalCollected: number;
-  totalPaidOut: number;
-  totalConverted: number;
-  totalCommission: number;
-  egpGross: number;
-  balance: number;
+  /** إجماليات مجمَّعة بالعملة — كل عملة مستقلة تماماً. لا خلط بين EGP/USD/LYD. */
+  totalIncoming: CurrencyMap;
+  totalOutgoing: CurrencyMap;
+  totalCollected: CurrencyMap;
+  totalPaidOut: CurrencyMap;
+  totalConverted: CurrencyMap;
+  totalCommission: CurrencyMap;
+  balance: CurrencyMap;
   byCurrency: LedgerCurrencyTotal[];
 };
 
 export function summarizeMerchantMovementTotals(
   items: readonly MerchantMovementItem[],
 ): MerchantMovementTotals {
-  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0;
-  let totalPaidOut = 0, totalConverted = 0, totalCommission = 0, egpGross = 0;
-  let balance = 0;
+  const totalIncoming = new CurrencyMap();
+  const totalOutgoing = new CurrencyMap();
+  const totalCollected = new CurrencyMap();
+  const totalPaidOut = new CurrencyMap();
+  const totalConverted = new CurrencyMap();
+  const totalCommission = new CurrencyMap();
+  const balance = new CurrencyMap();
   const map = new Map<string, { debit: number; credit: number; count: number }>();
   for (const m of items) {
-    switch (m.type) {
-      case "وارد من وكيل": totalIncoming += m.net; break;
-      case "صادر لشركة": totalOutgoing += m.net; break;
-      case "تحصيل نقدية من التاجر": totalCollected += m.net; break;
-      case "صرف نقدية للتاجر": totalPaidOut += m.net; break;
-      case "تحويل لـ USD": totalConverted += m.net; break;
-    }
-    totalCommission += m.commission;
-    balance += Number(m.delta) || 0;
     const cur = m.currency || "EGP";
-    if (cur === "EGP") egpGross += m.gross;
+    switch (m.type) {
+      case "وارد من وكيل": totalIncoming.add(cur, m.net); break;
+      case "صادر لشركة": totalOutgoing.add(cur, m.net); break;
+      case "تحصيل نقدية من التاجر": totalCollected.add(cur, m.net); break;
+      case "صرف نقدية للتاجر": totalPaidOut.add(cur, m.net); break;
+      case "تحويل لـ USD": totalConverted.add(cur, m.net); break;
+    }
+    totalCommission.add(cur, m.commission);
+    balance.add(cur, Number(m.delta) || 0);
     const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
     if (m.delta >= 0) g.debit += m.delta; else g.credit += -m.delta;
     g.count += 1;
@@ -1762,7 +1765,7 @@ export function summarizeMerchantMovementTotals(
   }
   return {
     totalIncoming, totalOutgoing, totalCollected, totalPaidOut, totalConverted,
-    totalCommission, egpGross, balance,
+    totalCommission, balance,
     byCurrency: byCurrency.filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0),
   };
 }
