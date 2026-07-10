@@ -362,17 +362,32 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
  * ============================================================ */
 
 export type MerchantAggregate = {
-  incoming: number;
-  outgoing: number;
-  collected: number;
-  paidOut: number;
-  converted: number;
-  balance: number;
+  incoming: CurrencyMap;
+  outgoing: CurrencyMap;
+  collected: CurrencyMap;
+  paidOut: CurrencyMap;
+  converted: CurrencyMap;
+  balance: CurrencyMap;
 };
 
 const emptyMerchantAgg = (): MerchantAggregate => ({
-  incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0, balance: 0,
+  incoming: new CurrencyMap(),
+  outgoing: new CurrencyMap(),
+  collected: new CurrencyMap(),
+  paidOut: new CurrencyMap(),
+  converted: new CurrencyMap(),
+  balance: new CurrencyMap(),
 });
+
+/** يجمع تجميعة تاجر إلى تجميعة إجمالية (كل عملة على حدة، لا خلط). */
+function accumulateMerchantAgg(target: MerchantAggregate, src: MerchantAggregate): void {
+  target.incoming.merge(src.incoming);
+  target.outgoing.merge(src.outgoing);
+  target.collected.merge(src.collected);
+  target.paidOut.merge(src.paidOut);
+  target.converted.merge(src.converted);
+  target.balance.merge(src.balance);
+}
 
 /**
  * يبني حركات كشف حساب تاجر واحد بنفس المنطق المستخدم في
