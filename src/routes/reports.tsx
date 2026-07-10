@@ -14,7 +14,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -1449,7 +1449,7 @@ function TreasuriesReport() {
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
-  const active = useMemo(() => boxes.filter((b) => b.is_active !== false), [boxes]);
+  const active = useMemo(() => activeCashBoxes(boxes), [boxes]);
   // كل حسابات الخزائن وأسعار الصرف من المحرك الموحد في src/lib/financialSummary.ts.
   const summary = useMemo(
     () => computeTreasurySummary(active, (cTxns || []) as any),

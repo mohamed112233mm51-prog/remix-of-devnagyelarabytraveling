@@ -1284,11 +1284,19 @@ const RATE_CURRENCY_ALIASES: Record<string, string[]> = {
   LYD: ["دينار ليبي", "دينار", "LYD"],
 };
 
+/**
+ * الفلتر الوحيد للخزائن النشطة — أي شاشة تريد قائمة الخزائن
+ * (للجدول أو للـ dropdown) يجب أن تمر عبر هذا الـ helper بدلاً
+ * من تكرار `is_active !== false` في مكانها.
+ */
+export function activeCashBoxes<T extends CashBoxLike>(boxes: T[]): T[] {
+  return (boxes || []).filter((b) => b.is_active !== false);
+}
+
 /** مجموع أرصدة الخزائن النشطة لكل عملة. */
 export function sumCashBoxesByCurrency(boxes: CashBoxLike[]): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const b of boxes) {
-    if (b.is_active === false) continue;
+  for (const b of activeCashBoxes(boxes)) {
     const cur = (b.currency || "").toString().trim().toUpperCase() || EGP_CODE_;
     out[cur] = (out[cur] || 0) + (Number(b.balance) || 0);
   }
