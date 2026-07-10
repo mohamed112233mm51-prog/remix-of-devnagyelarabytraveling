@@ -161,15 +161,13 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return true;
   }), [rowsWithMethodLabel, safeFilters]);
 
-  const totalServices = filteredLedger.reduce((s, e) => s + e.debit, 0);
-  const totalPayments = filteredLedger.reduce((s, e) => s + e.credit, 0);
+  // Per-currency totals for the footer — via Financial Summary Engine.
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredLedger), [filteredLedger]);
+  const totalServices = byCurrency.reduce((s, b) => s + b.debit, 0);
+  const totalPayments = byCurrency.reduce((s, b) => s + b.credit, 0);
   const net = totalServices - totalPayments;
   const accountStatus = net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن";
   const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
-
-  // Per-currency totals for the footer (final balance per currency).
-  // Per-currency totals for the footer — via Financial Summary Engine.
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredLedger), [filteredLedger]);
 
   const buildExportData = () => ({
     title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
