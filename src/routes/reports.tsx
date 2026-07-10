@@ -1449,7 +1449,7 @@ function TreasuriesReport() {
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
-  const active = useMemo(() => boxes.filter((b) => b.is_active !== false), [boxes]);
+  const active = useMemo(() => activeCashBoxes(boxes), [boxes]);
   // كل حسابات الخزائن وأسعار الصرف من المحرك الموحد في src/lib/financialSummary.ts.
   const summary = useMemo(
     () => computeTreasurySummary(active, (cTxns || []) as any),
