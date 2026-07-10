@@ -25,7 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
-import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, type LedgerRow } from "@/lib/financialSummary";
+import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, formatCurrencyMap, CurrencyMap, type LedgerRow } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -90,21 +90,22 @@ function CompaniesPage() {
   const [editCompany, setEditCompany] = useState<IssuingCompany | null>(null);
   const [viewCompany, setViewCompany] = useState<IssuingCompany | null>(null);
 
-  // Financial Summary Engine — نفس الأرقام، مصدر واحد.
+  // ⚠️ Currency-Safe: كل حقل CurrencyMap مستقل بالعملة (لا خلط EGP/USD/LYD).
   const companiesSummary = useCompaniesSummary();
   const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
-    const map = new Map<string, { trips: number; paid: number }>();
-    let tTrips = 0;
-    let tPaid = 0;
+    const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
+    const tTrips = new CurrencyMap();
+    const tPaid = new CurrencyMap();
+    const tDue = new CurrencyMap();
     for (const [id, sum] of companiesSummary) {
-      const trips = sum.totalDebit.total();
-      const paid = sum.totalCredit.total();
-      map.set(id, { trips, paid });
-      tTrips += trips;
-      tPaid += paid;
+      map.set(id, { trips: sum.totalDebit, paid: sum.totalCredit, due: sum.balance });
+      tTrips.merge(sum.totalDebit);
+      tPaid.merge(sum.totalCredit);
+      tDue.merge(sum.balance);
     }
-    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tTrips - tPaid };
+    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tDue };
   }, [companiesSummary]);
+
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => companies.filter((c) =>
@@ -137,21 +138,22 @@ function CompaniesPage() {
           <div className="kpi-icon"><Briefcase size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي الخدمات</div>
-            <div className="val">{fmtDL(totalTrips)}</div>
+            <div className="val">{formatCurrencyMap(totalTrips)}</div>
           </div>
         </div>
         <div className="sum-box green">
           <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي المدفوع</div>
-            <div className="val">{fmtDL(totalPaid)}</div>
+            <div className="val">{formatCurrencyMap(totalPaid)}</div>
           </div>
         </div>
         <div className="sum-box red">
           <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">المتبقي للشركات</div>
-            <div className="val">{fmtDL(totalDue)}</div>
+            <div className="val">{formatCurrencyMap(totalDue)}</div>
+
           </div>
         </div>
       </div>
@@ -211,17 +213,16 @@ function CompaniesPage() {
                       <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🏢</div><div className="empty-text">أضف شركة من تبويب "إضافة شركة جديدة"</div></div></td></tr>
                     ) : pageRows.map((c, i) => {
                       const idx = page * pageSize + i;
-                      const s = stats.get(c.id) || { trips: 0, paid: 0 };
-                      const due = s.trips - s.paid;
+                      const s = stats.get(c.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
                       return (
                         <tr key={c.id} onClick={() => setViewCompany(c)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
                           <td className="bold" data-label="الشركة الصادرة">{c.company_name}</td>
                           <td data-label="الهاتف">{c.phone || "—"}</td>
                           <td data-label="الواتساب">{c.whatsapp || "—"}</td>
-                          <td className="num-col" data-label="إجمالي الخدمات">{fmtDL(s.trips)}</td>
-                          <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{fmtDL(s.paid)}</td>
-                          <td className="num-col" data-label="المتبقي" style={{ color: due > 0 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{fmtDL(due)}</td>
+                          <td className="num-col" data-label="إجمالي الخدمات">{formatCurrencyMap(s.trips)}</td>
+                          <td className="num-col" data-label="المدفوع" style={{ color: "var(--green)", fontWeight: 700 }}>{formatCurrencyMap(s.paid)}</td>
+                          <td className="num-col" data-label="المتبقي" style={{ fontWeight: 700 }}>{formatCurrencyMap(s.due)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${((c as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(c as any).status || "نشط"}</span></td>
                         </tr>
                       );
@@ -230,11 +231,12 @@ function CompaniesPage() {
                   <tfoot className="totals-foot">
                     <tr>
                       <td colSpan={4}>الإجمالي</td>
-                      <td className="num-col">{fmtDL(totalTrips)}</td>
-                      <td className="num-col">{fmtDL(totalPaid)}</td>
-                      <td className="num-col">{fmtDL(totalDue)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalTrips)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalPaid)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalDue)}</td>
                       <td></td>
                     </tr>
+
 
                   </tfoot>
                 </table>
@@ -256,8 +258,9 @@ function CompaniesPage() {
 
       {viewCompany && (() => {
         const c = viewCompany as any;
-        const s = stats.get(viewCompany.id) || { trips: 0, paid: 0 };
-        const due = s.trips - s.paid;
+        const s = stats.get(viewCompany.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
+        const dueSigns = new Set(s.due.entries().map((e) => Math.sign(e.amount)));
+        const dueTone: "red" | "default" = dueSigns.size !== 1 ? "default" : dueSigns.has(1) ? "red" : "default";
         return (
           <EntityProfileModal
             open={!!viewCompany}
@@ -268,10 +271,11 @@ function CompaniesPage() {
             editLabel="تعديل بيانات الشركة"
             onEdit={() => { setEditCompany(viewCompany); setViewCompany(null); }}
             kpis={[
-              { label: "إجمالي الخدمات", value: fmtDL(s.trips), tone: "gold" },
-              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
-              { label: "المتبقي", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+              { label: "إجمالي الخدمات", value: formatCurrencyMap(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: formatCurrencyMap(s.paid), tone: "green" },
+              { label: "المتبقي", value: formatCurrencyMap(s.due), tone: dueTone },
             ]}
+
             fields={[
               { label: "اسم الشركة", value: viewCompany.company_name },
               { label: "الهاتف", value: viewCompany.phone },
@@ -341,10 +345,16 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   );
 
   const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
-  const totalServices = byCurrency.reduce((s, b) => s + b.debit, 0);
-  const totalPaid = byCurrency.reduce((s, b) => s + b.credit, 0);
-  const balance = totalServices - totalPaid;
-  const accountStatus = balance > 0 ? "مستحق للشركة" : balance < 0 ? "مستحق على الشركة" : "متوازن";
+  // ⚠️ Currency-Safe: كل عملة تُحسب حالتها مستقلة (لا خلط EGP/USD/LYD).
+  const statusPerCurrency = byCurrency.map((b) => ({
+    currency: b.currency,
+    net: b.net,
+    status: b.net > 0 ? "مستحق للشركة" : b.net < 0 ? "مستحق على الشركة" : "متوازن",
+  }));
+  const accountStatus = statusPerCurrency.length === 0
+    ? "متوازن"
+    : statusPerCurrency.map((s) => `${s.status} (${s.currency})`).join(" · ");
+
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
@@ -431,7 +441,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   useRegisterStatementCapture(
     () => ({ data: buildData(), whatsapp: (company as any)?.whatsapp || null, contextId: company?.id || null }),
-    [company, displayRows, totalServices, totalPaid, balance, filters],
+    [company, displayRows, byCurrency, accountStatus, filters],
   );
 
   const Th = ({ children, filterKey, options }: { children: React.ReactNode; filterKey?: string; options?: string[] }) => (

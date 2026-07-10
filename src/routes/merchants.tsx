@@ -8,7 +8,7 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals } from "@/lib/financialSummary";
+import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
 
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -125,29 +125,30 @@ function MerchantsPage() {
       <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
           <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">تاجر الكاش الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <div className="kpi-text"><div className="label">تاجر الكاش الوارد من الوكلاء</div><div className="val">{formatCurrencyMap(totalIncoming)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">تاجر الكاش الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+          <div className="kpi-text"><div className="label">تاجر الكاش الصادر للشركات</div><div className="val">{formatCurrencyMap(totalOutgoing)}</div></div>
         </div>
         <div className="sum-box gold">
           <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المحصلة من التجار</div><div className="val">{fmtDL(totalCollected)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المحصلة من التجار</div><div className="val">{formatCurrencyMap(totalCollected)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المصروفة للتجار</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتجار</div><div className="val">{formatCurrencyMap(totalPaidOut)}</div></div>
         </div>
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
             <div className="label">رصيد تاجر الكاش</div>
-            <div className="val">{fmtDL(balance)}</div>
-            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات</div>
+            <div className="val">{formatCurrencyMap(balance)}</div>
+            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات — كل عملة على حدة</div>
           </div>
         </div>
       </div>
+
 
 
       <div className="action-toolbar">
@@ -189,22 +190,24 @@ function MerchantsPage() {
                   {merchants.length === 0 ? (
                     <tr><td colSpan={10}><div className="empty"><div className="empty-icon">🤝</div><div className="empty-text">لا يوجد تجار</div></div></td></tr>
                   ) : merchants.map((m, i) => {
-                    const t = merchantTotals.get(m.id) || { incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0, balance: 0 };
-                    const bal = t.balance;
+                    const t = merchantTotals.get(m.id) || { incoming: new CurrencyMap(), outgoing: new CurrencyMap(), collected: new CurrencyMap(), paidOut: new CurrencyMap(), converted: new CurrencyMap(), balance: new CurrencyMap() };
+                    const outWithConverted = t.outgoing.clone();
+                    outWithConverted.merge(t.converted);
                     return (
                       <tr key={m.id}>
                         <td data-label="#">{i + 1}</td>
                         <td className="bold" data-label="اسم التاجر">{m.merchant_name}</td>
                         <td data-label="الهاتف">{m.phone || "—"}</td>
                         <td data-label="الواتساب">{m.whatsapp || "—"}</td>
-                        <td className="num-col" data-label="إجمالي الوارد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.incoming)}</td>
-                        <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.outgoing + t.converted)}</td>
-                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{fmtDL(t.collected)}</td>
-                        <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
+                        <td className="num-col" data-label="إجمالي الوارد" style={{ color: "#15803D", fontWeight: 700 }}>{formatCurrencyMap(t.incoming)}</td>
+                        <td className="num-col" data-label="إجمالي الصادر" style={{ color: "#B91C1C", fontWeight: 700 }}>{formatCurrencyMap(outWithConverted)}</td>
+                        <td className="num-col" data-label="إجمالي النقدية المحصلة" style={{ color: "#B45309", fontWeight: 700 }}>{formatCurrencyMap(t.collected)}</td>
+                        <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800 }}>{formatCurrencyMap(t.balance)}</td>
                         <td data-label="الحالة"><span className={`badge pill-badge ${((m as any).status || "نشط") === "نشط" ? "badge-green" : "badge-red"}`}>{(m as any).status || "نشط"}</span></td>
                         <td data-label="إجراءات">{perm.edit ? <button className="action-btn" onClick={() => setEditMerchant(m)}>✏️ تعديل</button> : null}</td>
                       </tr>
                     );
+
                   })}
                 </tbody>
               </table>
@@ -927,12 +930,13 @@ function MerchantStatementTab({
       };
       const LABELS = { debit: "مستحق على التاجر", credit: "مستحق للتاجر", balanced: "متوازن" };
       const base = [
-        { label: "إجمالي الوارد", value: fmtDL(totalIncoming) },
-        { label: "النقدية المحصلة من التاجر", value: fmtDL(totalCollected) },
-        { label: "إجمالي الصادر للشركات", value: fmtDL(totalOutgoing) },
-        { label: "النقدية المصروفة للتاجر", value: fmtDL(totalPaidOut) },
-        { label: "نسبة التاجر (1%)", value: fmtDL(totalCommission) },
+        { label: "إجمالي الوارد", value: formatCurrencyMap(totalIncoming) },
+        { label: "النقدية المحصلة من التاجر", value: formatCurrencyMap(totalCollected) },
+        { label: "إجمالي الصادر للشركات", value: formatCurrencyMap(totalOutgoing) },
+        { label: "النقدية المصروفة للتاجر", value: formatCurrencyMap(totalPaidOut) },
+        { label: "نسبة التاجر (1%)", value: formatCurrencyMap(totalCommission) },
       ];
+
       const perCurrency = byCurrency.flatMap((t) => {
         const name = CUR_NAMES[t.currency] || t.currency;
         const status = t.net > 0 ? LABELS.debit : t.net < 0 ? LABELS.credit : LABELS.balanced;
@@ -1030,33 +1034,34 @@ function MerchantStatementTab({
       <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
           <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <div className="kpi-text"><div className="label">الوارد من الوكلاء</div><div className="val">{formatCurrencyMap(totalIncoming)}</div></div>
         </div>
         <div className="sum-box gold">
           <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المحصلة من التاجر</div><div className="val">{fmtDL(totalCollected)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المحصلة من التاجر</div><div className="val">{formatCurrencyMap(totalCollected)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+          <div className="kpi-text"><div className="label">الصادر للشركات</div><div className="val">{formatCurrencyMap(totalOutgoing)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المصروفة للتاجر</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتاجر</div><div className="val">{formatCurrencyMap(totalPaidOut)}</div></div>
         </div>
         <div className="sum-box">
           <span className="kpi-icon"><Percent size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">نسبة التاجر (1%)</div><div className="val">{fmtDL(totalCommission)}</div></div>
+          <div className="kpi-text"><div className="label">نسبة التاجر (1%)</div><div className="val">{formatCurrencyMap(totalCommission)}</div></div>
         </div>
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
             <div className="label">صافي الرصيد</div>
-            <div className="val">{fmtDL(finalBalance)}</div>
-            <div className="kpi-sub">= الوارد + المصروف − المحصل − الصادر − التحويلات</div>
+            <div className="val">{formatCurrencyMap(totals.balance)}</div>
+            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات — كل عملة مستقلة</div>
           </div>
         </div>
       </div>
+
 
       <CurrencyTotalsCards totals={byCurrency} entityKind="merchant" />
 
@@ -1104,7 +1109,7 @@ function MerchantStatementTab({
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجمالي بالجنيه — المبلغ: {fmtDL(totals.egpGross)} · النسبة: {fmtDL(totalCommission)} · الصافي: {fmtDL(totalIncoming + totalPaidOut - totalCollected - totalOutgoing - totalConverted)}</td></tr>
+                <tr><td colSpan={visibleCount} style={{ fontWeight: 800 }}>الإجماليات حسب العملة — النسبة: {formatCurrencyMap(totalCommission)} · الصافي: {formatCurrencyMap(totals.balance)}</td></tr>
                 <tr><td colSpan={visibleCount} style={{ fontWeight: 800, background: "var(--card)" }}>الرصيد الحالي حسب العملة — {finalByCurrency.length === 0 ? "—" : finalByCurrency.map(([c, v]) => fmtCurrency(v, c)).join(" · ")}</td></tr>
               </tfoot>
             </table>

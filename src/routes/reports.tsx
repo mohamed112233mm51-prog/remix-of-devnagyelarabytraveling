@@ -13,7 +13,7 @@ import {
   type UsdTreasuryTransaction,
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap } from "@/lib/financialSummary";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -798,17 +798,20 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- MERCHANTS ----------
 function MerchantsReport({ inRange, data: rd }: SectionProps) {
-  const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, loading } = rd;
+  const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, usdTreasury, loading } = rd;
 
   const rpt = useMemo(
-    () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, inRange }),
-    [merchants, txns, cTxns, collections, inRange],
+    () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, usdRows: usdTreasury, inRange }),
+    [merchants, txns, cTxns, collections, usdTreasury, inRange],
   );
   const data = rpt.rows;
 
-  const flow = data.map((d) => ({ name: d.name, "وارد": d.incoming, "صادر": d.outgoing }));
-  const fees = data.filter((d) => d.fee > 0).map((d) => ({ name: d.name, value: d.fee }));
-  const balances = data.map((d) => ({ name: d.name, value: d.balance }));
+  // ⚠️ الرسوم البيانية تقبل رقماً واحداً لكل شريحة — لذا نعرض EGP فقط
+  // (وليس دمج EGP+USD+LYD في قيمة واحدة). العملات الأخرى تُعرض في الجدول
+  // والكروت أدناه كل على حدة.
+  const flow = data.map((d) => ({ name: d.name, "وارد": d.incoming.get("EGP"), "صادر": d.outgoing.get("EGP") }));
+  const fees = data.filter((d) => d.fee.get("EGP") > 0).map((d) => ({ name: d.name, value: d.fee.get("EGP") }));
+  const balances = data.map((d) => ({ name: d.name, value: d.balance.get("EGP") }));
 
   const totIn = rpt.totalIn;
   const totOut = rpt.totalOut;
@@ -823,12 +826,12 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
     { header: "الرصيد", key: "balance" },
   ];
   const rows = data.map((r) => ({
-    ...r,
-    incoming: fmtDL(r.incoming), incoming__excel: r.incoming,
-    outgoing: fmtDL(r.outgoing), outgoing__excel: r.outgoing,
-    collected: fmtDL(r.collected), collected__excel: r.collected,
-    fee: fmtDL(r.fee), fee__excel: r.fee,
-    balance: fmtDL(r.balance), balance__excel: r.balance,
+    name: r.name,
+    incoming: formatCurrencyMap(r.incoming), incoming__excel: r.incoming.get("EGP"),
+    outgoing: formatCurrencyMap(r.outgoing), outgoing__excel: r.outgoing.get("EGP"),
+    collected: formatCurrencyMap(r.collected), collected__excel: r.collected.get("EGP"),
+    fee: formatCurrencyMap(r.fee), fee__excel: r.fee.get("EGP"),
+    balance: formatCurrencyMap(r.balance), balance__excel: r.balance.get("EGP"),
   }));
 
   return (
@@ -836,14 +839,14 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
       <div className="card-header"><div className="card-title">🤝 تقرير تاجر الكاش</div></div>
       <div className="card-body">
         <KpiRow items={[
-          { label: "إجمالي الوارد", value: fmtDL(totIn), tone: "green" },
-          { label: "إجمالي الصادر", value: fmtDL(totOut), tone: "red" },
-          { label: "عمولات 1%", value: fmtDL(totFee), tone: "gold" },
+          { label: "إجمالي الوارد", value: formatCurrencyMap(totIn), tone: "green" },
+          { label: "إجمالي الصادر", value: formatCurrencyMap(totOut), tone: "red" },
+          { label: "عمولات 1%", value: formatCurrencyMap(totFee), tone: "gold" },
           { label: "عدد التجار", value: fmtNum(merchants.length) },
         ]} />
 
         <ChartsGrid>
-          <ChartCard title="حركة تاجر الكاش" subtitle="مقارنة بين الوارد والصادر لكل تاجر" isEmpty={flow.length === 0}>
+          <ChartCard title="حركة تاجر الكاش (EGP)" subtitle="مقارنة بين الوارد والصادر لكل تاجر — بالجنيه فقط" isEmpty={flow.length === 0}>
             <BarChart data={flow} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
               <XAxis dataKey="name" tick={axisTick} interval={0} angle={-15} textAnchor="end" height={60} />
@@ -855,7 +858,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="عمولات التجار 1%" subtitle="إجمالي العمولات لكل تاجر" isEmpty={fees.length === 0}>
+          <ChartCard title="عمولات التجار 1% (EGP)" subtitle="إجمالي العمولات لكل تاجر — بالجنيه فقط" isEmpty={fees.length === 0}>
             <BarChart data={fees} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
               <XAxis dataKey="name" tick={axisTick} interval={0} angle={-15} textAnchor="end" height={60} />
@@ -865,7 +868,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="أرصدة التجار" subtitle="الرصيد الحالي لكل تاجر" isEmpty={balances.length === 0}>
+          <ChartCard title="أرصدة التجار (EGP)" subtitle="الرصيد الحالي لكل تاجر — بالجنيه فقط" isEmpty={balances.length === 0}>
             <BarChart data={balances} layout="vertical" margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
               <XAxis type="number" tick={axisTick} tickFormatter={fmtCount} />
@@ -889,11 +892,11 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
               ) : data.map((r, i) => (
                 <tr key={i}>
                   <td className="bold" data-label="التاجر">{r.name}</td>
-                  <td data-label="وارد">{fmtDL(r.incoming)}</td>
-                  <td data-label="صادر">{fmtDL(r.outgoing)}</td>
-                  <td data-label="محصل">{fmtDL(r.collected)}</td>
-                  <td data-label="نسبة">{fmtDL(r.fee)}</td>
-                  <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtDL(r.balance)}</td>
+                  <td data-label="وارد">{formatCurrencyMap(r.incoming)}</td>
+                  <td data-label="صادر">{formatCurrencyMap(r.outgoing)}</td>
+                  <td data-label="محصل">{formatCurrencyMap(r.collected)}</td>
+                  <td data-label="نسبة">{formatCurrencyMap(r.fee)}</td>
+                  <td data-label="الرصيد" style={{ fontWeight: 700 }}>{formatCurrencyMap(r.balance)}</td>
                 </tr>
               ))}
             </tbody>
@@ -903,6 +906,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
     </div>
   );
 }
+
 
 // ---------- INVESTORS ----------
 function InvestorsReport({ inRange, data: rd }: SectionProps) {

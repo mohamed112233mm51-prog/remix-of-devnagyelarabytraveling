@@ -108,11 +108,35 @@ export class CurrencyMap {
     return this.entries().length === 0;
   }
 
-  /** مجموع القيم عبر كل العملات (بدون تحويل صرف). للاستخدام عندما تكون الحركات فعلياً بعملة واحدة. */
+  /**
+   * @deprecated ⛔ يخلط العملات في رقم واحد. لا تستخدمه لأي رصيد أو إجمالي قد يحتوي
+   * أكثر من عملة. Currency-Safe الآن يمنع دمج العملات — استخدم `entries()` والعرض
+   * سطراً لكل عملة عبر `formatCurrencyLines(map)`.
+   * يُترك للاستخدام الداخلي فقط عندما نضمن يقيناً أن الحركات كلها بعملة واحدة.
+   */
   total(): number {
     let t = 0;
     for (const v of this.data.values()) t += v;
     return t;
+  }
+
+  /** عدد العملات غير الصفرية داخل الخريطة. */
+  size(): number {
+    return this.entries().length;
+  }
+
+  /** استنساخ الخريطة (مفيد لبناء تجميعات جديدة دون تعديل الأصل). */
+  clone(): CurrencyMap {
+    const c = new CurrencyMap();
+    for (const [k, v] of this.data) c.data.set(k, v);
+    return c;
+  }
+
+  /** يُدمج خريطة أخرى داخل هذه (نفس العملة تُجمع، عملة جديدة تُضاف). */
+  merge(other: CurrencyMap): void {
+    for (const { currency, amount } of other.entries({ includeZero: true })) {
+      this.add(currency, amount);
+    }
   }
 }
 
@@ -338,17 +362,32 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
  * ============================================================ */
 
 export type MerchantAggregate = {
-  incoming: number;
-  outgoing: number;
-  collected: number;
-  paidOut: number;
-  converted: number;
-  balance: number;
+  incoming: CurrencyMap;
+  outgoing: CurrencyMap;
+  collected: CurrencyMap;
+  paidOut: CurrencyMap;
+  converted: CurrencyMap;
+  balance: CurrencyMap;
 };
 
 const emptyMerchantAgg = (): MerchantAggregate => ({
-  incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0, balance: 0,
+  incoming: new CurrencyMap(),
+  outgoing: new CurrencyMap(),
+  collected: new CurrencyMap(),
+  paidOut: new CurrencyMap(),
+  converted: new CurrencyMap(),
+  balance: new CurrencyMap(),
 });
+
+/** يجمع تجميعة تاجر إلى تجميعة إجمالية (كل عملة على حدة، لا خلط). */
+function accumulateMerchantAgg(target: MerchantAggregate, src: MerchantAggregate): void {
+  target.incoming.merge(src.incoming);
+  target.outgoing.merge(src.outgoing);
+  target.collected.merge(src.collected);
+  target.paidOut.merge(src.paidOut);
+  target.converted.merge(src.converted);
+  target.balance.merge(src.balance);
+}
 
 /**
  * يبني حركات كشف حساب تاجر واحد بنفس المنطق المستخدم في
@@ -529,7 +568,7 @@ export function computeMerchantAggregates(input: {
   return map;
 }
 
-/** Hook حي لتجميعات كل التجار (EGP). */
+/** Hook حي لتجميعات كل التجار (لكل تاجر: CurrencyMap لكل حقل). */
 export function useMerchantAggregates(): Map<string, MerchantAggregate> {
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
@@ -541,20 +580,16 @@ export function useMerchantAggregates(): Map<string, MerchantAggregate> {
   );
 }
 
-/** المجموع الكلي (كل التجار) + الرصيد الصافي — يُستخدم في كروت KPI. */
-export function useMerchantTotals(): MerchantAggregate & { balance: number } {
+/**
+ * المجموع الكلي عبر كل التجار — كل حقل CurrencyMap (لا خلط بين العملات).
+ * الكروت تعرض سطراً لكل عملة عبر `formatCurrencyLines()`.
+ */
+export function useMerchantTotals(): MerchantAggregate {
   const per = useMerchantAggregates();
   return useMemo(() => {
     const t = emptyMerchantAgg();
-    for (const v of per.values()) {
-      t.incoming += v.incoming;
-      t.outgoing += v.outgoing;
-      t.collected += v.collected;
-      t.paidOut += v.paidOut;
-      t.converted += v.converted;
-      t.balance += v.balance;
-    }
-    return { ...t };
+    for (const v of per.values()) accumulateMerchantAgg(t, v);
+    return t;
   }, [per]);
 }
 
@@ -1176,6 +1211,32 @@ export function formatCurrencyLines(map: CurrencyMap): string[] {
   return map.entries().map(({ currency, amount }) => formatCurrencyAmount(amount, currency));
 }
 
+/**
+ * صياغة CurrencyMap كسطر واحد قابل للعرض داخل كارت أو خلية جدول:
+ *   "1,000 ج.م · 500 $ · 2,000 د.ل"
+ * إذا كانت الخريطة فارغة يُعاد `"0 ج.م"` (سلوك افتراضي متوافق مع الكروت السابقة).
+ * لا تُدمج العملات أبداً — كل سطر مستقل بعملته الأصلية.
+ */
+export function formatCurrencyMap(
+  map: CurrencyMap,
+  opts: { separator?: string; emptyLabel?: string } = {},
+): string {
+  const sep = opts.separator ?? " · ";
+  const entries = map.entries();
+  if (entries.length === 0) return opts.emptyLabel ?? "0 ج.م";
+  return entries
+    .map(({ currency, amount }) => {
+      // نستخدم fmtCurrency من db.ts (يعرف الرموز العربية: ج.م / $ / د.ل)
+      // بدل الرمز اللاتيني، لتطابق العرض السابق للكروت.
+      const rounded = Math.round((Number(amount) || 0) * 100) / 100;
+      const n = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(rounded);
+      const sym = currency === "EGP" ? "ج.م" : currency === "USD" ? "$" : currency === "LYD" ? "د.ل" : currency;
+      return `${n} ${sym}`;
+    })
+    .join(sep);
+}
+
+
 /* ============================================================
  *  Treasury (cash_boxes + latest exchange rates)
  *  مصدر واحد للحساب المستخدم في Dashboard و Reports.
@@ -1333,38 +1394,12 @@ export function paymentMethodLabel(t: {
 }
 
 /* ============================================================
- *  MERCHANT MOVEMENTS — تلخيص حركة تاجر واحد ضمن نطاق
- *  (يُستخدم في تقرير التجار — مصدر واحد لحساب الوارد/الصادر/العمولة/الرصيد).
+ *  MERCHANT MOVEMENTS — الدالة القديمة `summarizeMerchantMovements`
+ *  تم حذفها لأنها كانت تجمع القيم عبر العملات (EGP+USD+LYD → رقم واحد).
+ *  الاستبدال: `summarizeMerchantReport` / `buildMerchantMovements` +
+ *  `summarizeMerchantMovementTotals` — كل حقل CurrencyMap مستقل بالعملة.
  * ============================================================ */
 
-export type MerchantMovementSummary = {
-  incoming: number;      // net incoming (بعد خصم 1%)
-  incomingGross: number;
-  outgoing: number;
-  collected: number;
-  fee: number;           // عمولة 1%
-  balance: number;       // incoming - outgoing - collected
-};
-
-export function summarizeMerchantMovements(input: {
-  incomingTxns: Transaction[];
-  outgoingCTxns: CompanyTransaction[];
-  collections: MerchantCashCollection[];
-}): MerchantMovementSummary {
-  const { incomingTxns, outgoingCTxns, collections } = input;
-  let incoming = 0;
-  let incomingGross = 0;
-  for (const t of incomingTxns) {
-    incoming += merchantCashNet(t);
-    incomingGross += Number(t.merchant_cash_amount || 0);
-  }
-  let outgoing = 0;
-  for (const t of outgoingCTxns) outgoing += Number((t as any).merchant_cash_amount || 0);
-  let collected = 0;
-  for (const c of collections) collected += Number(c.amount || 0);
-  const fee = incomingGross - incoming;
-  return { incoming, incomingGross, outgoing, collected, fee, balance: incoming - outgoing - collected };
-}
 
 /* ============================================================
  *  TOP AGENTS — ترتيب الوكلاء حسب المحصَّل
@@ -1528,12 +1563,23 @@ export function summarizeCompanyReport(input: {
   return { rows, totalPaid, filteredTxns };
 }
 
-/** تقرير التجار لفترة. */
+/**
+ * تقرير التجار لفترة — Currency-Safe: كل حقل CurrencyMap مستقل بالعملة،
+ * لا خلط بين EGP/USD/LYD في أي إجمالي.
+ */
 export type MerchantReportRow = {
-  name: string; incoming: number; outgoing: number; collected: number; fee: number; balance: number;
+  name: string;
+  incoming: CurrencyMap;
+  outgoing: CurrencyMap;
+  collected: CurrencyMap;
+  fee: CurrencyMap;
+  balance: CurrencyMap;
 };
 export type MerchantReportSummary = {
-  rows: MerchantReportRow[]; totalIn: number; totalOut: number; totalFee: number;
+  rows: MerchantReportRow[];
+  totalIn: CurrencyMap;
+  totalOut: CurrencyMap;
+  totalFee: CurrencyMap;
 };
 
 export function summarizeMerchantReport(input: {
@@ -1541,38 +1587,36 @@ export function summarizeMerchantReport(input: {
   transactions: Transaction[];
   companyTransactions: CompanyTransaction[];
   collections: MerchantCashCollection[];
+  usdRows?: UsdTreasuryTransaction[];
   inRange: InRange;
 }): MerchantReportSummary {
-  const { merchants, transactions, companyTransactions, collections, inRange } = input;
-  // Group inputs by merchant in one pass each.
-  const inc = new Map<string, Transaction[]>();
-  const out = new Map<string, CompanyTransaction[]>();
-  const col = new Map<string, MerchantCashCollection[]>();
-  for (const t of transactions) if (t.merchant_id && inRange(t.date)) {
-    const arr = inc.get(t.merchant_id) || []; arr.push(t); inc.set(t.merchant_id, arr);
-  }
-  for (const t of companyTransactions) {
-    const mid = (t as any).merchant_id;
-    if (mid && inRange(t.date)) { const arr = out.get(mid) || []; arr.push(t); out.set(mid, arr); }
-  }
-  for (const c of collections) if (c.merchant_id && inRange(c.date)) {
-    const arr = col.get(c.merchant_id) || []; arr.push(c); col.set(c.merchant_id, arr);
-  }
+  const { merchants, transactions, companyTransactions, collections, usdRows, inRange } = input;
+  // نستخدم buildMerchantMovements (نفس Ledger كشف الحساب) ثم نصفّي بـ inRange.
+  const movementInput = buildMerchantMovementInputs(
+    transactions, companyTransactions, collections, usdRows || [],
+  );
+  const totalIn = new CurrencyMap();
+  const totalOut = new CurrencyMap();
+  const totalFee = new CurrencyMap();
   const rows: MerchantReportRow[] = merchants.map((m) => {
-    const s = summarizeMerchantMovements({
-      incomingTxns: inc.get(m.id) || [],
-      outgoingCTxns: out.get(m.id) || [],
-      collections: col.get(m.id) || [],
-    });
+    const movs = buildMerchantMovements(m.id, movementInput)
+      .filter((mv) => inRange(mv.date));
+    const totals = summarizeMerchantMovementTotals(movs);
+    totalIn.merge(totals.totalIncoming);
+    totalOut.merge(totals.totalOutgoing);
+    totalFee.merge(totals.totalCommission);
     return {
       name: (m as any).merchant_name,
-      incoming: s.incoming, outgoing: s.outgoing, collected: s.collected, fee: s.fee, balance: s.balance,
+      incoming: totals.totalIncoming,
+      outgoing: totals.totalOutgoing,
+      collected: totals.totalCollected,
+      fee: totals.totalCommission,
+      balance: totals.balance,
     };
   });
-  let totalIn = 0, totalOut = 0, totalFee = 0;
-  for (const r of rows) { totalIn += r.incoming; totalOut += r.outgoing; totalFee += r.fee; }
   return { rows, totalIn, totalOut, totalFee };
 }
+
 
 /** تقرير المستثمرين لفترة. */
 export type InvestorReportRow = { name: string; deposit: number; withdraw: number; balance: number };
@@ -1673,36 +1717,39 @@ export type MerchantMovementItem = {
 };
 
 export type MerchantMovementTotals = {
-  totalIncoming: number;
-  totalOutgoing: number;
-  totalCollected: number;
-  totalPaidOut: number;
-  totalConverted: number;
-  totalCommission: number;
-  egpGross: number;
-  balance: number;
+  /** إجماليات مجمَّعة بالعملة — كل عملة مستقلة تماماً. لا خلط بين EGP/USD/LYD. */
+  totalIncoming: CurrencyMap;
+  totalOutgoing: CurrencyMap;
+  totalCollected: CurrencyMap;
+  totalPaidOut: CurrencyMap;
+  totalConverted: CurrencyMap;
+  totalCommission: CurrencyMap;
+  balance: CurrencyMap;
   byCurrency: LedgerCurrencyTotal[];
 };
 
 export function summarizeMerchantMovementTotals(
   items: readonly MerchantMovementItem[],
 ): MerchantMovementTotals {
-  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0;
-  let totalPaidOut = 0, totalConverted = 0, totalCommission = 0, egpGross = 0;
-  let balance = 0;
+  const totalIncoming = new CurrencyMap();
+  const totalOutgoing = new CurrencyMap();
+  const totalCollected = new CurrencyMap();
+  const totalPaidOut = new CurrencyMap();
+  const totalConverted = new CurrencyMap();
+  const totalCommission = new CurrencyMap();
+  const balance = new CurrencyMap();
   const map = new Map<string, { debit: number; credit: number; count: number }>();
   for (const m of items) {
-    switch (m.type) {
-      case "وارد من وكيل": totalIncoming += m.net; break;
-      case "صادر لشركة": totalOutgoing += m.net; break;
-      case "تحصيل نقدية من التاجر": totalCollected += m.net; break;
-      case "صرف نقدية للتاجر": totalPaidOut += m.net; break;
-      case "تحويل لـ USD": totalConverted += m.net; break;
-    }
-    totalCommission += m.commission;
-    balance += Number(m.delta) || 0;
     const cur = m.currency || "EGP";
-    if (cur === "EGP") egpGross += m.gross;
+    switch (m.type) {
+      case "وارد من وكيل": totalIncoming.add(cur, m.net); break;
+      case "صادر لشركة": totalOutgoing.add(cur, m.net); break;
+      case "تحصيل نقدية من التاجر": totalCollected.add(cur, m.net); break;
+      case "صرف نقدية للتاجر": totalPaidOut.add(cur, m.net); break;
+      case "تحويل لـ USD": totalConverted.add(cur, m.net); break;
+    }
+    totalCommission.add(cur, m.commission);
+    balance.add(cur, Number(m.delta) || 0);
     const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
     if (m.delta >= 0) g.debit += m.delta; else g.credit += -m.delta;
     g.count += 1;
@@ -1723,7 +1770,7 @@ export function summarizeMerchantMovementTotals(
   }
   return {
     totalIncoming, totalOutgoing, totalCollected, totalPaidOut, totalConverted,
-    totalCommission, egpGross, balance,
+    totalCommission, balance,
     byCurrency: byCurrency.filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0),
   };
 }

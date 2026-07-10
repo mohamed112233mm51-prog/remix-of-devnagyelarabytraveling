@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
-import { useAgentsSummary } from "@/lib/financialSummary";
+import { useAgentsSummary, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
 
 
 import { syncAgentOpeningBalance } from "@/lib/openingBalance";
@@ -49,21 +49,22 @@ function AccountsPage() {
 
   const agentsSummary = useAgentsSummary();
 
-  // نحوّل ملخصات العملات إلى أرقام موحّدة (EGP-only حالياً في هذه الشاشة)
-  // بجمع كل العملات — يطابق سلوك fmtDL القديم الذي يعرض قيمة واحدة.
-  const stats = useMemo(() => {
-    const map = new Map<string, { trips: number; paid: number }>();
+  // ⚠️ Currency-Safe: كل حقل CurrencyMap (لا خلط عبر EGP/USD/LYD).
+  // الكروت والصفوف تعرض سطراً لكل عملة عبر formatCurrencyMap.
+  const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
+    const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
+    const tTrips = new CurrencyMap();
+    const tPaid = new CurrencyMap();
+    const tDue = new CurrencyMap();
     for (const [id, s] of agentsSummary) {
-      const trips = s.totalDebit.total();
-      const paid = s.totalCredit.total();
-      map.set(id, { trips, paid });
+      map.set(id, { trips: s.totalDebit, paid: s.totalCredit, due: s.balance });
+      tTrips.merge(s.totalDebit);
+      tPaid.merge(s.totalCredit);
+      tDue.merge(s.balance);
     }
-    return map;
+    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tDue };
   }, [agentsSummary]);
 
-  const totalTrips = Array.from(stats.values()).reduce((s, v) => s + v.trips, 0);
-  const totalPaid = Array.from(stats.values()).reduce((s, v) => s + v.paid, 0);
-  const totalDue = totalTrips - totalPaid;
 
 
   const debouncedSearch = useDebouncedValue(search, 250);
@@ -97,21 +98,22 @@ function AccountsPage() {
           <div className="kpi-icon"><Plane size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">قيمة الرحلات</div>
-            <div className="val">{fmtDL(totalTrips)}</div>
+            <div className="val">{formatCurrencyMap(totalTrips)}</div>
           </div>
         </div>
         <div className="sum-box green">
           <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي المدفوعات</div>
-            <div className="val">{fmtDL(totalPaid)}</div>
+            <div className="val">{formatCurrencyMap(totalPaid)}</div>
           </div>
         </div>
         <div className="sum-box red">
           <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">الصافي المستحق</div>
-            <div className="val">{fmtDL(totalDue)}</div>
+            <div className="val">{formatCurrencyMap(totalDue)}</div>
+
           </div>
         </div>
       </div>
@@ -167,7 +169,7 @@ function AccountsPage() {
                       <tr><td colSpan={10}><div className="empty"><div className="empty-icon">👥</div><div className="empty-text">أضف وكلاء من تبويب "وكيل جديد"</div></div></td></tr>
                     ) : pageRows.map((a, i) => {
                       const idx = page * pageSize + i;
-                      const s = stats.get(a.id) || { trips: 0, paid: 0 };
+                      const s = stats.get(a.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
                       return (
                         <tr key={a.id} onClick={() => setViewAgent(a)} style={{ cursor: "pointer" }}>
                           <td data-label="#">{idx + 1}</td>
@@ -176,9 +178,9 @@ function AccountsPage() {
                           <td data-label="الهاتف">{a.phone || "—"}</td>
                           <td data-label="الواتساب">{a.whatsapp || "—"}</td>
                           <td data-label="المحافظة">{a.governorate || "—"}</td>
-                          <td className="num-col" data-label="قيمة الرحلات">{fmtDL(s.trips)}</td>
-                          <td className="num-col" data-label="المدفوعات">{fmtDL(s.paid)}</td>
-                          <td className="num-col" data-label="الصافي" style={{ color: "var(--red)", fontWeight: 700 }}>{fmtDL(s.trips - s.paid)}</td>
+                          <td className="num-col" data-label="قيمة الرحلات">{formatCurrencyMap(s.trips)}</td>
+                          <td className="num-col" data-label="المدفوعات">{formatCurrencyMap(s.paid)}</td>
+                          <td className="num-col" data-label="الصافي" style={{ fontWeight: 700 }}>{formatCurrencyMap(s.due)}</td>
                           <td data-label="الحالة"><span className={`badge pill-badge ${badgeFor(a.status)}`}>{a.status}</span></td>
                         </tr>
                       );
@@ -187,11 +189,12 @@ function AccountsPage() {
                   <tfoot className="totals-foot">
                     <tr>
                       <td colSpan={6}>الإجمالي</td>
-                      <td className="num-col">{fmtDL(totalTrips)}</td>
-                      <td className="num-col">{fmtDL(totalPaid)}</td>
-                      <td className="num-col">{fmtDL(totalDue)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalTrips)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalPaid)}</td>
+                      <td className="num-col">{formatCurrencyMap(totalDue)}</td>
                       <td></td>
                     </tr>
+
 
                   </tfoot>
                 </table>
@@ -211,8 +214,10 @@ function AccountsPage() {
 
       {viewAgent && (() => {
         const a = viewAgent as any;
-        const s = stats.get(viewAgent.id) || { trips: 0, paid: 0 };
-        const due = s.trips - s.paid;
+        const s = stats.get(viewAgent.id) || { trips: new CurrencyMap(), paid: new CurrencyMap(), due: new CurrencyMap() };
+        // لون "الصافي المستحق" — إذا كانت كل العملات موجبة نستخدم لوناً واحداً، وإلا لون محايد.
+        const dueSigns = new Set(s.due.entries().map((e) => Math.sign(e.amount)));
+        const dueTone: "red" | "green" | "default" = dueSigns.size !== 1 ? "default" : dueSigns.has(1) ? "red" : "default";
         return (
           <EntityProfileModal
             open={!!viewAgent}
@@ -225,10 +230,11 @@ function AccountsPage() {
             editLabel="تعديل بيانات الوكيل"
             onEdit={() => { setEditAgent(viewAgent); setViewAgent(null); }}
             kpis={[
-              { label: "قيمة الرحلات", value: fmtDL(s.trips), tone: "gold" },
-              { label: "إجمالي المدفوعات", value: fmtDL(s.paid), tone: "green" },
-              { label: "الصافي المستحق", value: fmtDL(due), tone: due > 0 ? "red" : "default" },
+              { label: "قيمة الرحلات", value: formatCurrencyMap(s.trips), tone: "gold" },
+              { label: "إجمالي المدفوعات", value: formatCurrencyMap(s.paid), tone: "green" },
+              { label: "الصافي المستحق", value: formatCurrencyMap(s.due), tone: dueTone },
             ]}
+
             fields={[
               { label: "اسم الوكيل", value: viewAgent.name },
               { label: "الرقم القومي", value: viewAgent.national_id },
