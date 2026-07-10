@@ -425,7 +425,6 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       merchant_id: r.merchant_id,
       date,
       amount: Number(r.amount || 0),
-      currency: r.currency,
       note: note.trim() ? note.trim() : null,
       statement: statement.trim() ? statement.trim() : null,
     }));
