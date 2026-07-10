@@ -108,11 +108,35 @@ export class CurrencyMap {
     return this.entries().length === 0;
   }
 
-  /** مجموع القيم عبر كل العملات (بدون تحويل صرف). للاستخدام عندما تكون الحركات فعلياً بعملة واحدة. */
+  /**
+   * @deprecated ⛔ يخلط العملات في رقم واحد. لا تستخدمه لأي رصيد أو إجمالي قد يحتوي
+   * أكثر من عملة. Currency-Safe الآن يمنع دمج العملات — استخدم `entries()` والعرض
+   * سطراً لكل عملة عبر `formatCurrencyLines(map)`.
+   * يُترك للاستخدام الداخلي فقط عندما نضمن يقيناً أن الحركات كلها بعملة واحدة.
+   */
   total(): number {
     let t = 0;
     for (const v of this.data.values()) t += v;
     return t;
+  }
+
+  /** عدد العملات غير الصفرية داخل الخريطة. */
+  size(): number {
+    return this.entries().length;
+  }
+
+  /** استنساخ الخريطة (مفيد لبناء تجميعات جديدة دون تعديل الأصل). */
+  clone(): CurrencyMap {
+    const c = new CurrencyMap();
+    for (const [k, v] of this.data) c.data.set(k, v);
+    return c;
+  }
+
+  /** يُدمج خريطة أخرى داخل هذه (نفس العملة تُجمع، عملة جديدة تُضاف). */
+  merge(other: CurrencyMap): void {
+    for (const { currency, amount } of other.entries({ includeZero: true })) {
+      this.add(currency, amount);
+    }
   }
 }
 
