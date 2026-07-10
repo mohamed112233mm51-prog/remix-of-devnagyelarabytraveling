@@ -358,19 +358,13 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     "form:agent:add",
     { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A", status: "نشط" },
   );
-  const [opening, setOpening, clearOpening] = usePersistentState(
-    "form:agent:add:opening",
-    { debit: "", credit: "", currency: "EGP", date: "", note: "" },
-  );
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
-  const resetAll = () => { clearForm(); clearOpening(); };
+  const resetAll = () => { clearForm(); setOpenings([]); };
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
     if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
-    const opDebit = Number(opening.debit) || 0;
-    const opCredit = Number(opening.credit) || 0;
     const { data, error } = await supabase.from("agents").insert({
       name: form.name,
       national_id: form.national_id || null,
@@ -379,21 +373,12 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       governorate: form.governorate || null,
       tier: form.tier || "A",
       status: form.status || "نشط",
-      opening_debit: opDebit,
-      opening_credit: opCredit,
-      opening_currency: opening.currency || "EGP",
-      opening_date: opening.date || null,
-      opening_note: opening.note.trim() || null,
     } as any).select("id").single();
     if (error) return toast.error(error.message);
     const agentId = data?.id;
-    if (agentId && (opDebit > 0 || opCredit > 0)) {
-      await syncAgentOpeningBalance(agentId, {
-        debit: opDebit, credit: opCredit,
-        currency: opening.currency || "EGP",
-        date: opening.date || null,
-        note: opening.note.trim() || null,
-      });
+    if (agentId) {
+      try { await syncEntityOpeningEntries("agent", agentId, openings); }
+      catch (e: any) { toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية"); }
     }
     resetAll();
     onDone();
@@ -417,32 +402,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-        <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
-        <div className="card-body">
-          <div className="form-grid">
-            <div className="form-group"><label>رصيد سابق مدين</label>
-              <NumberInput value={Number(opening.debit) || 0} onChange={(n) => setOp("debit", n === 0 ? "" : String(n))} min={0} />
-            </div>
-            <div className="form-group"><label>رصيد سابق دائن</label>
-              <NumberInput value={Number(opening.credit) || 0} onChange={(n) => setOp("credit", n === 0 ? "" : String(n))} min={0} />
-            </div>
-            <div className="form-group"><label>تاريخ الرصيد السابق</label>
-              <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
-            </div>
-            <div className="form-group"><label>العملة</label>
-              <select value={opening.currency || "EGP"} onChange={(e) => setOp("currency", e.target.value)}>
-                <option value="EGP">جنيه مصري</option>
-                <option value="USD">دولار أمريكي</option>
-                <option value="LYD">دينار ليبي</option>
-              </select>
-            </div>
-            <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
-              <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <OpeningEntriesEditor value={openings} onChange={setOpenings} />
 
       <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button>
