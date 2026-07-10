@@ -544,12 +544,10 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
   const [agentId, setAgentId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const filtered = txns.filter((t) =>
-    (!agentId || t.agent_id === agentId) &&
-    (!from || t.date >= from) &&
-    (!to || t.date <= to)
+  const { filtered, total } = useMemo(
+    () => summarizeMerchantIncomingPeriod(txns, agentId, from, to),
+    [txns, agentId, from, to],
   );
-  const total = filtered.reduce((s, t) => s + merchantCashNet(t), 0);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">⬇️ مدفوعات واردة من وكلاء (تاجر الكاش)</div></div>
