@@ -437,7 +437,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   useRegisterStatementCapture(
     () => ({ data: buildData(), whatsapp: (company as any)?.whatsapp || null, contextId: company?.id || null }),
-    [company, displayRows, totalServices, totalPaid, balance, filters],
+    [company, displayRows, byCurrency, accountStatus, filters],
   );
 
   const Th = ({ children, filterKey, options }: { children: React.ReactNode; filterKey?: string; options?: string[] }) => (
