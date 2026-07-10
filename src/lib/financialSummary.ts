@@ -1168,7 +1168,12 @@ export function buildCompanyLedgerRows(
   txns: CompanyTransaction[],
   splitCurrencyByTxnId: Map<string, string>,
 ): LedgerRow<CompanyTransaction>[] {
-  return (Array.isArray(txns) ? txns : []).map((t) => {
+  // Single Source of Truth: يتم استبعاد الحركات الملغاة هنا (وليس في المُستدعي)،
+  // فتتطابق تلقائياً الكروت + قائمة الشركات + كشف الحساب + التقارير + الداشبورد،
+  // مهما اختلفت العملة أو نوع الحركة. أي مُستدعٍ يحتاج الحركات الملغاة يجب أن
+  // يعالجها في مسار منفصل صراحةً، لا هنا.
+  const active = (Array.isArray(txns) ? txns : []).filter((t) => !(t as any).cancelled_at);
+  return active.map((t) => {
     const serviceValue = Math.round(Number((t as any).trip_value || 0));
     const payment = Math.round(Number((t as any).total_paid || 0));
     const kind: LedgerRowKind = serviceValue > 0 ? "service" : "payment";
