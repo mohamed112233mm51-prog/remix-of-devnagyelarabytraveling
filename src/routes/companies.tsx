@@ -20,7 +20,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { syncCompanyOpeningBalance } from "@/lib/openingBalance";
+import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
+import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
@@ -281,11 +282,6 @@ function CompaniesPage() {
               { label: "اسم الشركة", value: viewCompany.company_name },
               { label: "الهاتف", value: viewCompany.phone },
               { label: "الواتساب", value: (viewCompany as any).whatsapp },
-              { label: "رصيد سابق مدين", value: c.opening_debit ? fmtCurrency(Number(c.opening_debit), c.opening_currency || "EGP") : "—" },
-              { label: "رصيد سابق دائن", value: c.opening_credit ? fmtCurrency(Number(c.opening_credit), c.opening_currency || "EGP") : "—" },
-              { label: "عملة الرصيد السابق", value: c.opening_currency || "EGP" },
-              { label: "تاريخ الرصيد السابق", value: c.opening_date || "—" },
-              { label: "ملاحظات الرصيد السابق", value: c.opening_note || "—" },
             ]}
           />
         );
@@ -541,38 +537,32 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
     phone: company.phone || "",
     whatsapp: company.whatsapp || "",
     status: company.status || "نشط",
-    opening_debit: c.opening_debit ? String(c.opening_debit) : "",
-    opening_credit: c.opening_credit ? String(c.opening_credit) : "",
-    opening_currency: c.opening_currency || "EGP",
-    opening_date: c.opening_date || "",
-    opening_note: c.opening_note || "",
   });
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
+  useEffect(() => {
+    let alive = true;
+    readEntityOpeningEntries("company", company.id).then((rows) => { if (alive) setOpenings(rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [company.id]);
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
     if (!form.company_name.trim()) return toast.error("اسم الشركة مطلوب");
     setSaving(true);
-    const debit = Number(form.opening_debit) || 0;
-    const credit = Number(form.opening_credit) || 0;
     const { error } = await supabase.from("issuing_companies").update({
       company_name: form.company_name.trim(),
       phone: form.phone.trim() || null,
       whatsapp: form.whatsapp.trim() || null,
       status: form.status || "نشط",
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: form.opening_currency || "EGP",
-      opening_date: form.opening_date || null,
-      opening_note: form.opening_note.trim() || null,
     } as any).eq("id", company.id);
     if (error) { setSaving(false); return toast.error(error.message); }
-    await syncCompanyOpeningBalance(company.id, {
-      debit, credit,
-      currency: form.opening_currency || "EGP",
-      date: form.opening_date || null,
-      note: form.opening_note.trim() || null,
-    });
+    try {
+      await syncEntityOpeningEntries("company", company.id, openings);
+    } catch (e: any) {
+      setSaving(false);
+      return toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية");
+    }
     setSaving(false);
     toast.success("تم تحديث بيانات الشركة بنجاح");
     onClose();
@@ -649,32 +639,7 @@ function EditCompanyModal({ company, onClose }: { company: IssuingCompany; onClo
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-          <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
-          <div className="card-body">
-            <div className="form-grid">
-              <div className="form-group"><label>رصيد سابق مدين</label>
-                <NumberInput value={Number(form.opening_debit) || 0} onChange={(n) => set("opening_debit", n === 0 ? "" : String(n))} min={0} />
-              </div>
-              <div className="form-group"><label>رصيد سابق دائن</label>
-                <NumberInput value={Number(form.opening_credit) || 0} onChange={(n) => set("opening_credit", n === 0 ? "" : String(n))} min={0} />
-              </div>
-              <div className="form-group"><label>تاريخ الرصيد السابق</label>
-                <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
-              </div>
-              <div className="form-group"><label>العملة</label>
-                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
-                  <option value="EGP">جنيه مصري</option>
-                  <option value="USD">دولار أمريكي</option>
-                  <option value="LYD">دينار ليبي</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
-                <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <OpeningEntriesEditor value={openings} onChange={setOpenings} />
 
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
@@ -694,36 +659,21 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
     "form:company:add",
     { company_name: "", phone: "", whatsapp: "", status: "نشط" },
   );
-  const [opening, setOpening, clearOpening] = usePersistentState(
-    "form:company:add:opening",
-    { debit: "", credit: "", currency: "EGP", date: "", note: "" },
-  );
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
-  const resetAll = () => { clearForm(); clearOpening(); };
+  const resetAll = () => { clearForm(); setOpenings([]); };
   const save = async () => {
     if (!form.company_name) return toast.error("برجاء إدخال اسم الشركة");
-    const debit = Number(opening.debit) || 0;
-    const credit = Number(opening.credit) || 0;
     const { data, error } = await supabase.from("issuing_companies").insert({
       company_name: form.company_name,
       phone: form.phone || null,
       whatsapp: form.whatsapp || null,
       status: form.status || "نشط",
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: opening.currency || "EGP",
-      opening_date: opening.date || null,
-      opening_note: opening.note.trim() || null,
     } as any).select("id").single();
     if (error) return toast.error(error.message);
-    if (data?.id && (debit > 0 || credit > 0)) {
-      await syncCompanyOpeningBalance(data.id, {
-        debit, credit,
-        currency: opening.currency || "EGP",
-        date: opening.date || null,
-        note: opening.note.trim() || null,
-      });
+    if (data?.id) {
+      try { await syncEntityOpeningEntries("company", data.id, openings); }
+      catch (e: any) { toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية"); }
     }
     resetAll();
     onDone();
@@ -742,32 +692,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-        <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
-        <div className="card-body">
-          <div className="form-grid">
-            <div className="form-group"><label>رصيد سابق مدين</label>
-              <NumberInput value={Number(opening.debit) || 0} onChange={(n) => setOp("debit", n === 0 ? "" : String(n))} min={0} />
-            </div>
-            <div className="form-group"><label>رصيد سابق دائن</label>
-              <NumberInput value={Number(opening.credit) || 0} onChange={(n) => setOp("credit", n === 0 ? "" : String(n))} min={0} />
-            </div>
-            <div className="form-group"><label>تاريخ الرصيد السابق</label>
-              <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
-            </div>
-            <div className="form-group"><label>العملة</label>
-              <select value={opening.currency || "EGP"} onChange={(e) => setOp("currency", e.target.value)}>
-                <option value="EGP">جنيه مصري</option>
-                <option value="USD">دولار أمريكي</option>
-                <option value="LYD">دينار ليبي</option>
-              </select>
-            </div>
-            <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
-              <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <OpeningEntriesEditor value={openings} onChange={setOpenings} />
 
       <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button data-confirm-save="تأكيد حفظ الشركة" className="btn btn-gold" onClick={save}>💾 حفظ الشركة</button>

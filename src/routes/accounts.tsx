@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CurrencyLines } from "@/components/CurrencyLines";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
 import { useAgentsSummary, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
 
 
-import { syncAgentOpeningBalance } from "@/lib/openingBalance";
+import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
+import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
 import { toast } from "sonner";
 import { usePerm, checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
@@ -243,11 +244,6 @@ function AccountsPage() {
               { label: "الواتساب", value: viewAgent.whatsapp },
               { label: "المحافظة", value: viewAgent.governorate },
               { label: "شريحة الوكيل", value: a.tier || "—" },
-              { label: "رصيد سابق مدين", value: a.opening_debit ? fmtCurrency(Number(a.opening_debit), a.opening_currency || "EGP") : "—" },
-              { label: "رصيد سابق دائن", value: a.opening_credit ? fmtCurrency(Number(a.opening_credit), a.opening_currency || "EGP") : "—" },
-              { label: "عملة الرصيد السابق", value: a.opening_currency || "EGP" },
-              { label: "تاريخ الرصيد السابق", value: a.opening_date || "—" },
-              { label: "ملاحظات الرصيد السابق", value: a.opening_note || "—" },
             ]}
             headerActions={
               canSearchPricing ? (
@@ -287,18 +283,17 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
     governorate: agent.governorate || "",
     tier: a.tier || "A",
     status: agent.status || "نشط",
-    opening_debit: a.opening_debit ? String(a.opening_debit) : "",
-    opening_credit: a.opening_credit ? String(a.opening_credit) : "",
-    opening_currency: a.opening_currency || "EGP",
-    opening_date: a.opening_date || "",
-    opening_note: a.opening_note || "",
   });
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
+  useEffect(() => {
+    let alive = true;
+    readEntityOpeningEntries("agent", agent.id).then((rows) => { if (alive) setOpenings(rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [agent.id]);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.name.trim()) return toast.error("برجاء إدخال اسم الوكيل");
     if (!form.phone.trim()) return toast.error("برجاء إدخال رقم الهاتف");
-    const debit = Number(form.opening_debit) || 0;
-    const credit = Number(form.opening_credit) || 0;
     const patch = {
       name: form.name.trim(),
       national_id: form.national_id.trim() || null,
@@ -307,23 +302,17 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
       governorate: form.governorate || null,
       tier: form.tier || "A",
       status: form.status || "نشط",
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: form.opening_currency || "EGP",
-      opening_date: form.opening_date || null,
-      opening_note: form.opening_note.trim() || null,
     } as any;
     const { ok } = await applyOptimistic({
       table: "agents", type: "update", id: agent.id, patch,
       run: async () => await supabase.from("agents").update(patch).eq("id", agent.id),
     });
     if (!ok) return;
-    await syncAgentOpeningBalance(agent.id, {
-      debit, credit,
-      currency: form.opening_currency || "EGP",
-      date: form.opening_date || null,
-      note: form.opening_note.trim() || null,
-    });
+    try {
+      await syncEntityOpeningEntries("agent", agent.id, openings);
+    } catch (e: any) {
+      return toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية");
+    }
     toast.success("تم تحديث بيانات الوكيل بنجاح");
     onClose();
   };
@@ -348,32 +337,7 @@ function EditAgentModal({ agent, onClose }: { agent: Agent; onClose: () => void 
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-          <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
-          <div className="card-body">
-            <div className="form-grid">
-              <div className="form-group"><label>رصيد سابق مدين</label>
-                <NumberInput value={Number(form.opening_debit) || 0} onChange={(n) => set("opening_debit", n === 0 ? "" : String(n))} min={0} />
-              </div>
-              <div className="form-group"><label>رصيد سابق دائن</label>
-                <NumberInput value={Number(form.opening_credit) || 0} onChange={(n) => set("opening_credit", n === 0 ? "" : String(n))} min={0} />
-              </div>
-              <div className="form-group"><label>تاريخ الرصيد السابق</label>
-                <DateInput value={form.opening_date} onChange={(iso) => set("opening_date", iso)} />
-              </div>
-              <div className="form-group"><label>العملة</label>
-                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
-                  <option value="EGP">جنيه مصري</option>
-                  <option value="USD">دولار أمريكي</option>
-                  <option value="LYD">دينار ليبي</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
-                <input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} placeholder="ملاحظات اختيارية" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <OpeningEntriesEditor value={openings} onChange={setOpenings} />
 
         
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -394,19 +358,13 @@ function AgentForm({ onDone }: { onDone: () => void }) {
     "form:agent:add",
     { name: "", national_id: "", phone: "", whatsapp: "", governorate: "", tier: "A", status: "نشط" },
   );
-  const [opening, setOpening, clearOpening] = usePersistentState(
-    "form:agent:add:opening",
-    { debit: "", credit: "", currency: "EGP", date: "", note: "" },
-  );
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const setOp = (k: string, v: string) => setOpening((p) => ({ ...p, [k]: v }));
-  const resetAll = () => { clearForm(); clearOpening(); };
+  const resetAll = () => { clearForm(); setOpenings([]); };
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("اسم الوكيل مطلوب");
     if (!form.phone.trim()) return toast.error("الهاتف مطلوب");
-    const opDebit = Number(opening.debit) || 0;
-    const opCredit = Number(opening.credit) || 0;
     const { data, error } = await supabase.from("agents").insert({
       name: form.name,
       national_id: form.national_id || null,
@@ -415,21 +373,12 @@ function AgentForm({ onDone }: { onDone: () => void }) {
       governorate: form.governorate || null,
       tier: form.tier || "A",
       status: form.status || "نشط",
-      opening_debit: opDebit,
-      opening_credit: opCredit,
-      opening_currency: opening.currency || "EGP",
-      opening_date: opening.date || null,
-      opening_note: opening.note.trim() || null,
     } as any).select("id").single();
     if (error) return toast.error(error.message);
     const agentId = data?.id;
-    if (agentId && (opDebit > 0 || opCredit > 0)) {
-      await syncAgentOpeningBalance(agentId, {
-        debit: opDebit, credit: opCredit,
-        currency: opening.currency || "EGP",
-        date: opening.date || null,
-        note: opening.note.trim() || null,
-      });
+    if (agentId) {
+      try { await syncEntityOpeningEntries("agent", agentId, openings); }
+      catch (e: any) { toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية"); }
     }
     resetAll();
     onDone();
@@ -453,32 +402,7 @@ function AgentForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
-        <div className="card-header"><div className="card-title">📒 الرصيد السابق</div></div>
-        <div className="card-body">
-          <div className="form-grid">
-            <div className="form-group"><label>رصيد سابق مدين</label>
-              <NumberInput value={Number(opening.debit) || 0} onChange={(n) => setOp("debit", n === 0 ? "" : String(n))} min={0} />
-            </div>
-            <div className="form-group"><label>رصيد سابق دائن</label>
-              <NumberInput value={Number(opening.credit) || 0} onChange={(n) => setOp("credit", n === 0 ? "" : String(n))} min={0} />
-            </div>
-            <div className="form-group"><label>تاريخ الرصيد السابق</label>
-              <DateInput value={opening.date} onChange={(iso) => setOp("date", iso)} />
-            </div>
-            <div className="form-group"><label>العملة</label>
-              <select value={opening.currency || "EGP"} onChange={(e) => setOp("currency", e.target.value)}>
-                <option value="EGP">جنيه مصري</option>
-                <option value="USD">دولار أمريكي</option>
-                <option value="LYD">دينار ليبي</option>
-              </select>
-            </div>
-            <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>ملاحظات</label>
-              <input value={opening.note} onChange={(e) => setOp("note", e.target.value)} placeholder="ملاحظات اختيارية" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <OpeningEntriesEditor value={openings} onChange={setOpenings} />
 
       <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button data-confirm-save="تأكيد حفظ الوكيل" className="btn btn-gold" onClick={save}>💾 حفظ الوكيل</button>
