@@ -174,7 +174,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     ? "متوازن"
     : statusPerCurrency.map((s) => `${s.status} (${s.currency})`).join(" · ");
 
-  const statusClass = net > 0 ? "red" : net < 0 ? "green" : "gold";
+  // statusClass = لون الحالة الإجمالية عندما تتفق كل العملات؛ وإلا لون محايد.
+  const _signs = new Set(statusPerCurrency.map((s) => Math.sign(s.net)));
+  const statusClass = _signs.size !== 1 ? "gold" : _signs.has(1) ? "red" : _signs.has(-1) ? "green" : "gold";
+
 
   const buildExportData = () => ({
     title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
