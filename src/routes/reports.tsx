@@ -840,9 +840,9 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
       <div className="card-header"><div className="card-title">🤝 تقرير تاجر الكاش</div></div>
       <div className="card-body">
         <KpiRow items={[
-          { label: "إجمالي الوارد", value: formatCurrencyMap(totIn), tone: "green" },
-          { label: "إجمالي الصادر", value: formatCurrencyMap(totOut), tone: "red" },
-          { label: "عمولات 1%", value: formatCurrencyMap(totFee), tone: "gold" },
+          { label: "إجمالي الوارد", value: <CurrencyLines map={totIn} />, tone: "green" },
+          { label: "إجمالي الصادر", value: <CurrencyLines map={totOut} />, tone: "red" },
+          { label: "عمولات 1%", value: <CurrencyLines map={totFee} />, tone: "gold" },
           { label: "عدد التجار", value: fmtNum(merchants.length) },
         ]} />
 
@@ -893,11 +893,11 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
               ) : data.map((r, i) => (
                 <tr key={i}>
                   <td className="bold" data-label="التاجر">{r.name}</td>
-                  <td data-label="وارد">{formatCurrencyMap(r.incoming)}</td>
-                  <td data-label="صادر">{formatCurrencyMap(r.outgoing)}</td>
-                  <td data-label="محصل">{formatCurrencyMap(r.collected)}</td>
-                  <td data-label="نسبة">{formatCurrencyMap(r.fee)}</td>
-                  <td data-label="الرصيد" style={{ fontWeight: 700 }}>{formatCurrencyMap(r.balance)}</td>
+                  <td data-label="وارد"><CurrencyLines map={r.incoming} /></td>
+                  <td data-label="صادر"><CurrencyLines map={r.outgoing} /></td>
+                  <td data-label="محصل"><CurrencyLines map={r.collected} /></td>
+                  <td data-label="نسبة"><CurrencyLines map={r.fee} /></td>
+                  <td data-label="الرصيد" style={{ fontWeight: 700 }}><CurrencyLines map={r.balance} /></td>
                 </tr>
               ))}
             </tbody>
