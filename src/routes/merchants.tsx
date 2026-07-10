@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CurrencyLines } from "@/components/CurrencyLines";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -595,7 +595,6 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
 }
 
 function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose: () => void }) {
-  const m: any = merchant;
   const [form, setForm] = useState({
     merchant_name: merchant.merchant_name || "",
     phone: merchant.phone || "",
@@ -603,28 +602,19 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
     supports_instapay: merchant.supports_instapay ?? true,
     supports_cash_wallet: merchant.supports_cash_wallet ?? true,
     supports_physical_cash: merchant.supports_physical_cash ?? true,
-    status: m.status || "نشط",
-    opening_kind: (Number(m.opening_debit) > 0 ? "debit" : Number(m.opening_credit) > 0 ? "credit" : "") as "" | "debit" | "credit",
-    opening_amount: Number(m.opening_debit) > 0 ? String(m.opening_debit) : Number(m.opening_credit) > 0 ? String(m.opening_credit) : "",
-    opening_currency: m.opening_currency || "EGP",
-    opening_date: m.opening_date || "",
-    opening_note: m.opening_note || "",
+    status: (merchant as any).status || "نشط",
   });
+  const [openings, setOpenings] = useState<OpeningEntry[]>([]);
+  useEffect(() => {
+    let alive = true;
+    readEntityOpeningEntries("merchant", merchant.id).then((rows) => { if (alive) setOpenings(rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [merchant.id]);
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.merchant_name.trim()) return toast.error("اسم التاجر مطلوب");
-    const amount = Math.max(0, Number(form.opening_amount) || 0);
-    const hasOpening = !!form.opening_kind || amount > 0;
-    if (hasOpening) {
-      if (!form.opening_kind) { return toast.error("اختر نوع الرصيد (مدين / دائن)"); }
-      if (!(amount > 0)) { return toast.error("أدخل مبلغ الرصيد السابق"); }
-      if (!form.opening_currency) { return toast.error("اختر عملة الرصيد السابق"); }
-      if (!form.opening_date) { return toast.error("أدخل تاريخ الرصيد السابق"); }
-    }
     setSaving(true);
-    const debit = form.opening_kind === "debit" ? amount : 0;
-    const credit = form.opening_kind === "credit" ? amount : 0;
     const { error } = await supabase.from("merchants").update({
       merchant_name: form.merchant_name.trim(),
       phone: form.phone.trim() || null,
@@ -633,25 +623,13 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
       supports_cash_wallet: form.supports_cash_wallet,
       supports_physical_cash: form.supports_physical_cash,
       status: form.status || "نشط",
-      opening_debit: debit,
-      opening_credit: credit,
-      opening_currency: form.opening_currency || "EGP",
-      opening_date: form.opening_date || null,
-      opening_note: form.opening_note || null,
     } as any).eq("id", merchant.id);
     if (error) { setSaving(false); return toast.error(error.message); }
     try {
-      await syncMerchantOpeningBalance(merchant.id, {
-        debit, credit,
-        currency: form.opening_currency || "EGP",
-        date: form.opening_date || null,
-        note: form.opening_note || null,
-      });
+      await syncEntityOpeningEntries("merchant", merchant.id, openings);
     } catch (e: any) {
       setSaving(false);
-      return toast.error(String(e?.message || "").includes("ux_merchant_opening_row")
-        ? "يوجد رصيد سابق لهذه الجهة بهذه العملة"
-        : (e?.message || "فشل حفظ الرصيد السابق"));
+      return toast.error(e?.message || "فشل حفظ الأرصدة الافتتاحية");
     }
     setSaving(false);
     onClose();
@@ -659,7 +637,7 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
   if (typeof document === "undefined") return null;
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 780, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
         <div className="card-header"><div className="card-title">✏️ تعديل بيانات التاجر</div></div>
         <div className="form-grid">
           <div className="form-group"><label>اسم التاجر</label><input value={form.merchant_name} onChange={(e) => set("merchant_name", e.target.value)} /></div>
@@ -679,32 +657,8 @@ function EditMerchantModal({ merchant, onClose }: { merchant: Merchant; onClose:
               <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--card)", whiteSpace: "nowrap", height: 42, fontSize: 14 }}><input type="checkbox" checked={form.supports_cash_wallet} onChange={(e) => set("supports_cash_wallet", e.target.checked)} /> فودافون كاش</label>
             </div>
           </div>
-          <div className="form-group full" style={{ marginTop: 8, padding: 12, border: "1px dashed var(--border)", borderRadius: 8 }}>
-            <label style={{ fontWeight: 700, marginBottom: 8 }}>رصيد سابق</label>
-            <div className="form-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-              <div className="form-group full">
-                <label>نوع الرصيد</label>
-                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="mrc-edit-open-kind" checked={form.opening_kind === "debit"} onChange={() => set("opening_kind", "debit")} /> مدين</label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="radio" name="mrc-edit-open-kind" checked={form.opening_kind === "credit"} onChange={() => set("opening_kind", "credit")} /> دائن</label>
-                  {form.opening_kind && (
-                    <button type="button" className="action-btn" onClick={() => set("opening_kind", "")}>مسح</button>
-                  )}
-                </div>
-              </div>
-              <div className="form-group"><label>المبلغ</label><input type="number" min={0} value={form.opening_amount} onChange={(e) => set("opening_amount", e.target.value)} /></div>
-              <div className="form-group"><label>العملة</label>
-                <select value={form.opening_currency} onChange={(e) => set("opening_currency", e.target.value)}>
-                  <option value="EGP">جنيه مصري</option>
-                  <option value="USD">دولار أمريكي</option>
-                  <option value="LYD">دينار ليبي</option>
-                </select>
-              </div>
-              <div className="form-group"><label>التاريخ</label><input type="date" value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} /></div>
-              <div className="form-group full"><label>ملاحظات</label><input value={form.opening_note} onChange={(e) => set("opening_note", e.target.value)} /></div>
-            </div>
-          </div>
         </div>
+        <OpeningEntriesEditor value={openings} onChange={setOpenings} />
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
           <button data-confirm-save="تأكيد حفظ التعديلات" type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ التعديلات</button>
