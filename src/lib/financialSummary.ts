@@ -403,9 +403,10 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
  *                    transactions.source_service_type = merchant_cash_out_to_*)
  *    - collected  = ما تم تحصيله نقداً من التاجر (merchant_cash_collections)
  *    - paidOut    = ما صُرف نقداً للتاجر (source_service_type = merchant_cash_out)
+ *    - balance    = صافي كل الدلتا في كشف التاجر نفسه (يشمل الصرف لوكيل)
  *    - converted  = ما حُوّل إلى USD (usd_treasury_transactions conversion)
  *
- *  balance = incoming + paidOut − collected − outgoing − converted
+ *  balance = sum(movement.delta)
  *  (موجب = رصيد لدى النظام لصالح التاجر / سالب = دَين على التاجر).
  * ============================================================ */
 
@@ -415,10 +416,11 @@ export type MerchantAggregate = {
   collected: number;
   paidOut: number;
   converted: number;
+  balance: number;
 };
 
 const emptyMerchantAgg = (): MerchantAggregate => ({
-  incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0,
+  incoming: 0, outgoing: 0, collected: 0, paidOut: 0, converted: 0, balance: 0,
 });
 
 /**
@@ -574,6 +576,7 @@ export function computeMerchantAggregates(input: {
       collected: totals.totalCollected,
       paidOut: totals.totalPaidOut,
       converted: totals.totalConverted,
+      balance: totals.balance,
     });
   }
   return map;
@@ -602,9 +605,9 @@ export function useMerchantTotals(): MerchantAggregate & { balance: number } {
       t.collected += v.collected;
       t.paidOut += v.paidOut;
       t.converted += v.converted;
+      t.balance += v.balance;
     }
-    const balance = t.incoming + t.paidOut - t.collected - t.outgoing - t.converted;
-    return { ...t, balance };
+    return { ...t };
   }, [per]);
 }
 
@@ -1730,6 +1733,7 @@ export type MerchantMovementTotals = {
   totalConverted: number;
   totalCommission: number;
   egpGross: number;
+  balance: number;
   byCurrency: LedgerCurrencyTotal[];
 };
 
@@ -1738,6 +1742,7 @@ export function summarizeMerchantMovementTotals(
 ): MerchantMovementTotals {
   let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0;
   let totalPaidOut = 0, totalConverted = 0, totalCommission = 0, egpGross = 0;
+  let balance = 0;
   const map = new Map<string, { debit: number; credit: number; count: number }>();
   for (const m of items) {
     switch (m.type) {
@@ -1748,6 +1753,7 @@ export function summarizeMerchantMovementTotals(
       case "تحويل لـ USD": totalConverted += m.net; break;
     }
     totalCommission += m.commission;
+    balance += Number(m.delta) || 0;
     const cur = m.currency || "EGP";
     if (cur === "EGP") egpGross += m.gross;
     const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
@@ -1770,7 +1776,7 @@ export function summarizeMerchantMovementTotals(
   }
   return {
     totalIncoming, totalOutgoing, totalCollected, totalPaidOut, totalConverted,
-    totalCommission, egpGross,
+    totalCommission, egpGross, balance,
     byCurrency: byCurrency.filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0),
   };
 }
