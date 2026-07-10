@@ -25,7 +25,7 @@ import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
-import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, type LedgerRow } from "@/lib/financialSummary";
+import { useCompaniesSummary, useCompaniesBalanceByCurrency, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, type LedgerRow } from "@/lib/financialSummary";
 
 import {
   PaymentSplits,
@@ -92,6 +92,8 @@ function CompaniesPage() {
 
   // Financial Summary Engine — نفس الأرقام، مصدر واحد.
   const companiesSummary = useCompaniesSummary();
+  // كارت الإجماليات = مجموع الرصيد الحالي لكل شركة، مُقسَّم حسب العملة.
+  const companiesBalanceByCurrency = useCompaniesBalanceByCurrency();
   const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
     const map = new Map<string, { trips: number; paid: number }>();
     let tTrips = 0;
@@ -132,29 +134,10 @@ function CompaniesPage() {
         )}
       </div>
 
-      <div className="account-summary kpi-rich">
-        <div className="sum-box gold">
-          <div className="kpi-icon"><Briefcase size={18} strokeWidth={2} /></div>
-          <div className="kpi-text">
-            <div className="label">إجمالي الخدمات</div>
-            <div className="val">{fmtDL(totalTrips)}</div>
-          </div>
-        </div>
-        <div className="sum-box green">
-          <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
-          <div className="kpi-text">
-            <div className="label">إجمالي المدفوع</div>
-            <div className="val">{fmtDL(totalPaid)}</div>
-          </div>
-        </div>
-        <div className="sum-box red">
-          <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
-          <div className="kpi-text">
-            <div className="label">المتبقي للشركات</div>
-            <div className="val">{fmtDL(totalDue)}</div>
-          </div>
-        </div>
-      </div>
+      {/* كارت الإجماليات = مجموع الرصيد النهائي لجميع الشركات لكل عملة على حدة */}
+      <CurrencyTotalsCards totals={companiesBalanceByCurrency} entityKind="company" />
+
+
 
 
 

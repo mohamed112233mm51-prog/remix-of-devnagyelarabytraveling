@@ -8,7 +8,7 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals } from "@/lib/financialSummary";
+import { useMerchantAggregates, useMerchantTotals, useMerchantsBalanceByCurrency, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals } from "@/lib/financialSummary";
 
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -75,6 +75,8 @@ function MerchantsPage() {
   const totalPaidOut = kpi.paidOut;
   const totalConverted = kpi.converted;
   const balance = kpi.balance;
+  // كارت الإجماليات = مجموع الرصيد الحالي لكل تاجر، مُقسَّم حسب العملة.
+  const merchantsBalanceByCurrency = useMerchantsBalanceByCurrency();
 
   // Local helpers still needed by list/history sub-sections (filters only, not KPIs).
   const merchantCompanyOutSourceIds = useMemo(
@@ -122,32 +124,9 @@ function MerchantsPage() {
           </button>
         )}
       </div>
-      <div className="account-summary kpi-rich kpi-merchants">
-        <div className="sum-box green">
-          <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">تاجر الكاش الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
-        </div>
-        <div className="sum-box red">
-          <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">تاجر الكاش الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
-        </div>
-        <div className="sum-box gold">
-          <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المحصلة من التجار</div><div className="val">{fmtDL(totalCollected)}</div></div>
-        </div>
-        <div className="sum-box red">
-          <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المصروفة للتجار</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
-        </div>
-        <div className="sum-box hero">
-          <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
-          <div className="kpi-text">
-            <div className="label">رصيد تاجر الكاش</div>
-            <div className="val">{fmtDL(balance)}</div>
-            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات</div>
-          </div>
-        </div>
-      </div>
+      {/* كارت الإجماليات = مجموع الرصيد النهائي لجميع التجار لكل عملة على حدة */}
+      <CurrencyTotalsCards totals={merchantsBalanceByCurrency} entityKind="merchant" />
+
 
       <div className="action-toolbar">
         <div className={`tool-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>

@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
-import { useAgentsSummary } from "@/lib/financialSummary";
+import { useAgentsSummary, useAgentsBalanceByCurrency } from "@/lib/financialSummary";
+import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 
 
 import { syncAgentOpeningBalance } from "@/lib/openingBalance";
@@ -48,6 +49,8 @@ function AccountsPage() {
 
 
   const agentsSummary = useAgentsSummary();
+  // كارت الإجماليات = مجموع الرصيد الحالي لكل وكيل، مُقسَّم حسب العملة.
+  const agentsBalanceByCurrency = useAgentsBalanceByCurrency();
 
   // نحوّل ملخصات العملات إلى أرقام موحّدة (EGP-only حالياً في هذه الشاشة)
   // بجمع كل العملات — يطابق سلوك fmtDL القديم الذي يعرض قيمة واحدة.
@@ -92,29 +95,9 @@ function AccountsPage() {
         )}
       </div>
 
-      <div className="account-summary kpi-rich">
-        <div className="sum-box gold">
-          <div className="kpi-icon"><Plane size={18} strokeWidth={2} /></div>
-          <div className="kpi-text">
-            <div className="label">قيمة الرحلات</div>
-            <div className="val">{fmtDL(totalTrips)}</div>
-          </div>
-        </div>
-        <div className="sum-box green">
-          <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
-          <div className="kpi-text">
-            <div className="label">إجمالي المدفوعات</div>
-            <div className="val">{fmtDL(totalPaid)}</div>
-          </div>
-        </div>
-        <div className="sum-box red">
-          <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
-          <div className="kpi-text">
-            <div className="label">الصافي المستحق</div>
-            <div className="val">{fmtDL(totalDue)}</div>
-          </div>
-        </div>
-      </div>
+      {/* كارت الإجماليات = مجموع الرصيد النهائي لجميع الوكلاء لكل عملة على حدة */}
+      <CurrencyTotalsCards totals={agentsBalanceByCurrency} entityKind="agent" />
+
 
       <div className="action-toolbar">
         <div className={`tool-tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>
