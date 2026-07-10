@@ -341,10 +341,16 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   );
 
   const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
-  const totalServices = byCurrency.reduce((s, b) => s + b.debit, 0);
-  const totalPaid = byCurrency.reduce((s, b) => s + b.credit, 0);
-  const balance = totalServices - totalPaid;
-  const accountStatus = balance > 0 ? "مستحق للشركة" : balance < 0 ? "مستحق على الشركة" : "متوازن";
+  // ⚠️ Currency-Safe: كل عملة تُحسب حالتها مستقلة (لا خلط EGP/USD/LYD).
+  const statusPerCurrency = byCurrency.map((b) => ({
+    currency: b.currency,
+    net: b.net,
+    status: b.net > 0 ? "مستحق للشركة" : b.net < 0 ? "مستحق على الشركة" : "متوازن",
+  }));
+  const accountStatus = statusPerCurrency.length === 0
+    ? "متوازن"
+    : statusPerCurrency.map((s) => `${s.status} (${s.currency})`).join(" · ");
+
 
   const rowsWithMethodLabel = useMemo(() => allWithBalance.map((e) => ({
     ...e,
