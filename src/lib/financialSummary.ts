@@ -494,6 +494,75 @@ export function useMerchantTotals(): MerchantAggregate & { balance: number } {
 
 
 /* ============================================================
+ *  ENTITY-BALANCE AGGREGATES — إجماليات "مجموع الأرصدة الحالية"
+ * ============================================================
+ *  الكروت في صفحات (الوكلاء / الشركات / التجار) يجب أن تعرض
+ *  **مجموع الرصيد النهائي لكل جهة**، مُقسَّماً حسب العملة —
+ *  وليس مجموع المبيعات أو المدفوعات أو الحركات.
+ *
+ *  المعادلة الحسابية: sum(entity.balance[cur]) = sum(entity.debit[cur]) − sum(entity.credit[cur]).
+ *  الفارق الحرج: كل عملة تُجمع بشكل مستقل — لا يُخلط EGP + USD + LYD.
+ * ============================================================ */
+
+/** شكل بطاقة العملة المُستخدَم في CurrencyTotalsCards. */
+export type CurrencyBalanceTotal = {
+  currency: string;
+  debit: number;
+  credit: number;
+  net: number;
+};
+
+/** يُجمِّع Map<id, EntitySummary> إلى إجمالي واحد لكل عملة (debit/credit/net). */
+export function aggregateSummariesByCurrency(
+  map: Map<string, EntitySummary>,
+): CurrencyBalanceTotal[] {
+  const debit = new CurrencyMap();
+  const credit = new CurrencyMap();
+  const net = new CurrencyMap();
+  for (const s of map.values()) {
+    for (const { currency, amount } of s.totalDebit.entries({ includeZero: true })) debit.add(currency, amount);
+    for (const { currency, amount } of s.totalCredit.entries({ includeZero: true })) credit.add(currency, amount);
+    for (const { currency, amount } of s.balance.entries({ includeZero: true })) net.add(currency, amount);
+  }
+  const currencies = new Set<string>();
+  for (const { currency } of debit.entries()) currencies.add(currency);
+  for (const { currency } of credit.entries()) currencies.add(currency);
+  for (const { currency } of net.entries()) currencies.add(currency);
+  const ordered = [
+    ...CURRENCY_ORDER.filter((c) => currencies.has(c)),
+    ...[...currencies].filter((c) => !CURRENCY_ORDER.includes(c)).sort(),
+  ];
+  return ordered.map((c) => ({
+    currency: c,
+    debit: debit.get(c),
+    credit: credit.get(c),
+    net: net.get(c),
+  }));
+}
+
+/** Hook حي: إجمالي رصيد جميع الوكلاء بالعملة. */
+export function useAgentsBalanceByCurrency(): CurrencyBalanceTotal[] {
+  const map = useAgentsSummary();
+  return useMemo(() => aggregateSummariesByCurrency(map), [map]);
+}
+
+/** Hook حي: إجمالي رصيد جميع الشركات بالعملة. */
+export function useCompaniesBalanceByCurrency(): CurrencyBalanceTotal[] {
+  const map = useCompaniesSummary();
+  return useMemo(() => aggregateSummariesByCurrency(map), [map]);
+}
+
+/** Hook حي: إجمالي رصيد جميع التجار بالعملة. */
+export function useMerchantsBalanceByCurrency(): CurrencyBalanceTotal[] {
+  const map = useMerchantsSummary();
+  return useMemo(() => aggregateSummariesByCurrency(map), [map]);
+}
+
+
+
+
+
+/* ============================================================
  *  CURRENCY SUPPLIERS — موردو العملات
  * ============================================================
  *  نموذج الرصيد (مطابق تماماً لكشف حساب المورد في الشاشة):
