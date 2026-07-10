@@ -1261,3 +1261,432 @@ export function computeTopAgentsByCollected(
     .sort((a, b) => b.collected - a.collected)
     .slice(0, limit);
 }
+
+/* ============================================================
+ *  PERIOD REPORTS — تلخيصات فترة زمنية للتقارير (Reports page)
+ *  كل الحسابات المالية للتقارير تُنفَّذ هنا؛ الصفحة تعرض فقط.
+ * ============================================================ */
+
+type InRange = (d: string | null | undefined) => boolean;
+
+/** تقرير الوكلاء لفترة. */
+export type AgentReportRow = {
+  name: string;
+  total: number;
+  paid: number;
+  due: number;
+  flights: number;
+  approvals: number;
+};
+export type AgentReportSummary = {
+  rows: AgentReportRow[];
+  totalCollections: number;
+  totalValue: number;
+  flightsCount: number;
+  approvalsCount: number;
+  filteredTxns: Transaction[];
+  filteredFlights: any[];
+  filteredApprovals: any[];
+};
+
+export function summarizeAgentReport(input: {
+  agents: Pick<Agent, "id" | "name">[];
+  transactions: Transaction[];
+  flights: any[];
+  approvals: any[];
+  inRange: InRange;
+  approvalDate?: (a: any) => string | null;
+}): AgentReportSummary {
+  const { agents, transactions, flights, approvals, inRange } = input;
+  const approvalDate = input.approvalDate || ((a: any) =>
+    (a.submit_date && String(a.submit_date)) ||
+    (a.issue_date && String(a.issue_date)) ||
+    (a.created_at ? String(a.created_at).slice(0, 10) : null));
+
+  // Single-pass grouping by agent — no per-agent .filter().
+  const byAgent = new Map<string, { total: number; paid: number; flights: number; approvals: number }>();
+  const bump = (id: string | null | undefined) => {
+    if (!id) return null;
+    let v = byAgent.get(id);
+    if (!v) { v = { total: 0, paid: 0, flights: 0, approvals: 0 }; byAgent.set(id, v); }
+    return v;
+  };
+  let totalCollections = 0, totalValue = 0;
+  const filteredTxns: Transaction[] = [];
+  for (const t of transactions) {
+    if (!inRange(t.date)) continue;
+    filteredTxns.push(t);
+    const v = tripValue(t as any);
+    const p = txnTotalPaid(t);
+    totalValue += v;
+    totalCollections += p;
+    const agg = bump(t.agent_id as any);
+    if (agg) { agg.total += v; agg.paid += p; }
+  }
+  const filteredFlights: any[] = [];
+  for (const f of flights) {
+    if (!inRange(f.travel_date)) continue;
+    filteredFlights.push(f);
+    const agg = bump(f.agent_id);
+    if (agg) agg.flights += 1;
+  }
+  const filteredApprovals: any[] = [];
+  for (const a of approvals) {
+    if (!inRange(approvalDate(a))) continue;
+    filteredApprovals.push(a);
+    const agg = bump((a as any).agent_id);
+    if (agg && inRange((a as any).submit_date)) agg.approvals += 1;
+  }
+  const rows: AgentReportRow[] = agents.map((a) => {
+    const v = byAgent.get(a.id) || { total: 0, paid: 0, flights: 0, approvals: 0 };
+    return { name: a.name, total: v.total, paid: v.paid, due: v.total - v.paid, flights: v.flights, approvals: v.approvals };
+  });
+  return {
+    rows, totalCollections, totalValue,
+    flightsCount: filteredFlights.length, approvalsCount: filteredApprovals.length,
+    filteredTxns, filteredFlights, filteredApprovals,
+  };
+}
+
+/** تقرير الشركات الصادرة لفترة. */
+export type CompanyReportRow = { name: string; total: number; paid: number; due: number; count: number };
+export type CompanyReportSummary = {
+  rows: CompanyReportRow[];
+  totalPaid: number;
+  filteredTxns: CompanyTransaction[];
+};
+
+export function summarizeCompanyReport(input: {
+  companies: IssuingCompany[];
+  companyTransactions: CompanyTransaction[];
+  approvals: any[];
+  inRange: InRange;
+}): CompanyReportSummary {
+  const { companies, companyTransactions, approvals, inRange } = input;
+  const byCo = new Map<string, { total: number; paid: number; count: number }>();
+  const bump = (id: string | null | undefined) => {
+    if (!id) return null;
+    let v = byCo.get(id);
+    if (!v) { v = { total: 0, paid: 0, count: 0 }; byCo.set(id, v); }
+    return v;
+  };
+  let totalPaid = 0;
+  const filteredTxns: CompanyTransaction[] = [];
+  for (const t of companyTransactions) {
+    if (!inRange(t.date)) continue;
+    filteredTxns.push(t);
+    const val = Number((t as any).trip_value || 0) || Number((t as any).count || 0) * Number((t as any).price || 0);
+    const paid = txnCollectedAmount(t);
+    totalPaid += paid;
+    const agg = bump(t.company_id as any);
+    if (agg) { agg.total += val; agg.paid += paid; agg.count += 1; }
+  }
+  for (const a of approvals) {
+    if (!inRange((a as any).submit_date)) continue;
+    const agg = bump((a as any).approval_company_id);
+    if (agg) agg.count += 1;
+  }
+  const rows: CompanyReportRow[] = companies.map((c) => {
+    const v = byCo.get(c.id) || { total: 0, paid: 0, count: 0 };
+    return { name: (c as any).company_name, total: v.total, paid: v.paid, due: v.total - v.paid, count: v.count };
+  });
+  return { rows, totalPaid, filteredTxns };
+}
+
+/** تقرير التجار لفترة. */
+export type MerchantReportRow = {
+  name: string; incoming: number; outgoing: number; collected: number; fee: number; balance: number;
+};
+export type MerchantReportSummary = {
+  rows: MerchantReportRow[]; totalIn: number; totalOut: number; totalFee: number;
+};
+
+export function summarizeMerchantReport(input: {
+  merchants: Merchant[];
+  transactions: Transaction[];
+  companyTransactions: CompanyTransaction[];
+  collections: MerchantCashCollection[];
+  inRange: InRange;
+}): MerchantReportSummary {
+  const { merchants, transactions, companyTransactions, collections, inRange } = input;
+  // Group inputs by merchant in one pass each.
+  const inc = new Map<string, Transaction[]>();
+  const out = new Map<string, CompanyTransaction[]>();
+  const col = new Map<string, MerchantCashCollection[]>();
+  for (const t of transactions) if (t.merchant_id && inRange(t.date)) {
+    const arr = inc.get(t.merchant_id) || []; arr.push(t); inc.set(t.merchant_id, arr);
+  }
+  for (const t of companyTransactions) {
+    const mid = (t as any).merchant_id;
+    if (mid && inRange(t.date)) { const arr = out.get(mid) || []; arr.push(t); out.set(mid, arr); }
+  }
+  for (const c of collections) if (c.merchant_id && inRange(c.date)) {
+    const arr = col.get(c.merchant_id) || []; arr.push(c); col.set(c.merchant_id, arr);
+  }
+  const rows: MerchantReportRow[] = merchants.map((m) => {
+    const s = summarizeMerchantMovements({
+      incomingTxns: inc.get(m.id) || [],
+      outgoingCTxns: out.get(m.id) || [],
+      collections: col.get(m.id) || [],
+    });
+    return {
+      name: (m as any).merchant_name,
+      incoming: s.incoming, outgoing: s.outgoing, collected: s.collected, fee: s.fee, balance: s.balance,
+    };
+  });
+  let totalIn = 0, totalOut = 0, totalFee = 0;
+  for (const r of rows) { totalIn += r.incoming; totalOut += r.outgoing; totalFee += r.fee; }
+  return { rows, totalIn, totalOut, totalFee };
+}
+
+/** تقرير المستثمرين لفترة. */
+export type InvestorReportRow = { name: string; deposit: number; withdraw: number; balance: number };
+export type InvestorReportSummary = {
+  rows: InvestorReportRow[];
+  totalDeposit: number;
+  totalWithdraw: number;
+  totalBalance: number;
+  filteredTxns: InvestorTransaction[];
+};
+
+export function summarizeInvestorReport(input: {
+  investors: Investor[];
+  investorTransactions: InvestorTransaction[];
+  inRange: InRange;
+}): InvestorReportSummary {
+  const { investors, investorTransactions, inRange } = input;
+  const byInv = new Map<string, { deposit: number; withdraw: number }>();
+  const filteredTxns: InvestorTransaction[] = [];
+  for (const t of investorTransactions) {
+    if (!inRange(t.date)) continue;
+    filteredTxns.push(t);
+    const id = t.investor_id;
+    if (!id) continue;
+    let v = byInv.get(id);
+    if (!v) { v = { deposit: 0, withdraw: 0 }; byInv.set(id, v); }
+    const amt = Number((t as any).amount || 0);
+    if ((t as any).transaction_type === "توريد نقدية") v.deposit += amt;
+    else if ((t as any).transaction_type === "صرف نقدية") v.withdraw += amt;
+  }
+  const rows: InvestorReportRow[] = investors.map((inv) => {
+    const v = byInv.get(inv.id) || { deposit: 0, withdraw: 0 };
+    return { name: (inv as any).investor_name, deposit: v.deposit, withdraw: v.withdraw, balance: v.deposit - v.withdraw };
+  });
+  let totalDeposit = 0, totalWithdraw = 0, totalBalance = 0;
+  for (const r of rows) { totalDeposit += r.deposit; totalWithdraw += r.withdraw; totalBalance += r.balance; }
+  return { rows, totalDeposit, totalWithdraw, totalBalance, filteredTxns };
+}
+
+/** تقرير الخزينة الدولارية لفترة (رصيد جارٍ + إجماليات الفترة). */
+export type UsdTreasuryPeriodSummary = {
+  allSorted: UsdTreasuryTransaction[];
+  withBalance: Array<{ row: UsdTreasuryTransaction; balance: number }>;
+  filtered: Array<{ row: UsdTreasuryTransaction; balance: number }>;
+  periodConversions: number;
+  periodPayments: number;
+  periodEgpUsed: number;
+  currentBalance: number;
+};
+
+export function summarizeUsdTreasuryPeriod(
+  usdTreasury: UsdTreasuryTransaction[],
+  inRange: InRange,
+): UsdTreasuryPeriodSummary {
+  const allSorted = [...usdTreasury]
+    .filter((r) => !(r as any).cancelled_at)
+    .sort((a, b) => {
+      const da = (a.date || "") + " " + ((a as any).created_at || "");
+      const db = (b.date || "") + " " + ((b as any).created_at || "");
+      return da.localeCompare(db);
+    });
+  let bal = 0;
+  const withBalance = allSorted.map((r) => {
+    const amt = Number((r as any).usd_amount || 0);
+    bal += r.type === "company_payment" ? -amt : amt;
+    return { row: r, balance: bal };
+  });
+  let periodConversions = 0, periodPayments = 0, periodEgpUsed = 0;
+  const filteredFwd: Array<{ row: UsdTreasuryTransaction; balance: number }> = [];
+  for (const x of withBalance) {
+    if (!inRange(x.row.date)) continue;
+    filteredFwd.push(x);
+    const usd = Number((x.row as any).usd_amount || 0);
+    const egp = Number((x.row as any).egp_amount || 0);
+    if (x.row.type === "conversion") { periodConversions += usd; periodEgpUsed += egp; }
+    else if (x.row.type === "company_payment") periodPayments += usd;
+  }
+  const currentBalance = withBalance.length ? withBalance[withBalance.length - 1].balance : 0;
+  return {
+    allSorted, withBalance,
+    filtered: filteredFwd.slice().reverse(),
+    periodConversions, periodPayments, periodEgpUsed, currentBalance,
+  };
+}
+
+/* ============================================================
+ *  MERCHANT MOVEMENT TOTALS — إجماليات كشف حركة تاجر (شاشة /merchants)
+ *  Single-pass: كل الإجماليات + التجميع بالعملة في مرور واحد.
+ * ============================================================ */
+
+export type MerchantMovementItem = {
+  type: string;
+  currency?: string | null;
+  gross: number;
+  commission: number;
+  net: number;
+  delta: number;
+};
+
+export type MerchantMovementTotals = {
+  totalIncoming: number;
+  totalOutgoing: number;
+  totalCollected: number;
+  totalPaidOut: number;
+  totalConverted: number;
+  totalCommission: number;
+  egpGross: number;
+  byCurrency: LedgerCurrencyTotal[];
+};
+
+export function summarizeMerchantMovementTotals(
+  items: readonly MerchantMovementItem[],
+): MerchantMovementTotals {
+  let totalIncoming = 0, totalOutgoing = 0, totalCollected = 0;
+  let totalPaidOut = 0, totalConverted = 0, totalCommission = 0, egpGross = 0;
+  const map = new Map<string, { debit: number; credit: number; count: number }>();
+  for (const m of items) {
+    switch (m.type) {
+      case "وارد من وكيل": totalIncoming += m.net; break;
+      case "صادر لشركة": totalOutgoing += m.net; break;
+      case "تحصيل نقدية من التاجر": totalCollected += m.net; break;
+      case "صرف نقدية للتاجر": totalPaidOut += m.net; break;
+      case "تحويل لـ USD": totalConverted += m.net; break;
+    }
+    totalCommission += m.commission;
+    const cur = m.currency || "EGP";
+    if (cur === "EGP") egpGross += m.gross;
+    const g = map.get(cur) || { debit: 0, credit: 0, count: 0 };
+    if (m.delta >= 0) g.debit += m.delta; else g.credit += -m.delta;
+    g.count += 1;
+    map.set(cur, g);
+  }
+  const byCurrency: LedgerCurrencyTotal[] = [];
+  const seen = new Set<string>();
+  for (const cur of CURRENCY_ORDER) {
+    if (map.has(cur)) {
+      const g = map.get(cur)!;
+      byCurrency.push({ currency: cur, debit: g.debit, credit: g.credit, net: g.debit - g.credit, count: g.count });
+      seen.add(cur);
+    }
+  }
+  for (const cur of Array.from(map.keys()).filter((c) => !seen.has(c)).sort()) {
+    const g = map.get(cur)!;
+    byCurrency.push({ currency: cur, debit: g.debit, credit: g.credit, net: g.debit - g.credit, count: g.count });
+  }
+  return {
+    totalIncoming, totalOutgoing, totalCollected, totalPaidOut, totalConverted,
+    totalCommission, egpGross,
+    byCurrency: byCurrency.filter((t) => t.debit !== 0 || t.credit !== 0 || t.net !== 0),
+  };
+}
+
+/* ============================================================
+ *  MERCHANT SUB-PERIOD TOTALS — تصفية + إجمالي بسيط لتبويبات /merchants
+ * ============================================================ */
+
+export function summarizeMerchantCollectionsPeriod(
+  collections: MerchantCashCollection[], from: string, to: string,
+): { filtered: MerchantCashCollection[]; total: number } {
+  const filtered: MerchantCashCollection[] = [];
+  let total = 0;
+  for (const c of collections) {
+    if (from && c.date < from) continue;
+    if (to && c.date > to) continue;
+    filtered.push(c);
+    total += Number(c.amount || 0);
+  }
+  return { filtered, total };
+}
+
+export function summarizeMerchantIncomingPeriod(
+  txns: Transaction[], agentId: string, from: string, to: string,
+): { filtered: Transaction[]; total: number } {
+  const filtered: Transaction[] = [];
+  let total = 0;
+  for (const t of txns) {
+    if (agentId && t.agent_id !== agentId) continue;
+    if (from && (t.date || "") < from) continue;
+    if (to && (t.date || "") > to) continue;
+    filtered.push(t);
+    total += merchantCashNet(t);
+  }
+  return { filtered, total };
+}
+
+export function summarizeMerchantOutgoingPeriod(
+  cTxns: CompanyTransaction[], companyId: string, from: string, to: string,
+): { filtered: CompanyTransaction[]; total: number } {
+  const filtered: CompanyTransaction[] = [];
+  let total = 0;
+  for (const t of cTxns) {
+    if (companyId && (t as any).company_id !== companyId) continue;
+    if (from && (t.date || "") < from) continue;
+    if (to && (t.date || "") > to) continue;
+    filtered.push(t);
+    total += merchantCompanyOutflowAmount(t);
+  }
+  return { filtered, total };
+}
+
+/* ============================================================
+ *  USD CONVERSION SOURCE BALANCE — رصيد مصدر التحويل لـ USD
+ *  (يُستخدم في مودال "تحويل إلى الخزينة الدولارية" داخل /companies).
+ * ============================================================ */
+
+export type ConvertSource =
+  | "insta_company" | "cash_company" | "merchant_wallet" | "merchant_physical";
+
+export function computeUsdConversionSourceBalance(input: {
+  sourceType: ConvertSource | "";
+  merchantId?: string;
+  agentTxns: Transaction[];
+  companyTxns: CompanyTransaction[];
+  collections: MerchantCashCollection[];
+  usdRows: UsdTreasuryTransaction[];
+}): number {
+  const { sourceType, merchantId, agentTxns, companyTxns, collections, usdRows } = input;
+  if (!sourceType) return 0;
+  let conv = 0;
+  for (const r of usdRows) {
+    if (r.type !== "conversion") continue;
+    if ((r as any).source_type !== sourceType) continue;
+    if (merchantId && (r as any).merchant_id !== merchantId) continue;
+    conv += Number((r as any).egp_amount || 0);
+  }
+  if (sourceType === "insta_company") {
+    let inn = 0, out = 0;
+    for (const t of agentTxns) inn += Number((t as any).instapay_amount || 0);
+    for (const t of companyTxns) out += Number((t as any).instapay_amount || 0);
+    return Math.round(inn - out - conv);
+  }
+  if (sourceType === "cash_company") {
+    let inn = 0, out = 0;
+    for (const t of agentTxns) inn += Number((t as any).cash_amount || 0);
+    for (const t of companyTxns) out += Number((t as any).cash_amount || 0);
+    return Math.round(inn - out - conv);
+  }
+  if (!merchantId) return 0;
+  if (sourceType === "merchant_wallet") {
+    let inn = 0, out = 0, col = 0;
+    for (const t of agentTxns) if ((t as any).merchant_id === merchantId) inn += merchantCashNet(t);
+    for (const t of companyTxns) if ((t as any).merchant_id === merchantId) out += merchantCashNet(t as any);
+    for (const c of collections) if (c.merchant_id === merchantId) col += Number(c.amount || 0);
+    return Math.round(inn - out - col - conv);
+  }
+  // merchant_physical
+  let inn = 0, out = 0;
+  for (const t of agentTxns) if ((t as any).merchant_id === merchantId) inn += Number((t as any).merchant_cash_physical_amount || 0);
+  for (const t of companyTxns) if ((t as any).merchant_id === merchantId) out += Number((t as any).merchant_cash_physical_amount || 0);
+  return Math.round(inn - out - conv);
+}
+
