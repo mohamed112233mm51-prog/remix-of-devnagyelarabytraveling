@@ -393,6 +393,7 @@ function MerchantForm() {
 
 
 function CollectForm({ merchants }: { merchants: Merchant[] }) {
+  const { rows: cashBoxes } = useLive<{ id: string; name: string; currency: string; is_active: boolean; method_key?: string | null }>("cash_boxes");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
   const [statement, setStatement] = useState("");
@@ -423,38 +424,48 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       merchant_id: r.merchant_id,
       date,
       amount: Number(r.amount || 0),
+      currency: r.currency,
       note: note.trim() ? note.trim() : null,
       statement: statement.trim() ? statement.trim() : null,
     }));
     const { data: inserted, error } = await supabase
       .from("merchant_cash_collections")
-      .insert(rows)
+      .insert(rows as any)
       .select("id, merchant_id, amount");
     if (error) return toast.error(error.message);
 
-    // 2) Mirror each row into payment_splits via the Financial Engine
-    //    so the movement appears in unified financial logs (no cash_box impact
-    //    because collections drain a merchant wallet, not a company treasury).
+    // 2) Mirror each row into payment_splits via the Financial Engine.
+    //    Collection = cash physically enters the company treasury, so we resolve
+    //    the matching cash box by mapping the merchant's payment method to the
+    //    corresponding company cash box (instapay → company_instapay,
+    //    physical/wallet → company_cash for the selected currency). This is the
+    //    SAME Payment Split → apply_payment_split_to_cash_box trigger path used
+    //    by every other cash-in flow in the system.
     const methodLabelFor = (m: string): string => {
       if (m === "merchant_instapay") return "انستا";
       if (m === "merchant_wallet") return "فودافون كاش";
       if (m === "merchant_physical") return "نقدي";
       return "نقدي";
     };
+    const companyMethodFor = (m: string): string =>
+      m === "merchant_instapay" ? "company_instapay" : "company_cash";
+
     for (let i = 0; i < valid.length; i++) {
       const row = valid[i];
       const dbRow = (inserted as any[])?.[i];
       if (!dbRow) continue;
+      const amt = Number(row.amount || 0);
+      const box = resolveCompanyCashBoxForSplit(cashBoxes, row.currency, companyMethodFor(row.method));
       const engineSplits: MovementSplit[] = [{
         method: methodLabelFor(row.method),
-        currency: "EGP",
-        cashBoxId: null,
-        amount: Number(row.amount || 0),
+        currency: row.currency,
+        cashBoxId: box?.id || null,
+        amount: amt,
         direction: "in",
-        grossAmount: Number(row.amount || 0),
-        netAmount: Number(row.amount || 0),
+        grossAmount: amt,
+        netAmount: amt,
         exchangeRate: 1,
-        egpEquivalent: Number(row.amount || 0),
+        egpEquivalent: row.currency === "EGP" ? amt : 0,
       }];
       const res = await postMovement({
         partyType: "merchant",
@@ -471,6 +482,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         toast.error(res.error || "تعذر تسجيل الحركة في السجل المالي");
       }
     }
+
 
     toast.success("تم حفظ التحصيل");
     const r = newPaymentSplitRow();
