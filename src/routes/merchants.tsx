@@ -125,29 +125,30 @@ function MerchantsPage() {
       <div className="account-summary kpi-rich kpi-merchants">
         <div className="sum-box green">
           <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">تاجر الكاش الوارد من الوكلاء</div><div className="val">{fmtDL(totalIncoming)}</div></div>
+          <div className="kpi-text"><div className="label">تاجر الكاش الوارد من الوكلاء</div><div className="val">{formatCurrencyMap(totalIncoming)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">تاجر الكاش الصادر للشركات</div><div className="val">{fmtDL(totalOutgoing)}</div></div>
+          <div className="kpi-text"><div className="label">تاجر الكاش الصادر للشركات</div><div className="val">{formatCurrencyMap(totalOutgoing)}</div></div>
         </div>
         <div className="sum-box gold">
           <span className="kpi-icon"><Banknote size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المحصلة من التجار</div><div className="val">{fmtDL(totalCollected)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المحصلة من التجار</div><div className="val">{formatCurrencyMap(totalCollected)}</div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpFromLine size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">النقدية المصروفة للتجار</div><div className="val">{fmtDL(totalPaidOut)}</div></div>
+          <div className="kpi-text"><div className="label">النقدية المصروفة للتجار</div><div className="val">{formatCurrencyMap(totalPaidOut)}</div></div>
         </div>
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
             <div className="label">رصيد تاجر الكاش</div>
-            <div className="val">{fmtDL(balance)}</div>
-            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات</div>
+            <div className="val">{formatCurrencyMap(balance)}</div>
+            <div className="kpi-sub">الرصيد الحالي بعد التحصيلات — كل عملة على حدة</div>
           </div>
         </div>
       </div>
+
 
 
       <div className="action-toolbar">
