@@ -138,21 +138,22 @@ function CompaniesPage() {
           <div className="kpi-icon"><Briefcase size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي الخدمات</div>
-            <div className="val">{fmtDL(totalTrips)}</div>
+            <div className="val">{formatCurrencyMap(totalTrips)}</div>
           </div>
         </div>
         <div className="sum-box green">
           <div className="kpi-icon"><Wallet size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">إجمالي المدفوع</div>
-            <div className="val">{fmtDL(totalPaid)}</div>
+            <div className="val">{formatCurrencyMap(totalPaid)}</div>
           </div>
         </div>
         <div className="sum-box red">
           <div className="kpi-icon"><AlertCircle size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
             <div className="label">المتبقي للشركات</div>
-            <div className="val">{fmtDL(totalDue)}</div>
+            <div className="val">{formatCurrencyMap(totalDue)}</div>
+
           </div>
         </div>
       </div>
