@@ -640,17 +640,26 @@ function TxModal({
     if (!txDate) return toast.error("التاريخ مطلوب");
     if (!foreignCurrency) return toast.error("اختر العملة");
     if (!(a > 0) || !(r > 0) || !(e > 0)) return toast.error("أدخل قيمتين على الأقل لحساب الثالثة");
-    const err = validatePaymentSplits(splits);
-    if (err) return toast.error(err);
+    // For "شراء عملة": payment is OPTIONAL. Allow zero payment (full credit to supplier),
+    // partial payment, or full payment. Only validate split-row shape when the user
+    // actually entered payment amounts. For "بيع عملة": receipts remain required
+    // (previous behaviour).
+    const hasAnyPayment = splitsTotal > 0;
+    if (kind !== "شراء عملة" || hasAnyPayment) {
+      const err = validatePaymentSplits(splits);
+      if (err) return toast.error(err);
+    }
     // Partial payment allowed. Only block if paying MORE than the exchange value.
     if (splitsDiff < -0.5) {
       return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) يتجاوز قيمة الصفقة بالجنيه (${fmtNum(egpNum)})`);
     }
     const validForCheck = filterValidSplits(splits);
     if (kind === "شراء عملة") {
-      // EGP leaves the company / merchants → guard balances.
-      const balanceErr = validateSplitOutflows(validForCheck, balances, merchants);
-      if (balanceErr) return toast.error(balanceErr);
+      // EGP leaves the company / merchants → guard balances only if there are payments.
+      if (validForCheck.length > 0) {
+        const balanceErr = validateSplitOutflows(validForCheck, balances, merchants);
+        if (balanceErr) return toast.error(balanceErr);
+      }
     } else {
       // sell: foreign currency leaves treasury → guard the foreign box.
       const code = foreignCurrency;
