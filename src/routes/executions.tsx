@@ -662,7 +662,7 @@ function ExecutionForm({
       missing: res.missingCurrencies,
       reason: res.reason,
     };
-  }, [services, form.travel_date, buyRows, editing?.id, editing?.fx_locks]);
+  }, [services, form.travel_date, buyRows, editing?.id, (editing as any)?.fx_locks]);
 
 
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
