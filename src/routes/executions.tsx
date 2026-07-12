@@ -28,6 +28,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
+import {
+  computeExecutionProfitEGP,
+  loadCurrencyBuyRows,
+  resolveRateFromRows,
+  aggregateExecutionByCurrency,
+  type CurrencyBuyRow,
+  type FxLocks,
+} from "@/lib/executionProfit";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
@@ -597,6 +605,66 @@ function ExecutionForm({
     return [...curs].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   };
 
+  // ─── Net-profit preview (EGP) — SAME central source used by Dashboard.
+  // Read-only preview: never writes fx_locks. Resolves historical rates
+  // via `resolveRateFromRows(rows, cur, travel_date)` and feeds them as
+  // synthetic locks to `computeExecutionProfitEGP`. If any required
+  // currency has no rate on/before travel_date, preview is "pending".
+  const [buyRows, setBuyRows] = useState<CurrencyBuyRow[]>([]);
+  useEffect(() => {
+    let alive = true;
+    loadCurrencyBuyRows(supabase)
+      .then((rows) => { if (alive) setBuyRows(rows); })
+      .catch(() => { if (alive) setBuyRows([]); });
+    return () => { alive = false; };
+  }, []);
+  const profitPreview = useMemo(() => {
+    const synthetic = {
+      id: editing?.id || "preview",
+      travel_date: form.travel_date || null,
+      operation_status: "منفذ",
+      services,
+      fx_locks: ((editing as any)?.fx_locks as FxLocks | null) || null,
+      fx_locked_at: (editing as any)?.fx_locked_at || null,
+    };
+    // If already locked historically, use those locks verbatim.
+    const existing: FxLocks = { ...(synthetic.fx_locks || {}) };
+    const { salesByCur, costByCur } = aggregateExecutionByCurrency(synthetic);
+    const foreign = Array.from(
+      new Set([...Object.keys(salesByCur), ...Object.keys(costByCur)].filter((c) => c !== "EGP")),
+    );
+    const missingForPreview: string[] = [];
+    const previewLocks: FxLocks = { ...existing };
+    if (form.travel_date) {
+      for (const cur of foreign) {
+        if (Number(previewLocks[cur]) > 0) continue;
+        const rate = resolveRateFromRows(buyRows, cur, form.travel_date);
+        if (rate !== null) previewLocks[cur] = rate;
+        else missingForPreview.push(cur);
+      }
+    } else {
+      for (const cur of foreign) if (!(Number(previewLocks[cur]) > 0)) missingForPreview.push(cur);
+    }
+    if (foreign.length > 0 && missingForPreview.length > 0) {
+      return {
+        status: "pending" as const,
+        profitEGP: null as number | null,
+        missing: missingForPreview,
+        reason: !form.travel_date
+          ? "أدخل تاريخ المغادرة أولاً لحساب الربح بالجنيه."
+          : `لا يمكن حساب الربح حتى يتم تسجيل سعر شراء للعملات: ${missingForPreview.join(", ")}`,
+      };
+    }
+    const res = computeExecutionProfitEGP({ ...synthetic, fx_locks: previewLocks });
+    return {
+      status: res.status,
+      profitEGP: res.profitEGP,
+      missing: res.missingCurrencies,
+      reason: res.reason,
+    };
+  }, [services, form.travel_date, buyRows, editing?.id, (editing as any)?.fx_locks]);
+
+
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
 
@@ -991,28 +1059,26 @@ function ExecutionForm({
             </div>
           )}
         </div>
-        <div style={{ padding: 12, borderRadius: 10, background: profitCurrency ? (profit >= 0 ? "#fffbeb" : "#fef2f2") : "#f8fafc", border: `1px solid ${profitCurrency ? (profit >= 0 ? "#fde68a" : "#fecaca") : "#e2e8f0"}` }}>
-          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
-            {profitCurrency ? "صافي الربح" : "صافي الأرباح حسب العملة"}
-          </div>
-          {profitCurrency ? (
-            <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
-              {profit.toLocaleString("ar")} {currencyShortLabel(profitCurrency)}
+        {(() => {
+          const pending = profitPreview.status !== "locked" || profitPreview.profitEGP === null;
+          const val = Number(profitPreview.profitEGP || 0);
+          const bg = pending ? "#f8fafc" : (val >= 0 ? "#fffbeb" : "#fef2f2");
+          const border = pending ? "#e2e8f0" : (val >= 0 ? "#fde68a" : "#fecaca");
+          return (
+            <div style={{ padding: 12, borderRadius: 10, background: bg, border: `1px solid ${border}` }}>
+              <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>صافي الربح (بالجنيه)</div>
+              {pending ? (
+                <div style={{ fontSize: 12, color: "#b45309", fontWeight: 700, marginTop: 6, lineHeight: 1.5 }}>
+                  {profitPreview.reason || "لا يمكن حساب الربح حالياً."}
+                </div>
+              ) : (
+                <div style={{ fontSize: 18, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
+                  {val.toLocaleString("ar")} ج.م
+                </div>
+              )}
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {sortCurrencies(profitCurrencies).map((cur) => {
-                const val = profitByCurrency[cur] || 0;
-                return (
-                  <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c" }}>
-                    <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
-                    <span>{val.toLocaleString("ar")}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
       )}
 
