@@ -22,7 +22,9 @@ import {
   type Transaction,
 } from "@/lib/db";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
-import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime } from "@/lib/financialSummary";
+import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
+import { CurrencyLines } from "@/components/CurrencyLines";
+import { usePerm } from "@/hooks/usePerm";
 import {
   Users,
   Building2,
