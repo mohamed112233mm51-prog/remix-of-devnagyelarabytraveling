@@ -696,13 +696,21 @@ export type CurrencySupplierTx = {
 };
 
 /**
- * Single Source of Truth: يستبعد الحركات الملغاة **مرة واحدة فقط** هنا.
+ * Single Source of Truth: يستبعد الحركات الملغاة **مرة واحدة فقط** هنا،
+ * ويُرتّبها ترتيباً حتمياً بتاريخ الحركة (`tx_date`) ثم `created_at` ثم `id`.
  * كل مُستهلك (الكشف، الرصيد الجاري، الإجماليات، تقرير شراء/بيع العملات)
  * يجب أن يُمرّر صفوفه عبر هذه الدالة أولاً — بحيث يستحيل معمارياً أن
- * تظهر حركة ملغاة في أي شاشة.
+ * تظهر حركة ملغاة في أي شاشة، أو أن يختلف ترتيب الكشف عن ترتيب الرصيد الجاري.
  */
 export function buildCurrencySupplierLedgerRows<T extends CurrencySupplierTx>(rows: ReadonlyArray<T>): T[] {
-  return (Array.isArray(rows) ? rows : []).filter((t) => !(t as any).cancelled_at);
+  return (Array.isArray(rows) ? rows : [])
+    .filter((t) => !(t as any).cancelled_at)
+    .slice()
+    .sort((a, b) =>
+      ((a as any).tx_date || "").localeCompare((b as any).tx_date || "") ||
+      ((a as any).created_at || "").localeCompare((b as any).created_at || "") ||
+      ((a as any).id || "").localeCompare((b as any).id || ""),
+    );
 }
 
 /** الدلتا الفعلية لصف واحد في كشف مورد العملة. */
