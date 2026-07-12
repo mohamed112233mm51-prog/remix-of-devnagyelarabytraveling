@@ -193,6 +193,16 @@ function Dashboard() {
     refetchOnMount: "always",
     queryFn: () => profitSummaryFn(),
   });
+  // Unified source for "إجمالي مبيعات الوكلاء" across every card on the
+  // dashboard. Auth-only (no profit permission required) so the hero KPI
+  // stays visible to users without profit_summary_view.
+  const executionSalesQuery = useQuery({
+    queryKey: ["dashboard-execution-sales"],
+    staleTime: 15_000,
+    refetchOnMount: "always",
+    queryFn: () => executionSalesFn(),
+  });
+  const executionAgentSalesEGP = executionSalesQuery.data?.salesEGP ?? 0;
 
   const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
   const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
