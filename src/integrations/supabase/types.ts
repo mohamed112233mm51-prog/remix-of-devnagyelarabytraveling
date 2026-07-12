@@ -531,6 +531,8 @@ export type Database = {
           departure_from: string | null
           destination: string | null
           dob: string | null
+          fx_locked_at: string | null
+          fx_locks: Json
           id: string
           is_demo: boolean
           issue_date: string | null
@@ -556,6 +558,8 @@ export type Database = {
           departure_from?: string | null
           destination?: string | null
           dob?: string | null
+          fx_locked_at?: string | null
+          fx_locks?: Json
           id?: string
           is_demo?: boolean
           issue_date?: string | null
@@ -581,6 +585,8 @@ export type Database = {
           departure_from?: string | null
           destination?: string | null
           dob?: string | null
+          fx_locked_at?: string | null
+          fx_locks?: Json
           id?: string
           is_demo?: boolean
           issue_date?: string | null
