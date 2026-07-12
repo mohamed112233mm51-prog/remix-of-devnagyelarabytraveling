@@ -809,7 +809,7 @@ function Dashboard() {
 
         {effectiveCanViewProfitSummary && (
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
-          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(profitExecSales)} tone="green" />
+          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(executionAgentSalesEGP)} tone="green" />
           <Stat label="إجمالي تكلفة الشركات" value={fmtDL(profitExecCompanyCost)} tone="red" />
           <Stat label="إجمالي المصروفات" value={fmtDL(profitExpensesAll)} tone="red" />
           <Stat label="صافي الأرباح" value={fmtDL(profitSummaryData?.companyProfit ?? 0)} highlight />
