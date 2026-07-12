@@ -56,11 +56,12 @@ export function useReportsData(): ReportsData {
   const ed = useLive<ExpenseDeduction>("expense_deductions");
   const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const sub = useLive<Submission>("submissions");
+  const ex = useLive<Execution>("executions");
 
   const loading =
     a.loading || t.loading || c.loading || ct.loading ||
     m.loading || mc.loading || inv.loading || it.loading ||
-    e.loading || ed.loading || u.loading || sub.loading;
+    e.loading || ed.loading || u.loading || sub.loading || ex.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);
@@ -71,6 +72,7 @@ export function useReportsData(): ReportsData {
     loading,
     agents: a.rows,
     flights: [] as any[],
+    executions: ex.rows,
     approvals: sub.rows,
     submissions: sub.rows,
     transactions: t.rows,
