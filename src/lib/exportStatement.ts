@@ -443,6 +443,9 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
   const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
