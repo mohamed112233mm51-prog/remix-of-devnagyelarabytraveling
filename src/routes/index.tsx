@@ -602,8 +602,19 @@ function Dashboard() {
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
         <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
-        {effectiveCanViewNetProfit && (
-          <HeroKpi label="صافي الربح من التنفيذات" value={executionNetProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
+        {merchantsPerm.view && (
+          <div className="erp-hero erp-hero-navy">
+            <div className="erp-hero-top">
+              <span className="erp-hero-label">رصيد تجار الكاش</span>
+              <span className="erp-hero-icon"><Handshake size={18} /></span>
+            </div>
+            <div className="erp-hero-value" style={{ fontSize: 20, lineHeight: 1.3 }}>
+              <CurrencyLines map={merchantBalanceMap} />
+            </div>
+            <div className="erp-hero-foot">
+              <span className="erp-hero-sub">إجمالي الرصيد الحالي لجميع تجار الكاش — كل عملة على حدة</span>
+            </div>
+          </div>
         )}
       </div>
 
