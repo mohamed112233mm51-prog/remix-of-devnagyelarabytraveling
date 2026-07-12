@@ -5,6 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 import {
   computeExecutionProfitEGP,
+  computeExecutionSalesEGP,
   computeExpenseEGP,
   type ExecutionRow,
   type ExpenseRow,
