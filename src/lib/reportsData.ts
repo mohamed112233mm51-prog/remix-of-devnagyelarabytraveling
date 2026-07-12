@@ -4,6 +4,7 @@ import {
   useLive,
   type Agent,
   type CompanyTransaction,
+  type Execution,
   type Expense,
   type ExpenseDeduction,
   type Investor,
@@ -21,6 +22,8 @@ export type ReportsData = {
   agents: Agent[];
   /** @deprecated flights table removed — always [] */
   flights: any[];
+  /** Executions (post-approval trips). Live-subscribed. */
+  executions: Execution[];
   /** Security approvals — now sourced from `submissions` table (live). */
   approvals: Submission[];
   submissions: Submission[];
