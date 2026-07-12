@@ -42,6 +42,7 @@ import {
   Coins,
   Landmark,
   DollarSign,
+  Handshake,
 } from "lucide-react";
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
