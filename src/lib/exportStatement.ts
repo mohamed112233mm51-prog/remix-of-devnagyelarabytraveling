@@ -443,6 +443,9 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
   const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
@@ -540,8 +543,20 @@ export async function buildStatementPdfBlob(
     doc.open();
     doc.write(html);
     doc.close();
-    await new Promise((r) => setTimeout(r, 300));
-    try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
+    // Wait for fonts (Cairo/Tajawal from Google Fonts) to actually load inside
+    // the iframe — otherwise html2canvas rasterises with a fallback font that
+    // breaks Arabic letter shaping.
+    const fontsReady = (async () => {
+      try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
+      try {
+        await Promise.all([
+          (doc as any).fonts?.load?.('700 14px "Cairo"'),
+          (doc as any).fonts?.load?.('400 14px "Cairo"'),
+        ].filter(Boolean));
+      } catch { /* ignore */ }
+    })();
+    await Promise.race([fontsReady, new Promise((r) => setTimeout(r, 3500))]);
+    await new Promise((r) => setTimeout(r, 200));
     iframe.style.height = `${doc.body.scrollHeight}px`;
 
     const canvas = await html2canvas(doc.body, {
