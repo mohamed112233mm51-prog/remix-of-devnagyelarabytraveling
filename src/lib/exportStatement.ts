@@ -595,7 +595,7 @@ export async function buildStatementPdfBlob(
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        const sliceData = slice.toDataURL("image/jpeg", 0.92);
+        const sliceData = slice.toDataURL("image/jpeg", 0.98);
         const sliceImgH = (sliceH * imgW) / canvas.width;
         if (!first) pdf.addPage();
         pdf.addImage(sliceData, "JPEG", 0, 0, imgW, sliceImgH);
