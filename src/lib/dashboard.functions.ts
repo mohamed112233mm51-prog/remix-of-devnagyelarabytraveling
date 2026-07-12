@@ -137,35 +137,28 @@ function computeExecutionAgg(executions: any[], predicate: (ex: any) => boolean)
 }
 
 /**
- * Convert an expense row's amount to EGP using:
- *  1) the exchange_rate the user recorded on the expense (if present & > 0),
- *  2) otherwise the latest currency-buy rate with tx_date <= expense date.
- * Rows without any resolvable rate are treated as pending and skipped.
+ * Sum expenses IN EGP using ONLY the historically locked `fx_rate` stored on
+ * each expense row. NEVER resolves rates at read time — that would allow
+ * historical totals to shift when a new currency-buy rate is recorded later.
+ * Expenses without a locked fx_rate (non-EGP + not yet locked) are pending
+ * and excluded from every total.
  */
 function expenseSumEGP(
-  expenses: any[],
-  buyRows: CurrencyBuyRow[],
-  predicate: (row: any) => boolean,
+  expenses: ExpenseRow[],
+  predicate: (row: ExpenseRow) => boolean,
 ) {
   let total = 0;
   let pending = 0;
   for (const e of expenses) {
     if (!predicate(e)) continue;
-    const amount = Number(e.amount || 0);
-    if (amount === 0) continue;
-    const cur = (typeof e.currency === "string" && e.currency.trim() ? e.currency.trim().toUpperCase() : "EGP");
-    if (cur === "EGP") { total += amount; continue; }
-    const explicit = Number(e.exchange_rate || 0);
-    if (explicit > 0) { total += amount * explicit; continue; }
-    const asOf = (typeof e.date === "string" && e.date.length >= 8)
-      ? e.date
-      : (typeof e.created_at === "string" ? e.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
-    const rate = resolveRateFromRows(buyRows, cur, asOf);
-    if (rate === null) { pending += 1; continue; }
-    total += amount * rate;
+    if (!Number(e.amount || 0)) continue;
+    const r = computeExpenseEGP(e);
+    if (r.status === "locked") total += r.amountEGP;
+    else pending += 1;
   }
   return { total, pending };
 }
+
 
 
 function inRange(d: string | null | undefined, range: { start: Date; end: Date }) {
