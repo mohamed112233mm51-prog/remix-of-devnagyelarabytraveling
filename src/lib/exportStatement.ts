@@ -441,44 +441,62 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
   const colCount = data.columns.length;
   const useLandscape = colCount > 6;
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
-  const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
+  const fontSize = colCount > 12 ? 8.5 : colCount > 9 ? 9.5 : colCount > 6 ? 10.5 : 11.5;
+  // Fixed canvas widths matching A4 @ ~96dpi — independent of viewer viewport.
+  const pxWidth = useLandscape ? 1123 : 794;
+
+  // Heuristic: text-ish columns (name/description/notes) get more room; numeric less.
+  const NUMERIC_HEADER_HINTS = ["count","qty","عدد","المدفوع","المتبقي","الصافي","الرصيد","إجمالي","اجمالي","سعر","مبلغ","قيمة","total","paid","net","balance","amount","price","value","#","رقم","تاريخ","date"];
+  const TEXT_HEADER_HINTS   = ["name","company","agent","service","description","notes","بيان","ملاحظ","اسم","شركة","وكيل","خدمة","منتج","العميل","تاجر","مورد"];
+  const isText = (h: string, k: string) => {
+    const s = (h + " " + k).toLowerCase();
+    if (TEXT_HEADER_HINTS.some((w) => s.includes(w.toLowerCase()))) return true;
+    if (NUMERIC_HEADER_HINTS.some((w) => s.includes(w.toLowerCase()))) return false;
+    return false;
+  };
+  const colWeights = data.columns.map((c) => (isText(c.header, c.key) ? 2.2 : 1));
+  const totalWeight = colWeights.reduce((a, b) => a + b, 0) || 1;
+  const colWidthPct = colWeights.map((w) => (w / totalWeight) * 100);
+  const colgroupHtml = `<colgroup>${colWidthPct.map((p) => `<col style="width:${p.toFixed(3)}%"/>`).join("")}</colgroup>`;
+
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
-html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
-.page{width:100%;margin:0;padding:12mm;background:#fff}
-.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
+html,body{margin:0;padding:0;color:#111;background:#fff;width:${pxWidth}px;min-width:${pxWidth}px}
+.pdf-export-layout{width:${pxWidth}px;min-width:${pxWidth}px;margin:0;padding:10mm 8mm;background:#fff;direction:rtl}
+.header{display:flex;align-items:flex-start;gap:14px;background:#fff;padding:6px 4px 10px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
-.header .meta{flex:1;text-align:right;min-width:0}
-.header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px}
-.header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
-.header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
-.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
-.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:12px;width:100%}
+.header .meta{flex:1;text-align:right;min-width:0;overflow:visible}
+.header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.3}
+.header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700;white-space:normal;word-break:break-word}
+.header .meta-line{font-size:10px;color:#6b7280;margin-top:2px;white-space:normal}
+.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 10px;width:100%}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:10px;width:100%}
 .sum-box{border:1px solid #e5e7eb;border-right:3px solid #C9A84C;border-radius:6px;padding:6px 10px;background:#fffaf0}
-.sum-box .label{font-size:11px;color:#666}
-.sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
+.sum-box .label{font-size:11px;color:#666;white-space:normal;word-break:break-word}
+.sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D;white-space:normal;word-break:break-word}
 .table-wrap{width:100%}
-table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
-th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;word-wrap:break-word;overflow-wrap:break-word}
+table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:fixed}
+th,td{border:1px solid #e5e7eb;padding:5px 6px;text-align:center;vertical-align:middle;
+  white-space:normal !important;overflow:visible !important;text-overflow:clip !important;
+  word-break:break-word;overflow-wrap:anywhere;height:auto !important;line-height:1.45}
 thead{background:#faf5e6;color:#0F1B3D}
 thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
-tbody tr{page-break-inside:avoid}
+tbody tr{page-break-inside:avoid;break-inside:avoid}
 tbody tr:nth-child(even){background:#fafafa}
 tfoot td{font-weight:700;background:#fffaf0}
-.foot{margin-top:10px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:6px}
+.foot{margin-top:8px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:6px}
 @media print{
-  html,body{width:100%}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
   thead th,.sum-box,tbody tr:nth-child(even),.gold-divider{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .header,.gold-divider{break-inside:avoid}
 }
 </style></head><body>
-<div class="page">
+<div class="pdf-export-layout">
 <div class="header">
-  ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
+  ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" crossorigin="anonymous" />` : ""}
   <div class="meta">
     <div class="co-name">${esc(companyName)}</div>
     <div class="report-title">${esc(data.title)}</div>
@@ -487,7 +505,7 @@ tfoot td{font-weight:700;background:#fffaf0}
 </div>
 <div class="gold-divider"></div>
 ${summaryHtml}
-<div class="table-wrap"><table><thead><tr>${data.columns.map((c) => `<th>${esc(c.header)}</th>`).join("")}</tr></thead>
+<div class="table-wrap"><table>${colgroupHtml}<thead><tr>${data.columns.map((c) => `<th>${esc(c.header)}</th>`).join("")}</tr></thead>
 <tbody>${data.rows
     .map(
       (r) =>
@@ -497,7 +515,7 @@ ${summaryHtml}
 <div class="foot">${esc(companyName)} • تم التوليد آليًا</div>
 </div>
 </body></html>`;
-  return { html, landscape: useLandscape };
+  return { html, landscape: useLandscape, pxWidth };
 }
 
 export async function exportStatementToPDF(data: StatementExportData) {
