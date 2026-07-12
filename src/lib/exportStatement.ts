@@ -422,7 +422,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData, opts?: { stackedHeader?: boolean }): Promise<{ html: string; landscape: boolean }> {
+async function buildStatementPdfHtml(data: StatementExportData, opts?: { stackedHeader?: boolean; companyNameImage?: string }): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
