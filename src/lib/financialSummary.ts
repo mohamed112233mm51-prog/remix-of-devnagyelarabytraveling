@@ -1146,7 +1146,8 @@ export function buildAgentLedgerRows(
   return [...safe]
     .sort((a, b) =>
       (a.date || "").localeCompare(b.date || "") ||
-      (a.created_at || "").localeCompare(b.created_at || ""),
+      (a.created_at || "").localeCompare(b.created_at || "") ||
+      (a.id || "").localeCompare(b.id || ""),
     )
     .map((t) => {
       const kind = classifyAgentTxn(t);
