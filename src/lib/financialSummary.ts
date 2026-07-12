@@ -24,6 +24,7 @@
  */
 
 import { useMemo } from "react";
+import { computeExecutionSalesEGP, type ExecutionRow } from "./executionProfit";
 import {
   useLive,
   tripValue,
