@@ -543,8 +543,20 @@ export async function buildStatementPdfBlob(
     doc.open();
     doc.write(html);
     doc.close();
-    await new Promise((r) => setTimeout(r, 300));
-    try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
+    // Wait for fonts (Cairo/Tajawal from Google Fonts) to actually load inside
+    // the iframe — otherwise html2canvas rasterises with a fallback font that
+    // breaks Arabic letter shaping.
+    const fontsReady = (async () => {
+      try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
+      try {
+        await Promise.all([
+          (doc as any).fonts?.load?.('700 14px "Cairo"'),
+          (doc as any).fonts?.load?.('400 14px "Cairo"'),
+        ].filter(Boolean));
+      } catch { /* ignore */ }
+    })();
+    await Promise.race([fontsReady, new Promise((r) => setTimeout(r, 3500))]);
+    await new Promise((r) => setTimeout(r, 200));
     iframe.style.height = `${doc.body.scrollHeight}px`;
 
     const canvas = await html2canvas(doc.body, {
