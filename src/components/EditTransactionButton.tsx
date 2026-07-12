@@ -79,8 +79,7 @@ export function EditTransactionButton({
   onDone?: () => void;
 }) {
   const { permissions, isAdmin, isSuperAdmin } = useAuth();
-  const allowed =
-    isSuperAdmin || isAdmin || checkPerm(permissions, false, "financial_transaction_update", "edit");
+  const allowed = checkFinancialActionPerm(permissions, isAdmin, isSuperAdmin, table, "edit");
 
   const [open, setOpen] = useState(false);
   const [row, setRow] = useState<any>(null);
