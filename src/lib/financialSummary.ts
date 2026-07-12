@@ -495,7 +495,9 @@ export function buildMerchantMovements(
     });
   }
   return list.sort((a, b) =>
-    (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt),
+    (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) ||
+    a.createdAt.localeCompare(b.createdAt) ||
+    a.id.localeCompare(b.id),
   );
 }
 
@@ -694,13 +696,22 @@ export type CurrencySupplierTx = {
 };
 
 /**
- * Single Source of Truth: يستبعد الحركات الملغاة **مرة واحدة فقط** هنا.
+ * Single Source of Truth: يستبعد الحركات الملغاة **مرة واحدة فقط** هنا،
+ * ويُرتّبها ترتيباً حتمياً بتاريخ الحركة (`tx_date`) ثم `created_at` ثم `id`.
  * كل مُستهلك (الكشف، الرصيد الجاري، الإجماليات، تقرير شراء/بيع العملات)
  * يجب أن يُمرّر صفوفه عبر هذه الدالة أولاً — بحيث يستحيل معمارياً أن
- * تظهر حركة ملغاة في أي شاشة.
+ * تظهر حركة ملغاة في أي شاشة، أو أن يختلف ترتيب الكشف عن ترتيب الرصيد الجاري.
  */
 export function buildCurrencySupplierLedgerRows<T extends CurrencySupplierTx>(rows: ReadonlyArray<T>): T[] {
-  return (Array.isArray(rows) ? rows : []).filter((t) => !(t as any).cancelled_at);
+  const arr: T[] = Array.isArray(rows) ? (rows as T[]) : [];
+  return arr
+    .filter((t) => !(t as any).cancelled_at)
+    .slice()
+    .sort((a, b) =>
+      ((a as any).tx_date || "").localeCompare((b as any).tx_date || "") ||
+      ((a as any).created_at || "").localeCompare((b as any).created_at || "") ||
+      ((a as any).id || "").localeCompare((b as any).id || ""),
+    );
 }
 
 /** الدلتا الفعلية لصف واحد في كشف مورد العملة. */
@@ -1146,7 +1157,8 @@ export function buildAgentLedgerRows(
   return [...safe]
     .sort((a, b) =>
       (a.date || "").localeCompare(b.date || "") ||
-      (a.created_at || "").localeCompare(b.created_at || ""),
+      (a.created_at || "").localeCompare(b.created_at || "") ||
+      (a.id || "").localeCompare(b.id || ""),
     )
     .map((t) => {
       const kind = classifyAgentTxn(t);
@@ -1178,7 +1190,9 @@ export function buildAgentLedgerRows(
 
 /**
  * صفوف كشف حساب الشركة الصادرة — تُبنى من `company_transactions`.
- * لا يُعاد ترتيبها هنا (المُستدعي يمرّرها مُرتَّبة كما يريد).
+ * تُرتَّب داخلياً حسب تاريخ الحركة (date) ثم created_at ثم id — نفس قاعدة
+ * الوكيل — لضمان أن العمود المعروض والترتيب يعتمدان على التاريخ الذي
+ * أدخله المستخدم في النموذج، لا على وقت إنشاء السجل.
  */
 export function buildCompanyLedgerRows(
   txns: CompanyTransaction[],
@@ -1188,7 +1202,14 @@ export function buildCompanyLedgerRows(
   // فتتطابق تلقائياً الكروت + قائمة الشركات + كشف الحساب + التقارير + الداشبورد،
   // مهما اختلفت العملة أو نوع الحركة. أي مُستدعٍ يحتاج الحركات الملغاة يجب أن
   // يعالجها في مسار منفصل صراحةً، لا هنا.
-  const active = (Array.isArray(txns) ? txns : []).filter((t) => !(t as any).cancelled_at);
+  const active = (Array.isArray(txns) ? txns : [])
+    .filter((t) => !(t as any).cancelled_at)
+    .slice()
+    .sort((a, b) =>
+      ((a as any).date || "").localeCompare((b as any).date || "") ||
+      ((a as any).created_at || "").localeCompare((b as any).created_at || "") ||
+      ((a as any).id || "").localeCompare((b as any).id || ""),
+    );
   return active.map((t) => {
     const serviceValue = Math.round(Number((t as any).trip_value || 0));
     const payment = Math.round(Number((t as any).total_paid || 0));
