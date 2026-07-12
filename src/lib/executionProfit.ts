@@ -148,6 +148,26 @@ export function computeExecutionProfitEGP(ex: ExecutionRow): ProfitBreakdown {
   };
 }
 
+/**
+ * Shared helper: sum executed agent sales in EGP across many executions
+ * using the locked FX rates only. Pending/excluded rows are skipped.
+ * This is THE single source of truth for "إجمالي مبيعات الوكلاء".
+ */
+export function computeExecutionSalesEGP(rows: ExecutionRow[]): {
+  salesEGP: number;
+  pending: number;
+} {
+  let salesEGP = 0;
+  let pending = 0;
+  for (const ex of rows) {
+    if ((ex.operation_status || "") !== "منفذ") continue;
+    const r = computeExecutionProfitEGP(ex);
+    if (r.status === "locked") salesEGP += r.salesEGP;
+    else if (r.status === "pending") pending += 1;
+  }
+  return { salesEGP, pending };
+}
+
 // ─── DB-backed helpers ────────────────────────────────────────────────────
 
 export type SB = SupabaseClient<any, any, any>;
