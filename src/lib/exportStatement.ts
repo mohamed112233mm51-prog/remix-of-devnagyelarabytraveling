@@ -422,7 +422,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData, opts?: { stackedHeader?: boolean }): Promise<{ html: string; landscape: boolean }> {
+async function buildStatementPdfHtml(data: StatementExportData, opts?: { stackedHeader?: boolean; companyNameImage?: string }): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
@@ -455,6 +455,7 @@ html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl
 .header .logo{width:${opts?.stackedHeader ? "72px;height:72px" : "64px;height:64px"};object-fit:contain;flex-shrink:0}
 .header .meta{flex:1;text-align:${opts?.stackedHeader ? "center" : "right"};min-width:0;width:100%}
 .header .co-name{font-size:${opts?.stackedHeader ? "20px" : "15px"};font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:nowrap;overflow:visible;direction:rtl;unicode-bidi:bidi-override;text-align:right}
+.header .co-name-img{display:block;max-width:100%;height:${opts?.stackedHeader ? "34px" : "26px"};width:auto;margin:${opts?.stackedHeader ? "0 auto" : "0 0 0 auto"};object-fit:contain}
 .header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
 .header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
 .gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
@@ -483,7 +484,9 @@ tfoot td{font-weight:700;background:#fffaf0}
 <div class="header">
   ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
   <div class="meta">
-    <div class="co-name">${esc(companyName)}</div>
+    ${opts?.companyNameImage
+      ? `<img class="co-name-img" src="${opts.companyNameImage}" alt="${esc(companyName)}" />`
+      : `<div class="co-name">${esc(companyName)}</div>`}
     <div class="report-title">${esc(data.title)}</div>
     <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
@@ -564,16 +567,60 @@ async function getInlinedCairoCss(): Promise<string> {
   return inlinedCairoCssPromise;
 }
 
+// Render the company name onto a standalone canvas using the parent document's
+// loaded Cairo font, then return a PNG data URL. This bypasses html2canvas's
+// Arabic shaping quirks — the name ships as a pre-shaped raster image.
+async function renderCompanyNameImage(name: string): Promise<string | null> {
+  try {
+    // Ensure Cairo is actually loaded in the parent document before drawing.
+    try {
+      await (document as any).fonts?.load?.('800 48px "Cairo"');
+      await (document as any).fonts?.ready;
+    } catch { /* ignore */ }
+    const scale = 3; // hi-DPI for crisp scaling
+    const fontPx = 48;
+    const font = `800 ${fontPx}px Cairo, Tajawal, Tahoma, Arial, sans-serif`;
+    // Measure with a temporary context
+    const meas = document.createElement("canvas").getContext("2d");
+    if (!meas) return null;
+    meas.font = font;
+    const w = Math.ceil(meas.measureText(name).width) + 24;
+    const h = Math.ceil(fontPx * 1.4);
+    const canvas = document.createElement("canvas");
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = font;
+    (ctx as any).direction = "rtl";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0F1B3D";
+    ctx.fillText(name, w - 12, h / 2);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 export async function buildStatementPdfBlob(
   data: StatementExportData,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const [{ jsPDF }, html2canvasMod, inlinedCss] = await Promise.all([
+  const [{ jsPDF }, html2canvasMod, inlinedCss, branding] = await Promise.all([
     import("jspdf"),
     import("html2canvas"),
     getInlinedCairoCss(),
+    loadBranding(),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
-  const { html, landscape } = await buildStatementPdfHtml(data, { stackedHeader: true });
+  const companyName = branding.companyName || COMPANY_NAME;
+  const companyNameImage = await renderCompanyNameImage(companyName);
+  const { html, landscape } = await buildStatementPdfHtml(data, {
+    stackedHeader: true,
+    companyNameImage: companyNameImage || undefined,
+  });
   // Inject the fully-inlined Cairo @font-face right before </head> so it beats
   // the Google Fonts <link> and no network wait is needed inside the iframe.
   const htmlWithFont = inlinedCss
