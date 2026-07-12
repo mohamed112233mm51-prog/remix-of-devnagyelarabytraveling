@@ -1561,7 +1561,7 @@ export function summarizeAgentReport(input: {
   // العدّ لكل وكيل: تنفيذ واحد لكل agent_id فريد (مجموعة موحّدة من
   // agent_id على مستوى التنفيذ + services[].agent_id للسجلات القديمة).
   const filteredExecutions: any[] = [];
-  const execRowsForSales: import("./executionProfit").ExecutionRow[] = [];
+  const execRowsForSales: ExecutionRow[] = [];
   for (const ex of executions) {
     if ((ex.operation_status || "") !== "منفذ") continue;
     const d = (ex.travel_date && String(ex.travel_date)) ||
@@ -1582,7 +1582,6 @@ export function summarizeAgentReport(input: {
       if (agg) agg.flights += 1;
     }
   }
-  const { computeExecutionSalesEGP } = require("./executionProfit") as typeof import("./executionProfit");
   const salesRes = computeExecutionSalesEGP(execRowsForSales);
   const totalValue = salesRes.salesEGP;
   const pendingExecutions = salesRes.pending;
