@@ -224,3 +224,21 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
     };
   });
 
+/**
+ * Unified source of truth for "إجمالي مبيعات الوكلاء" on the dashboard.
+ * Auth-only (no profit permission) — the hero KPI is visible to every user
+ * who can open the dashboard. Uses the SAME shared helper as the profit
+ * summary so all three surfaces render identical values.
+ */
+export const getDashboardExecutionSales = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("executions")
+      .select("id, created_at, travel_date, operation_status, services, fx_locks, fx_locked_at");
+    if (error) throw new Error(error.message || "تعذر تحميل بيانات مبيعات التنفيذات");
+    const rows = (data ?? []) as ExecutionRow[];
+    const { salesEGP, pending } = computeExecutionSalesEGP(rows);
+    return { salesEGP, pending };
+  });
+
