@@ -166,20 +166,22 @@ function CurrencySupplierStatementPage() {
   const filtered = useMemo(() => {
     // Normalize legacy Arabic currency values to canonical codes so old rows
     // group correctly with new ones.
-    return txns
-      .map((t) => ({
-        ...t,
-        bought_currency: normalizeCurrency(t.bought_currency),
-        sold_currency: normalizeCurrency(t.sold_currency),
-      }))
-      .filter((t) => {
-        if ((t as any).cancelled_at) return false;
-        if (from && t.tx_date < from) return false;
-        if (to && t.tx_date > to) return false;
-        if (typeFilter && t.tx_type !== typeFilter) return false;
-        if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
-        return true;
-      });
+    const normalized = txns.map((t) => ({
+      ...t,
+      bought_currency: normalizeCurrency(t.bought_currency),
+      sold_currency: normalizeCurrency(t.sold_currency),
+    }));
+    // Single Source of Truth: استبعاد الحركات الملغاة + الترتيب الحتمي
+    // (tx_date ASC → created_at ASC → id ASC) يتم داخل المحرك الموحد،
+    // بحيث يعتمد العرض والرصيد الجاري على تاريخ الحركة الذي أدخله المستخدم.
+    const canonical = buildCurrencySupplierLedgerRows(normalized);
+    return canonical.filter((t) => {
+      if (from && t.tx_date < from) return false;
+      if (to && t.tx_date > to) return false;
+      if (typeFilter && t.tx_type !== typeFilter) return false;
+      if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
+      return true;
+    });
   }, [txns, from, to, typeFilter, currencyFilter]);
 
 
