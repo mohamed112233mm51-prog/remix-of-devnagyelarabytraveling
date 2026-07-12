@@ -52,14 +52,31 @@ async function getProfitAuthorization(userId: string) {
 }
 
 async function loadProfitRows(sb: ReturnType<typeof admin>) {
-  const [{ data: executions, error: executionsError }, { data: expenses, error: expensesError }] = await Promise.all([
-    sb.from("executions").select("id, created_at, operation_status, services"),
-    sb.from("expenses").select("id, created_at, amount"),
+  const [
+    { data: executions, error: executionsError },
+    { data: expenses, error: expensesError },
+  ] = await Promise.all([
+    sb
+      .from("executions")
+      .select("id, created_at, travel_date, operation_status, services, fx_locks, fx_locked_at"),
+    sb
+      .from("expenses")
+      .select("id, created_at, date, amount, currency, exchange_rate"),
   ]);
   if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
   if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
-  return { executionRows: executions ?? [], expenseRows: expenses ?? [] };
+
+  // Load currency buy rows once — used for both lazy-locking pending executions
+  // and for expense conversion (when an expense row does not carry its own rate).
+  const buyRows: CurrencyBuyRow[] = await loadCurrencyBuyRows(sb);
+
+  // Best-effort: lock any pending executions whose required rates are now
+  // available. Existing locks are NEVER overwritten.
+  const lockedExecutions = await lockPendingExecutions(sb, (executions ?? []) as ExecutionRow[]);
+
+  return { executionRows: lockedExecutions, expenseRows: expenses ?? [], buyRows };
 }
+
 
 function getPeriodRange(period: Period, ref: Date = new Date()) {
   const start = new Date(ref);
