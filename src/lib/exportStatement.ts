@@ -422,13 +422,25 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean }> {
+async function buildStatementPdfHtml(
+  data: StatementExportData,
+  opts?: { arabicAsEntities?: boolean },
+): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
     String(v ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
     );
+  // Convert Arabic/RTL chars to HTML numeric entities so html2canvas rasterises
+  // them from raw code points (avoids broken shaping in the WhatsApp PDF path).
+  const toEntities = (s: string) =>
+    s.replace(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g, (ch) =>
+      `&#x${ch.charCodeAt(0).toString(16).toUpperCase()};`,
+    );
+  const companyNameHtml = opts?.arabicAsEntities
+    ? toEntities(esc(companyName))
+    : esc(companyName);
   const summaryHtml =
     data.summary && data.summary.length
       ? `<div class="summary">${data.summary
