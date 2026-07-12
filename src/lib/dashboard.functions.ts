@@ -176,20 +176,20 @@ export const getDashboardNetProfitData = createServerFn({ method: "POST" })
       return { canNetProfit, netProfit: null };
     }
 
-    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const expensesAllRes = expenseSumEGP(expenseRows, () => true);
     const companyProfit = allExec.profit - expensesAllRes.total;
 
     const range = getPeriodRange(data.period);
     const prevRange = getPreviousRange(data.period);
     const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
-    const periodExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, range));
+    const periodExpensesRes = expenseSumEGP(expenseRows, (e) => inRange(e.created_at, range));
     const periodProfit = periodExec.profit - periodExpensesRes.total;
     let previousProfit: number | null = null;
     if (prevRange) {
       const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
-      const prevExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, prevRange));
+      const prevExpensesRes = expenseSumEGP(expenseRows, (e) => inRange(e.created_at, prevRange));
       previousProfit = prevExec.profit - prevExpensesRes.total;
     }
 
@@ -204,9 +204,9 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
       return { canProfitSummary, profitSummary: null };
     }
 
-    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const expensesAllRes = expenseSumEGP(expenseRows, () => true);
     const companyProfit = allExec.profit - expensesAllRes.total;
 
     return {
@@ -218,6 +218,7 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
         companyProfit,
         pendingExecutions: allExec.pending,
         pendingExpenses: expensesAllRes.pending,
+
       },
     };
   });
