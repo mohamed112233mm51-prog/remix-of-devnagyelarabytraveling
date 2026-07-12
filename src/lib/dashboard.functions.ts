@@ -223,3 +223,38 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
     };
   });
 
+/**
+ * إجمالي مبيعات الوكلاء (بالجنيه) — من التنفيذات فقط.
+ *
+ * لا يعتمد على جدول التقديمات ولا على transactions.
+ * - المصدر: جدول `executions` مباشرةً.
+ * - يشمل فقط: operation_status = 'منفذ'.
+ * - يستبعد: التقديمات غير المنفّذة، التنفيذات غير المنفّذة، أي تنفيذ لم يُثبَّت
+ *   له سعر شراء لعملة أجنبية (pending) — فلا تتغير أرقام تاريخياً.
+ * - قيمة البيع = مجموع (agent_price × count) لكل خدمات التنفيذ، محوَّلة إلى
+ *   الجنيه عبر `fx_locks` المثبتة على نفس صف التنفيذ (لا يُعاد استعلام السعر).
+ * - متاح لكل مستخدم مسجَّل (لا يتطلب صلاحية الأرباح) لأن القيمة مبيعات لا ربح.
+ */
+export const getDashboardExecutionSales = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const sb = admin();
+    const { data, error } = await sb
+      .from("executions")
+      .select("id, created_at, travel_date, operation_status, services, fx_locks, fx_locked_at");
+    if (error) throw new Error(error.message || "تعذر تحميل مبيعات التنفيذات");
+    const rows = (data ?? []) as ExecutionRow[];
+    let execSalesEGP = 0;
+    let pending = 0;
+    let executedCount = 0;
+    for (const ex of rows) {
+      if ((ex.operation_status || "") !== "منفذ") continue;
+      executedCount += 1;
+      const r = computeExecutionProfitEGP(ex);
+      if (r.status === "locked") execSalesEGP += r.salesEGP;
+      else if (r.status === "pending") pending += 1;
+    }
+    return { execSalesEGP, pendingCount: pending, executedCount };
+  });
+
+
