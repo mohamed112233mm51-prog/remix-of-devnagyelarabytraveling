@@ -463,8 +463,8 @@ html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl
 .sum-box .label{font-size:11px;color:#666}
 .sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
 .table-wrap{width:100%}
-table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
-th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
+table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto;direction:rtl}
+th,td{border:1px solid #e5e7eb;padding:8px 8px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;direction:rtl;unicode-bidi:plaintext;line-height:1.6}
 thead{background:#faf5e6;color:#0F1B3D}
 thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
 tbody tr{page-break-inside:avoid}
