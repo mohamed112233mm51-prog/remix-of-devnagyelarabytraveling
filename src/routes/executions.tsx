@@ -28,6 +28,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
+import {
+  computeExecutionProfitEGP,
+  loadCurrencyBuyRows,
+  resolveRateFromRows,
+  aggregateExecutionByCurrency,
+  type CurrencyBuyRow,
+  type FxLocks,
+} from "@/lib/executionProfit";
 
 export const Route = createFileRoute("/executions")({
   component: () => <AppErrorBoundary><ExecutionsPage /></AppErrorBoundary>,
