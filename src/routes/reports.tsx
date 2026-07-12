@@ -505,11 +505,11 @@ function SubTabsBar({ tabs, current, onChange }: { tabs: { id: string; label: st
 
 // ---------- AGENTS ----------
 function AgentsReport({ inRange, data: rd }: SectionProps) {
-  const { agents, transactions: txns, flights, approvals, loading } = rd;
+  const { agents, transactions: txns, flights, executions, approvals, loading } = rd;
 
   const rpt = useMemo(
-    () => summarizeAgentReport({ agents, transactions: txns, flights, approvals, inRange }),
-    [agents, txns, flights, approvals, inRange],
+    () => summarizeAgentReport({ agents, transactions: txns, flights, executions, approvals, inRange }),
+    [agents, txns, flights, executions, approvals, inRange],
   );
   const data = rpt.rows;
   const fTxns = rpt.filteredTxns;
