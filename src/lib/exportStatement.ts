@@ -567,16 +567,60 @@ async function getInlinedCairoCss(): Promise<string> {
   return inlinedCairoCssPromise;
 }
 
+// Render the company name onto a standalone canvas using the parent document's
+// loaded Cairo font, then return a PNG data URL. This bypasses html2canvas's
+// Arabic shaping quirks — the name ships as a pre-shaped raster image.
+async function renderCompanyNameImage(name: string): Promise<string | null> {
+  try {
+    // Ensure Cairo is actually loaded in the parent document before drawing.
+    try {
+      await (document as any).fonts?.load?.('800 48px "Cairo"');
+      await (document as any).fonts?.ready;
+    } catch { /* ignore */ }
+    const scale = 3; // hi-DPI for crisp scaling
+    const fontPx = 48;
+    const font = `800 ${fontPx}px Cairo, Tajawal, Tahoma, Arial, sans-serif`;
+    // Measure with a temporary context
+    const meas = document.createElement("canvas").getContext("2d");
+    if (!meas) return null;
+    meas.font = font;
+    const w = Math.ceil(meas.measureText(name).width) + 24;
+    const h = Math.ceil(fontPx * 1.4);
+    const canvas = document.createElement("canvas");
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = font;
+    (ctx as any).direction = "rtl";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0F1B3D";
+    ctx.fillText(name, w - 12, h / 2);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 export async function buildStatementPdfBlob(
   data: StatementExportData,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const [{ jsPDF }, html2canvasMod, inlinedCss] = await Promise.all([
+  const [{ jsPDF }, html2canvasMod, inlinedCss, branding] = await Promise.all([
     import("jspdf"),
     import("html2canvas"),
     getInlinedCairoCss(),
+    loadBranding(),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
-  const { html, landscape } = await buildStatementPdfHtml(data, { stackedHeader: true });
+  const companyName = branding.companyName || COMPANY_NAME;
+  const companyNameImage = await renderCompanyNameImage(companyName);
+  const { html, landscape } = await buildStatementPdfHtml(data, {
+    stackedHeader: true,
+    companyNameImage: companyNameImage || undefined,
+  });
   // Inject the fully-inlined Cairo @font-face right before </head> so it beats
   // the Google Fonts <link> and no network wait is needed inside the iframe.
   const htmlWithFont = inlinedCss
