@@ -441,7 +441,7 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
   const colCount = data.columns.length;
   const useLandscape = colCount > 6;
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
-  const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
+  const fontSize = colCount > 10 ? 11 : colCount > 7 ? 12 : 13;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -449,7 +449,7 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
-html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
+html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl;text-align:right;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 .page{width:100%;margin:0;padding:12mm;background:#fff}
 .header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
@@ -463,8 +463,8 @@ html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
 .sum-box .label{font-size:11px;color:#666}
 .sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
 .table-wrap{width:100%}
-table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
-th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
+table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto;direction:rtl}
+th,td{border:1px solid #e5e7eb;padding:8px 8px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;direction:rtl;unicode-bidi:plaintext;line-height:1.6}
 thead{background:#faf5e6;color:#0F1B3D}
 thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
 tbody tr{page-break-inside:avoid}
@@ -560,10 +560,13 @@ export async function buildStatementPdfBlob(
     iframe.style.height = `${doc.body.scrollHeight}px`;
 
     const canvas = await html2canvas(doc.body, {
-      scale: 2,
+      scale: 3,
       backgroundColor: "#ffffff",
       useCORS: true,
+      allowTaint: false,
       windowWidth: pxWidth,
+      logging: false,
+      imageTimeout: 15000,
     });
 
     const pdf = new jsPDF({
@@ -575,7 +578,7 @@ export async function buildStatementPdfBlob(
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW = pageW;
     const imgH = (canvas.height * imgW) / canvas.width;
-    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+    const imgData = canvas.toDataURL("image/jpeg", 0.98);
 
     if (imgH <= pageH) {
       pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
@@ -592,7 +595,7 @@ export async function buildStatementPdfBlob(
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        const sliceData = slice.toDataURL("image/jpeg", 0.92);
+        const sliceData = slice.toDataURL("image/jpeg", 0.98);
         const sliceImgH = (sliceH * imgW) / canvas.width;
         if (!first) pdf.addPage();
         pdf.addImage(sliceData, "JPEG", 0, 0, imgW, sliceImgH);
