@@ -114,43 +114,61 @@ function getPreviousRange(period: Period) {
   return { start: new Date(start.getTime() - len), end: new Date(start.getTime()) };
 }
 
+/**
+ * Aggregate execution profit IN EGP using the LOCKED per-execution FX rates.
+ * Pending executions (rate not yet resolvable) are excluded from all totals.
+ */
 function computeExecutionAgg(executions: any[], predicate: (ex: any) => boolean) {
   let sales = 0;
   let companyCost = 0;
-  let agentCost = 0;
+  let profit = 0;
+  let pending = 0;
   for (const ex of executions) {
     if ((ex.operation_status || "") !== "منفذ") continue;
     if (!predicate(ex)) continue;
-    const services = Array.isArray(ex.services) ? ex.services : [];
-    for (const s of services) {
-      if (!s || typeof s !== "object") continue;
-      const count = Math.max(1, Math.round(Number(s.count) || 1));
-      const agentPrice = Math.max(0, Number(s.agent_price) || 0);
-      const companyPrice = Math.max(0, Number(s.company_price) || 0);
-      const explicitCompanyValue = Math.max(0, Number(s.company_value) || 0);
-      const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
-      const kind = (s as { kind?: string }).kind;
-      if (kind === "company") {
-        companyCost += companyValue;
-      } else if (kind === "agent") {
-        sales += agentPrice * count;
-      } else {
-        sales += agentPrice * count;
-        if (s.company_id) companyCost += companyValue;
-      }
+    const r = computeExecutionProfitEGP(ex as ExecutionRow);
+    if (r.status !== "locked") {
+      if (r.status === "pending") pending += 1;
+      continue;
     }
+    sales += r.salesEGP;
+    companyCost += r.companyCostEGP;
+    profit += r.profitEGP ?? 0;
   }
-  return { sales, companyCost, agentCost };
+  return { sales, companyCost, profit, agentCost: 0, pending };
 }
 
-function expenseSum(expenses: any[], predicate: (row: any) => boolean) {
+/**
+ * Convert an expense row's amount to EGP using:
+ *  1) the exchange_rate the user recorded on the expense (if present & > 0),
+ *  2) otherwise the latest currency-buy rate with tx_date <= expense date.
+ * Rows without any resolvable rate are treated as pending and skipped.
+ */
+function expenseSumEGP(
+  expenses: any[],
+  buyRows: CurrencyBuyRow[],
+  predicate: (row: any) => boolean,
+) {
   let total = 0;
+  let pending = 0;
   for (const e of expenses) {
     if (!predicate(e)) continue;
-    total += Number(e.amount || 0);
+    const amount = Number(e.amount || 0);
+    if (amount === 0) continue;
+    const cur = (typeof e.currency === "string" && e.currency.trim() ? e.currency.trim().toUpperCase() : "EGP");
+    if (cur === "EGP") { total += amount; continue; }
+    const explicit = Number(e.exchange_rate || 0);
+    if (explicit > 0) { total += amount * explicit; continue; }
+    const asOf = (typeof e.date === "string" && e.date.length >= 8)
+      ? e.date
+      : (typeof e.created_at === "string" ? e.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const rate = resolveRateFromRows(buyRows, cur, asOf);
+    if (rate === null) { pending += 1; continue; }
+    total += amount * rate;
   }
-  return total;
+  return { total, pending };
 }
+
 
 function inRange(d: string | null | undefined, range: { start: Date; end: Date }) {
   if (!d) return false;
