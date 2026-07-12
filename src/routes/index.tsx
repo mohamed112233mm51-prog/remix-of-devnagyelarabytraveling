@@ -22,7 +22,9 @@ import {
   type Transaction,
 } from "@/lib/db";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
-import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime } from "@/lib/financialSummary";
+import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
+import { CurrencyLines } from "@/components/CurrencyLines";
+import { usePerm } from "@/hooks/usePerm";
 import {
   Users,
   Building2,
@@ -40,6 +42,7 @@ import {
   Coins,
   Landmark,
   DollarSign,
+  Handshake,
 } from "lucide-react";
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -109,6 +112,8 @@ function pctDelta(curr: number, prev: number) {
 function Dashboard() {
   const { user, roles, permissions, isSuperAdmin, profileLoaded } = useAuth();
   const queryClient = useQueryClient();
+  const merchantsPerm = usePerm("merchants");
+  const merchantBalanceMap = useMerchantTotals().balance;
   // Profit cards are strict: super_admin/admin always see them; manager/user require an explicit true value.
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
@@ -239,7 +244,7 @@ function Dashboard() {
   const profitSummaryData = effectiveCanViewProfitSummary ? profitSummaryQuery.data?.profitSummary : null;
   const periodProfit = netProfitData?.periodProfit ?? 0;
   const previousPeriodProfit = netProfitData?.previousProfit ?? null;
-  const executionNetProfit = netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0;
+  // executionNetProfit was removed from "المؤشرات الرئيسية"؛ الحقل السابق كان: netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0
   const profitExecSales = profitSummaryData?.execSales ?? 0;
   const profitExecCompanyCost = profitSummaryData?.execCompanyCost ?? 0;
   const profitExpensesAll = profitSummaryData?.expensesAll ?? 0;
@@ -597,8 +602,19 @@ function Dashboard() {
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
         <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
-        {effectiveCanViewNetProfit && (
-          <HeroKpi label="صافي الربح من التنفيذات" value={executionNetProfit} format={fmtDL} icon={<TrendingUp size={18} />} tone="success" />
+        {merchantsPerm.view && (
+          <div className="erp-hero erp-hero-navy">
+            <div className="erp-hero-top">
+              <span className="erp-hero-label">رصيد تجار الكاش</span>
+              <span className="erp-hero-icon"><Handshake size={18} /></span>
+            </div>
+            <div className="erp-hero-value" style={{ fontSize: 20, lineHeight: 1.3 }}>
+              <CurrencyLines map={merchantBalanceMap} />
+            </div>
+            <div className="erp-hero-foot">
+              <span className="erp-hero-sub">إجمالي الرصيد الحالي لجميع تجار الكاش — كل عملة على حدة</span>
+            </div>
+          </div>
         )}
       </div>
 
