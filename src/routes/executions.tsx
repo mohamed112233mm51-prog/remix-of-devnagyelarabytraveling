@@ -624,7 +624,7 @@ function ExecutionForm({
       travel_date: form.travel_date || null,
       operation_status: "منفذ",
       services,
-      fx_locks: (editing?.fx_locks as FxLocks | null) || null,
+      fx_locks: ((editing as any)?.fx_locks as FxLocks | null) || null,
       fx_locked_at: (editing as any)?.fx_locked_at || null,
     };
     // If already locked historically, use those locks verbatim.
