@@ -441,7 +441,7 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
   const colCount = data.columns.length;
   const useLandscape = colCount > 6;
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
-  const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
+  const fontSize = colCount > 10 ? 11 : colCount > 7 ? 12 : 13;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
