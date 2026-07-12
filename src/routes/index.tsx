@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
-import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/dashboard.functions";
+import { getDashboardNetProfitData, getDashboardProfitSummaryData, getDashboardExecutionSales } from "@/lib/dashboard.functions";
 import {
   fmtDL,
   fmtNum,
@@ -114,6 +114,7 @@ function Dashboard() {
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
   const netProfitFn = useServerFn(getDashboardNetProfitData);
   const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
+  const executionSalesFn = useServerFn(getDashboardExecutionSales);
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
     roles,
@@ -192,6 +193,16 @@ function Dashboard() {
     refetchOnMount: "always",
     queryFn: () => profitSummaryFn(),
   });
+  // Unified source for "إجمالي مبيعات الوكلاء" across every card on the
+  // dashboard. Auth-only (no profit permission required) so the hero KPI
+  // stays visible to users without profit_summary_view.
+  const executionSalesQuery = useQuery({
+    queryKey: ["dashboard-execution-sales"],
+    staleTime: 15_000,
+    refetchOnMount: "always",
+    queryFn: () => executionSalesFn(),
+  });
+  const executionAgentSalesEGP = executionSalesQuery.data?.salesEGP ?? 0;
 
   const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
   const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
@@ -581,7 +592,7 @@ function Dashboard() {
       <div className="erp-hero-grid">
         <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
         <HeroKpi label="عدد التنفيذات" value={executedRows.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
-        <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
+        <HeroKpi label="إجمالي مبيعات الوكلاء" value={executionAgentSalesEGP} format={fmtDL} icon={<Users size={18} />} tone="success" />
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
@@ -759,7 +770,7 @@ function Dashboard() {
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة الخدمات" value={fmtDL(agentsTripValue)} />
+          <Stat label="قيمة الخدمات" value={fmtDL(executionAgentSalesEGP)} />
           <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
           <Stat label="المستحق" value={fmtDL(agentsDue)} tone="red" highlight />
         </SectionCard>
@@ -798,7 +809,7 @@ function Dashboard() {
 
         {effectiveCanViewProfitSummary && (
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
-          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(profitExecSales)} tone="green" />
+          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(executionAgentSalesEGP)} tone="green" />
           <Stat label="إجمالي تكلفة الشركات" value={fmtDL(profitExecCompanyCost)} tone="red" />
           <Stat label="إجمالي المصروفات" value={fmtDL(profitExpensesAll)} tone="red" />
           <Stat label="صافي الأرباح" value={fmtDL(profitSummaryData?.companyProfit ?? 0)} highlight />
