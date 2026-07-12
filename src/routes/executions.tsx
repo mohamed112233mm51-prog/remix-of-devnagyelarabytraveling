@@ -686,6 +686,24 @@ function ExecutionForm({
         executionNotes: form.notes || null,
         services,
       });
+      // Try to lock FX rates for this execution (once, on first success).
+      // If no buy rate exists yet for a currency, the execution stays "pending"
+      // and is excluded from all profit aggregates until the lock succeeds.
+      try {
+        if (form.operation_status === "منفذ") {
+          const { data: exRow } = await supabase
+            .from("executions")
+            .select("id, travel_date, created_at, operation_status, services, fx_locks, fx_locked_at")
+            .eq("id", executionId)
+            .maybeSingle();
+          if (exRow) {
+            const { ensureExecutionFxLocks } = await import("@/lib/executionProfit");
+            await ensureExecutionFxLocks(supabase as any, exRow as any);
+          }
+        }
+      } catch (fxErr) {
+        console.warn("[fx-lock] failed for execution", executionId, fxErr);
+      }
       toast.success(form.operation_status === "منفذ" ? "تم التنفيذ واعتماد الحركات المالية" : "تم الحفظ");
       clearForm();
       clearServices();
