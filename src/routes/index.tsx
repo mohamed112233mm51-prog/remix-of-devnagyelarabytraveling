@@ -591,7 +591,7 @@ function Dashboard() {
       <div className="erp-hero-grid">
         <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
         <HeroKpi label="عدد التنفيذات" value={executedRows.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
-        <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
+        <HeroKpi label="إجمالي مبيعات الوكلاء" value={execAgentsSalesEGP} format={fmtDL} icon={<Users size={18} />} tone="success" sub="من التنفيذات (بالجنيه)" />
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
