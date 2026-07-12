@@ -304,15 +304,11 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
 
   const company = safeCompanies.find((c) => c.id === companyId);
   const myTxnsAll = useMemo(
-    // ملاحظة معمارية: لا نفلتر cancelled_at هنا — buildCompanyLedgerRows يفعل ذلك
-    // داخلياً كمصدر واحد للحقيقة. أي فلتر مكرر هنا يخالف قاعدة SoT.
-    () => safeTxns
-      .filter((t) => !companyId || t.company_id === companyId)
-      .slice()
-      .sort((a, b) =>
-        (a.created_at || "").localeCompare(b.created_at || "") ||
-        (a.date || "").localeCompare(b.date || ""),
-      ),
+    // ملاحظة معمارية: لا نفلتر cancelled_at ولا نُعيد الترتيب هنا —
+    // buildCompanyLedgerRows يفعل ذلك داخلياً كمصدر واحد للحقيقة
+    // (ترتيب حتمي: date ASC → created_at ASC → id ASC، بحيث يعتمد
+    // العرض والرصيد الجاري على تاريخ الحركة الذي أدخله المستخدم).
+    () => safeTxns.filter((t) => !companyId || t.company_id === companyId),
     [safeTxns, companyId],
   );
 
