@@ -92,8 +92,7 @@ export function CancelTransactionButton({
   onDone?: () => void;
 }) {
   const { permissions, isAdmin, isSuperAdmin } = useAuth();
-  const allowed =
-    isSuperAdmin || isAdmin || checkPerm(permissions, false, "financial_cancel", "delete");
+  const allowed = checkFinancialActionPerm(permissions, isAdmin, isSuperAdmin, table, "delete");
 
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
