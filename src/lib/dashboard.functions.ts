@@ -3,6 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
+import {
+  computeExecutionProfitEGP,
+  lockPendingExecutions,
+  loadCurrencyBuyRows,
+  resolveRateFromRows,
+  type ExecutionRow,
+  type CurrencyBuyRow,
+} from "@/lib/executionProfit";
+
 
 type Period = "today" | "week" | "month" | "year" | "all";
 
@@ -43,14 +52,31 @@ async function getProfitAuthorization(userId: string) {
 }
 
 async function loadProfitRows(sb: ReturnType<typeof admin>) {
-  const [{ data: executions, error: executionsError }, { data: expenses, error: expensesError }] = await Promise.all([
-    sb.from("executions").select("id, created_at, operation_status, services"),
-    sb.from("expenses").select("id, created_at, amount"),
+  const [
+    { data: executions, error: executionsError },
+    { data: expenses, error: expensesError },
+  ] = await Promise.all([
+    sb
+      .from("executions")
+      .select("id, created_at, travel_date, operation_status, services, fx_locks, fx_locked_at"),
+    sb
+      .from("expenses")
+      .select("id, created_at, date, amount, currency, exchange_rate"),
   ]);
   if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
   if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
-  return { executionRows: executions ?? [], expenseRows: expenses ?? [] };
+
+  // Load currency buy rows once — used for both lazy-locking pending executions
+  // and for expense conversion (when an expense row does not carry its own rate).
+  const buyRows: CurrencyBuyRow[] = await loadCurrencyBuyRows(sb);
+
+  // Best-effort: lock any pending executions whose required rates are now
+  // available. Existing locks are NEVER overwritten.
+  const lockedExecutions = await lockPendingExecutions(sb, (executions ?? []) as ExecutionRow[]);
+
+  return { executionRows: lockedExecutions, expenseRows: expenses ?? [], buyRows };
 }
+
 
 function getPeriodRange(period: Period, ref: Date = new Date()) {
   const start = new Date(ref);
@@ -88,43 +114,61 @@ function getPreviousRange(period: Period) {
   return { start: new Date(start.getTime() - len), end: new Date(start.getTime()) };
 }
 
+/**
+ * Aggregate execution profit IN EGP using the LOCKED per-execution FX rates.
+ * Pending executions (rate not yet resolvable) are excluded from all totals.
+ */
 function computeExecutionAgg(executions: any[], predicate: (ex: any) => boolean) {
   let sales = 0;
   let companyCost = 0;
-  let agentCost = 0;
+  let profit = 0;
+  let pending = 0;
   for (const ex of executions) {
     if ((ex.operation_status || "") !== "منفذ") continue;
     if (!predicate(ex)) continue;
-    const services = Array.isArray(ex.services) ? ex.services : [];
-    for (const s of services) {
-      if (!s || typeof s !== "object") continue;
-      const count = Math.max(1, Math.round(Number(s.count) || 1));
-      const agentPrice = Math.max(0, Number(s.agent_price) || 0);
-      const companyPrice = Math.max(0, Number(s.company_price) || 0);
-      const explicitCompanyValue = Math.max(0, Number(s.company_value) || 0);
-      const companyValue = explicitCompanyValue > 0 ? explicitCompanyValue : companyPrice * count;
-      const kind = (s as { kind?: string }).kind;
-      if (kind === "company") {
-        companyCost += companyValue;
-      } else if (kind === "agent") {
-        sales += agentPrice * count;
-      } else {
-        sales += agentPrice * count;
-        if (s.company_id) companyCost += companyValue;
-      }
+    const r = computeExecutionProfitEGP(ex as ExecutionRow);
+    if (r.status !== "locked") {
+      if (r.status === "pending") pending += 1;
+      continue;
     }
+    sales += r.salesEGP;
+    companyCost += r.companyCostEGP;
+    profit += r.profitEGP ?? 0;
   }
-  return { sales, companyCost, agentCost };
+  return { sales, companyCost, profit, agentCost: 0, pending };
 }
 
-function expenseSum(expenses: any[], predicate: (row: any) => boolean) {
+/**
+ * Convert an expense row's amount to EGP using:
+ *  1) the exchange_rate the user recorded on the expense (if present & > 0),
+ *  2) otherwise the latest currency-buy rate with tx_date <= expense date.
+ * Rows without any resolvable rate are treated as pending and skipped.
+ */
+function expenseSumEGP(
+  expenses: any[],
+  buyRows: CurrencyBuyRow[],
+  predicate: (row: any) => boolean,
+) {
   let total = 0;
+  let pending = 0;
   for (const e of expenses) {
     if (!predicate(e)) continue;
-    total += Number(e.amount || 0);
+    const amount = Number(e.amount || 0);
+    if (amount === 0) continue;
+    const cur = (typeof e.currency === "string" && e.currency.trim() ? e.currency.trim().toUpperCase() : "EGP");
+    if (cur === "EGP") { total += amount; continue; }
+    const explicit = Number(e.exchange_rate || 0);
+    if (explicit > 0) { total += amount * explicit; continue; }
+    const asOf = (typeof e.date === "string" && e.date.length >= 8)
+      ? e.date
+      : (typeof e.created_at === "string" ? e.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const rate = resolveRateFromRows(buyRows, cur, asOf);
+    if (rate === null) { pending += 1; continue; }
+    total += amount * rate;
   }
-  return total;
+  return { total, pending };
 }
+
 
 function inRange(d: string | null | undefined, range: { start: Date; end: Date }) {
   if (!d) return false;
@@ -141,21 +185,21 @@ export const getDashboardNetProfitData = createServerFn({ method: "POST" })
       return { canNetProfit, netProfit: null };
     }
 
-    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAll = expenseSum(expenseRows, () => true);
-    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const companyProfit = allExec.profit - expensesAllRes.total;
 
     const range = getPeriodRange(data.period);
     const prevRange = getPreviousRange(data.period);
     const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
-    const periodExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, range));
-    const periodProfit = periodExec.sales - periodExec.companyCost - periodExpenses;
+    const periodExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, range));
+    const periodProfit = periodExec.profit - periodExpensesRes.total;
     let previousProfit: number | null = null;
     if (prevRange) {
       const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
-      const prevExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, prevRange));
-      previousProfit = prevExec.sales - prevExec.companyCost - prevExpenses;
+      const prevExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, prevRange));
+      previousProfit = prevExec.profit - prevExpensesRes.total;
     }
 
     return { canNetProfit, netProfit: { periodProfit, previousProfit, companyProfit } };
@@ -169,18 +213,21 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
       return { canProfitSummary, profitSummary: null };
     }
 
-    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAll = expenseSum(expenseRows, () => true);
-    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const companyProfit = allExec.profit - expensesAllRes.total;
 
     return {
       canProfitSummary,
       profitSummary: {
         execSales: allExec.sales,
         execCompanyCost: allExec.companyCost,
-        expensesAll,
+        expensesAll: expensesAllRes.total,
         companyProfit,
+        pendingExecutions: allExec.pending,
+        pendingExpenses: expensesAllRes.pending,
       },
     };
   });
+
