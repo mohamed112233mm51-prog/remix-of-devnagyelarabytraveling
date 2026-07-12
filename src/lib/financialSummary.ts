@@ -703,7 +703,8 @@ export type CurrencySupplierTx = {
  * تظهر حركة ملغاة في أي شاشة، أو أن يختلف ترتيب الكشف عن ترتيب الرصيد الجاري.
  */
 export function buildCurrencySupplierLedgerRows<T extends CurrencySupplierTx>(rows: ReadonlyArray<T>): T[] {
-  return (Array.isArray(rows) ? rows : [])
+  const arr: T[] = Array.isArray(rows) ? (rows as T[]) : [];
+  return arr
     .filter((t) => !(t as any).cancelled_at)
     .slice()
     .sort((a, b) =>
