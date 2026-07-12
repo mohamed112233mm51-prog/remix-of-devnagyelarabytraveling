@@ -605,6 +605,66 @@ function ExecutionForm({
     return [...curs].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   };
 
+  // ─── Net-profit preview (EGP) — SAME central source used by Dashboard.
+  // Read-only preview: never writes fx_locks. Resolves historical rates
+  // via `resolveRateFromRows(rows, cur, travel_date)` and feeds them as
+  // synthetic locks to `computeExecutionProfitEGP`. If any required
+  // currency has no rate on/before travel_date, preview is "pending".
+  const [buyRows, setBuyRows] = useState<CurrencyBuyRow[]>([]);
+  useEffect(() => {
+    let alive = true;
+    loadCurrencyBuyRows(supabase)
+      .then((rows) => { if (alive) setBuyRows(rows); })
+      .catch(() => { if (alive) setBuyRows([]); });
+    return () => { alive = false; };
+  }, []);
+  const profitPreview = useMemo(() => {
+    const synthetic = {
+      id: editing?.id || "preview",
+      travel_date: form.travel_date || null,
+      operation_status: "منفذ",
+      services,
+      fx_locks: (editing?.fx_locks as FxLocks | null) || null,
+      fx_locked_at: (editing as any)?.fx_locked_at || null,
+    };
+    // If already locked historically, use those locks verbatim.
+    const existing: FxLocks = { ...(synthetic.fx_locks || {}) };
+    const { salesByCur, costByCur } = aggregateExecutionByCurrency(synthetic);
+    const foreign = Array.from(
+      new Set([...Object.keys(salesByCur), ...Object.keys(costByCur)].filter((c) => c !== "EGP")),
+    );
+    const missingForPreview: string[] = [];
+    const previewLocks: FxLocks = { ...existing };
+    if (form.travel_date) {
+      for (const cur of foreign) {
+        if (Number(previewLocks[cur]) > 0) continue;
+        const rate = resolveRateFromRows(buyRows, cur, form.travel_date);
+        if (rate !== null) previewLocks[cur] = rate;
+        else missingForPreview.push(cur);
+      }
+    } else {
+      for (const cur of foreign) if (!(Number(previewLocks[cur]) > 0)) missingForPreview.push(cur);
+    }
+    if (foreign.length > 0 && missingForPreview.length > 0) {
+      return {
+        status: "pending" as const,
+        profitEGP: null as number | null,
+        missing: missingForPreview,
+        reason: !form.travel_date
+          ? "أدخل تاريخ المغادرة أولاً لحساب الربح بالجنيه."
+          : `لا يمكن حساب الربح حتى يتم تسجيل سعر شراء للعملات: ${missingForPreview.join(", ")}`,
+      };
+    }
+    const res = computeExecutionProfitEGP({ ...synthetic, fx_locks: previewLocks });
+    return {
+      status: res.status,
+      profitEGP: res.profitEGP,
+      missing: res.missingCurrencies,
+      reason: res.reason,
+    };
+  }, [services, form.travel_date, buyRows, editing?.id, editing?.fx_locks]);
+
+
   const addCompanyService = () => setServices((s) => [...s, { kind: "company", service_type: serviceKinds[0] || "تذكرة طيران", company_id: null, count: 1, company_price: 0, company_value: 0 }]);
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
 
