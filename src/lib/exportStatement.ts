@@ -495,7 +495,7 @@ tfoot td{font-weight:700;background:#fffaf0}
 <div class="header">
   ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
   <div class="meta">
-    <div class="co-name">${esc(companyName)}</div>
+    <div class="co-name" style="font-family:'Cairo',Arial,sans-serif;direction:rtl;unicode-bidi:embed;text-align:right;">${companyNameHtml}</div>
     <div class="report-title">${esc(data.title)}</div>
     <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
