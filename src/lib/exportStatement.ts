@@ -532,7 +532,7 @@ export async function buildStatementPdfBlob(
     import("html2canvas"),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
-  const { html, landscape } = await buildStatementPdfHtml(data);
+  const { html, landscape } = await buildStatementPdfHtml(data, { stackedHeader: true });
 
   const pxWidth = landscape ? 1414 : 1000;
   const iframe = document.createElement("iframe");
