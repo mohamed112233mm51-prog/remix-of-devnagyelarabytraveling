@@ -199,12 +199,19 @@ export function resolveRateFromRows(
 
 /**
  * Try to lock FX rates for a single execution.
- * Only ADDS missing currencies to fx_locks — never overwrites an existing lock.
- * Persists to DB only when new locks were added AND all required currencies
- * are now covered (so we never store a half-locked execution and later
- * "top it up" with a rate that differs from what would have been used earlier).
+ * WRITE-SIDE ONLY — never call from a read-only screen (Dashboard, Reports).
  *
- * Returns the resulting fx_locks and whether the row was updated.
+ * Rules:
+ *  - Only ADDS missing currencies to fx_locks; NEVER overwrites an existing lock.
+ *  - `travel_date` is the ONLY date used to pick a historical rate. If the
+ *    execution has no `travel_date`, we leave it pending — NO fallback to
+ *    `created_at` or "today" is permitted (that would produce a rate that
+ *    depends on when the row was created, not on the trip itself).
+ *  - Persists to DB only when new locks were added AND all required
+ *    currencies are now covered — so we never store a half-locked execution
+ *    and later "top it up" with a rate that would have differed earlier.
+ *  - The UPDATE is guarded by `fx_locked_at IS NULL` to prevent races
+ *    with a concurrent writer that already locked the row.
  */
 export async function ensureExecutionFxLocks(
   sb: SB,
@@ -223,10 +230,15 @@ export async function ensureExecutionFxLocks(
     // pure-EGP execution: nothing to lock, always complete
     return { fx_locks: existing, updated: false, complete: true };
   }
-  const rows = buyRows ?? (await loadCurrencyBuyRows(sb));
+  // Strict: travel_date is REQUIRED to resolve a historical rate. Otherwise
+  // the execution stays pending until the user supplies it.
   const onOrBefore = (ex.travel_date && String(ex.travel_date).length >= 8)
     ? String(ex.travel_date)
-    : (ex.created_at ? String(ex.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    : null;
+  if (!onOrBefore) {
+    return { fx_locks: existing, updated: false, complete: false };
+  }
+  const rows = buyRows ?? (await loadCurrencyBuyRows(sb));
 
   const next: FxLocks = { ...existing };
   let added = false;
@@ -240,24 +252,31 @@ export async function ensureExecutionFxLocks(
   }
   const complete = foreign.every((c) => Number(next[c]) > 0);
   if (added && complete) {
-    const { error } = await sb
+    // Race-safe: only lock rows that are still unlocked. If a concurrent
+    // writer beat us to it, we accept their lock and return the caller's
+    // original view (existing) — never overwrite.
+    const { data, error } = await sb
       .from("executions")
       .update({ fx_locks: next, fx_locked_at: new Date().toISOString() })
-      .eq("id", ex.id);
+      .eq("id", ex.id)
+      .is("fx_locked_at", null)
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
-    return { fx_locks: next, updated: true, complete: true };
+    if (data) return { fx_locks: next, updated: true, complete: true };
+    return { fx_locks: existing, updated: false, complete: true };
   }
   return { fx_locks: existing, updated: false, complete };
 }
 
 /**
- * Batch-lock any pending executions. Called lazily from server aggregates so
- * newly-added currency purchases automatically unlock any historical
- * executions that were pending — without ever overwriting an existing lock.
+ * Batch-lock any pending executions. WRITE-SIDE ONLY (called from the
+ * currency-purchase save flow after a new buy rate is recorded).
  */
 export async function lockPendingExecutions(sb: SB, executions: ExecutionRow[]): Promise<ExecutionRow[]> {
   const pending = executions.filter((ex) => {
     if ((ex.operation_status || "") !== "منفذ") return false;
+    if (!ex.travel_date) return false; // strict: no travel_date → stays pending
     const { salesByCur, costByCur } = aggregateExecutionByCurrency(ex);
     const foreign = Array.from(
       new Set([...Object.keys(salesByCur), ...Object.keys(costByCur)].filter((c) => c !== "EGP")),
@@ -282,3 +301,138 @@ export async function lockPendingExecutions(sb: SB, executions: ExecutionRow[]):
   }
   return Array.from(map.values());
 }
+
+// ─── Currency-scoped write-side helpers ──────────────────────────────────
+// Called from the currency-purchase save flow so a newly recorded buy rate
+// immediately (and exclusively from the write side) unlocks any pending
+// executions/expenses that were waiting for it.
+
+/** Lock any pending execution that uses `currency` and has travel_date. */
+export async function lockPendingExecutionsForCurrency(sb: SB, currency: string): Promise<number> {
+  const cur = currency.toUpperCase();
+  if (cur === "EGP") return 0;
+  const { data, error } = await sb
+    .from("executions")
+    .select("id, travel_date, created_at, operation_status, services, fx_locks, fx_locked_at")
+    .eq("operation_status", "منفذ")
+    .is("fx_locked_at", null);
+  if (error || !data) return 0;
+  const rows = await loadCurrencyBuyRows(sb);
+  let locked = 0;
+  for (const ex of data as any as ExecutionRow[]) {
+    const { salesByCur, costByCur } = aggregateExecutionByCurrency(ex);
+    const foreign = new Set(
+      [...Object.keys(salesByCur), ...Object.keys(costByCur)].filter((c) => c !== "EGP"),
+    );
+    if (!foreign.has(cur)) continue;
+    try {
+      const r = await ensureExecutionFxLocks(sb, ex, rows);
+      if (r.updated) locked += 1;
+    } catch {
+      // best-effort
+    }
+  }
+  return locked;
+}
+
+// ─── Expense FX Lock (historical, immutable) ─────────────────────────────
+
+export interface ExpenseRow {
+  id: string;
+  date?: string | null;
+  created_at?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  exchange_rate?: number | null;
+  fx_rate?: number | null;
+  fx_locked_at?: string | null;
+}
+
+export interface ExpenseBreakdown {
+  status: "locked" | "pending";
+  amountEGP: number;
+  fxRate: number | null;
+  reason?: string;
+}
+
+/**
+ * Pure conversion — reads only the stored fx_rate. NEVER resolves against
+ * currency-buy rows at read time. Rows without an fx_rate for a non-EGP
+ * currency are pending and excluded from all totals.
+ */
+export function computeExpenseEGP(e: ExpenseRow): ExpenseBreakdown {
+  const amount = Number(e.amount || 0);
+  const cur = (typeof e.currency === "string" && e.currency.trim() ? e.currency.trim().toUpperCase() : "EGP");
+  if (cur === "EGP") return { status: "locked", amountEGP: amount, fxRate: 1 };
+  const rate = Number(e.fx_rate || 0);
+  if (rate > 0) return { status: "locked", amountEGP: amount * rate, fxRate: rate };
+  return { status: "pending", amountEGP: 0, fxRate: null, reason: `لا يوجد سعر مثبت للعملة ${cur}` };
+}
+
+/**
+ * Try to lock an expense's FX rate. WRITE-SIDE ONLY.
+ *  - EGP → fx_rate = 1 (immediate lock).
+ *  - Foreign → latest buy rate with tx_date <= expense.date; if none, stays
+ *    pending. NO fallback to created_at or today.
+ *  - Never overwrites an existing lock (guarded by fx_locked_at IS NULL).
+ */
+export async function ensureExpenseFxLock(
+  sb: SB,
+  e: ExpenseRow,
+  buyRows?: CurrencyBuyRow[],
+): Promise<{ fx_rate: number | null; updated: boolean; status: "locked" | "pending" }> {
+  if (Number(e.fx_rate || 0) > 0) {
+    return { fx_rate: Number(e.fx_rate), updated: false, status: "locked" };
+  }
+  const cur = (typeof e.currency === "string" && e.currency.trim() ? e.currency.trim().toUpperCase() : "EGP");
+  const nowIso = new Date().toISOString();
+  if (cur === "EGP") {
+    const { data, error } = await sb
+      .from("expenses")
+      .update({ fx_rate: 1, fx_locked_at: nowIso })
+      .eq("id", e.id)
+      .is("fx_locked_at", null)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return { fx_rate: 1, updated: !!data, status: "locked" };
+  }
+  const onOrBefore = (e.date && String(e.date).length >= 8) ? String(e.date) : null;
+  if (!onOrBefore) return { fx_rate: null, updated: false, status: "pending" };
+  const rows = buyRows ?? (await loadCurrencyBuyRows(sb));
+  const rate = resolveRateFromRows(rows, cur, onOrBefore);
+  if (rate === null) return { fx_rate: null, updated: false, status: "pending" };
+  const { data, error } = await sb
+    .from("expenses")
+    .update({ fx_rate: rate, fx_locked_at: nowIso })
+    .eq("id", e.id)
+    .is("fx_locked_at", null)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return { fx_rate: rate, updated: !!data, status: "locked" };
+}
+
+/** Lock any pending expense that uses `currency`. WRITE-SIDE ONLY. */
+export async function lockPendingExpensesForCurrency(sb: SB, currency: string): Promise<number> {
+  const cur = currency.toUpperCase();
+  if (cur === "EGP") return 0;
+  const { data, error } = await sb
+    .from("expenses")
+    .select("id, date, created_at, amount, currency, exchange_rate, fx_rate, fx_locked_at")
+    .eq("currency", cur)
+    .is("fx_locked_at", null);
+  if (error || !data) return 0;
+  const rows = await loadCurrencyBuyRows(sb);
+  let locked = 0;
+  for (const e of data as any as ExpenseRow[]) {
+    try {
+      const r = await ensureExpenseFxLock(sb, e, rows);
+      if (r.updated) locked += 1;
+    } catch {
+      // best-effort
+    }
+  }
+  return locked;
+}
+

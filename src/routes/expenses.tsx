@@ -208,7 +208,13 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       currency: "EGP",
       usd_amount: 0,
       exchange_rate: null,
+      // FX-lock: EGP expenses are locked at 1 immediately (historical source
+      // of truth). Non-EGP paths must call ensureExpenseFxLock from the
+      // write side; Dashboard/Reports never resolve rates at read time.
+      fx_rate: 1,
+      fx_locked_at: new Date().toISOString(),
     };
+
 
 
     const { data: expenseRow, error } = await supabase

@@ -5,12 +5,11 @@ import type { Database } from "@/integrations/supabase/types";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 import {
   computeExecutionProfitEGP,
-  lockPendingExecutions,
-  loadCurrencyBuyRows,
-  resolveRateFromRows,
+  computeExpenseEGP,
   type ExecutionRow,
-  type CurrencyBuyRow,
+  type ExpenseRow,
 } from "@/lib/executionProfit";
+
 
 
 type Period = "today" | "week" | "month" | "year" | "all";
@@ -61,21 +60,20 @@ async function loadProfitRows(sb: ReturnType<typeof admin>) {
       .select("id, created_at, travel_date, operation_status, services, fx_locks, fx_locked_at"),
     sb
       .from("expenses")
-      .select("id, created_at, date, amount, currency, exchange_rate"),
+      .select("id, created_at, date, amount, currency, exchange_rate, fx_rate, fx_locked_at"),
   ]);
   if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
   if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
 
-  // Load currency buy rows once — used for both lazy-locking pending executions
-  // and for expense conversion (when an expense row does not carry its own rate).
-  const buyRows: CurrencyBuyRow[] = await loadCurrencyBuyRows(sb);
-
-  // Best-effort: lock any pending executions whose required rates are now
-  // available. Existing locks are NEVER overwritten.
-  const lockedExecutions = await lockPendingExecutions(sb, (executions ?? []) as ExecutionRow[]);
-
-  return { executionRows: lockedExecutions, expenseRows: expenses ?? [], buyRows };
+  // READ-ONLY: Dashboard never writes. No lazy locking, no rate resolution.
+  // Executions and expenses are consumed exactly as stored — profit is
+  // computed only from the historically locked fx_locks / fx_rate values.
+  return {
+    executionRows: (executions ?? []) as ExecutionRow[],
+    expenseRows: (expenses ?? []) as unknown as ExpenseRow[],
+  };
 }
+
 
 
 function getPeriodRange(period: Period, ref: Date = new Date()) {
@@ -139,35 +137,28 @@ function computeExecutionAgg(executions: any[], predicate: (ex: any) => boolean)
 }
 
 /**
- * Convert an expense row's amount to EGP using:
- *  1) the exchange_rate the user recorded on the expense (if present & > 0),
- *  2) otherwise the latest currency-buy rate with tx_date <= expense date.
- * Rows without any resolvable rate are treated as pending and skipped.
+ * Sum expenses IN EGP using ONLY the historically locked `fx_rate` stored on
+ * each expense row. NEVER resolves rates at read time — that would allow
+ * historical totals to shift when a new currency-buy rate is recorded later.
+ * Expenses without a locked fx_rate (non-EGP + not yet locked) are pending
+ * and excluded from every total.
  */
 function expenseSumEGP(
-  expenses: any[],
-  buyRows: CurrencyBuyRow[],
-  predicate: (row: any) => boolean,
+  expenses: ExpenseRow[],
+  predicate: (row: ExpenseRow) => boolean,
 ) {
   let total = 0;
   let pending = 0;
   for (const e of expenses) {
     if (!predicate(e)) continue;
-    const amount = Number(e.amount || 0);
-    if (amount === 0) continue;
-    const cur = (typeof e.currency === "string" && e.currency.trim() ? e.currency.trim().toUpperCase() : "EGP");
-    if (cur === "EGP") { total += amount; continue; }
-    const explicit = Number(e.exchange_rate || 0);
-    if (explicit > 0) { total += amount * explicit; continue; }
-    const asOf = (typeof e.date === "string" && e.date.length >= 8)
-      ? e.date
-      : (typeof e.created_at === "string" ? e.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
-    const rate = resolveRateFromRows(buyRows, cur, asOf);
-    if (rate === null) { pending += 1; continue; }
-    total += amount * rate;
+    if (!Number(e.amount || 0)) continue;
+    const r = computeExpenseEGP(e);
+    if (r.status === "locked") total += r.amountEGP;
+    else pending += 1;
   }
   return { total, pending };
 }
+
 
 
 function inRange(d: string | null | undefined, range: { start: Date; end: Date }) {
@@ -185,20 +176,20 @@ export const getDashboardNetProfitData = createServerFn({ method: "POST" })
       return { canNetProfit, netProfit: null };
     }
 
-    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const expensesAllRes = expenseSumEGP(expenseRows, () => true);
     const companyProfit = allExec.profit - expensesAllRes.total;
 
     const range = getPeriodRange(data.period);
     const prevRange = getPreviousRange(data.period);
     const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
-    const periodExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, range));
+    const periodExpensesRes = expenseSumEGP(expenseRows, (e) => inRange(e.created_at, range));
     const periodProfit = periodExec.profit - periodExpensesRes.total;
     let previousProfit: number | null = null;
     if (prevRange) {
       const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
-      const prevExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, prevRange));
+      const prevExpensesRes = expenseSumEGP(expenseRows, (e) => inRange(e.created_at, prevRange));
       previousProfit = prevExec.profit - prevExpensesRes.total;
     }
 
@@ -213,9 +204,9 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
       return { canProfitSummary, profitSummary: null };
     }
 
-    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const expensesAllRes = expenseSumEGP(expenseRows, () => true);
     const companyProfit = allExec.profit - expensesAllRes.total;
 
     return {
@@ -227,6 +218,7 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
         companyProfit,
         pendingExecutions: allExec.pending,
         pendingExpenses: expensesAllRes.pending,
+
       },
     };
   });
