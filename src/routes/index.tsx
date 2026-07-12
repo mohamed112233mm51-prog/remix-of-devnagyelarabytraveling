@@ -194,6 +194,14 @@ function Dashboard() {
     refetchOnMount: "always",
     queryFn: () => profitSummaryFn(),
   });
+  // إجمالي مبيعات الوكلاء (بالجنيه) — من التنفيذات فقط (لا يتطلب صلاحية أرباح).
+  const execSalesQuery = useQuery({
+    queryKey: ["dashboard-execution-sales"],
+    staleTime: 15_000,
+    queryFn: () => execSalesFn(),
+  });
+  const execAgentsSalesEGP = execSalesQuery.data?.execSalesEGP ?? 0;
+
 
   const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
   const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
