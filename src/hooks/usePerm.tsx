@@ -27,6 +27,54 @@ export const SECTION_KEYS = [
   PROFIT_SUMMARY_PERMISSION_KEY,
 ] as const;
 
+/**
+ * Maps a financial-transaction table to the ERP section whose permission
+ * governs edit/cancel actions on its rows. Used by EditTransactionButton and
+ * CancelTransactionButton so that a section manager (e.g. agents_manage,
+ * companies_manage) can maintain their own section's ledger without needing
+ * a blanket Admin role. Returns null for tables that have no single owning
+ * section (e.g. payment_splits, which is derived from a parent row).
+ */
+export function sectionForFinancialTable(table: string): string | null {
+  switch (table) {
+    case "transactions":
+      return "accounts";
+    case "company_transactions":
+      return "companies";
+    case "currency_supplier_transactions":
+      return "currency_suppliers";
+    case "merchant_cash_collections":
+      return "merchants";
+    case "expense_deductions":
+      return "expenses";
+    case "usd_treasury_transactions":
+      return "reports";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Grants a financial edit/cancel action if the user has EITHER:
+ *   1. the legacy blanket permission (financial_transaction_update / financial_cancel), OR
+ *   2. the matching action on the section that owns the row's table.
+ * Admin/SuperAdmin bypass through the standard checkPerm(_, isAdmin, ...) path.
+ */
+export function checkFinancialActionPerm(
+  perms: Record<string, any> | undefined | null,
+  isAdmin: boolean,
+  isSuperAdmin: boolean,
+  table: string,
+  action: "edit" | "delete",
+): boolean {
+  if (isSuperAdmin || isAdmin) return true;
+  const legacyKey = action === "edit" ? "financial_transaction_update" : "financial_cancel";
+  if (checkPerm(perms, false, legacyKey, action)) return true;
+  const section = sectionForFinancialTable(table);
+  if (section && checkPerm(perms, false, section, action)) return true;
+  return false;
+}
+
 // Settings sub-permissions (stored under permissions.settings.{key})
 export const SETTINGS_SUB_KEYS = [
   "users_manage",
