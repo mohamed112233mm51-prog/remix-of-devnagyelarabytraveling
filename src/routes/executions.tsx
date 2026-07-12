@@ -1059,28 +1059,26 @@ function ExecutionForm({
             </div>
           )}
         </div>
-        <div style={{ padding: 12, borderRadius: 10, background: profitCurrency ? (profit >= 0 ? "#fffbeb" : "#fef2f2") : "#f8fafc", border: `1px solid ${profitCurrency ? (profit >= 0 ? "#fde68a" : "#fecaca") : "#e2e8f0"}` }}>
-          <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
-            {profitCurrency ? "صافي الربح" : "صافي الأرباح حسب العملة"}
-          </div>
-          {profitCurrency ? (
-            <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
-              {profit.toLocaleString("ar")} {currencyShortLabel(profitCurrency)}
+        {(() => {
+          const pending = profitPreview.status !== "locked" || profitPreview.profitEGP === null;
+          const val = Number(profitPreview.profitEGP || 0);
+          const bg = pending ? "#f8fafc" : (val >= 0 ? "#fffbeb" : "#fef2f2");
+          const border = pending ? "#e2e8f0" : (val >= 0 ? "#fde68a" : "#fecaca");
+          return (
+            <div style={{ padding: 12, borderRadius: 10, background: bg, border: `1px solid ${border}` }}>
+              <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>صافي الربح (بالجنيه)</div>
+              {pending ? (
+                <div style={{ fontSize: 12, color: "#b45309", fontWeight: 700, marginTop: 6, lineHeight: 1.5 }}>
+                  {profitPreview.reason || "لا يمكن حساب الربح حالياً."}
+                </div>
+              ) : (
+                <div style={{ fontSize: 18, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c", marginTop: 4 }}>
+                  {val.toLocaleString("ar")} ج.م
+                </div>
+              )}
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {sortCurrencies(profitCurrencies).map((cur) => {
-                const val = profitByCurrency[cur] || 0;
-                return (
-                  <div key={cur} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13, fontWeight: 800, color: val >= 0 ? "#b45309" : "#b91c1c" }}>
-                    <span style={{ color: "#475569", fontWeight: 700 }}>{currencyShortLabel(cur)}</span>
-                    <span>{val.toLocaleString("ar")}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
       )}
 
