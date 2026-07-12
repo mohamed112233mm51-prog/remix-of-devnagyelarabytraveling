@@ -244,7 +244,7 @@ function Dashboard() {
   const profitSummaryData = effectiveCanViewProfitSummary ? profitSummaryQuery.data?.profitSummary : null;
   const periodProfit = netProfitData?.periodProfit ?? 0;
   const previousPeriodProfit = netProfitData?.previousProfit ?? null;
-  const executionNetProfit = netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0;
+  // executionNetProfit was removed from "المؤشرات الرئيسية"؛ الحقل السابق كان: netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0
   const profitExecSales = profitSummaryData?.execSales ?? 0;
   const profitExecCompanyCost = profitSummaryData?.execCompanyCost ?? 0;
   const profitExpensesAll = profitSummaryData?.expensesAll ?? 0;
