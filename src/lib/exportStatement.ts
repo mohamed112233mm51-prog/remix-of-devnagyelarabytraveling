@@ -422,7 +422,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean; pxWidth: number }> {
+async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
@@ -441,62 +441,44 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
   const colCount = data.columns.length;
   const useLandscape = colCount > 6;
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
-  const fontSize = colCount > 12 ? 8.5 : colCount > 9 ? 9.5 : colCount > 6 ? 10.5 : 11.5;
-  // Fixed canvas widths matching A4 @ ~96dpi — independent of viewer viewport.
-  const pxWidth = useLandscape ? 1123 : 794;
-
-  // Heuristic: text-ish columns (name/description/notes) get more room; numeric less.
-  const NUMERIC_HEADER_HINTS = ["count","qty","عدد","المدفوع","المتبقي","الصافي","الرصيد","إجمالي","اجمالي","سعر","مبلغ","قيمة","total","paid","net","balance","amount","price","value","#","رقم","تاريخ","date"];
-  const TEXT_HEADER_HINTS   = ["name","company","agent","service","description","notes","بيان","ملاحظ","اسم","شركة","وكيل","خدمة","منتج","العميل","تاجر","مورد"];
-  const isText = (h: string, k: string) => {
-    const s = (h + " " + k).toLowerCase();
-    if (TEXT_HEADER_HINTS.some((w) => s.includes(w.toLowerCase()))) return true;
-    if (NUMERIC_HEADER_HINTS.some((w) => s.includes(w.toLowerCase()))) return false;
-    return false;
-  };
-  const colWeights = data.columns.map((c) => (isText(c.header, c.key) ? 2.2 : 1));
-  const totalWeight = colWeights.reduce((a, b) => a + b, 0) || 1;
-  const colWidthPct = colWeights.map((w) => (w / totalWeight) * 100);
-  const colgroupHtml = `<colgroup>${colWidthPct.map((p) => `<col style="width:${p.toFixed(3)}%"/>`).join("")}</colgroup>`;
-
+  const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
-html,body{margin:0;padding:0;color:#111;background:#fff;width:${pxWidth}px;min-width:${pxWidth}px}
-.pdf-export-layout{width:${pxWidth}px;min-width:${pxWidth}px;margin:0;padding:10mm 8mm;background:#fff;direction:rtl}
-.header{display:flex;align-items:flex-start;gap:14px;background:#fff;padding:6px 4px 10px;width:100%}
+html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
+.page{width:100%;margin:0;padding:12mm;background:#fff}
+.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
-.header .meta{flex:1;text-align:right;min-width:0;overflow:visible}
-.header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.3}
-.header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700;white-space:normal;word-break:break-word}
-.header .meta-line{font-size:10px;color:#6b7280;margin-top:2px;white-space:normal}
-.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 10px;width:100%}
-.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:10px;width:100%}
+.header .meta{flex:1;text-align:right;min-width:0}
+.header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px}
+.header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
+.header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
+.gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:12px;width:100%}
 .sum-box{border:1px solid #e5e7eb;border-right:3px solid #C9A84C;border-radius:6px;padding:6px 10px;background:#fffaf0}
-.sum-box .label{font-size:11px;color:#666;white-space:normal;word-break:break-word}
-.sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D;white-space:normal;word-break:break-word}
+.sum-box .label{font-size:11px;color:#666}
+.sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
 .table-wrap{width:100%}
-table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:fixed}
-th,td{border:1px solid #e5e7eb;padding:5px 6px;text-align:center;vertical-align:middle;
-  white-space:normal !important;overflow:visible !important;text-overflow:clip !important;
-  word-break:break-word;overflow-wrap:anywhere;height:auto !important;line-height:1.45}
+table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
+th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;word-wrap:break-word;overflow-wrap:break-word}
 thead{background:#faf5e6;color:#0F1B3D}
 thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
-tbody tr{page-break-inside:avoid;break-inside:avoid}
+tbody tr{page-break-inside:avoid}
 tbody tr:nth-child(even){background:#fafafa}
 tfoot td{font-weight:700;background:#fffaf0}
-.foot{margin-top:8px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:6px}
+.foot{margin-top:10px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:6px}
 @media print{
+  html,body{width:100%}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
   thead th,.sum-box,tbody tr:nth-child(even),.gold-divider{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .header,.gold-divider{break-inside:avoid}
 }
 </style></head><body>
-<div class="pdf-export-layout">
+<div class="page">
 <div class="header">
-  ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" crossorigin="anonymous" />` : ""}
+  ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
   <div class="meta">
     <div class="co-name">${esc(companyName)}</div>
     <div class="report-title">${esc(data.title)}</div>
@@ -505,7 +487,7 @@ tfoot td{font-weight:700;background:#fffaf0}
 </div>
 <div class="gold-divider"></div>
 ${summaryHtml}
-<div class="table-wrap"><table>${colgroupHtml}<thead><tr>${data.columns.map((c) => `<th>${esc(c.header)}</th>`).join("")}</tr></thead>
+<div class="table-wrap"><table><thead><tr>${data.columns.map((c) => `<th>${esc(c.header)}</th>`).join("")}</tr></thead>
 <tbody>${data.rows
     .map(
       (r) =>
@@ -515,7 +497,7 @@ ${summaryHtml}
 <div class="foot">${esc(companyName)} • تم التوليد آليًا</div>
 </div>
 </body></html>`;
-  return { html, landscape: useLandscape, pxWidth };
+  return { html, landscape: useLandscape };
 }
 
 export async function exportStatementToPDF(data: StatementExportData) {
@@ -542,41 +524,32 @@ export async function exportStatementToPDF(data: StatementExportData) {
 export async function buildStatementPdfBlob(
   data: StatementExportData,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const { jsPDF } = await import("jspdf");
-  const { html, landscape, pxWidth } = await buildStatementPdfHtml(data);
+  const [{ jsPDF }, html2canvasMod] = await Promise.all([
+    import("jspdf"),
+    import("html2canvas"),
+  ]);
+  const html2canvas = (html2canvasMod as any).default || html2canvasMod;
+  const { html, landscape } = await buildStatementPdfHtml(data);
 
-  // Render into an off-screen iframe with a FIXED width so the export never
-  // depends on the device viewport (mobile / desktop identical output).
+  const pxWidth = landscape ? 1414 : 1000;
   const iframe = document.createElement("iframe");
-  iframe.style.cssText =
-    `position:fixed;left:-10000px;top:0;width:${pxWidth}px;height:10px;border:0;visibility:hidden;`;
+  iframe.style.cssText = `position:fixed;left:-10000px;top:0;width:${pxWidth}px;height:10px;border:0;visibility:hidden;`;
   document.body.appendChild(iframe);
-
   try {
     const doc = iframe.contentDocument!;
     doc.open();
     doc.write(html);
     doc.close();
-
-    // Wait for fonts (Cairo/Tajawal fallbacks) and the logo image to be ready
-    // BEFORE we snapshot — otherwise the header renders empty / mis-sized.
+    await new Promise((r) => setTimeout(r, 300));
     try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
-    const imgs = Array.from(doc.images || []);
-    await Promise.all(
-      imgs.map((im) =>
-        im.complete && im.naturalWidth > 0
-          ? Promise.resolve()
-          : new Promise<void>((res) => {
-              const done = () => res();
-              im.addEventListener("load", done, { once: true });
-              im.addEventListener("error", done, { once: true });
-              setTimeout(done, 4000);
-            }),
-      ),
-    );
-    // Give layout one paint to settle after fonts/images.
-    await new Promise((r) => setTimeout(r, 120));
     iframe.style.height = `${doc.body.scrollHeight}px`;
+
+    const canvas = await html2canvas(doc.body, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      windowWidth: pxWidth,
+    });
 
     const pdf = new jsPDF({
       orientation: landscape ? "landscape" : "portrait",
@@ -584,24 +557,34 @@ export async function buildStatementPdfBlob(
       format: "a4",
     });
     const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
-    // jsPDF.html uses html2canvas internally but with autoPaging='slice' it
-    // slices the tall canvas across pages at safe boundaries and respects
-    // page-break-inside:avoid on rows we set in CSS.
-    await (pdf as any).html(doc.body, {
-      x: 0,
-      y: 0,
-      width: pageW,
-      windowWidth: pxWidth,
-      autoPaging: "slice",
-      margin: 0,
-      html2canvas: {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        windowWidth: pxWidth,
-      },
-    });
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
+    } else {
+      const pageCanvasH = Math.floor((pageH * canvas.width) / imgW);
+      let y = 0;
+      let first = true;
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageCanvasH, canvas.height - y);
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = sliceH;
+        const ctx = slice.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceData = slice.toDataURL("image/jpeg", 0.92);
+        const sliceImgH = (sliceH * imgW) / canvas.width;
+        if (!first) pdf.addPage();
+        pdf.addImage(sliceData, "JPEG", 0, 0, imgW, sliceImgH);
+        first = false;
+        y += sliceH;
+      }
+    }
 
     const blob = pdf.output("blob") as Blob;
     return { blob, fileName: data.fileName || data.title };
