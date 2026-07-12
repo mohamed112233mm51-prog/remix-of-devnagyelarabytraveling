@@ -114,6 +114,8 @@ function Dashboard() {
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
   const netProfitFn = useServerFn(getDashboardNetProfitData);
   const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
+  const execSalesFn = useServerFn(getDashboardExecutionSales);
+
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
     roles,
