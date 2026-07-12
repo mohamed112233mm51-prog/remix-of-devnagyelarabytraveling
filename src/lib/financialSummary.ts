@@ -1494,13 +1494,22 @@ export type AgentReportRow = {
   total: number;
   paid: number;
   due: number;
+  /** عدد التنفيذات (executions) المميّزة للوكيل بحالة "منفذ" داخل الفترة. */
   flights: number;
+  /** عدد التقديمات (submissions) للوكيل داخل الفترة. */
   approvals: number;
 };
 export type AgentReportSummary = {
   rows: AgentReportRow[];
   totalCollections: number;
+  /**
+   * إجمالي قيمة خدمات الوكلاء بالجنيه — نفس معادلة كارت
+   * "إجمالي مبيعات الوكلاء" في الداشبورد (computeExecutionSalesEGP).
+   * يعتمد على executions ذات operation_status === "منفذ" وأسعار fx مثبتة.
+   */
   totalValue: number;
+  /** عدد التنفيذات المعلّقة بسبب عدم تثبيت fx (مستبعدة من totalValue). */
+  pendingExecutions: number;
   flightsCount: number;
   approvalsCount: number;
   filteredTxns: Transaction[];
@@ -1511,12 +1520,15 @@ export type AgentReportSummary = {
 export function summarizeAgentReport(input: {
   agents: Pick<Agent, "id" | "name">[];
   transactions: Transaction[];
+  /** @deprecated الجدول القديم لم يعد يُستخدم — مرَّر executions بدلاً منه. */
   flights: any[];
+  /** التنفيذات الحقيقية من جدول public.executions. */
+  executions?: any[];
   approvals: any[];
   inRange: InRange;
   approvalDate?: (a: any) => string | null;
 }): AgentReportSummary {
-  const { agents, transactions, flights, approvals, inRange } = input;
+  const { agents, transactions, executions = [], approvals, inRange } = input;
   const approvalDate = input.approvalDate || ((a: any) =>
     (a.submit_date && String(a.submit_date)) ||
     (a.issue_date && String(a.issue_date)) ||
@@ -1530,7 +1542,7 @@ export function summarizeAgentReport(input: {
     if (!v) { v = { total: 0, paid: 0, flights: 0, approvals: 0 }; byAgent.set(id, v); }
     return v;
   };
-  let totalCollections = 0, totalValue = 0;
+  let totalCollections = 0;
   const filteredTxns: Transaction[] = [];
   for (const t of transactions) {
     if ((t as any).cancelled_at) continue; // نفس مصدر buildAgentLedgerRows
@@ -1538,33 +1550,58 @@ export function summarizeAgentReport(input: {
     filteredTxns.push(t);
     const v = tripValue(t as any);
     const p = txnTotalPaid(t);
-    totalValue += v;
     totalCollections += p;
     const agg = bump(t.agent_id as any);
     if (agg) { agg.total += v; agg.paid += p; }
   }
-  const filteredFlights: any[] = [];
-  for (const f of flights) {
-    if (!inRange(f.travel_date)) continue;
-    filteredFlights.push(f);
-    const agg = bump(f.agent_id);
-    if (agg) agg.flights += 1;
+
+  // ─── التنفيذات: نفس منطق كارت الداشبورد "إجمالي مبيعات الوكلاء" ───
+  // الفلاتر: operation_status === "منفذ" + داخل الفترة (travel_date أو created_at).
+  // العدّ لكل وكيل: تنفيذ واحد لكل agent_id فريد (مجموعة موحّدة من
+  // agent_id على مستوى التنفيذ + services[].agent_id للسجلات القديمة).
+  const filteredExecutions: any[] = [];
+  const execRowsForSales: import("./executionProfit").ExecutionRow[] = [];
+  for (const ex of executions) {
+    if ((ex.operation_status || "") !== "منفذ") continue;
+    const d = (ex.travel_date && String(ex.travel_date)) ||
+      (ex.created_at ? String(ex.created_at).slice(0, 10) : null);
+    if (!inRange(d)) continue;
+    filteredExecutions.push(ex);
+    execRowsForSales.push(ex as any);
+    // اجمع كل الوكلاء المميّزين داخل التنفيذ الواحد لعدّه مرة واحدة لكل وكيل.
+    const agentIds = new Set<string>();
+    if (ex.agent_id) agentIds.add(String(ex.agent_id));
+    const services = Array.isArray(ex.services) ? ex.services : [];
+    for (const s of services) {
+      const aid = s && (s.agent_id ?? s.agentId);
+      if (aid) agentIds.add(String(aid));
+    }
+    for (const aid of agentIds) {
+      const agg = bump(aid);
+      if (agg) agg.flights += 1;
+    }
   }
+  const { computeExecutionSalesEGP } = require("./executionProfit") as typeof import("./executionProfit");
+  const salesRes = computeExecutionSalesEGP(execRowsForSales);
+  const totalValue = salesRes.salesEGP;
+  const pendingExecutions = salesRes.pending;
+
   const filteredApprovals: any[] = [];
   for (const a of approvals) {
-    if (!inRange(approvalDate(a))) continue;
+    const d = approvalDate(a);
+    if (!inRange(d)) continue;
     filteredApprovals.push(a);
     const agg = bump((a as any).agent_id);
-    if (agg && inRange((a as any).submit_date)) agg.approvals += 1;
+    if (agg) agg.approvals += 1;
   }
   const rows: AgentReportRow[] = agents.map((a) => {
     const v = byAgent.get(a.id) || { total: 0, paid: 0, flights: 0, approvals: 0 };
     return { name: a.name, total: v.total, paid: v.paid, due: v.total - v.paid, flights: v.flights, approvals: v.approvals };
   });
   return {
-    rows, totalCollections, totalValue,
-    flightsCount: filteredFlights.length, approvalsCount: filteredApprovals.length,
-    filteredTxns, filteredFlights, filteredApprovals,
+    rows, totalCollections, totalValue, pendingExecutions,
+    flightsCount: filteredExecutions.length, approvalsCount: filteredApprovals.length,
+    filteredTxns, filteredFlights: filteredExecutions, filteredApprovals,
   };
 }
 
