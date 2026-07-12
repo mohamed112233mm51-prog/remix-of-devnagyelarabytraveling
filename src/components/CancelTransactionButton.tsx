@@ -9,7 +9,7 @@ import {
   type CancellableTable,
 } from "@/lib/financialEngine.cancel";
 import { useAuth } from "@/hooks/useAuth";
-import { checkPerm } from "@/hooks/usePerm";
+import { checkFinancialActionPerm } from "@/hooks/usePerm";
 import { supabase } from "@/integrations/supabase/client";
 
 type Mode = "cancel" | "restore";
