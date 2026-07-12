@@ -422,7 +422,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean }> {
+async function buildStatementPdfHtml(data: StatementExportData, opts?: { stackedHeader?: boolean }): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
@@ -451,10 +451,10 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
 html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl;text-align:right;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 .page{width:100%;margin:0;padding:12mm;background:#fff}
-.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
-.header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
-.header .meta{flex:1;text-align:right;min-width:0}
-.header .co-name{font-size:15px;font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%${opts?.stackedHeader ? ";flex-direction:column;text-align:center" : ""}}
+.header .logo{width:${opts?.stackedHeader ? "72px;height:72px" : "64px;height:64px"};object-fit:contain;flex-shrink:0}
+.header .meta{flex:1;text-align:${opts?.stackedHeader ? "center" : "right"};min-width:0;width:100%}
+.header .co-name{font-size:${opts?.stackedHeader ? "20px" : "15px"};font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:nowrap;overflow:visible}
 .header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
 .header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
 .gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
@@ -532,7 +532,7 @@ export async function buildStatementPdfBlob(
     import("html2canvas"),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
-  const { html, landscape } = await buildStatementPdfHtml(data);
+  const { html, landscape } = await buildStatementPdfHtml(data, { stackedHeader: true });
 
   const pxWidth = landscape ? 1414 : 1000;
   const iframe = document.createElement("iframe");
