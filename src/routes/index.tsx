@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
-import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/dashboard.functions";
+import { getDashboardNetProfitData, getDashboardProfitSummaryData, getDashboardExecutionSales } from "@/lib/dashboard.functions";
 import {
   fmtDL,
   fmtNum,
