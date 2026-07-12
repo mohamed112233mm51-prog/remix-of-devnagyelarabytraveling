@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
-import { getDashboardNetProfitData, getDashboardProfitSummaryData, getDashboardExecutionSales } from "@/lib/dashboard.functions";
+import { getDashboardNetProfitData, getDashboardProfitSummaryData } from "@/lib/dashboard.functions";
 import {
   fmtDL,
   fmtNum,
@@ -114,8 +114,6 @@ function Dashboard() {
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
   const netProfitFn = useServerFn(getDashboardNetProfitData);
   const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
-  const execSalesFn = useServerFn(getDashboardExecutionSales);
-
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
     roles,
@@ -194,14 +192,6 @@ function Dashboard() {
     refetchOnMount: "always",
     queryFn: () => profitSummaryFn(),
   });
-  // إجمالي مبيعات الوكلاء (بالجنيه) — من التنفيذات فقط (لا يتطلب صلاحية أرباح).
-  const execSalesQuery = useQuery({
-    queryKey: ["dashboard-execution-sales"],
-    staleTime: 15_000,
-    queryFn: () => execSalesFn(),
-  });
-  const execAgentsSalesEGP = execSalesQuery.data?.execSalesEGP ?? 0;
-
 
   const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
   const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
@@ -591,7 +581,7 @@ function Dashboard() {
       <div className="erp-hero-grid">
         <HeroKpi label="عدد التقديمات" value={submissions.length} format={fmtNum} icon={<ClipboardCheck size={18} />} tone="navy" />
         <HeroKpi label="عدد التنفيذات" value={executedRows.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
-        <HeroKpi label="إجمالي مبيعات الوكلاء" value={execAgentsSalesEGP} format={fmtDL} icon={<Users size={18} />} tone="success" sub="من التنفيذات (بالجنيه)" />
+        <HeroKpi label="إجمالي مبيعات الوكلاء" value={agentsTripValue} format={fmtDL} icon={<Users size={18} />} tone="success" />
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
         <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
@@ -769,7 +759,7 @@ function Dashboard() {
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة الخدمات (من التنفيذات)" value={fmtDL(execAgentsSalesEGP)} />
+          <Stat label="قيمة الخدمات" value={fmtDL(agentsTripValue)} />
           <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
           <Stat label="المستحق" value={fmtDL(agentsDue)} tone="red" highlight />
         </SectionCard>
