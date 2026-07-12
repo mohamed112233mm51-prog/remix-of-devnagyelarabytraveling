@@ -463,12 +463,12 @@ async function buildStatementPdfHtml(
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
 html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
 .page{width:100%;margin:0;padding:12mm;background:#fff}
-.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
-.header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
+.header{display:flex;align-items:center;gap:18px;background:#fff;padding:16px 6px 18px;width:100%}
+.header .logo{width:84px;height:84px;object-fit:contain;flex-shrink:0}
 .header .meta{flex:1;text-align:right;min-width:0}
-.header .co-name{font-size:15px;font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
-.header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
-.header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
+.header .co-name{font-size:22px;font-weight:800;color:#0F1B3D;letter-spacing:0;line-height:1.4;white-space:nowrap;overflow:visible}
+.header .report-title{font-size:15px;color:#1F2937;margin-top:6px;font-weight:700}
+.header .meta-line{font-size:11px;color:#6b7280;margin-top:3px}
 .gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:12px;width:100%}
 .sum-box{border:1px solid #e5e7eb;border-right:3px solid #C9A84C;border-radius:6px;padding:6px 10px;background:#fffaf0}
