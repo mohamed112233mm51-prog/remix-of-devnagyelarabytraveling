@@ -3,6 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
+import {
+  computeExecutionProfitEGP,
+  lockPendingExecutions,
+  loadCurrencyBuyRows,
+  resolveRateFromRows,
+  type ExecutionRow,
+  type CurrencyBuyRow,
+} from "@/lib/executionProfit";
+
 
 type Period = "today" | "week" | "month" | "year" | "all";
 
