@@ -422,7 +422,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData, opts?: { stackedHeader?: boolean }): Promise<{ html: string; landscape: boolean }> {
+async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
@@ -441,7 +441,7 @@ async function buildStatementPdfHtml(data: StatementExportData, opts?: { stacked
   const colCount = data.columns.length;
   const useLandscape = colCount > 6;
   const pageSize = useLandscape ? "A4 landscape" : "A4 portrait";
-  const fontSize = colCount > 10 ? 11 : colCount > 7 ? 12 : 13;
+  const fontSize = colCount > 10 ? 9 : colCount > 7 ? 10 : 11;
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(data.fileName || data.title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -449,12 +449,12 @@ async function buildStatementPdfHtml(data: StatementExportData, opts?: { stacked
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
-html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl;text-align:right;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
 .page{width:100%;margin:0;padding:12mm;background:#fff}
-.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%${opts?.stackedHeader ? ";flex-direction:column;text-align:center" : ""}}
-.header .logo{width:${opts?.stackedHeader ? "72px;height:72px" : "64px;height:64px"};object-fit:contain;flex-shrink:0}
-.header .meta{flex:1;text-align:${opts?.stackedHeader ? "center" : "right"};min-width:0;width:100%}
-.header .co-name{font-size:${opts?.stackedHeader ? "20px" : "15px"};font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:nowrap;overflow:visible}
+.header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
+.header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
+.header .meta{flex:1;text-align:right;min-width:0}
+.header .co-name{font-size:15px;font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 .header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
 .header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
 .gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
@@ -463,8 +463,8 @@ html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl
 .sum-box .label{font-size:11px;color:#666}
 .sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
 .table-wrap{width:100%}
-table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto;direction:rtl}
-th,td{border:1px solid #e5e7eb;padding:8px 8px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;direction:rtl;unicode-bidi:plaintext;line-height:1.6}
+table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
+th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
 thead{background:#faf5e6;color:#0F1B3D}
 thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
 tbody tr{page-break-inside:avoid}
@@ -524,61 +524,15 @@ export async function exportStatementToPDF(data: StatementExportData) {
  * Renders the HTML into an off-screen iframe, snapshots it with html2canvas,
  * and packs the image into a jsPDF document — preserves Arabic text rendering.
  */
-// Fetch Google Fonts Cairo CSS + inline every woff2 file as a data: URI so the
-// font is guaranteed present inside the iframe html2canvas rasterises.
-// Cached at module scope — one network fetch per session.
-let inlinedCairoCssPromise: Promise<string> | null = null;
-async function getInlinedCairoCss(): Promise<string> {
-  if (!inlinedCairoCssPromise) {
-    inlinedCairoCssPromise = (async () => {
-      try {
-        const cssUrl =
-          "https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap";
-        const cssRes = await fetch(cssUrl);
-        if (!cssRes.ok) return "";
-        let css = await cssRes.text();
-        const urls = Array.from(
-          new Set(Array.from(css.matchAll(/url\((https:\/\/[^)]+)\)/g)).map((m) => m[1])),
-        );
-        await Promise.all(
-          urls.map(async (u) => {
-            try {
-              const r = await fetch(u);
-              if (!r.ok) return;
-              const buf = await r.arrayBuffer();
-              const bytes = new Uint8Array(buf);
-              let bin = "";
-              for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-              const b64 = btoa(bin);
-              const mime = u.endsWith(".woff2") ? "font/woff2" : "font/woff";
-              css = css.split(u).join(`data:${mime};base64,${b64}`);
-            } catch { /* skip this file */ }
-          }),
-        );
-        return css;
-      } catch {
-        return "";
-      }
-    })();
-  }
-  return inlinedCairoCssPromise;
-}
-
 export async function buildStatementPdfBlob(
   data: StatementExportData,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const [{ jsPDF }, html2canvasMod, inlinedCss] = await Promise.all([
+  const [{ jsPDF }, html2canvasMod] = await Promise.all([
     import("jspdf"),
     import("html2canvas"),
-    getInlinedCairoCss(),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
-  const { html, landscape } = await buildStatementPdfHtml(data, { stackedHeader: true });
-  // Inject the fully-inlined Cairo @font-face right before </head> so it beats
-  // the Google Fonts <link> and no network wait is needed inside the iframe.
-  const htmlWithFont = inlinedCss
-    ? html.replace("</head>", `<style>${inlinedCss}</style></head>`)
-    : html;
+  const { html, landscape } = await buildStatementPdfHtml(data);
 
   const pxWidth = landscape ? 1414 : 1000;
   const iframe = document.createElement("iframe");
@@ -587,33 +541,29 @@ export async function buildStatementPdfBlob(
   try {
     const doc = iframe.contentDocument!;
     doc.open();
-    doc.write(htmlWithFont);
+    doc.write(html);
     doc.close();
-    // Even with inlined data-URI fonts, browsers still parse @font-face async.
-    // Wait for `fonts.ready` plus explicit load calls for the exact weights we use.
+    // Wait for fonts (Cairo/Tajawal from Google Fonts) to actually load inside
+    // the iframe — otherwise html2canvas rasterises with a fallback font that
+    // breaks Arabic letter shaping.
     const fontsReady = (async () => {
       try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
       try {
         await Promise.all([
-          (doc as any).fonts?.load?.('800 20px "Cairo"'),
           (doc as any).fonts?.load?.('700 14px "Cairo"'),
           (doc as any).fonts?.load?.('400 14px "Cairo"'),
         ].filter(Boolean));
       } catch { /* ignore */ }
     })();
-    await Promise.race([fontsReady, new Promise((r) => setTimeout(r, 5000))]);
-    await new Promise((r) => setTimeout(r, 250));
+    await Promise.race([fontsReady, new Promise((r) => setTimeout(r, 3500))]);
+    await new Promise((r) => setTimeout(r, 200));
     iframe.style.height = `${doc.body.scrollHeight}px`;
 
-
     const canvas = await html2canvas(doc.body, {
-      scale: 3,
+      scale: 2,
       backgroundColor: "#ffffff",
       useCORS: true,
-      allowTaint: false,
       windowWidth: pxWidth,
-      logging: false,
-      imageTimeout: 15000,
     });
 
     const pdf = new jsPDF({
@@ -625,7 +575,7 @@ export async function buildStatementPdfBlob(
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW = pageW;
     const imgH = (canvas.height * imgW) / canvas.width;
-    const imgData = canvas.toDataURL("image/jpeg", 0.98);
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
     if (imgH <= pageH) {
       pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
@@ -642,7 +592,7 @@ export async function buildStatementPdfBlob(
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        const sliceData = slice.toDataURL("image/jpeg", 0.98);
+        const sliceData = slice.toDataURL("image/jpeg", 0.92);
         const sliceImgH = (sliceH * imgW) / canvas.width;
         if (!first) pdf.addPage();
         pdf.addImage(sliceData, "JPEG", 0, 0, imgW, sliceImgH);
