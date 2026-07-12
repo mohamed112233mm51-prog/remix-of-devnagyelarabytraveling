@@ -1836,6 +1836,11 @@ export function summarizeMerchantCollectionsPeriod(
   const filtered: MerchantCashCollection[] = [];
   let total = 0;
   for (const c of collections) {
+    // Cancelled collections are treated as removed everywhere else in the
+    // merchant ledger (aggregates/balance/statement). Hide them here too so
+    // "سجل التحصيلات" stays in sync with the merchant statement — no orphan
+    // rows after cancelFinancialTransaction("merchant_cash_collections", id).
+    if ((c as any).cancelled_at) continue;
     if (from && c.date < from) continue;
     if (to && c.date > to) continue;
     filtered.push(c);
