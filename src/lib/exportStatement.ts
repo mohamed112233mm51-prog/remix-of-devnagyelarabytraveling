@@ -422,13 +422,25 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF (branded header) ----------
-async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html: string; landscape: boolean }> {
+async function buildStatementPdfHtml(
+  data: StatementExportData,
+  opts?: { arabicAsEntities?: boolean },
+): Promise<{ html: string; landscape: boolean }> {
   const branding = await loadBranding();
   const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
     String(v ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
     );
+  // Convert Arabic/RTL chars to HTML numeric entities so html2canvas rasterises
+  // them from raw code points (avoids broken shaping in the WhatsApp PDF path).
+  const toEntities = (s: string) =>
+    s.replace(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g, (ch) =>
+      `&#x${ch.charCodeAt(0).toString(16).toUpperCase()};`,
+    );
+  const companyNameHtml = opts?.arabicAsEntities
+    ? toEntities(esc(companyName))
+    : esc(companyName);
   const summaryHtml =
     data.summary && data.summary.length
       ? `<div class="summary">${data.summary
@@ -483,7 +495,7 @@ tfoot td{font-weight:700;background:#fffaf0}
 <div class="header">
   ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
   <div class="meta">
-    <div class="co-name">${esc(companyName)}</div>
+    <div class="co-name" style="font-family:'Cairo',Arial,sans-serif;direction:rtl;unicode-bidi:embed;text-align:right;">${companyNameHtml}</div>
     <div class="report-title">${esc(data.title)}</div>
     <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
@@ -532,7 +544,7 @@ export async function buildStatementPdfBlob(
     import("html2canvas"),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
-  const { html, landscape } = await buildStatementPdfHtml(data);
+  const { html, landscape } = await buildStatementPdfHtml(data, { arabicAsEntities: true });
 
   const pxWidth = landscape ? 1414 : 1000;
   const iframe = document.createElement("iframe");
