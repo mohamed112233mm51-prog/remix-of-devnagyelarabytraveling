@@ -5,7 +5,7 @@ import { Modal } from "@/components/Modal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { checkPerm } from "@/hooks/usePerm";
+import { checkFinancialActionPerm } from "@/hooks/usePerm";
 import {
   updateFinancialTransaction,
   type EditableTable,
