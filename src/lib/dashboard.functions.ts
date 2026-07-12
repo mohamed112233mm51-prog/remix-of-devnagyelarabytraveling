@@ -5,12 +5,11 @@ import type { Database } from "@/integrations/supabase/types";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 import {
   computeExecutionProfitEGP,
-  lockPendingExecutions,
-  loadCurrencyBuyRows,
-  resolveRateFromRows,
+  computeExpenseEGP,
   type ExecutionRow,
-  type CurrencyBuyRow,
+  type ExpenseRow,
 } from "@/lib/executionProfit";
+
 
 
 type Period = "today" | "week" | "month" | "year" | "all";
