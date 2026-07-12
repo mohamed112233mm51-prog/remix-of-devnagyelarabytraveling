@@ -495,7 +495,9 @@ export function buildMerchantMovements(
     });
   }
   return list.sort((a, b) =>
-    (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || a.createdAt.localeCompare(b.createdAt),
+    (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) ||
+    a.createdAt.localeCompare(b.createdAt) ||
+    a.id.localeCompare(b.id),
   );
 }
 
