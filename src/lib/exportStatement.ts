@@ -578,7 +578,7 @@ export async function buildStatementPdfBlob(
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW = pageW;
     const imgH = (canvas.height * imgW) / canvas.width;
-    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+    const imgData = canvas.toDataURL("image/jpeg", 0.98);
 
     if (imgH <= pageH) {
       pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
