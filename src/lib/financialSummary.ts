@@ -1179,7 +1179,9 @@ export function buildAgentLedgerRows(
 
 /**
  * صفوف كشف حساب الشركة الصادرة — تُبنى من `company_transactions`.
- * لا يُعاد ترتيبها هنا (المُستدعي يمرّرها مُرتَّبة كما يريد).
+ * تُرتَّب داخلياً حسب تاريخ الحركة (date) ثم created_at ثم id — نفس قاعدة
+ * الوكيل — لضمان أن العمود المعروض والترتيب يعتمدان على التاريخ الذي
+ * أدخله المستخدم في النموذج، لا على وقت إنشاء السجل.
  */
 export function buildCompanyLedgerRows(
   txns: CompanyTransaction[],
@@ -1189,7 +1191,14 @@ export function buildCompanyLedgerRows(
   // فتتطابق تلقائياً الكروت + قائمة الشركات + كشف الحساب + التقارير + الداشبورد،
   // مهما اختلفت العملة أو نوع الحركة. أي مُستدعٍ يحتاج الحركات الملغاة يجب أن
   // يعالجها في مسار منفصل صراحةً، لا هنا.
-  const active = (Array.isArray(txns) ? txns : []).filter((t) => !(t as any).cancelled_at);
+  const active = (Array.isArray(txns) ? txns : [])
+    .filter((t) => !(t as any).cancelled_at)
+    .slice()
+    .sort((a, b) =>
+      ((a as any).date || "").localeCompare((b as any).date || "") ||
+      ((a as any).created_at || "").localeCompare((b as any).created_at || "") ||
+      ((a as any).id || "").localeCompare((b as any).id || ""),
+    );
   return active.map((t) => {
     const serviceValue = Math.round(Number((t as any).trip_value || 0));
     const payment = Math.round(Number((t as any).total_paid || 0));
