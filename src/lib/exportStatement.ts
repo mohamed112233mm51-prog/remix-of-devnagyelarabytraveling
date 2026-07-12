@@ -449,7 +449,7 @@ async function buildStatementPdfHtml(data: StatementExportData): Promise<{ html:
 <style>
 @page { size: ${pageSize}; margin: 0; }
 *{box-sizing:border-box;font-family:'Cairo','Tajawal','Segoe UI',Tahoma,Arial,sans-serif}
-html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
+html,body{margin:0;padding:0;color:#111;background:#fff;width:100%;direction:rtl;text-align:right;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 .page{width:100%;margin:0;padding:12mm;background:#fff}
 .header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
