@@ -342,35 +342,87 @@ function MerchantForm() {
 }
 
 
+type CollectRow = {
+  uid: string;
+  merchant_id: string;
+  cash_box_id: string;
+  amount: string;
+};
+
+const newCollectRow = (): CollectRow => ({
+  uid: Math.random().toString(36).slice(2),
+  merchant_id: "",
+  cash_box_id: "",
+  amount: "",
+});
+
+function labelForCompanyBox(box: { name: string; method_key?: string | null }): string {
+  const key = box.method_key || "";
+  if (key === "company_instapay") return "إنستاباي الشركة";
+  if (key === "company_cash") return "نقدي الشركة";
+  if (key === "company_usd") return "دولار الشركة";
+  if (key === "company_lyd") return "دينار الشركة";
+  return box.name;
+}
+
+function methodLabelForBox(box: { name: string; method_key?: string | null }): string {
+  const key = box.method_key || "";
+  if (key === "company_instapay") return "إنستاباي الشركة";
+  return "نقدي الشركة";
+}
+
 function CollectForm({ merchants }: { merchants: Merchant[] }) {
   const { rows: cashBoxes } = useLive<{ id: string; name: string; currency: string; is_active: boolean; method_key?: string | null }>("cash_boxes");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
   const [statement, setStatement] = useState("");
-  const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
-    const r = newPaymentSplitRow();
-    r.source = "merchant";
-    r.method = "";
-    return [r];
-  });
+  const [rows, setRows] = useState<CollectRow[]>(() => [newCollectRow()]);
 
-  const total = useMemo(
-    () => splits.reduce((s, r) => s + (Number(r.amount) || 0), 0),
-    [splits],
+  // Only ACTIVE company-owned cash boxes (identified by method_key starting with company_).
+  // This is the ONLY source for payment options in this form — merchant methods
+  // (Vodafone Cash, merchant wallets, ...) are intentionally never shown here.
+  const companyBoxes = useMemo(
+    () => cashBoxes.filter((b) => b.is_active !== false && (b.method_key || "").startsWith("company_")),
+    [cashBoxes],
   );
 
+  const boxesByCurrency = useMemo(() => {
+    const map: Record<string, typeof companyBoxes> = {};
+    for (const b of companyBoxes) {
+      const c = normalizeCurrency(b.currency);
+      (map[c] ||= []).push(b);
+    }
+    return map;
+  }, [companyBoxes]);
+
+  const total = useMemo(
+    () => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    [rows],
+  );
+
+  const update = (uid: string, patch: Partial<CollectRow>) =>
+    setRows((prev) => prev.map((r) => (r.uid === uid ? { ...r, ...patch } : r)));
+  const remove = (uid: string) =>
+    setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.uid !== uid)));
+  const add = () => setRows((prev) => [...prev, newCollectRow()]);
+
   const save = async () => {
-    const valid = filterValidSplits(splits);
-    const err = validatePaymentSplits(splits);
-    if (err) return toast.error(err);
+    const valid = rows.filter((r) => Number(r.amount) > 0);
+    if (valid.length === 0) return toast.error("أضف سطر تحصيل واحد على الأقل بمبلغ");
     for (const r of valid) {
-      if (r.source !== "merchant" || !r.merchant_id) {
-        return toast.error("كل سطر يجب أن يكون لتاجر محدد");
-      }
+      if (!r.merchant_id) return toast.error("اختر التاجر لكل سطر");
+      if (!r.cash_box_id) return toast.error("اختر خزينة استقبال الشركة لكل سطر");
+      const box = companyBoxes.find((b) => b.id === r.cash_box_id);
+      if (!box) return toast.error("خزينة الشركة المختارة غير متاحة");
     }
 
+    const enriched = valid.map((r) => {
+      const box = companyBoxes.find((b) => b.id === r.cash_box_id)!;
+      return { r, box, currency: normalizeCurrency(box.currency) as "EGP" | "USD" | "LYD" };
+    });
+
     // 1) Insert merchant_cash_collections rows (merchant balance is aggregated from this table).
-    const rows = valid.map((r) => ({
+    const insertRows = enriched.map(({ r }) => ({
       merchant_id: r.merchant_id,
       date,
       amount: Number(r.amount || 0),
@@ -379,46 +431,33 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
     }));
     const { data: inserted, error } = await supabase
       .from("merchant_cash_collections")
-      .insert(rows as any)
+      .insert(insertRows as any)
       .select("id, merchant_id, amount");
     if (error) return toast.error(error.message);
 
-    // 2) Mirror each row into payment_splits via the Financial Engine.
-    //    Collection = cash physically enters the company treasury, so we resolve
-    //    the matching cash box by mapping the merchant's payment method to the
-    //    corresponding company cash box (instapay → company_instapay,
-    //    physical/wallet → company_cash for the selected currency). This is the
-    //    SAME Payment Split → apply_payment_split_to_cash_box trigger path used
-    //    by every other cash-in flow in the system.
-    const methodLabelFor = (m: string): string => {
-      if (m === "merchant_instapay") return "انستا";
-      if (m === "merchant_wallet") return "فودافون كاش";
-      if (m === "merchant_physical") return "نقدي";
-      return "نقدي";
-    };
-    const companyMethodFor = (m: string): string =>
-      m === "merchant_instapay" ? "company_instapay" : "company_cash";
-
-    for (let i = 0; i < valid.length; i++) {
-      const row = valid[i];
+    // 2) Mirror each row into payment_splits via the Financial Engine, hitting
+    //    the chosen company cash box directly. This is the SAME
+    //    payment_splits → apply_payment_split_to_cash_box trigger path used by
+    //    every other cash-in flow in the system.
+    for (let i = 0; i < enriched.length; i++) {
+      const { r, box, currency } = enriched[i];
       const dbRow = (inserted as any[])?.[i];
       if (!dbRow) continue;
-      const amt = Number(row.amount || 0);
-      const box = resolveCompanyCashBoxForSplit(cashBoxes, row.currency, companyMethodFor(row.method));
+      const amt = Number(r.amount || 0);
       const engineSplits: MovementSplit[] = [{
-        method: methodLabelFor(row.method),
-        currency: row.currency,
-        cashBoxId: box?.id || null,
+        method: methodLabelForBox(box),
+        currency,
+        cashBoxId: box.id,
         amount: amt,
         direction: "in",
         grossAmount: amt,
         netAmount: amt,
         exchangeRate: 1,
-        egpEquivalent: row.currency === "EGP" ? amt : 0,
+        egpEquivalent: currency === "EGP" ? amt : 0,
       }];
       const res = await postMovement({
         partyType: "merchant",
-        partyId: row.merchant_id,
+        partyId: r.merchant_id,
         kind: "receipt",
         date,
         statement: statement.trim() || undefined,
@@ -432,15 +471,13 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       }
     }
 
-
     toast.success("تم حفظ التحصيل");
-    const r = newPaymentSplitRow();
-    r.source = "merchant";
-    r.method = "";
-    setSplits([r]);
+    setRows([newCollectRow()]);
     setNote("");
     setStatement("");
   };
+
+  const hasAnyCompanyBox = companyBoxes.length > 0;
 
   return (
     <div className="card">
@@ -450,11 +487,78 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         <div className="form-group full"><label>البيان</label><input value={statement} onChange={(e) => setStatement(e.target.value)} /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
       </div>
-      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} title="وسائل التحصيل" hideSource />
+
+      <div className="card-header" style={{ marginTop: 8 }}>
+        <div className="card-title">وسائل التحصيل (خزائن الشركة فقط)</div>
+        <button type="button" className="btn btn-sm" onClick={add}>+ إضافة سطر</button>
+      </div>
+
+      {!hasAnyCompanyBox && (
+        <div style={{ padding: 12, color: "var(--red)" }}>
+          لا توجد خزائن استقبال فعّالة للشركة. أضف/فعّل خزينة شركة قبل تسجيل التحصيل.
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
+        {rows.map((row) => {
+          const selectedBox = companyBoxes.find((b) => b.id === row.cash_box_id);
+          const currency = selectedBox ? normalizeCurrency(selectedBox.currency) : "";
+          return (
+            <div key={row.uid} className="form-grid" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+              <div className="form-group"><label>التاجر</label>
+                <select value={row.merchant_id} onChange={(e) => update(row.uid, { merchant_id: e.target.value })}>
+                  <option value="" disabled>اختر...</option>
+                  {merchants
+                    .filter((m) => ((m as any).status || "نشط") === "نشط" || m.id === row.merchant_id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.merchant_name}
+                        {((m as any).status || "نشط") !== "نشط" ? " (غير نشط)" : ""}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="form-group"><label>خزينة الاستقبال (الشركة)</label>
+                <select value={row.cash_box_id} onChange={(e) => update(row.uid, { cash_box_id: e.target.value })}>
+                  <option value="" disabled>اختر خزينة شركة...</option>
+                  {["EGP", "USD", "LYD"].flatMap((cur) => {
+                    const list = boxesByCurrency[cur] || [];
+                    if (list.length === 0) return [];
+                    return [
+                      <optgroup key={cur} label={cur === "EGP" ? "جنيه مصري" : cur === "USD" ? "دولار" : "دينار ليبي"}>
+                        {list.map((b) => (
+                          <option key={b.id} value={b.id}>{labelForCompanyBox(b)}</option>
+                        ))}
+                      </optgroup>,
+                    ];
+                  })}
+                </select>
+              </div>
+              <div className="form-group"><label>العملة</label>
+                <input value={currency} readOnly disabled />
+              </div>
+              <div className="form-group"><label>المبلغ</label>
+                <input type="number" min={0} value={row.amount} onChange={(e) => update(row.uid, { amount: e.target.value })} />
+              </div>
+              <div className="form-group" style={{ alignSelf: "end" }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() => remove(row.uid)}
+                  disabled={rows.length === 1}
+                >
+                  حذف
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
         الإجمالي: {fmtDL(total)}
       </div>
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ التحصيل" className="btn btn-gold" onClick={save}>💾 حفظ التحصيل</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ التحصيل" className="btn btn-gold" onClick={save} disabled={!hasAnyCompanyBox}>💾 حفظ التحصيل</button></div>
     </div>
   );
 }
