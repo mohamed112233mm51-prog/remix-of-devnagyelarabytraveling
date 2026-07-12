@@ -454,7 +454,7 @@ html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
 .header{display:flex;align-items:center;gap:14px;background:#fff;padding:10px 4px 12px;width:100%}
 .header .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
 .header .meta{flex:1;text-align:right;min-width:0}
-.header .co-name{font-size:18px;font-weight:800;color:#0F1B3D;letter-spacing:.2px}
+.header .co-name{font-size:15px;font-weight:800;color:#0F1B3D;letter-spacing:.2px;line-height:1.25;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 .header .report-title{font-size:13px;color:#1F2937;margin-top:4px;font-weight:700}
 .header .meta-line{font-size:10px;color:#6b7280;margin-top:2px}
 .gold-divider{height:2px;background:linear-gradient(90deg,transparent 0%,#C9A84C 15%,#B8923A 50%,#C9A84C 85%,transparent 100%);margin:4px 0 12px;width:100%}
@@ -464,7 +464,7 @@ html,body{margin:0;padding:0;color:#111;background:#fff;width:100%}
 .sum-box .val{font-size:13px;font-weight:700;margin-top:2px;color:#0F1B3D}
 .table-wrap{width:100%}
 table{width:100%;border-collapse:collapse;font-size:${fontSize}px;table-layout:auto}
-th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;word-wrap:break-word;overflow-wrap:break-word}
+th,td{border:1px solid #e5e7eb;padding:6px 7px;text-align:center;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
 thead{background:#faf5e6;color:#0F1B3D}
 thead th{border-color:#e5d4a1;font-weight:800;border-bottom:2px solid #B8923A}
 tbody tr{page-break-inside:avoid}
