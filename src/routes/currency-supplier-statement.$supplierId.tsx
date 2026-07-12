@@ -723,9 +723,26 @@ function TxModal({
       description: description.trim(),
     });
 
+    // WRITE-SIDE FX LOCK propagation: a newly recorded buy rate can unlock
+    // executions and expenses that were pending on this currency. This runs
+    // ONLY from the write path — never from a read screen (Dashboard/Reports).
+    if (isBuy && foreignCurrency && foreignCurrency !== EGP_CODE) {
+      try {
+        const { lockPendingExecutionsForCurrency, lockPendingExpensesForCurrency } =
+          await import("@/lib/executionProfit");
+        await Promise.all([
+          lockPendingExecutionsForCurrency(supabase as any, foreignCurrency),
+          lockPendingExpensesForCurrency(supabase as any, foreignCurrency),
+        ]);
+      } catch (fxErr) {
+        console.warn("[fx-lock] pending propagation failed", fxErr);
+      }
+    }
+
     toast.success("تم حفظ الحركة");
     onSaved();
   };
+
 
   if (typeof document === "undefined") return null;
   const isBuy = kind === "شراء عملة";
