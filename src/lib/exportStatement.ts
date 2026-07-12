@@ -524,15 +524,61 @@ export async function exportStatementToPDF(data: StatementExportData) {
  * Renders the HTML into an off-screen iframe, snapshots it with html2canvas,
  * and packs the image into a jsPDF document — preserves Arabic text rendering.
  */
+// Fetch Google Fonts Cairo CSS + inline every woff2 file as a data: URI so the
+// font is guaranteed present inside the iframe html2canvas rasterises.
+// Cached at module scope — one network fetch per session.
+let inlinedCairoCssPromise: Promise<string> | null = null;
+async function getInlinedCairoCss(): Promise<string> {
+  if (!inlinedCairoCssPromise) {
+    inlinedCairoCssPromise = (async () => {
+      try {
+        const cssUrl =
+          "https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap";
+        const cssRes = await fetch(cssUrl);
+        if (!cssRes.ok) return "";
+        let css = await cssRes.text();
+        const urls = Array.from(
+          new Set(Array.from(css.matchAll(/url\((https:\/\/[^)]+)\)/g)).map((m) => m[1])),
+        );
+        await Promise.all(
+          urls.map(async (u) => {
+            try {
+              const r = await fetch(u);
+              if (!r.ok) return;
+              const buf = await r.arrayBuffer();
+              const bytes = new Uint8Array(buf);
+              let bin = "";
+              for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+              const b64 = btoa(bin);
+              const mime = u.endsWith(".woff2") ? "font/woff2" : "font/woff";
+              css = css.split(u).join(`data:${mime};base64,${b64}`);
+            } catch { /* skip this file */ }
+          }),
+        );
+        return css;
+      } catch {
+        return "";
+      }
+    })();
+  }
+  return inlinedCairoCssPromise;
+}
+
 export async function buildStatementPdfBlob(
   data: StatementExportData,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const [{ jsPDF }, html2canvasMod] = await Promise.all([
+  const [{ jsPDF }, html2canvasMod, inlinedCss] = await Promise.all([
     import("jspdf"),
     import("html2canvas"),
+    getInlinedCairoCss(),
   ]);
   const html2canvas = (html2canvasMod as any).default || html2canvasMod;
   const { html, landscape } = await buildStatementPdfHtml(data, { stackedHeader: true });
+  // Inject the fully-inlined Cairo @font-face right before </head> so it beats
+  // the Google Fonts <link> and no network wait is needed inside the iframe.
+  const htmlWithFont = inlinedCss
+    ? html.replace("</head>", `<style>${inlinedCss}</style></head>`)
+    : html;
 
   const pxWidth = landscape ? 1414 : 1000;
   const iframe = document.createElement("iframe");
@@ -541,23 +587,24 @@ export async function buildStatementPdfBlob(
   try {
     const doc = iframe.contentDocument!;
     doc.open();
-    doc.write(html);
+    doc.write(htmlWithFont);
     doc.close();
-    // Wait for fonts (Cairo/Tajawal from Google Fonts) to actually load inside
-    // the iframe — otherwise html2canvas rasterises with a fallback font that
-    // breaks Arabic letter shaping.
+    // Even with inlined data-URI fonts, browsers still parse @font-face async.
+    // Wait for `fonts.ready` plus explicit load calls for the exact weights we use.
     const fontsReady = (async () => {
       try { await (doc as any).fonts?.ready; } catch { /* ignore */ }
       try {
         await Promise.all([
+          (doc as any).fonts?.load?.('800 20px "Cairo"'),
           (doc as any).fonts?.load?.('700 14px "Cairo"'),
           (doc as any).fonts?.load?.('400 14px "Cairo"'),
         ].filter(Boolean));
       } catch { /* ignore */ }
     })();
-    await Promise.race([fontsReady, new Promise((r) => setTimeout(r, 3500))]);
-    await new Promise((r) => setTimeout(r, 200));
+    await Promise.race([fontsReady, new Promise((r) => setTimeout(r, 5000))]);
+    await new Promise((r) => setTimeout(r, 250));
     iframe.style.height = `${doc.body.scrollHeight}px`;
+
 
     const canvas = await html2canvas(doc.body, {
       scale: 3,
