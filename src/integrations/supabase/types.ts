@@ -673,6 +673,8 @@ export type Database = {
           expense_name: string
           expense_type: string
           funding_source: string | null
+          fx_locked_at: string | null
+          fx_rate: number | null
           id: string
           is_demo: boolean
           merchant_id: string | null
@@ -692,6 +694,8 @@ export type Database = {
           expense_name: string
           expense_type?: string
           funding_source?: string | null
+          fx_locked_at?: string | null
+          fx_rate?: number | null
           id?: string
           is_demo?: boolean
           merchant_id?: string | null
@@ -711,6 +715,8 @@ export type Database = {
           expense_name?: string
           expense_type?: string
           funding_source?: string | null
+          fx_locked_at?: string | null
+          fx_rate?: number | null
           id?: string
           is_demo?: boolean
           merchant_id?: string | null
