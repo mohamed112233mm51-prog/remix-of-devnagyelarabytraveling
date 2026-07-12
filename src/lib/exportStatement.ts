@@ -560,10 +560,13 @@ export async function buildStatementPdfBlob(
     iframe.style.height = `${doc.body.scrollHeight}px`;
 
     const canvas = await html2canvas(doc.body, {
-      scale: 2,
+      scale: 3,
       backgroundColor: "#ffffff",
       useCORS: true,
+      allowTaint: false,
       windowWidth: pxWidth,
+      logging: false,
+      imageTimeout: 15000,
     });
 
     const pdf = new jsPDF({
