@@ -185,21 +185,21 @@ export const getDashboardNetProfitData = createServerFn({ method: "POST" })
       return { canNetProfit, netProfit: null };
     }
 
-    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAll = expenseSum(expenseRows, () => true);
-    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const companyProfit = allExec.profit - expensesAllRes.total;
 
     const range = getPeriodRange(data.period);
     const prevRange = getPreviousRange(data.period);
     const periodExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, range));
-    const periodExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, range));
-    const periodProfit = periodExec.sales - periodExec.companyCost - periodExpenses;
+    const periodExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, range));
+    const periodProfit = periodExec.profit - periodExpensesRes.total;
     let previousProfit: number | null = null;
     if (prevRange) {
       const prevExec = computeExecutionAgg(executionRows, (ex) => inRange(ex.created_at, prevRange));
-      const prevExpenses = expenseSum(expenseRows, (e) => inRange(e.created_at, prevRange));
-      previousProfit = prevExec.sales - prevExec.companyCost - prevExpenses;
+      const prevExpensesRes = expenseSumEGP(expenseRows, buyRows, (e) => inRange(e.created_at, prevRange));
+      previousProfit = prevExec.profit - prevExpensesRes.total;
     }
 
     return { canNetProfit, netProfit: { periodProfit, previousProfit, companyProfit } };
@@ -213,18 +213,21 @@ export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
       return { canProfitSummary, profitSummary: null };
     }
 
-    const { executionRows, expenseRows } = await loadProfitRows(sb);
+    const { executionRows, expenseRows, buyRows } = await loadProfitRows(sb);
     const allExec = computeExecutionAgg(executionRows, () => true);
-    const expensesAll = expenseSum(expenseRows, () => true);
-    const companyProfit = allExec.sales - allExec.companyCost - expensesAll;
+    const expensesAllRes = expenseSumEGP(expenseRows, buyRows, () => true);
+    const companyProfit = allExec.profit - expensesAllRes.total;
 
     return {
       canProfitSummary,
       profitSummary: {
         execSales: allExec.sales,
         execCompanyCost: allExec.companyCost,
-        expensesAll,
+        expensesAll: expensesAllRes.total,
         companyProfit,
+        pendingExecutions: allExec.pending,
+        pendingExpenses: expensesAllRes.pending,
       },
     };
   });
+
