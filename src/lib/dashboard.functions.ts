@@ -60,21 +60,20 @@ async function loadProfitRows(sb: ReturnType<typeof admin>) {
       .select("id, created_at, travel_date, operation_status, services, fx_locks, fx_locked_at"),
     sb
       .from("expenses")
-      .select("id, created_at, date, amount, currency, exchange_rate"),
+      .select("id, created_at, date, amount, currency, exchange_rate, fx_rate, fx_locked_at"),
   ]);
   if (executionsError) throw new Error(executionsError.message || "تعذر تحميل بيانات التنفيذات للأرباح");
   if (expensesError) throw new Error(expensesError.message || "تعذر تحميل بيانات المصروفات للأرباح");
 
-  // Load currency buy rows once — used for both lazy-locking pending executions
-  // and for expense conversion (when an expense row does not carry its own rate).
-  const buyRows: CurrencyBuyRow[] = await loadCurrencyBuyRows(sb);
-
-  // Best-effort: lock any pending executions whose required rates are now
-  // available. Existing locks are NEVER overwritten.
-  const lockedExecutions = await lockPendingExecutions(sb, (executions ?? []) as ExecutionRow[]);
-
-  return { executionRows: lockedExecutions, expenseRows: expenses ?? [], buyRows };
+  // READ-ONLY: Dashboard never writes. No lazy locking, no rate resolution.
+  // Executions and expenses are consumed exactly as stored — profit is
+  // computed only from the historically locked fx_locks / fx_rate values.
+  return {
+    executionRows: (executions ?? []) as ExecutionRow[],
+    expenseRows: (expenses ?? []) as unknown as ExpenseRow[],
+  };
 }
+
 
 
 function getPeriodRange(period: Period, ref: Date = new Date()) {
