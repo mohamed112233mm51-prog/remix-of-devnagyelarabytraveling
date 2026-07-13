@@ -438,12 +438,9 @@ async function buildStatementPdfHtml(
     s.replace(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g, (ch) =>
       `&#x${ch.charCodeAt(0).toString(16).toUpperCase()};`,
     );
-  // For WhatsApp PDF only, use a shorter display name that renders reliably
-  // through html2canvas without broken letter joining.
-  const displayCompanyName = opts?.arabicAsEntities ? "العربي للسياحة" : companyName;
   const companyNameHtml = opts?.arabicAsEntities
-    ? toEntities(esc(displayCompanyName))
-    : esc(displayCompanyName);
+    ? toEntities(esc(companyName))
+    : esc(companyName);
   const summaryHtml =
     data.summary && data.summary.length
       ? `<div class="summary">${data.summary
