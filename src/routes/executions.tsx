@@ -893,7 +893,7 @@ function ExecutionForm({
             const cp = Number(s.company_price) || 0;
             const total = (Number(s.company_value) || 0) > 0 ? Number(s.company_value) : cp * cnt;
             return (
-              <div key={i} style={{ border: "1px solid #c7d2fe", borderRadius: 10, padding: 12, background: "#eef2ff" }}>
+              <div key={i} style={isAbsentStatus(form.status) ? { border: "1px solid #ef4444", borderRadius: 10, padding: 12, ...ABSENT_FIELD_STYLE } : { border: "1px solid #c7d2fe", borderRadius: 10, padding: 12, background: "#eef2ff" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="الشركة الصادرة">
                     <SearchableSelect
