@@ -1714,12 +1714,13 @@ export function summarizeMerchantReport(input: {
   companyTransactions: CompanyTransaction[];
   collections: MerchantCashCollection[];
   usdRows?: UsdTreasuryTransaction[];
+  splits?: readonly CollectionSplitRow[] | null;
   inRange: InRange;
 }): MerchantReportSummary {
-  const { merchants, transactions, companyTransactions, collections, usdRows, inRange } = input;
+  const { merchants, transactions, companyTransactions, collections, usdRows, splits, inRange } = input;
   // نستخدم buildMerchantMovements (نفس Ledger كشف الحساب) ثم نصفّي بـ inRange.
   const movementInput = buildMerchantMovementInputs(
-    transactions, companyTransactions, collections, usdRows || [],
+    transactions, companyTransactions, collections, usdRows || [], splits,
   );
   const totalIn = new CurrencyMap();
   const totalOut = new CurrencyMap();
