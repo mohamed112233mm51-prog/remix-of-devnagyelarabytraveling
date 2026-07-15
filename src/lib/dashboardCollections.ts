@@ -19,9 +19,10 @@
  * =============================================================================
  */
 
-import { normalizeCurrency, txnCollectedAmount } from "@/lib/db";
+import { normalizeCurrency, txnCollectedAmount, tripValue } from "@/lib/db";
 import { CurrencyMap } from "@/lib/financialSummary";
-import type { MerchantCashCollection, Transaction } from "@/lib/db";
+import { aggregateExecutionByCurrency, type ExecutionRow } from "@/lib/executionProfit";
+import type { CompanyTransaction, Expense, MerchantCashCollection, Transaction } from "@/lib/db";
 
 type MaybeCancelled = { cancelled_at?: string | null };
 
