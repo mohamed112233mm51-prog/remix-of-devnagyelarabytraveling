@@ -1051,15 +1051,16 @@ export function computeDashboardLifetime(input: {
 
   // ✅ تحصيلات تجار الكاش من الدالة المشتركة (تستبعد الملغاة، dedupe بالـ id).
   const merchantCollected = computeMerchantCashCollections(collections);
+  const merchantCollectedByCurrency = computeMerchantCashCollectionsByCurrency(collections);
   const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
   const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
   return {
     agentsFlightsValue, agentsApprovalsValue, agentsOtherValue, agentsTripValue,
-    agentsPaid, agentsDue, agentCollectionsNet,
+    agentsPaid, agentsDue, agentCollectionsNet, agentCollectionsNetByCurrency,
     merchantIncomingNet, merchantIncomingGross, merchantFee,
     companyServices, companyOutgoingNet, companyPaid, companyDue,
-    merchantOutgoing, merchantCollected, merchantBalance,
+    merchantOutgoing, merchantCollected, merchantCollectedByCurrency, merchantBalance,
   };
 }
 
