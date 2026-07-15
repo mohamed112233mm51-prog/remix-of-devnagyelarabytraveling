@@ -799,11 +799,11 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- MERCHANTS ----------
 function MerchantsReport({ inRange, data: rd }: SectionProps) {
-  const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, usdTreasury, loading } = rd;
+  const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, usdTreasury, paymentSplits, loading } = rd;
 
   const rpt = useMemo(
-    () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, usdRows: usdTreasury, inRange }),
-    [merchants, txns, cTxns, collections, usdTreasury, inRange],
+    () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, usdRows: usdTreasury, splits: paymentSplits, inRange }),
+    [merchants, txns, cTxns, collections, usdTreasury, paymentSplits, inRange],
   );
   const data = rpt.rows;
 
