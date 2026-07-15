@@ -319,13 +319,9 @@ function Dashboard() {
     () => computeExpensesByCurrency(expenses as any),
     [expenses],
   );
-  const merchantFeeMap = useMemo(() => {
-    // نسبة التاجر 1% = الوارد الإجمالي − الصافي؛ لكل عملة على حدة.
-    // incoming حاليًا يمثل الصافي؛ نتجاوز الحساب المختلط ونعرض EGP فقط عند غياب معلومة العملة للـ gross.
-    const map = new CurrencyMap();
-    map.add("EGP", merchantFee);
-    return map;
-  }, [merchantFee]);
+  // نسبة التاجر 1% مبلغ مشتق (gross-net) عبر عملات مختلطة على مستوى الحركة القديمة —
+  // يظل EGP-only محاسبيًا (لا نخلط عملات؛ الحقل مصدره تاريخي بلا تفصيل عملة).
+  void CurrencyMap;
 
 
   // Treasury balances (per currency from cash_boxes) + latest exchange rates
