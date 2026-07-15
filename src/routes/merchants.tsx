@@ -835,7 +835,7 @@ function MerchantStatementTab({
       conversions,
       splits,
     }) as unknown as StatementMovement[];
-  }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions]);
+  }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, splits]);
 
   const debouncedSearch = useDebouncedValue(search, 250);
   const filtered = useMemo(() => movements.filter((m) => {
