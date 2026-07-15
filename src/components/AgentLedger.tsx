@@ -323,7 +323,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                         </td>
                       )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
