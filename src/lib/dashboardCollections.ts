@@ -202,6 +202,17 @@ export function mergeCurrencyTotals(...maps: CurrencyMap[]): CurrencyMap {
   return out;
 }
 
+/**
+ * طرح خريطة عملات من أخرى — لكل عملة على حدة، بدون خلط.
+ * `a[cur] - b[cur]` لكل عملة تظهر في أي من الطرفين.
+ */
+export function subtractCurrencyMaps(a: CurrencyMap, b: CurrencyMap): CurrencyMap {
+  const out = new CurrencyMap();
+  for (const { currency, amount } of a.entries({ includeZero: true })) out.add(currency, amount);
+  for (const { currency, amount } of b.entries({ includeZero: true })) out.add(currency, -amount);
+  return out;
+}
+
 /** Helper: يبني DatePredicate من نطاق [start, end). */
 export function inRangePredicate(range: { start: Date; end: Date }): DatePredicate {
   const s = range.start.getTime();
@@ -212,4 +223,122 @@ export function inRangePredicate(range: { start: Date; end: Date }): DatePredica
     return t >= s && t < e;
   };
 }
+
+// ---------------------------------------------------------------------------
+// إجماليات تفاصيل الأقسام في الداشبورد — مفصولة حسب العملة.
+// كل دالة تُرجع CurrencyMap لكل حقل مالي؛ لا يتم خلط العملات ولا تحويلها.
+// ---------------------------------------------------------------------------
+
+/**
+ * قيمة خدمات الوكلاء لكل عملة — من `executions.services` (kind=agent).
+ * يُطابق مصدر مبيعات الوكلاء لكنه يعرض القيم بعملتها الأصلية بدل تحويلها إلى EGP.
+ * يستبعد التنفيذات غير "منفذ" و`cancelled_at`.
+ */
+export function computeExecutionAgentSalesByCurrency(
+  rows: ReadonlyArray<ExecutionRow & { cancelled_at?: string | null }>,
+): CurrencyMap {
+  const map = new CurrencyMap();
+  for (const ex of rows) {
+    if ((ex as any).cancelled_at) continue;
+    if ((ex.operation_status || "") !== "منفذ") continue;
+    const { salesByCur } = aggregateExecutionByCurrency(ex);
+    for (const [cur, amt] of Object.entries(salesByCur)) map.add(cur, amt);
+  }
+  return map;
+}
+
+/**
+ * إجماليات الشركات الصادرة مفصولة حسب العملة (مصدر أصل موحّد مع كارت الشركات).
+ * services: من `trip_value || count*price`
+ * paid: من `txnCollectedAmount`
+ * due: services - paid لكل عملة على حدة (بدون خلط عملات)
+ * مصدر العملة: `payment_currency || currency || EGP`.
+ */
+export function computeCompanyStatsByCurrency(
+  cTxns: ReadonlyArray<CompanyTransaction & { cancelled_at?: string | null }>,
+): { services: CurrencyMap; paid: CurrencyMap; due: CurrencyMap } {
+  const services = new CurrencyMap();
+  const paid = new CurrencyMap();
+  for (const t of cTxns) {
+    if ((t as any).cancelled_at) continue;
+    const cur = normalizeCurrency((t as any).payment_currency ?? (t as any).currency);
+    const sv =
+      Number((t as any).trip_value || 0) ||
+      Number((t as any).count || 0) * Number((t as any).price || 0);
+    if (sv) services.add(cur, sv);
+    const pd = txnCollectedAmount(t);
+    if (pd) paid.add(cur, pd);
+  }
+  return { services, paid, due: subtractCurrencyMaps(services, paid) };
+}
+
+/**
+ * إجماليات المصروفات مفصولة حسب العملة (`expenses.currency` fallback EGP).
+ * المبلغ من `expenses.amount` فقط — لا نضيف `expense_deductions` أبداً
+ * لأنها شرائح سداد لنفس المصروف (يؤدي إلى تضاعف الحساب).
+ */
+export function computeExpensesByCurrency(
+  expenses: ReadonlyArray<Expense & { cancelled_at?: string | null }>,
+): { total: CurrencyMap; fixed: CurrencyMap; variable: CurrencyMap } {
+  const total = new CurrencyMap();
+  const fixed = new CurrencyMap();
+  const variable = new CurrencyMap();
+  for (const e of expenses) {
+    if ((e as any).cancelled_at) continue;
+    const amt = Number((e as any).amount || 0);
+    if (!amt) continue;
+    const cur = normalizeCurrency((e as any).currency);
+    total.add(cur, amt);
+    const kind = (e as any).expense_type;
+    if (kind === "ثابت") fixed.add(cur, amt);
+    else if (kind === "متغير") variable.add(cur, amt);
+  }
+  return { total, fixed, variable };
+}
+
+type CurrencyTxnLike = {
+  supplier_id?: string | null;
+  tx_type?: string | null;
+  bought_currency?: string | null;
+  bought_amount?: number | string | null;
+  sold_currency?: string | null;
+  sold_amount?: number | string | null;
+  payment_splits?: any;
+  cancelled_at?: string | null;
+};
+
+/**
+ * إجماليات موردي العملة مفصولة حسب العملة (لا تحويل ولا خلط).
+ * - `purchases[sold_currency] += sold_amount` (المبلغ المستحق للمورد بعملة السداد)
+ * - `payments[split.currency ?? sold_currency] += split.amount`
+ * - `due = purchases - payments` لكل عملة
+ * (يبقى كل مورد بعملته الأصلية بدون تحويل.)
+ */
+export function computeCurrencySupplierStatsByCurrency(
+  txns: ReadonlyArray<CurrencyTxnLike>,
+  activeSupplierIds: ReadonlySet<string>,
+): { purchases: CurrencyMap; payments: CurrencyMap; due: CurrencyMap } {
+  const purchases = new CurrencyMap();
+  const payments = new CurrencyMap();
+  for (const t of txns) {
+    if (t.cancelled_at) continue;
+    if (!t.supplier_id || !activeSupplierIds.has(t.supplier_id)) continue;
+    if ((t.tx_type || "") !== "شراء عملة") continue;
+    const owedCur = normalizeCurrency(t.sold_currency);
+    const owedAmt = Number(t.sold_amount || 0);
+    if (owedAmt) purchases.add(owedCur, owedAmt);
+    const splits = Array.isArray(t.payment_splits) ? t.payment_splits : [];
+    for (const s of splits) {
+      const amt = Number((s && s.amount) || 0);
+      if (!amt) continue;
+      const cur = normalizeCurrency((s && s.currency) ?? owedCur);
+      payments.add(cur, amt);
+    }
+  }
+  return { purchases, payments, due: subtractCurrencyMaps(purchases, payments) };
+}
+
+// used only in currency supplier helper — silences "tripValue unused" if branch removed
+void tripValue;
+
 
