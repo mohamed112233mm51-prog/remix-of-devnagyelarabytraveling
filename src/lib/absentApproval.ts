@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 /**
  * Absent-approval visual marker.
  *
