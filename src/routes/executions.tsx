@@ -20,6 +20,7 @@ import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
+import { isAbsentStatus, ABSENT_FIELD_STYLE, ABSENT_ROW_STYLE } from "@/lib/absentApproval";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
@@ -406,7 +407,7 @@ function ExecutionsPage() {
                     const ageBg = paxAgeBg(e.dob, e.created_at);
                     const defaultBg = i % 2 ? "#fafbfd" : "#fff";
                     return (
-                    <tr key={e.id} style={{ background: ageBg || defaultBg, borderBottom: "1px solid #f1f5f9" }}>
+                    <tr key={e.id} style={isAbsentStatus(e.status) ? { ...ABSENT_ROW_STYLE, borderBottom: "1px solid #f1f5f9" } : { background: ageBg || defaultBg, borderBottom: "1px solid #f1f5f9" }}>
 
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
                       {visibleColumns.map((c) => {
@@ -802,12 +803,14 @@ function ExecutionForm({
           />
         </Field>
         <Field label="حالة الموافقة">
-          <SearchableSelect
-            value={form.status}
-            onChange={(v) => setForm({ ...form, status: v })}
-            options={withSelected(approvalStatuses, form.status)}
-            placeholder="اختر الحالة..."
-          />
+          <div style={isAbsentStatus(form.status) ? { padding: 6, borderRadius: 8, border: "1px solid #ef4444", ...ABSENT_FIELD_STYLE } : undefined}>
+            <SearchableSelect
+              value={form.status}
+              onChange={(v) => setForm({ ...form, status: v })}
+              options={withSelected(approvalStatuses, form.status)}
+              placeholder="اختر الحالة..."
+            />
+          </div>
         </Field>
         <Field label="حالة العملية">
           <SearchableSelect
@@ -890,7 +893,7 @@ function ExecutionForm({
             const cp = Number(s.company_price) || 0;
             const total = (Number(s.company_value) || 0) > 0 ? Number(s.company_value) : cp * cnt;
             return (
-              <div key={i} style={{ border: "1px solid #c7d2fe", borderRadius: 10, padding: 12, background: "#eef2ff" }}>
+              <div key={i} style={isAbsentStatus(form.status) ? { border: "1px solid #ef4444", borderRadius: 10, padding: 12, ...ABSENT_FIELD_STYLE } : { border: "1px solid #c7d2fe", borderRadius: 10, padding: 12, background: "#eef2ff" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="الشركة الصادرة">
                     <SearchableSelect
@@ -966,7 +969,7 @@ function ExecutionForm({
             const ap = Number(s.agent_price) || 0;
             const total = ap * cnt;
             return (
-              <div key={i} style={{ border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
+              <div key={i} style={isAbsentStatus(form.status) ? { border: "1px solid #ef4444", borderRadius: 10, padding: 12, ...ABSENT_FIELD_STYLE } : { border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="نوع الخدمة المباعة">
                     <SearchableSelect

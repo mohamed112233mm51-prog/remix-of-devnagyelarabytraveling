@@ -9,8 +9,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fmtDL, fmtNum, fmtUSD, fmtCurrency, useLive, useDropdownOptions, withSelected, useTreasuryBalances,
-  type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction,
+  type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction, type Execution,
 } from "@/lib/db";
+import { buildAbsentLookup, ABSENT_ROW_STYLE } from "@/lib/absentApproval";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import CurrencyFilter from "@/components/CurrencyFilter";
@@ -299,6 +300,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const [companyId, setCompanyId] = useState(initialCompanyId || "");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
   const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
+  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const merchantName = (mid: string | null | undefined) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
 
@@ -488,8 +491,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             <tbody>
               {displayRows.length === 0 ? (
                 <tr><td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
-              ) : displayRows.map((e, i) => (
-                <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
+              ) : displayRows.map((e, i) => {
+                const absent = absentLookup.isAbsentMovement(e.raw as any);
+                return (
+                <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                   {isVisible("n") && <td data-label="#">{i + 1}</td>}
                   {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
                   {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
@@ -510,7 +515,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

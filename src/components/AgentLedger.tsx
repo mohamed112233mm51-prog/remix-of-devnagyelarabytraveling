@@ -8,8 +8,9 @@ import { buildArabicFileName } from "@/lib/exportStatement";
 import {
   badgeFor, fmtDL, fmtNum, fmtCurrency,
   useLive, GOVERNORATES,
-  type Agent, type Transaction, type Merchant,
+  type Agent, type Transaction, type Merchant, type Execution,
 } from "@/lib/db";
+import { buildAbsentLookup, ABSENT_ROW_STYLE } from "@/lib/absentApproval";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
@@ -60,6 +61,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const { rows: liveTxns } = useLive<Transaction>("transactions");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
   const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
+  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const agents = Array.isArray(liveAgents) ? liveAgents : [];
   const txns = Array.isArray(liveTxns) ? liveTxns : [];
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
@@ -296,8 +299,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 <tbody>
                   {displayRows.length === 0 ? (
                     <tr><td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
-                  ) : displayRows.map((e, i) => (
-                    <tr key={e.id} style={{ background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
+                  ) : displayRows.map((e, i) => {
+                    const absent = absentLookup.isAbsentMovement(e.raw as any);
+                    return (
+                    <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                       {isVisible("n") && <td data-label="#">{i + 1}</td>}
                       {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
                       {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
@@ -318,7 +323,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                         </td>
                       )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
