@@ -280,6 +280,7 @@ function Dashboard() {
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
+    agentCollectionsNetByCurrency,
     companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
     merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
