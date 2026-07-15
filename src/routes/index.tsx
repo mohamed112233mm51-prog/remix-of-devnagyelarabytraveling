@@ -261,7 +261,10 @@ function Dashboard() {
     const expensesAll = expensesTotals.total;
     let expensesDeducted = 0;
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
-    const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
+    // expense_deductions هي شرائح سداد المصروف نفسه (مسجّل بالفعل في expenses.amount)
+    // لذلك لا نضيفها إلى الإجمالي حتى لا يُحسب المصروف مرتين.
+    const expensesTotal = expensesFixed + expensesVariable;
+
     return {
       ...base,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
