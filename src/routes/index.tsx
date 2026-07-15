@@ -27,9 +27,14 @@ import {
   computeMerchantCashCollections,
   computeMerchantCashCollectionsByCurrency,
   mergeCurrencyTotals,
+  subtractCurrencyMaps,
+  computeExecutionAgentSalesByCurrency,
+  computeCompanyStatsByCurrency,
+  computeExpensesByCurrency,
+  computeCurrencySupplierStatsByCurrency,
 } from "@/lib/dashboardCollections";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
-import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
+import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { usePerm } from "@/hooks/usePerm";
 import {
