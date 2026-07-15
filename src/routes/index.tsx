@@ -262,7 +262,7 @@ function Dashboard() {
   const expensesTotals = useExpensesTotals();
 
   const lifetime = useMemo(() => {
-    const base = computeDashboardLifetime({ txns, cTxns, collections });
+    const base = computeDashboardLifetime({ txns, cTxns, collections, splits: collectionSplits });
     // المصروفات: من المحرك الموحّد (نفس المنطق تماماً).
     const expensesFixed = expensesTotals.fixed;
     const expensesVariable = expensesTotals.variable;
@@ -277,7 +277,7 @@ function Dashboard() {
       ...base,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
     };
-  }, [txns, cTxns, collections, expenseDeductions, expensesTotals]);
+  }, [txns, cTxns, collections, collectionSplits, expenseDeductions, expensesTotals]);
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
