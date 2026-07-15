@@ -1908,8 +1908,11 @@ export function summarizeMerchantMovementTotals(
 
 export function summarizeMerchantCollectionsPeriod(
   collections: MerchantCashCollection[], from: string, to: string,
-): { filtered: MerchantCashCollection[]; total: number } {
+  splits?: readonly CollectionSplitRow[] | null,
+): { filtered: MerchantCashCollection[]; total: number; totalByCurrency: CurrencyMap; currencyById: Map<string, string> } {
   const filtered: MerchantCashCollection[] = [];
+  const currencyById = buildCollectionCurrencyMap(splits);
+  const totalByCurrency = new CurrencyMap();
   let total = 0;
   for (const c of collections) {
     // Cancelled collections are treated as removed everywhere else in the
@@ -1920,9 +1923,13 @@ export function summarizeMerchantCollectionsPeriod(
     if (from && c.date < from) continue;
     if (to && c.date > to) continue;
     filtered.push(c);
-    total += Number(c.amount || 0);
+    const amt = Number(c.amount || 0);
+    total += amt;
+    const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
+    const cur = normalizeCurrency(isOpening ? (c as any).opening_currency : (currencyById.get(c.id) ?? (c as any).currency));
+    totalByCurrency.add(cur, amt);
   }
-  return { filtered, total };
+  return { filtered, total, totalByCurrency, currencyById };
 }
 
 export function summarizeMerchantIncomingPeriod(
