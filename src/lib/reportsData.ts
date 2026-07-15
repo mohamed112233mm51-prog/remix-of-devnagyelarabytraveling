@@ -17,6 +17,14 @@ import {
   type UsdTreasuryTransaction,
 } from "./db";
 
+export type PaymentSplitLite = {
+  id: string;
+  source_table: string | null;
+  source_id: string | null;
+  currency: string | null;
+  cancelled_at: string | null;
+};
+
 export type ReportsData = {
   loading: boolean;
   agents: Agent[];
