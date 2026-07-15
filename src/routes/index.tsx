@@ -937,9 +937,13 @@ function AnimatedNumber({
 }
 
 const HeroKpi = memo(function HeroKpi({
-  label, value, format, icon, tone, sub, delta, deltaPositive,
+  label, value, valueMap, format, icon, tone, sub, delta, deltaPositive,
 }: {
-  label: string; value: number; format: (n: number) => string; icon: ReactNode;
+  label: string;
+  value?: number;
+  valueMap?: import("@/lib/financialSummary").CurrencyMap;
+  format?: (n: number) => string;
+  icon: ReactNode;
   tone: "primary" | "navy" | "success" | "warning";
   sub?: string; delta?: string; deltaPositive?: boolean;
 }) {
@@ -949,8 +953,12 @@ const HeroKpi = memo(function HeroKpi({
         <span className="erp-hero-label">{label}</span>
         <span className="erp-hero-icon">{icon}</span>
       </div>
-      <div className="erp-hero-value">
-        <AnimatedNumber value={value} format={format} />
+      <div className="erp-hero-value" style={valueMap ? { fontSize: 20, lineHeight: 1.35 } : undefined}>
+        {valueMap ? (
+          <CurrencyLines map={valueMap} />
+        ) : (
+          <AnimatedNumber value={value ?? 0} format={format ?? fmtDL} />
+        )}
       </div>
       <div className="erp-hero-foot">
         {delta ? (
