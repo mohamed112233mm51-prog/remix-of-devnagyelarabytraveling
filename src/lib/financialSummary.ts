@@ -25,7 +25,12 @@
 
 import { useMemo } from "react";
 import { computeExecutionSalesEGP, type ExecutionRow } from "./executionProfit";
-import { computeAgentCollections, computeMerchantCashCollections } from "./dashboardCollections";
+import {
+  computeAgentCollections,
+  computeAgentCollectionsByCurrency,
+  computeMerchantCashCollections,
+  computeMerchantCashCollectionsByCurrency,
+} from "./dashboardCollections";
 import {
   useLive,
   tripValue,
