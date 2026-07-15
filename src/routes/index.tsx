@@ -27,9 +27,14 @@ import {
   computeMerchantCashCollections,
   computeMerchantCashCollectionsByCurrency,
   mergeCurrencyTotals,
+  subtractCurrencyMaps,
+  computeExecutionAgentSalesByCurrency,
+  computeCompanyStatsByCurrency,
+  computeExpensesByCurrency,
+  computeCurrencySupplierStatsByCurrency,
 } from "@/lib/dashboardCollections";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
-import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
+import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { usePerm } from "@/hooks/usePerm";
 import {
@@ -120,7 +125,8 @@ function Dashboard() {
   const { user, roles, permissions, isSuperAdmin, profileLoaded } = useAuth();
   const queryClient = useQueryClient();
   const merchantsPerm = usePerm("merchants");
-  const merchantBalanceMap = useMerchantTotals().balance;
+  const merchantTotals = useMerchantTotals();
+  const merchantBalanceMap = merchantTotals.balance;
   // Profit cards are strict: super_admin/admin always see them; manager/user require an explicit true value.
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
@@ -168,26 +174,33 @@ function Dashboard() {
   const { rows: currencyTxns } = useLive<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any }>("currency_supplier_transactions");
   const { rows: currencySuppliers } = useLive<{ id: string; status: string | null }>("currency_suppliers");
 
+  const currencySupplierActiveIds = useMemo(
+    () => new Set(currencySuppliers.filter((s) => (s.status || "نشط") === "نشط").map((s) => s.id)),
+    [currencySuppliers],
+  );
   const currencySupplierStats = useMemo(() => {
-    const activeIds = new Set(
-      currencySuppliers.filter((s) => (s.status || "نشط") === "نشط").map((s) => s.id),
-    );
     let purchases = 0;
     let payments = 0;
     for (const t of currencyTxns) {
-      if (!t.supplier_id || !activeIds.has(t.supplier_id)) continue;
+      if (!t.supplier_id || !currencySupplierActiveIds.has(t.supplier_id)) continue;
       if ((t.tx_type || "") !== "شراء عملة") continue;
       purchases += Number(t.sold_amount || 0);
       const splits = Array.isArray(t.payment_splits) ? t.payment_splits : [];
       for (const s of splits) payments += Number((s && s.amount) || 0);
     }
     return {
-      count: activeIds.size,
+      count: currencySupplierActiveIds.size,
       purchases,
       payments,
       due: purchases - payments,
     };
-  }, [currencyTxns, currencySuppliers]);
+  }, [currencyTxns, currencySupplierActiveIds]);
+
+  // Per-currency totals for the "تفاصيل الأقسام" cards — no currency mixing.
+  const currencySupplierByCurrency = useMemo(
+    () => computeCurrencySupplierStatsByCurrency(currencyTxns as any, currencySupplierActiveIds),
+    [currencyTxns, currencySupplierActiveIds],
+  );
 
   // Heavy analytics use deferred period so KPI clicks feel instant
   const deferredPeriod = useDeferredValue(period);
@@ -287,6 +300,28 @@ function Dashboard() {
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
     companyOutgoingNet,
   } = lifetime;
+
+  // ===== Per-currency section-detail totals (تفاصيل الأقسام) =====
+  // كل قيمة مالية تُبقى بعملتها الأصلية — لا خلط ولا تحويل.
+  const agentServicesByCurrency = useMemo(
+    () => computeExecutionAgentSalesByCurrency(executedRows as any),
+    [executedRows],
+  );
+  const agentDueByCurrency = useMemo(
+    () => subtractCurrencyMaps(agentServicesByCurrency, agentCollectionsNetByCurrency),
+    [agentServicesByCurrency, agentCollectionsNetByCurrency],
+  );
+  const companyStatsByCurrency = useMemo(
+    () => computeCompanyStatsByCurrency(cTxns as any),
+    [cTxns],
+  );
+  const expensesByCurrency = useMemo(
+    () => computeExpensesByCurrency(expenses as any),
+    [expenses],
+  );
+  // نسبة التاجر 1% مبلغ مشتق (gross-net) عبر عملات مختلطة على مستوى الحركة القديمة —
+  // يظل EGP-only محاسبيًا (لا نخلط عملات؛ الحقل مصدره تاريخي بلا تفصيل عملة).
+  void CurrencyMap;
 
 
   // Treasury balances (per currency from cash_boxes) + latest exchange rates
@@ -798,41 +833,43 @@ function Dashboard() {
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة الخدمات" value={fmtDL(executionAgentSalesEGP)} />
+          <Stat label="قيمة الخدمات" valueNode={<CurrencyLines map={agentServicesByCurrency} />} />
           <Stat label="إجمالي المدفوعات" valueNode={<CurrencyLines map={agentCollectionsNetByCurrency} />} tone="green" />
-          <Stat label="المستحق" value={fmtDL(agentsDue)} tone="red" highlight />
+          <Stat label="المستحق" valueNode={<CurrencyLines map={agentDueByCurrency} />} tone="red" highlight />
         </SectionCard>
 
         <SectionCard title="الشركات الصادرة" icon={<Building2 size={16} />} accent="navy">
           <Stat label="عدد الشركات" value={fmtNum(companies.filter((c: any) => (c.status || "نشط") === "نشط").length)} />
-          <Stat label="إجمالي الخدمات" value={fmtDL(companyServices)} />
-          <Stat label="المدفوعات" value={fmtDL(companyPaid)} tone="green" />
-          <Stat label="المتبقي" value={fmtDL(companyDue)} tone="red" />
+          <Stat label="إجمالي الخدمات" valueNode={<CurrencyLines map={companyStatsByCurrency.services} />} />
+          <Stat label="المدفوعات" valueNode={<CurrencyLines map={companyStatsByCurrency.paid} />} tone="green" />
+          <Stat label="المتبقي" valueNode={<CurrencyLines map={companyStatsByCurrency.due} />} tone="red" />
         </SectionCard>
 
         <SectionCard title="تاجر الكاش" icon={<HandCoins size={16} />} accent="navy">
           <Stat label="عدد التجار" value={fmtNum(merchants.filter((m: any) => (m.status || "نشط") === "نشط").length)} />
-          <Stat label="الوارد (صافي)" value={fmtDL(merchantIncomingNet)} tone="green" />
-          <Stat label="الصادر" value={fmtDL(merchantOutgoing)} tone="red" />
-          <Stat label="نسبة التاجر 1%" value={fmtDL(merchantFee)} />
-          <Stat label="رصيد تاجر الكاش" value={fmtDL(merchantBalance)} highlight />
+          <Stat label="الوارد (صافي)" valueNode={<CurrencyLines map={merchantTotals.incoming} />} tone="green" />
+          <Stat label="الصادر" valueNode={<CurrencyLines map={merchantTotals.outgoing} />} tone="red" />
+          {/* نسبة التاجر 1% مبلغ مشتق (gross-net) — يُترك EGP مجمّعاً لأن المصدر التاريخي لا يفصّل العملة على مستوى الرسوم. */}
+          <Stat label="نسبة التاجر 1% (EGP)" value={fmtDL(merchantFee)} />
+          <Stat label="رصيد تاجر الكاش" valueNode={<CurrencyLines map={merchantTotals.balance} />} highlight />
         </SectionCard>
 
 
         <SectionCard title="المصروفات" icon={<Wallet size={16} />} accent="navy">
-          <Stat label="الإجمالي" value={fmtDL(expensesFixed + expensesVariable)} tone="red" />
-          <Stat label="ثابتة" value={fmtDL(expensesFixed)} />
-          <Stat label="متغيرة" value={fmtDL(expensesVariable)} />
+          <Stat label="الإجمالي" valueNode={<CurrencyLines map={expensesByCurrency.total} />} tone="red" />
+          <Stat label="ثابتة" valueNode={<CurrencyLines map={expensesByCurrency.fixed} />} />
+          <Stat label="متغيرة" valueNode={<CurrencyLines map={expensesByCurrency.variable} />} />
 
         </SectionCard>
 
 
         <SectionCard title="موردو العملة" icon={<Landmark size={16} />} accent="navy">
           <Stat label="عدد الموردين" value={fmtNum(currencySupplierStats.count)} />
-          <Stat label="إجمالي المشتريات" value={fmtDL(currencySupplierStats.purchases)} />
-          <Stat label="إجمالي المدفوعات" value={fmtDL(currencySupplierStats.payments)} tone="green" />
-          <Stat label="الرصيد المستحق" value={fmtDL(currencySupplierStats.due)} tone="red" highlight />
+          <Stat label="إجمالي المشتريات" valueNode={<CurrencyLines map={currencySupplierByCurrency.purchases} />} />
+          <Stat label="إجمالي المدفوعات" valueNode={<CurrencyLines map={currencySupplierByCurrency.payments} />} tone="green" />
+          <Stat label="الرصيد المستحق" valueNode={<CurrencyLines map={currencySupplierByCurrency.due} />} tone="red" highlight />
         </SectionCard>
+
 
 
         {effectiveCanViewProfitSummary && (
