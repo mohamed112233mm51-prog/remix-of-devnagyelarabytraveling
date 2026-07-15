@@ -259,7 +259,7 @@ function MerchantsPage() {
       )}
 
       {tab === "history" && (
-        <HistoryTab collections={collections} merchants={merchants} />
+        <HistoryTab collections={collections} merchants={merchants} splits={paymentSplits} />
       )}
 
       {tab === "incoming" && (
