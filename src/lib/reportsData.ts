@@ -17,6 +17,14 @@ import {
   type UsdTreasuryTransaction,
 } from "./db";
 
+export type PaymentSplitLite = {
+  id: string;
+  source_table: string | null;
+  source_id: string | null;
+  currency: string | null;
+  cancelled_at: string | null;
+};
+
 export type ReportsData = {
   loading: boolean;
   agents: Agent[];
@@ -37,6 +45,7 @@ export type ReportsData = {
   expenses: Expense[];
   expenseDeductions: ExpenseDeduction[];
   usdTreasury: UsdTreasuryTransaction[];
+  paymentSplits: PaymentSplitLite[];
   agentName: (id: string | null | undefined) => string;
   companyName: (id: string | null | undefined) => string;
   merchantName: (id: string | null | undefined) => string;
@@ -57,11 +66,12 @@ export function useReportsData(): ReportsData {
   const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const sub = useLive<Submission>("submissions");
   const ex = useLive<Execution>("executions");
+  const ps = useLive<PaymentSplitLite>("payment_splits");
 
   const loading =
     a.loading || t.loading || c.loading || ct.loading ||
     m.loading || mc.loading || inv.loading || it.loading ||
-    e.loading || ed.loading || u.loading || sub.loading || ex.loading;
+    e.loading || ed.loading || u.loading || sub.loading || ex.loading || ps.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);
@@ -85,6 +95,7 @@ export function useReportsData(): ReportsData {
     expenses: e.rows,
     expenseDeductions: ed.rows,
     usdTreasury: u.rows,
+    paymentSplits: ps.rows,
     agentName: (id) => (id ? agentMap.get(id) || "—" : "—"),
     companyName: (id) => (id ? companyMap.get(id) || "—" : "—"),
     merchantName: (id) => (id ? merchantMap.get(id) || "—" : "—"),

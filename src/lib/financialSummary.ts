@@ -30,6 +30,8 @@ import {
   computeAgentCollectionsByCurrency,
   computeMerchantCashCollections,
   computeMerchantCashCollectionsByCurrency,
+  buildCollectionCurrencyMap,
+  type CollectionSplitRow,
 } from "./dashboardCollections";
 import {
   useLive,
@@ -330,11 +332,12 @@ export function useMerchantSummary(merchantId: string | null | undefined): Entit
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
   return useMemo(() => {
     if (!merchantId) return empty();
-    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
     return summarizeMerchantMovementsAsEntity(buildMerchantMovements(merchantId, input));
-  }, [txns, companyTxns, collections, usdRows, merchantId]);
+  }, [txns, companyTxns, collections, usdRows, splits, merchantId]);
 }
 
 export function useMerchantsSummary(): Map<string, EntitySummary> {
@@ -343,14 +346,15 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
   return useMemo(() => {
     const out = new Map<string, EntitySummary>();
-    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
     for (const m of merchants) {
       out.set(m.id, summarizeMerchantMovementsAsEntity(buildMerchantMovements(m.id, input)));
     }
     return out;
-  }, [merchants, txns, companyTxns, collections, usdRows]);
+  }, [merchants, txns, companyTxns, collections, usdRows, splits]);
 }
 
 /* ============================================================
@@ -427,10 +431,17 @@ export function buildMerchantMovements(
     cashMoveTxns: Transaction[];
     collections: MerchantCashCollection[];
     conversions: UsdTreasuryTransaction[];
+    /**
+     * payment_splits — يُستخدَم فقط لاستخراج عملة تحصيلات تاجر الكاش العادية
+     * (`merchant_cash_collections` لا يحتوي عمود currency لسجلات التحصيل).
+     * لا يُجمَع كمبلغ إضافي على الإطلاق.
+     */
+    splits?: readonly CollectionSplitRow[] | null;
   },
 ): MerchantMovementRow[] {
   if (!merchantId) return [];
-  const { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions } = input;
+  const { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, splits } = input;
+  const collectionCurrencyById = buildCollectionCurrencyMap(splits);
   const list: MerchantMovementRow[] = [];
   for (const t of incomingTxns) {
     if (t.merchant_id !== merchantId) continue;
@@ -463,7 +474,14 @@ export function buildMerchantMovements(
     if ((c as any).cancelled_at) continue;
     const amt = Number(c.amount || 0);
     const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
-    const rowCurrency = normalizeCurrency(isOpening ? (c as any).opening_currency : (c as any).currency);
+    // ترتيب حسم عملة الحركة:
+    //   1) opening_currency للسجلات الافتتاحية (المصدر الوحيد الصحيح).
+    //   2) payment_splits.currency للتحصيلات العادية (المصدر الحقيقي — الخزنة المختارة).
+    //   3) fallback EGP للسجلات القديمة السابقة لدعم فصل العملات.
+    const fromSplits = !isOpening ? collectionCurrencyById.get(c.id) : undefined;
+    const rowCurrency = normalizeCurrency(
+      isOpening ? (c as any).opening_currency : (fromSplits ?? (c as any).currency),
+    );
     list.push({
       id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
       type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
@@ -513,6 +531,7 @@ function buildMerchantMovementInputs(
   companyTxns: CompanyTransaction[],
   collections: MerchantCashCollection[],
   usdRows: UsdTreasuryTransaction[],
+  splits?: readonly CollectionSplitRow[] | null,
 ): Parameters<typeof buildMerchantMovements>[1] {
   const incomingTxns = txns.filter((t) =>
     Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0,
@@ -531,7 +550,7 @@ function buildMerchantMovementInputs(
     t.source_service_type === "merchant_cash_out_to_company" ||
     t.source_service_type === "merchant_cash_out_to_agent"
   ));
-  return { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows };
+  return { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows, splits: splits ?? null };
 }
 
 function summarizeMerchantMovementsAsEntity(rows: MerchantMovementRow[]): EntitySummary {
@@ -551,10 +570,11 @@ export function computeMerchantAggregates(input: {
   companyTxns: CompanyTransaction[];
   collections: MerchantCashCollection[];
   usdRows: UsdTreasuryTransaction[];
+  splits?: readonly CollectionSplitRow[] | null;
 }): Map<string, MerchantAggregate> {
-  const { txns, companyTxns, collections, usdRows } = input;
+  const { txns, companyTxns, collections, usdRows, splits } = input;
   // Partition inputs EXACTLY like MerchantStatementTab does — نفس المصدر.
-  const movementInput = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+  const movementInput = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
 
   const merchantIds = new Set<string>();
   for (const t of txns) if (t.merchant_id) merchantIds.add(t.merchant_id);
@@ -584,9 +604,10 @@ export function useMerchantAggregates(): Map<string, MerchantAggregate> {
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
   return useMemo(
-    () => computeMerchantAggregates({ txns, companyTxns, collections, usdRows }),
-    [txns, companyTxns, collections, usdRows],
+    () => computeMerchantAggregates({ txns, companyTxns, collections, usdRows, splits }),
+    [txns, companyTxns, collections, usdRows, splits],
   );
 }
 
@@ -1693,12 +1714,13 @@ export function summarizeMerchantReport(input: {
   companyTransactions: CompanyTransaction[];
   collections: MerchantCashCollection[];
   usdRows?: UsdTreasuryTransaction[];
+  splits?: readonly CollectionSplitRow[] | null;
   inRange: InRange;
 }): MerchantReportSummary {
-  const { merchants, transactions, companyTransactions, collections, usdRows, inRange } = input;
+  const { merchants, transactions, companyTransactions, collections, usdRows, splits, inRange } = input;
   // نستخدم buildMerchantMovements (نفس Ledger كشف الحساب) ثم نصفّي بـ inRange.
   const movementInput = buildMerchantMovementInputs(
-    transactions, companyTransactions, collections, usdRows || [],
+    transactions, companyTransactions, collections, usdRows || [], splits,
   );
   const totalIn = new CurrencyMap();
   const totalOut = new CurrencyMap();
@@ -1886,8 +1908,11 @@ export function summarizeMerchantMovementTotals(
 
 export function summarizeMerchantCollectionsPeriod(
   collections: MerchantCashCollection[], from: string, to: string,
-): { filtered: MerchantCashCollection[]; total: number } {
+  splits?: readonly CollectionSplitRow[] | null,
+): { filtered: MerchantCashCollection[]; total: number; totalByCurrency: CurrencyMap; currencyById: Map<string, string> } {
   const filtered: MerchantCashCollection[] = [];
+  const currencyById = buildCollectionCurrencyMap(splits);
+  const totalByCurrency = new CurrencyMap();
   let total = 0;
   for (const c of collections) {
     // Cancelled collections are treated as removed everywhere else in the
@@ -1898,9 +1923,13 @@ export function summarizeMerchantCollectionsPeriod(
     if (from && c.date < from) continue;
     if (to && c.date > to) continue;
     filtered.push(c);
-    total += Number(c.amount || 0);
+    const amt = Number(c.amount || 0);
+    total += amt;
+    const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
+    const cur = normalizeCurrency(isOpening ? (c as any).opening_currency : (currencyById.get(c.id) ?? (c as any).currency));
+    totalByCurrency.add(cur, amt);
   }
-  return { filtered, total };
+  return { filtered, total, totalByCurrency, currencyById };
 }
 
 export function summarizeMerchantIncomingPeriod(
