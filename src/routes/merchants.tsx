@@ -67,6 +67,7 @@ function MerchantsPage() {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: paymentSplits } = useLive<{ id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null }>("payment_splits");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "cashout" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
   // Unified financial engine — نفس النتائج السابقة، مصدر واحد للحساب.
