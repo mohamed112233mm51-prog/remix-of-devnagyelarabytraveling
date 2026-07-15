@@ -338,7 +338,4 @@ export function computeCurrencySupplierStatsByCurrency(
   return { purchases, payments, due: subtractCurrencyMaps(purchases, payments) };
 }
 
-// used only in currency supplier helper — silences "tripValue unused" if branch removed
-void tripValue;
-
 
