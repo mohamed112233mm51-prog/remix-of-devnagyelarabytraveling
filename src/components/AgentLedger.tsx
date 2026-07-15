@@ -8,8 +8,9 @@ import { buildArabicFileName } from "@/lib/exportStatement";
 import {
   badgeFor, fmtDL, fmtNum, fmtCurrency,
   useLive, GOVERNORATES,
-  type Agent, type Transaction, type Merchant,
+  type Agent, type Transaction, type Merchant, type Execution,
 } from "@/lib/db";
+import { buildAbsentLookup, ABSENT_ROW_STYLE } from "@/lib/absentApproval";
 import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
