@@ -515,7 +515,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
