@@ -21,7 +21,13 @@ import {
   type Submission,
   type Transaction,
 } from "@/lib/db";
-import { computeAgentCollections, computeMerchantCashCollections } from "@/lib/dashboardCollections";
+import {
+  computeAgentCollections,
+  computeAgentCollectionsByCurrency,
+  computeMerchantCashCollections,
+  computeMerchantCashCollectionsByCurrency,
+  mergeCurrencyTotals,
+} from "@/lib/dashboardCollections";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
