@@ -1934,32 +1934,48 @@ export function summarizeMerchantCollectionsPeriod(
 
 export function summarizeMerchantIncomingPeriod(
   txns: Transaction[], agentId: string, from: string, to: string,
-): { filtered: Transaction[]; total: number } {
+): { filtered: Transaction[]; total: number; totalByCurrency: CurrencyMap; totalPaidByCurrency: CurrencyMap } {
   const filtered: Transaction[] = [];
   let total = 0;
+  const totalByCurrency = new CurrencyMap();
+  const totalPaidByCurrency = new CurrencyMap();
   for (const t of txns) {
+    if ((t as any).cancelled_at) continue;
     if (agentId && t.agent_id !== agentId) continue;
     if (from && (t.date || "") < from) continue;
     if (to && (t.date || "") > to) continue;
     filtered.push(t);
-    total += merchantCashNet(t);
+    const net = merchantCashNet(t) + Number((t as any).merchant_cash_physical_amount || 0);
+    // transactions table has NO payment_currency column — currency is stored in `currency`.
+    const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
+    total += net;
+    totalByCurrency.add(cur, net);
+    totalPaidByCurrency.add(cur, Number(t.total_paid || 0));
   }
-  return { filtered, total };
+  return { filtered, total, totalByCurrency, totalPaidByCurrency };
 }
 
 export function summarizeMerchantOutgoingPeriod(
   cTxns: CompanyTransaction[], companyId: string, from: string, to: string,
-): { filtered: CompanyTransaction[]; total: number } {
+): { filtered: CompanyTransaction[]; total: number; totalByCurrency: CurrencyMap; totalPaidByCurrency: CurrencyMap } {
   const filtered: CompanyTransaction[] = [];
   let total = 0;
+  const totalByCurrency = new CurrencyMap();
+  const totalPaidByCurrency = new CurrencyMap();
   for (const t of cTxns) {
+    if ((t as any).cancelled_at) continue;
     if (companyId && (t as any).company_id !== companyId) continue;
     if (from && (t.date || "") < from) continue;
     if (to && (t.date || "") > to) continue;
     filtered.push(t);
-    total += merchantCompanyOutflowAmount(t);
+    const amt = merchantCompanyOutflowAmount(t);
+    // company_transactions has BOTH payment_currency and currency — prefer payment_currency, then currency.
+    const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
+    total += amt;
+    totalByCurrency.add(cur, amt);
+    totalPaidByCurrency.add(cur, Number((t as any).total_paid || 0));
   }
-  return { filtered, total };
+  return { filtered, total, totalByCurrency, totalPaidByCurrency };
 }
 
 /* ============================================================
