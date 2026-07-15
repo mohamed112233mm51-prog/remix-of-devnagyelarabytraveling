@@ -141,6 +141,7 @@ function Dashboard() {
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: collectionSplits } = useLive<{ id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null }>("payment_splits");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const { rows: submissions } = useLive<Submission>("submissions");
 
