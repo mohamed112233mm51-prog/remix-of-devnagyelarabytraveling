@@ -9,8 +9,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fmtDL, fmtNum, fmtUSD, fmtCurrency, useLive, useDropdownOptions, withSelected, useTreasuryBalances,
-  type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction,
+  type IssuingCompany, type CompanyTransaction, type Merchant, type Agent, type UsdTreasuryTransaction, type Execution,
 } from "@/lib/db";
+import { buildAbsentLookup, ABSENT_ROW_STYLE } from "@/lib/absentApproval";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import CurrencyFilter from "@/components/CurrencyFilter";
