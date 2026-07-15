@@ -1016,12 +1016,12 @@ const SectionCard = memo(function SectionCard({
 });
 
 const Stat = memo(function Stat({
-  label, value, tone, highlight,
-}: { label: string; value: string; tone?: "gold" | "green" | "red"; highlight?: boolean }) {
+  label, value, valueNode, tone, highlight,
+}: { label: string; value?: string; valueNode?: ReactNode; tone?: "gold" | "green" | "red"; highlight?: boolean }) {
   return (
     <div className={`dash-stat ${highlight ? "dash-stat-hl" : ""}`}>
       <div className="dash-stat-label">{label}</div>
-      <div className={`dash-stat-value ${tone ? `tone-${tone}` : ""}`}>{value}</div>
+      <div className={`dash-stat-value ${tone ? `tone-${tone}` : ""}`}>{valueNode ?? value}</div>
     </div>
   );
 });
