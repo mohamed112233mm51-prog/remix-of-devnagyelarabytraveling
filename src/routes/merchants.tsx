@@ -681,7 +681,7 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
   const [to, setTo] = useState("");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const mName = (id: string | null) => id ? (merchants.find((m) => m.id === id)?.merchant_name || "—") : "—";
-  const { filtered, total } = useMemo(
+  const { filtered, totalByCurrency, totalPaidByCurrency } = useMemo(
     () => summarizeMerchantOutgoingPeriod(txns, companyId, from, to),
     [txns, companyId, from, to],
   );
@@ -700,19 +700,27 @@ function OutgoingTab({ txns, companyName, companies }: { txns: CompanyTransactio
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={7}><div className="empty"><div className="empty-text">لا توجد حركات</div></div></td></tr>
-              ) : filtered.map((t) => (
+              ) : filtered.map((t) => {
+                const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP") as "EGP" | "USD" | "LYD";
+                return (
                 <tr key={t.id}>
                   <td data-label="التاريخ">{t.date}</td>
                   <td className="bold" data-label="الشركة">{companyName(t.company_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{(t as any).statement || ""}</td>
-                  <td data-label="تاجر الكاش">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
-                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(merchantCompanyOutflowAmount(t), normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP"))}</td>
-                  <td data-label="إجمالي المدفوع">{fmtDL(Number(t.total_paid || 0))}</td>
+                  <td data-label="تاجر الكاش">{fmtCurrency(merchantCompanyOutflowAmount(t), cur)}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(merchantCompanyOutflowAmount(t), cur)}</td>
+                  <td data-label="إجمالي المدفوع">{fmtCurrency(Number(t.total_paid || 0), cur)}</td>
                 </tr>
-              ))}
+              );})}
             </tbody>
-            <tfoot><tr><td colSpan={5}>الإجمالي (صافي)</td><td>{fmtDL(total)}</td><td></td></tr></tfoot>
+            <tfoot>
+              <tr>
+                <td colSpan={5}>الإجمالي (صافي)</td>
+                <td><CurrencyLines map={totalByCurrency} /></td>
+                <td><CurrencyLines map={totalPaidByCurrency} /></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
