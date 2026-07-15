@@ -566,13 +566,19 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
 }
 
 
-function HistoryTab({ collections, merchants }: { collections: MerchantCashCollection[]; merchants: Merchant[] }) {
+type CollectionSplitLite = { id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null };
+
+function HistoryTab({ collections, merchants, splits }: { collections: MerchantCashCollection[]; merchants: Merchant[]; splits: CollectionSplitLite[] }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const { filtered, total } = useMemo(
-    () => summarizeMerchantCollectionsPeriod(collections, from, to),
-    [collections, from, to],
+  const { filtered, totalByCurrency, currencyById } = useMemo(
+    () => summarizeMerchantCollectionsPeriod(collections, from, to, splits),
+    [collections, from, to, splits],
   );
+  const resolveCurrency = (c: MerchantCashCollection): string => {
+    const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
+    return normalizeCurrency(isOpening ? (c as any).opening_currency : (currencyById.get(c.id) ?? (c as any).currency));
+  };
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">📜 سجل التحصيلات النقدية</div></div>
@@ -586,22 +592,26 @@ function HistoryTab({ collections, merchants }: { collections: MerchantCashColle
         </div>
         <div className="table-wrap">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>التاجر</th><th>المبلغ</th><th>البيان</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>التاجر</th><th>المبلغ</th><th>العملة</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6}><div className="empty"><div className="empty-text">لا توجد تحصيلات بعد</div></div></td></tr>
-              ) : filtered.map((c, i) => (
-                <tr key={c.id}>
-                  <td data-label="#">{i + 1}</td>
-                  <td data-label="التاريخ">{c.date}</td>
-                  <td className="bold" data-label="التاجر">{merchants.find((m) => m.id === c.merchant_id)?.merchant_name || "—"}</td>
-                  <td data-label="المبلغ">{fmtDL(Number(c.amount || 0))}</td>
-                  <td data-label="البيان">{(c as any).statement || ""}</td>
-                  <td data-label="ملاحظات">{c.note || "—"}</td>
-                </tr>
-              ))}
+                <tr><td colSpan={7}><div className="empty"><div className="empty-text">لا توجد تحصيلات بعد</div></div></td></tr>
+              ) : filtered.map((c, i) => {
+                const cur = resolveCurrency(c);
+                return (
+                  <tr key={c.id}>
+                    <td data-label="#">{i + 1}</td>
+                    <td data-label="التاريخ">{c.date}</td>
+                    <td className="bold" data-label="التاجر">{merchants.find((m) => m.id === c.merchant_id)?.merchant_name || "—"}</td>
+                    <td data-label="المبلغ">{fmtCurrency(Number(c.amount || 0), cur)}</td>
+                    <td data-label="العملة">{cur}</td>
+                    <td data-label="البيان">{(c as any).statement || ""}</td>
+                    <td data-label="ملاحظات">{c.note || "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
-            <tfoot><tr><td colSpan={3}>الإجمالي</td><td>{fmtDL(total)}</td><td colSpan={2}></td></tr></tfoot>
+            <tfoot><tr><td colSpan={3}>الإجمالي</td><td colSpan={4}><CurrencyLines map={totalByCurrency} /></td></tr></tfoot>
           </table>
 
         </div>
