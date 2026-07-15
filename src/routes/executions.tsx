@@ -20,6 +20,7 @@ import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { ensureApprovalFines, computeApprovalExpiry, cairoToday } from "@/lib/approvalFines";
+import { isAbsentStatus, ABSENT_FIELD_STYLE, ABSENT_ROW_STYLE } from "@/lib/absentApproval";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
