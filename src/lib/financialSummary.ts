@@ -1033,6 +1033,7 @@ export function computeDashboardLifetime(input: {
   // ✅ تحصيلات الوكلاء = المدفوعات (كارت واحد مشترك)، من الدالة المشتركة
   //    (تستبعد الحركات الملغاة، مصدر أصل واحد لكلا الكارتين).
   const agentCollectionsNet = computeAgentCollections(txns);
+  const agentCollectionsNetByCurrency = computeAgentCollectionsByCurrency(txns);
   const agentsPaid = agentCollectionsNet;
   const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
   const agentsDue = agentsTripValue - agentsPaid;
