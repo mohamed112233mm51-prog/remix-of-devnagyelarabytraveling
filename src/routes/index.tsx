@@ -261,7 +261,10 @@ function Dashboard() {
     const expensesAll = expensesTotals.total;
     let expensesDeducted = 0;
     for (const d of expenseDeductions) expensesDeducted += Number(d.amount || 0);
-    const expensesTotal = expensesFixed + expensesVariable + expensesDeducted;
+    // expense_deductions هي شرائح سداد المصروف نفسه (مسجّل بالفعل في expenses.amount)
+    // لذلك لا نضيفها إلى الإجمالي حتى لا يُحسب المصروف مرتين.
+    const expensesTotal = expensesFixed + expensesVariable;
+
     return {
       ...base,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
@@ -301,10 +304,10 @@ function Dashboard() {
       if (!inR(x.created_at)) continue;
       const a = Number(x.amount || 0); expSum += a; expBase += a;
     }
-    for (const x of expenseDeductions) {
-      if (!inR(x.created_at)) continue;
-      expSum += Number(x.amount || 0);
-    }
+    // NOTE: expense_deductions are payment splits of the same expense
+    // (already counted via expenses.amount). Do NOT add them here or
+    // the total would double-count every deducted expense.
+
     for (const x of executedRows) if (inR(x.created_at)) flightsCount += 1;
     for (const a of submissions) if (inR(a.created_at)) approvalsCount += 1;
     return {
