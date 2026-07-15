@@ -61,6 +61,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const { rows: liveTxns } = useLive<Transaction>("transactions");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
   const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
+  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const agents = Array.isArray(liveAgents) ? liveAgents : [];
   const txns = Array.isArray(liveTxns) ? liveTxns : [];
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
