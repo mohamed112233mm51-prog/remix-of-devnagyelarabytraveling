@@ -19,7 +19,7 @@
  * =============================================================================
  */
 
-import { normalizeCurrency, txnCollectedAmount, tripValue } from "@/lib/db";
+import { normalizeCurrency, txnCollectedAmount } from "@/lib/db";
 import { CurrencyMap } from "@/lib/financialSummary";
 import { aggregateExecutionByCurrency, type ExecutionRow } from "@/lib/executionProfit";
 import type { CompanyTransaction, Expense, MerchantCashCollection, Transaction } from "@/lib/db";
