@@ -21,6 +21,7 @@ import {
   type Submission,
   type Transaction,
 } from "@/lib/db";
+import { computeAgentCollections, computeMerchantCashCollections } from "@/lib/dashboardCollections";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
@@ -291,18 +292,16 @@ function Dashboard() {
   const computeAgg = (range: { start: Date; end: Date }) => {
     const s = range.start.getTime(), e = range.end.getTime();
     const inR = (d?: string | null) => { if (!d) return false; const t = new Date(d).getTime(); return t >= s && t < e; };
-    let collected = 0, compOut = 0, expSum = 0, expBase = 0, flightsCount = 0, approvalsCount = 0;
-    for (const x of txns) {
-      if (!inR(x.created_at)) continue;
-      collected += txnCollectedAmount(x);
-    }
-    for (const x of cTxns) {
-      if (!inR(x.created_at)) continue;
-      compOut += txnCollectedAmount(x);
-    }
+    // ✅ إجمالي التحصيلات — الفترة = تحصيلات الوكلاء + تحصيلات تجار الكاش فقط.
+    //    مصدر أصل واحد لكل نوع، الحركات الملغاة مستبعدة، بدون company_transactions.
+    const agentColl = computeAgentCollections(txns, (d) => inR(d));
+    const merchColl = computeMerchantCashCollections(collections, (d) => inR(d));
+    const collected = agentColl + merchColl;
+    let expSum = 0;
+    let flightsCount = 0, approvalsCount = 0;
     for (const x of expenses) {
       if (!inR(x.created_at)) continue;
-      const a = Number(x.amount || 0); expSum += a; expBase += a;
+      expSum += Number(x.amount || 0);
     }
     // NOTE: expense_deductions are payment splits of the same expense
     // (already counted via expenses.amount). Do NOT add them here or

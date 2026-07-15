@@ -25,6 +25,7 @@
 
 import { useMemo } from "react";
 import { computeExecutionSalesEGP, type ExecutionRow } from "./executionProfit";
+import { computeAgentCollections, computeMerchantCashCollections } from "./dashboardCollections";
 import {
   useLive,
   tripValue,
@@ -1007,19 +1008,23 @@ export function computeDashboardLifetime(input: {
   collections: MerchantCashCollection[];
 }): DashboardLifetimeTotals {
   const { txns, cTxns, collections } = input;
+  // NOTE: قيم الخدمات (tripValue) والوارد للتاجر (merchantCashNet/Gross)
+  // تُحسَب على كل صفوف transactions بلا استبعاد للملغاة — هذا هو السلوك
+  // التاريخي لبقية الكروت (مبيعات/رصيد التجار)، ولا يتغير هنا.
   let agentsFlightsValue = 0, agentsApprovalsValue = 0, agentsOtherValue = 0;
-  let agentsPaid = 0, agentCollectionsNet = 0;
   let merchantIncomingNet = 0, merchantIncomingGross = 0;
   for (const t of txns) {
     const v = tripValue(t as any);
     if ((t as any).service_type === "تذاكر طيران") agentsFlightsValue += v;
     else if ((t as any).service_type === "موافقة أمنية") agentsApprovalsValue += v;
     else agentsOtherValue += v;
-    agentsPaid += txnTotalPaid(t);
-    agentCollectionsNet += txnCollectedAmount(t);
     merchantIncomingNet += merchantCashNet(t);
     merchantIncomingGross += merchantCashGross(t);
   }
+  // ✅ تحصيلات الوكلاء = المدفوعات (كارت واحد مشترك)، من الدالة المشتركة
+  //    (تستبعد الحركات الملغاة، مصدر أصل واحد لكلا الكارتين).
+  const agentCollectionsNet = computeAgentCollections(txns);
+  const agentsPaid = agentCollectionsNet;
   const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
   const agentsDue = agentsTripValue - agentsPaid;
 
@@ -1034,8 +1039,8 @@ export function computeDashboardLifetime(input: {
   const companyPaid = companyOutgoingNet;
   const companyDue = companyServices - companyPaid;
 
-  let merchantCollected = 0;
-  for (const c of collections) merchantCollected += Number((c as any).amount || 0);
+  // ✅ تحصيلات تجار الكاش من الدالة المشتركة (تستبعد الملغاة، dedupe بالـ id).
+  const merchantCollected = computeMerchantCashCollections(collections);
   const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
   const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
