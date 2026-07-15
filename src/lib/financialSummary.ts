@@ -25,7 +25,12 @@
 
 import { useMemo } from "react";
 import { computeExecutionSalesEGP, type ExecutionRow } from "./executionProfit";
-import { computeAgentCollections, computeMerchantCashCollections } from "./dashboardCollections";
+import {
+  computeAgentCollections,
+  computeAgentCollectionsByCurrency,
+  computeMerchantCashCollections,
+  computeMerchantCashCollectionsByCurrency,
+} from "./dashboardCollections";
 import {
   useLive,
   tripValue,
@@ -990,6 +995,8 @@ export type DashboardLifetimeTotals = {
   agentsPaid: number;
   agentsDue: number;
   agentCollectionsNet: number;
+  /** تحصيلات الوكلاء مفصّلة حسب العملة (currency-safe). */
+  agentCollectionsNetByCurrency: CurrencyMap;
   merchantIncomingNet: number;
   merchantIncomingGross: number;
   merchantFee: number;
@@ -999,6 +1006,8 @@ export type DashboardLifetimeTotals = {
   companyDue: number;
   merchantOutgoing: number;
   merchantCollected: number;
+  /** تحصيلات تجار الكاش مفصّلة حسب العملة (currency-safe). */
+  merchantCollectedByCurrency: CurrencyMap;
   merchantBalance: number;
 };
 
@@ -1024,6 +1033,7 @@ export function computeDashboardLifetime(input: {
   // ✅ تحصيلات الوكلاء = المدفوعات (كارت واحد مشترك)، من الدالة المشتركة
   //    (تستبعد الحركات الملغاة، مصدر أصل واحد لكلا الكارتين).
   const agentCollectionsNet = computeAgentCollections(txns);
+  const agentCollectionsNetByCurrency = computeAgentCollectionsByCurrency(txns);
   const agentsPaid = agentCollectionsNet;
   const agentsTripValue = agentsFlightsValue + agentsApprovalsValue + agentsOtherValue;
   const agentsDue = agentsTripValue - agentsPaid;
@@ -1041,15 +1051,16 @@ export function computeDashboardLifetime(input: {
 
   // ✅ تحصيلات تجار الكاش من الدالة المشتركة (تستبعد الملغاة، dedupe بالـ id).
   const merchantCollected = computeMerchantCashCollections(collections);
+  const merchantCollectedByCurrency = computeMerchantCashCollectionsByCurrency(collections);
   const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
   const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
   return {
     agentsFlightsValue, agentsApprovalsValue, agentsOtherValue, agentsTripValue,
-    agentsPaid, agentsDue, agentCollectionsNet,
+    agentsPaid, agentsDue, agentCollectionsNet, agentCollectionsNetByCurrency,
     merchantIncomingNet, merchantIncomingGross, merchantFee,
     companyServices, companyOutgoingNet, companyPaid, companyDue,
-    merchantOutgoing, merchantCollected, merchantBalance,
+    merchantOutgoing, merchantCollected, merchantCollectedByCurrency, merchantBalance,
   };
 }
 

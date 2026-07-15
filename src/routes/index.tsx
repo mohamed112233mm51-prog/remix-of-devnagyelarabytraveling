@@ -21,7 +21,13 @@ import {
   type Submission,
   type Transaction,
 } from "@/lib/db";
-import { computeAgentCollections, computeMerchantCashCollections } from "@/lib/dashboardCollections";
+import {
+  computeAgentCollections,
+  computeAgentCollectionsByCurrency,
+  computeMerchantCashCollections,
+  computeMerchantCashCollectionsByCurrency,
+  mergeCurrencyTotals,
+} from "@/lib/dashboardCollections";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
@@ -274,6 +280,7 @@ function Dashboard() {
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
+    agentCollectionsNetByCurrency,
     companyServices, companyPaid, companyDue, merchantIncomingNet, merchantOutgoing, merchantFee, merchantBalance,
     merchantCollected,
     expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
@@ -297,6 +304,10 @@ function Dashboard() {
     const agentColl = computeAgentCollections(txns, (d) => inR(d));
     const merchColl = computeMerchantCashCollections(collections, (d) => inR(d));
     const collected = agentColl + merchColl;
+    // ✅ إجمالي التحصيلات مفصّلاً حسب العملة — لا خلط بين العملات في رقم واحد.
+    const agentCollByCurrency = computeAgentCollectionsByCurrency(txns, (d) => inR(d));
+    const merchCollByCurrency = computeMerchantCashCollectionsByCurrency(collections, (d) => inR(d));
+    const collectedByCurrency = mergeCurrencyTotals(agentCollByCurrency, merchCollByCurrency);
     let expSum = 0;
     let flightsCount = 0, approvalsCount = 0;
     for (const x of expenses) {
@@ -311,6 +322,7 @@ function Dashboard() {
     for (const a of submissions) if (inR(a.created_at)) approvalsCount += 1;
     return {
       collected,
+      collectedByCurrency,
       expenses: expSum,
       flightsCount,
       approvalsCount,
@@ -544,12 +556,9 @@ function Dashboard() {
         )}
         <HeroKpi
           label={`إجمالي التحصيلات — ${periodLabel}`}
-          value={periodAgg.collected}
-          format={fmtDL}
+          valueMap={periodAgg.collectedByCurrency}
           icon={<HandCoins size={18} />}
           tone="success"
-          delta={prevAgg ? `${pctDelta(periodAgg.collected, prevAgg.collected) >= 0 ? "+" : ""}${pctDelta(periodAgg.collected, prevAgg.collected)}%` : undefined}
-          deltaPositive={prevAgg ? pctDelta(periodAgg.collected, prevAgg.collected) >= 0 : undefined}
           sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
         <HeroKpi
@@ -601,7 +610,7 @@ function Dashboard() {
         <HeroKpi label="عدد التنفيذات" value={executedRows.length} format={fmtNum} icon={<Plane size={18} />} tone="primary" />
         <HeroKpi label="إجمالي مبيعات الوكلاء" value={executionAgentSalesEGP} format={fmtDL} icon={<Users size={18} />} tone="success" />
         <HeroKpi label="إجمالي مستحقات الشركات الصادرة" value={companyDue} format={fmtDL} icon={<Building2 size={18} />} tone="warning" />
-        <HeroKpi label="إجمالي تحصيلات الوكلاء" value={agentCollectionsNet} format={fmtDL} icon={<HandCoins size={18} />} tone="success" />
+        <HeroKpi label="إجمالي تحصيلات الوكلاء" valueMap={agentCollectionsNetByCurrency} icon={<HandCoins size={18} />} tone="success" />
         <HeroKpi label="إجمالي تحصيلات تجار الكاش" value={merchantCollected} format={fmtDL} icon={<HandCoins size={18} />} tone="navy" />
         <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={fmtDL} icon={<Landmark size={18} />} tone="primary" />
         {merchantsPerm.view && (
@@ -789,7 +798,7 @@ function Dashboard() {
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
           <Stat label="قيمة الخدمات" value={fmtDL(executionAgentSalesEGP)} />
-          <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
+          <Stat label="إجمالي المدفوعات" valueNode={<CurrencyLines map={agentCollectionsNetByCurrency} />} tone="green" />
           <Stat label="المستحق" value={fmtDL(agentsDue)} tone="red" highlight />
         </SectionCard>
 
@@ -925,9 +934,13 @@ function AnimatedNumber({
 }
 
 const HeroKpi = memo(function HeroKpi({
-  label, value, format, icon, tone, sub, delta, deltaPositive,
+  label, value, valueMap, format, icon, tone, sub, delta, deltaPositive,
 }: {
-  label: string; value: number; format: (n: number) => string; icon: ReactNode;
+  label: string;
+  value?: number;
+  valueMap?: import("@/lib/financialSummary").CurrencyMap;
+  format?: (n: number) => string;
+  icon: ReactNode;
   tone: "primary" | "navy" | "success" | "warning";
   sub?: string; delta?: string; deltaPositive?: boolean;
 }) {
@@ -937,8 +950,12 @@ const HeroKpi = memo(function HeroKpi({
         <span className="erp-hero-label">{label}</span>
         <span className="erp-hero-icon">{icon}</span>
       </div>
-      <div className="erp-hero-value">
-        <AnimatedNumber value={value} format={format} />
+      <div className="erp-hero-value" style={valueMap ? { fontSize: 20, lineHeight: 1.35 } : undefined}>
+        {valueMap ? (
+          <CurrencyLines map={valueMap} />
+        ) : (
+          <AnimatedNumber value={value ?? 0} format={format ?? fmtDL} />
+        )}
       </div>
       <div className="erp-hero-foot">
         {delta ? (
@@ -999,12 +1016,12 @@ const SectionCard = memo(function SectionCard({
 });
 
 const Stat = memo(function Stat({
-  label, value, tone, highlight,
-}: { label: string; value: string; tone?: "gold" | "green" | "red"; highlight?: boolean }) {
+  label, value, valueNode, tone, highlight,
+}: { label: string; value?: string; valueNode?: ReactNode; tone?: "gold" | "green" | "red"; highlight?: boolean }) {
   return (
     <div className={`dash-stat ${highlight ? "dash-stat-hl" : ""}`}>
       <div className="dash-stat-label">{label}</div>
-      <div className={`dash-stat-value ${tone ? `tone-${tone}` : ""}`}>{value}</div>
+      <div className={`dash-stat-value ${tone ? `tone-${tone}` : ""}`}>{valueNode ?? value}</div>
     </div>
   );
 });
