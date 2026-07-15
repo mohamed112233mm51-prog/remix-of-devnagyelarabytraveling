@@ -55,16 +55,16 @@ export function buildAbsentLookup(executions: Array<{ id: string; status?: strin
 }
 
 /** CSS خلفية "غياب" — تُطبَّق على <tr> أو <td> أو بطاقة/حقل. */
-export const ABSENT_ROW_STYLE: React.CSSProperties = {
+export const ABSENT_ROW_STYLE: CSSProperties = {
   backgroundColor: "#fee2e2",
   color: "#991b1b",
   // ضمان ظهور اللون في الطباعة وPDF
   WebkitPrintColorAdjust: "exact",
   printColorAdjust: "exact",
-} as React.CSSProperties;
+} as CSSProperties;
 
-export const ABSENT_FIELD_STYLE: React.CSSProperties = {
+export const ABSENT_FIELD_STYLE: CSSProperties = {
   backgroundColor: "#fee2e2",
   borderColor: "#ef4444",
   color: "#991b1b",
-} as React.CSSProperties;
+} as CSSProperties;
