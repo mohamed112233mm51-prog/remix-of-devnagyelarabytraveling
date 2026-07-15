@@ -803,7 +803,7 @@ type StatementMovement = {
 
 
 function MerchantStatementTab({
-  merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions,
+  merchants, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, splits,
 }: {
   merchants: Merchant[];
   incomingTxns: Transaction[];
@@ -811,6 +811,7 @@ function MerchantStatementTab({
   cashMoveTxns: Transaction[];
   collections: MerchantCashCollection[];
   conversions: UsdTreasuryTransaction[];
+  splits: CollectionSplitLite[];
 }) {
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
   const [from, setFrom] = useState("");
@@ -832,6 +833,7 @@ function MerchantStatementTab({
       cashMoveTxns,
       collections,
       conversions,
+      splits,
     }) as unknown as StatementMovement[];
   }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions]);
 
