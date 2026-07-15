@@ -798,7 +798,7 @@ function Dashboard() {
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
           <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
           <Stat label="قيمة الخدمات" value={fmtDL(executionAgentSalesEGP)} />
-          <Stat label="إجمالي المدفوعات" value={fmtDL(agentsPaid)} tone="green" />
+          <Stat label="إجمالي المدفوعات" valueNode={<CurrencyLines map={agentCollectionsNetByCurrency} />} tone="green" />
           <Stat label="المستحق" value={fmtDL(agentsDue)} tone="red" highlight />
         </SectionCard>
 
