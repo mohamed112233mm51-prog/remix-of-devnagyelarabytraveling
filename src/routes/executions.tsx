@@ -803,12 +803,14 @@ function ExecutionForm({
           />
         </Field>
         <Field label="حالة الموافقة">
-          <SearchableSelect
-            value={form.status}
-            onChange={(v) => setForm({ ...form, status: v })}
-            options={withSelected(approvalStatuses, form.status)}
-            placeholder="اختر الحالة..."
-          />
+          <div style={isAbsentStatus(form.status) ? { padding: 6, borderRadius: 8, border: "1px solid #ef4444", ...ABSENT_FIELD_STYLE } : undefined}>
+            <SearchableSelect
+              value={form.status}
+              onChange={(v) => setForm({ ...form, status: v })}
+              options={withSelected(approvalStatuses, form.status)}
+              placeholder="اختر الحالة..."
+            />
+          </div>
         </Field>
         <Field label="حالة العملية">
           <SearchableSelect
