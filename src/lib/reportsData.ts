@@ -37,6 +37,7 @@ export type ReportsData = {
   expenses: Expense[];
   expenseDeductions: ExpenseDeduction[];
   usdTreasury: UsdTreasuryTransaction[];
+  paymentSplits: PaymentSplitLite[];
   agentName: (id: string | null | undefined) => string;
   companyName: (id: string | null | undefined) => string;
   merchantName: (id: string | null | undefined) => string;
