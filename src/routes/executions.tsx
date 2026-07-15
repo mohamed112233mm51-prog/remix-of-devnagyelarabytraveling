@@ -407,7 +407,7 @@ function ExecutionsPage() {
                     const ageBg = paxAgeBg(e.dob, e.created_at);
                     const defaultBg = i % 2 ? "#fafbfd" : "#fff";
                     return (
-                    <tr key={e.id} style={{ background: ageBg || defaultBg, borderBottom: "1px solid #f1f5f9" }}>
+                    <tr key={e.id} style={isAbsentStatus(e.status) ? { ...ABSENT_ROW_STYLE, borderBottom: "1px solid #f1f5f9" } : { background: ageBg || defaultBg, borderBottom: "1px solid #f1f5f9" }}>
 
                       <td style={tdStyle}>{page * pageSize + i + 1}</td>
                       {visibleColumns.map((c) => {
