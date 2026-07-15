@@ -300,6 +300,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const [companyId, setCompanyId] = useState(initialCompanyId || "");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
   const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
+  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const merchantName = (mid: string | null | undefined) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
 
