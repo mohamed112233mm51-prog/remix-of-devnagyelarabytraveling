@@ -570,10 +570,11 @@ export function computeMerchantAggregates(input: {
   companyTxns: CompanyTransaction[];
   collections: MerchantCashCollection[];
   usdRows: UsdTreasuryTransaction[];
+  splits?: readonly CollectionSplitRow[] | null;
 }): Map<string, MerchantAggregate> {
-  const { txns, companyTxns, collections, usdRows } = input;
+  const { txns, companyTxns, collections, usdRows, splits } = input;
   // Partition inputs EXACTLY like MerchantStatementTab does — نفس المصدر.
-  const movementInput = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+  const movementInput = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
 
   const merchantIds = new Set<string>();
   for (const t of txns) if (t.merchant_id) merchantIds.add(t.merchant_id);
@@ -603,9 +604,10 @@ export function useMerchantAggregates(): Map<string, MerchantAggregate> {
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
   return useMemo(
-    () => computeMerchantAggregates({ txns, companyTxns, collections, usdRows }),
-    [txns, companyTxns, collections, usdRows],
+    () => computeMerchantAggregates({ txns, companyTxns, collections, usdRows, splits }),
+    [txns, companyTxns, collections, usdRows, splits],
   );
 }
 
