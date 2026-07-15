@@ -19,7 +19,8 @@
  * =============================================================================
  */
 
-import { txnCollectedAmount } from "@/lib/db";
+import { normalizeCurrency, txnCollectedAmount } from "@/lib/db";
+import { CurrencyMap } from "@/lib/financialSummary";
 import type { MerchantCashCollection, Transaction } from "@/lib/db";
 
 type MaybeCancelled = { cancelled_at?: string | null };
@@ -40,12 +41,23 @@ export function rowAccountingDate(
 export type DatePredicate = (dateISO: string | null) => boolean;
 
 /**
- * إجمالي تحصيلات الوكلاء من جدول `transactions`.
- * - يستبعد الحركات الملغاة (`cancelled_at != null`).
- * - يستخدم `txnCollectedAmount` (نفس التعريف المعتمد في كل النظام).
- * - يقبل predicate اختياري على التاريخ المحاسبي (date ثم created_at).
- * - يجمع كل حركة مرة واحدة فقط (المصفوفة نفسها لا تحتوي تكرار id).
+ * سياسة العملة (fallback موحّد للنظام):
+ *  - transactions.currency               → EGP إذا فارغة (`normalizeCurrency` يفعل ذلك).
+ *  - merchant_cash_collections.opening_currency → EGP إذا فارغة (نفس السياسة).
+ * هذا هو السلوك المعتمد في كل النظام (`normalizeCurrency` سطر 648 من db.ts).
  */
+function txnCurrency(t: Partial<Transaction>): string {
+  return normalizeCurrency((t as any).currency);
+}
+function collectionCurrency(c: Partial<MerchantCashCollection>): string {
+  return normalizeCurrency((c as any).opening_currency ?? (c as any).currency);
+}
+
+// ---------------------------------------------------------------------------
+// إجماليات مجمّعة كرقم واحد (للاستخدام في حسابات مدى الحياة الحالية).
+// ---------------------------------------------------------------------------
+
+/** إجمالي تحصيلات الوكلاء (رقم واحد). يستبعد الملغاة. */
 export function computeAgentCollections(
   transactions: Transaction[],
   predicate?: DatePredicate,
@@ -63,13 +75,7 @@ export function computeAgentCollections(
   return total;
 }
 
-/**
- * إجمالي تحصيلات تجار الكاش من جدول `merchant_cash_collections`.
- * - يستبعد الملغاة.
- * - يستخدم قيمة التحصيل الفعلية `amount` مباشرةً من الجدول.
- * - كل سجل يُحسَب مرة واحدة (dedupe بالـ id) حتى لو كان موزعاً على
- *   أكثر من وسيلة دفع (payment_splits تفاصيل دفع فقط).
- */
+/** إجمالي تحصيلات تجار الكاش (رقم واحد). يستبعد الملغاة. */
 export function computeMerchantCashCollections(
   collections: MerchantCashCollection[],
   predicate?: DatePredicate,
@@ -87,6 +93,65 @@ export function computeMerchantCashCollections(
   return total;
 }
 
+// ---------------------------------------------------------------------------
+// إجماليات مفصولة حسب العملة (CurrencyMap) — لا خلط بين العملات أبداً.
+// ---------------------------------------------------------------------------
+
+/**
+ * إجمالي تحصيلات الوكلاء مفصّلاً حسب العملة.
+ * كل حركة تُنسَب لعملة `transactions.currency` (fallback EGP).
+ * قيمة التحصيل = `txnCollectedAmount(t)` (كل مكونات الدفع تنتمي لنفس عملة الحركة).
+ */
+export function computeAgentCollectionsByCurrency(
+  transactions: Transaction[],
+  predicate?: DatePredicate,
+): CurrencyMap {
+  const seen = new Set<string>();
+  const map = new CurrencyMap();
+  for (const t of transactions) {
+    if (!t || !t.id) continue;
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    if (isCancelled(t as unknown as MaybeCancelled)) continue;
+    if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+    const amount = txnCollectedAmount(t);
+    if (!amount) continue;
+    map.add(txnCurrency(t), amount);
+  }
+  return map;
+}
+
+/**
+ * إجمالي تحصيلات تجار الكاش مفصّلاً حسب العملة.
+ * كل سجل يُحسَب مرة واحدة بقيمة `amount` تحت عملة `opening_currency` (fallback EGP).
+ * لا نمس `payment_splits` كمصدر للقيمة (تفاصيل دفع فقط).
+ */
+export function computeMerchantCashCollectionsByCurrency(
+  collections: MerchantCashCollection[],
+  predicate?: DatePredicate,
+): CurrencyMap {
+  const seen = new Set<string>();
+  const map = new CurrencyMap();
+  for (const c of collections) {
+    if (!c || !c.id) continue;
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    if (isCancelled(c as unknown as MaybeCancelled)) continue;
+    if (predicate && !predicate(rowAccountingDate(c as any))) continue;
+    const amount = Number((c as any).amount || 0);
+    if (!amount) continue;
+    map.add(collectionCurrency(c), amount);
+  }
+  return map;
+}
+
+/** دمج عدة خرائط عملة في خريطة واحدة (لا يجمع عملات مختلفة في رقم واحد). */
+export function mergeCurrencyTotals(...maps: CurrencyMap[]): CurrencyMap {
+  const out = new CurrencyMap();
+  for (const m of maps) out.merge(m);
+  return out;
+}
+
 /** Helper: يبني DatePredicate من نطاق [start, end). */
 export function inRangePredicate(range: { start: Date; end: Date }): DatePredicate {
   const s = range.start.getTime();
@@ -97,3 +162,4 @@ export function inRangePredicate(range: { start: Date; end: Date }): DatePredica
     return t >= s && t < e;
   };
 }
+
