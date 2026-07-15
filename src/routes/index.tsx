@@ -303,6 +303,10 @@ function Dashboard() {
     const agentColl = computeAgentCollections(txns, (d) => inR(d));
     const merchColl = computeMerchantCashCollections(collections, (d) => inR(d));
     const collected = agentColl + merchColl;
+    // ✅ إجمالي التحصيلات مفصّلاً حسب العملة — لا خلط بين العملات في رقم واحد.
+    const agentCollByCurrency = computeAgentCollectionsByCurrency(txns, (d) => inR(d));
+    const merchCollByCurrency = computeMerchantCashCollectionsByCurrency(collections, (d) => inR(d));
+    const collectedByCurrency = mergeCurrencyTotals(agentCollByCurrency, merchCollByCurrency);
     let expSum = 0;
     let flightsCount = 0, approvalsCount = 0;
     for (const x of expenses) {
@@ -317,6 +321,7 @@ function Dashboard() {
     for (const a of submissions) if (inR(a.created_at)) approvalsCount += 1;
     return {
       collected,
+      collectedByCurrency,
       expenses: expSum,
       flightsCount,
       approvalsCount,
