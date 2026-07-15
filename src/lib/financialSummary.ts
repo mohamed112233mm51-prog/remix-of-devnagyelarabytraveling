@@ -332,11 +332,12 @@ export function useMerchantSummary(merchantId: string | null | undefined): Entit
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
   return useMemo(() => {
     if (!merchantId) return empty();
-    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
     return summarizeMerchantMovementsAsEntity(buildMerchantMovements(merchantId, input));
-  }, [txns, companyTxns, collections, usdRows, merchantId]);
+  }, [txns, companyTxns, collections, usdRows, splits, merchantId]);
 }
 
 export function useMerchantsSummary(): Map<string, EntitySummary> {
@@ -345,14 +346,15 @@ export function useMerchantsSummary(): Map<string, EntitySummary> {
   const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
   return useMemo(() => {
     const out = new Map<string, EntitySummary>();
-    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows);
+    const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
     for (const m of merchants) {
       out.set(m.id, summarizeMerchantMovementsAsEntity(buildMerchantMovements(m.id, input)));
     }
     return out;
-  }, [merchants, txns, companyTxns, collections, usdRows]);
+  }, [merchants, txns, companyTxns, collections, usdRows, splits]);
 }
 
 /* ============================================================
