@@ -529,6 +529,7 @@ function buildMerchantMovementInputs(
   companyTxns: CompanyTransaction[],
   collections: MerchantCashCollection[],
   usdRows: UsdTreasuryTransaction[],
+  splits?: readonly CollectionSplitRow[] | null,
 ): Parameters<typeof buildMerchantMovements>[1] {
   const incomingTxns = txns.filter((t) =>
     Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0,
@@ -547,7 +548,7 @@ function buildMerchantMovementInputs(
     t.source_service_type === "merchant_cash_out_to_company" ||
     t.source_service_type === "merchant_cash_out_to_agent"
   ));
-  return { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows };
+  return { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions: usdRows, splits: splits ?? null };
 }
 
 function summarizeMerchantMovementsAsEntity(rows: MerchantMovementRow[]): EntitySummary {
