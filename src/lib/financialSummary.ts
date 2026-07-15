@@ -429,10 +429,17 @@ export function buildMerchantMovements(
     cashMoveTxns: Transaction[];
     collections: MerchantCashCollection[];
     conversions: UsdTreasuryTransaction[];
+    /**
+     * payment_splits — يُستخدَم فقط لاستخراج عملة تحصيلات تاجر الكاش العادية
+     * (`merchant_cash_collections` لا يحتوي عمود currency لسجلات التحصيل).
+     * لا يُجمَع كمبلغ إضافي على الإطلاق.
+     */
+    splits?: readonly CollectionSplitRow[] | null;
   },
 ): MerchantMovementRow[] {
   if (!merchantId) return [];
-  const { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions } = input;
+  const { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, splits } = input;
+  const collectionCurrencyById = buildCollectionCurrencyMap(splits);
   const list: MerchantMovementRow[] = [];
   for (const t of incomingTxns) {
     if (t.merchant_id !== merchantId) continue;
@@ -465,7 +472,14 @@ export function buildMerchantMovements(
     if ((c as any).cancelled_at) continue;
     const amt = Number(c.amount || 0);
     const isOpening = ((c as any).source_service_type === "opening_debit" || (c as any).source_service_type === "opening_credit");
-    const rowCurrency = normalizeCurrency(isOpening ? (c as any).opening_currency : (c as any).currency);
+    // ترتيب حسم عملة الحركة:
+    //   1) opening_currency للسجلات الافتتاحية (المصدر الوحيد الصحيح).
+    //   2) payment_splits.currency للتحصيلات العادية (المصدر الحقيقي — الخزنة المختارة).
+    //   3) fallback EGP للسجلات القديمة السابقة لدعم فصل العملات.
+    const fromSplits = !isOpening ? collectionCurrencyById.get(c.id) : undefined;
+    const rowCurrency = normalizeCurrency(
+      isOpening ? (c as any).opening_currency : (fromSplits ?? (c as any).currency),
+    );
     list.push({
       id: `col-${c.id}`, date: c.date, createdAt: (c as any).created_at || "",
       type: isOpening ? "رصيد سابق" : "تحصيل نقدية من التاجر",
