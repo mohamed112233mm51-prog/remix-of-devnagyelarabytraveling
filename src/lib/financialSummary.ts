@@ -1052,7 +1052,7 @@ export function computeDashboardLifetime(input: {
 
   // ✅ تحصيلات تجار الكاش من الدالة المشتركة (تستبعد الملغاة، dedupe بالـ id).
   const merchantCollected = computeMerchantCashCollections(collections);
-  const merchantCollectedByCurrency = computeMerchantCashCollectionsByCurrency(collections);
+  const merchantCollectedByCurrency = computeMerchantCashCollectionsByCurrency(collections, undefined, splits);
   const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
   const merchantFee = merchantIncomingGross - merchantIncomingNet;
 
