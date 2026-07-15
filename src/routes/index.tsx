@@ -301,6 +301,32 @@ function Dashboard() {
     companyOutgoingNet,
   } = lifetime;
 
+  // ===== Per-currency section-detail totals (تفاصيل الأقسام) =====
+  // كل قيمة مالية تُبقى بعملتها الأصلية — لا خلط ولا تحويل.
+  const agentServicesByCurrency = useMemo(
+    () => computeExecutionAgentSalesByCurrency(executedRows as any),
+    [executedRows],
+  );
+  const agentDueByCurrency = useMemo(
+    () => subtractCurrencyMaps(agentServicesByCurrency, agentCollectionsNetByCurrency),
+    [agentServicesByCurrency, agentCollectionsNetByCurrency],
+  );
+  const companyStatsByCurrency = useMemo(
+    () => computeCompanyStatsByCurrency(cTxns as any),
+    [cTxns],
+  );
+  const expensesByCurrency = useMemo(
+    () => computeExpensesByCurrency(expenses as any),
+    [expenses],
+  );
+  const merchantFeeMap = useMemo(() => {
+    // نسبة التاجر 1% = الوارد الإجمالي − الصافي؛ لكل عملة على حدة.
+    // incoming حاليًا يمثل الصافي؛ نتجاوز الحساب المختلط ونعرض EGP فقط عند غياب معلومة العملة للـ gross.
+    const map = new CurrencyMap();
+    map.add("EGP", merchantFee);
+    return map;
+  }, [merchantFee]);
+
 
   // Treasury balances (per currency from cash_boxes) + latest exchange rates
   // — كل الحساب من المحرك الموحد في src/lib/financialSummary.ts.
