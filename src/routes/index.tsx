@@ -125,7 +125,8 @@ function Dashboard() {
   const { user, roles, permissions, isSuperAdmin, profileLoaded } = useAuth();
   const queryClient = useQueryClient();
   const merchantsPerm = usePerm("merchants");
-  const merchantBalanceMap = useMerchantTotals().balance;
+  const merchantTotals = useMerchantTotals();
+  const merchantBalanceMap = merchantTotals.balance;
   // Profit cards are strict: super_admin/admin always see them; manager/user require an explicit true value.
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
