@@ -995,6 +995,8 @@ export type DashboardLifetimeTotals = {
   agentsPaid: number;
   agentsDue: number;
   agentCollectionsNet: number;
+  /** تحصيلات الوكلاء مفصّلة حسب العملة (currency-safe). */
+  agentCollectionsNetByCurrency: CurrencyMap;
   merchantIncomingNet: number;
   merchantIncomingGross: number;
   merchantFee: number;
@@ -1004,6 +1006,8 @@ export type DashboardLifetimeTotals = {
   companyDue: number;
   merchantOutgoing: number;
   merchantCollected: number;
+  /** تحصيلات تجار الكاش مفصّلة حسب العملة (currency-safe). */
+  merchantCollectedByCurrency: CurrencyMap;
   merchantBalance: number;
 };
 
