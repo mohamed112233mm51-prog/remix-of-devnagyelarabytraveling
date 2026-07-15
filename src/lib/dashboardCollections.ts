@@ -138,7 +138,7 @@ export type CollectionSplitRow = {
  *  - يتجاهل الـ splits الملغاة.
  *  - يعتمد العملة فقط إذا كانت كل splits التحصيل بعملة واحدة (وإلا يترك التحصيل بدون عملة محسومة).
  */
-function buildCollectionCurrencyMap(
+export function buildCollectionCurrencyMap(
   splits: readonly CollectionSplitRow[] | null | undefined,
 ): Map<string, string> {
   const buckets = new Map<string, Set<string>>();
