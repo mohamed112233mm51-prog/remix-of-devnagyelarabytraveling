@@ -556,12 +556,9 @@ function Dashboard() {
         )}
         <HeroKpi
           label={`إجمالي التحصيلات — ${periodLabel}`}
-          value={periodAgg.collected}
-          format={fmtDL}
+          valueMap={periodAgg.collectedByCurrency}
           icon={<HandCoins size={18} />}
           tone="success"
-          delta={prevAgg ? `${pctDelta(periodAgg.collected, prevAgg.collected) >= 0 ? "+" : ""}${pctDelta(periodAgg.collected, prevAgg.collected)}%` : undefined}
-          deltaPositive={prevAgg ? pctDelta(periodAgg.collected, prevAgg.collected) >= 0 : undefined}
           sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
         <HeroKpi
