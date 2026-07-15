@@ -122,14 +122,59 @@ export function computeAgentCollectionsByCurrency(
 }
 
 /**
+ * صف split نستخدمه لاستخراج عملة التحصيل الحقيقية.
+ * `merchant_cash_collections` لا يحفظ عملة التحصيل — العملة تُحفظ في
+ * `payment_splits.currency` عبر خزنة الشركة المختارة (Financial Engine).
+ */
+export type CollectionSplitRow = {
+  source_table?: string | null;
+  source_id?: string | null;
+  currency?: string | null;
+  cancelled_at?: string | null;
+};
+
+/**
+ * يبني خريطة `collectionId → currency` من `payment_splits`:
+ *  - يتجاهل الـ splits الملغاة.
+ *  - يعتمد العملة فقط إذا كانت كل splits التحصيل بعملة واحدة (وإلا يترك التحصيل بدون عملة محسومة).
+ */
+function buildCollectionCurrencyMap(
+  splits: readonly CollectionSplitRow[] | null | undefined,
+): Map<string, string> {
+  const buckets = new Map<string, Set<string>>();
+  for (const s of splits || []) {
+    if (!s || s.source_table !== "merchant_cash_collections") continue;
+    if (s.cancelled_at) continue;
+    const id = s.source_id || "";
+    const cur = (s.currency || "").trim();
+    if (!id || !cur) continue;
+    const set = buckets.get(id) || new Set<string>();
+    set.add(cur);
+    buckets.set(id, set);
+  }
+  const result = new Map<string, string>();
+  buckets.forEach((set, id) => {
+    if (set.size === 1) result.set(id, Array.from(set)[0]);
+  });
+  return result;
+}
+
+/**
  * إجمالي تحصيلات تجار الكاش مفصّلاً حسب العملة.
- * كل سجل يُحسَب مرة واحدة بقيمة `amount` تحت عملة `opening_currency` (fallback EGP).
- * لا نمس `payment_splits` كمصدر للقيمة (تفاصيل دفع فقط).
+ *
+ * ترتيب حسم العملة لكل صف (fallback موثّق):
+ *  1. عملة `payment_splits.currency` المرتبطة بالتحصيل (المصدر الحقيقي — الخزنة المختارة).
+ *  2. `opening_currency` (سجلات الرصيد الافتتاحي فقط).
+ *  3. EGP (سلوك تاريخي: لا يوجد حقل عملة على الصف).
+ *
+ * القيمة = `merchant_cash_collections.amount` (مرة واحدة لكل id — لا نجمع splits).
  */
 export function computeMerchantCashCollectionsByCurrency(
   collections: MerchantCashCollection[],
   predicate?: DatePredicate,
+  splits?: readonly CollectionSplitRow[] | null,
 ): CurrencyMap {
+  const currencyById = buildCollectionCurrencyMap(splits);
   const seen = new Set<string>();
   const map = new CurrencyMap();
   for (const c of collections) {
@@ -140,7 +185,11 @@ export function computeMerchantCashCollectionsByCurrency(
     if (predicate && !predicate(rowAccountingDate(c as any))) continue;
     const amount = Number((c as any).amount || 0);
     if (!amount) continue;
-    map.add(collectionCurrency(c), amount);
+    const fromSplit = currencyById.get(c.id);
+    const currency = fromSplit
+      ? normalizeCurrency(fromSplit)
+      : collectionCurrency(c);
+    map.add(currency, amount);
   }
   return map;
 }

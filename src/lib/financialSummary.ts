@@ -1015,8 +1015,9 @@ export function computeDashboardLifetime(input: {
   txns: Transaction[];
   cTxns: CompanyTransaction[];
   collections: MerchantCashCollection[];
+  splits?: readonly import("@/lib/dashboardCollections").CollectionSplitRow[] | null;
 }): DashboardLifetimeTotals {
-  const { txns, cTxns, collections } = input;
+  const { txns, cTxns, collections, splits } = input;
   // NOTE: قيم الخدمات (tripValue) والوارد للتاجر (merchantCashNet/Gross)
   // تُحسَب على كل صفوف transactions بلا استبعاد للملغاة — هذا هو السلوك
   // التاريخي لبقية الكروت (مبيعات/رصيد التجار)، ولا يتغير هنا.
@@ -1051,7 +1052,7 @@ export function computeDashboardLifetime(input: {
 
   // ✅ تحصيلات تجار الكاش من الدالة المشتركة (تستبعد الملغاة، dedupe بالـ id).
   const merchantCollected = computeMerchantCashCollections(collections);
-  const merchantCollectedByCurrency = computeMerchantCashCollectionsByCurrency(collections);
+  const merchantCollectedByCurrency = computeMerchantCashCollectionsByCurrency(collections, undefined, splits);
   const merchantBalance = merchantIncomingNet - merchantOutgoing - merchantCollected;
   const merchantFee = merchantIncomingGross - merchantIncomingNet;
 

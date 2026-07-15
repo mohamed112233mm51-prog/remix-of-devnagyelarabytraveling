@@ -141,6 +141,7 @@ function Dashboard() {
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: collectionSplits } = useLive<{ id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null }>("payment_splits");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const { rows: submissions } = useLive<Submission>("submissions");
 
@@ -261,7 +262,7 @@ function Dashboard() {
   const expensesTotals = useExpensesTotals();
 
   const lifetime = useMemo(() => {
-    const base = computeDashboardLifetime({ txns, cTxns, collections });
+    const base = computeDashboardLifetime({ txns, cTxns, collections, splits: collectionSplits });
     // المصروفات: من المحرك الموحّد (نفس المنطق تماماً).
     const expensesFixed = expensesTotals.fixed;
     const expensesVariable = expensesTotals.variable;
@@ -276,7 +277,7 @@ function Dashboard() {
       ...base,
       expensesFixed, expensesVariable, expensesDeducted, expensesAll, expensesTotal,
     };
-  }, [txns, cTxns, collections, expenseDeductions, expensesTotals]);
+  }, [txns, cTxns, collections, collectionSplits, expenseDeductions, expensesTotals]);
 
   const {
     agentsFlightsValue, agentsApprovalsValue, agentsTripValue, agentsPaid, agentsDue, agentCollectionsNet,
@@ -306,7 +307,7 @@ function Dashboard() {
     const collected = agentColl + merchColl;
     // ✅ إجمالي التحصيلات مفصّلاً حسب العملة — لا خلط بين العملات في رقم واحد.
     const agentCollByCurrency = computeAgentCollectionsByCurrency(txns, (d) => inR(d));
-    const merchCollByCurrency = computeMerchantCashCollectionsByCurrency(collections, (d) => inR(d));
+    const merchCollByCurrency = computeMerchantCashCollectionsByCurrency(collections, (d) => inR(d), collectionSplits);
     const collectedByCurrency = mergeCurrencyTotals(agentCollByCurrency, merchCollByCurrency);
     let expSum = 0;
     let flightsCount = 0, approvalsCount = 0;
