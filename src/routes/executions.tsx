@@ -969,7 +969,7 @@ function ExecutionForm({
             const ap = Number(s.agent_price) || 0;
             const total = ap * cnt;
             return (
-              <div key={i} style={{ border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
+              <div key={i} style={isAbsentStatus(form.status) ? { border: "1px solid #ef4444", borderRadius: 10, padding: 12, ...ABSENT_FIELD_STYLE } : { border: "1px solid #a7f3d0", borderRadius: 10, padding: 12, background: "#ecfdf5" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                   <Field label="نوع الخدمة المباعة">
                     <SearchableSelect
