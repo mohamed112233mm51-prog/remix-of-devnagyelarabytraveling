@@ -71,6 +71,7 @@ export function computeAgentCollections(
     seen.add(t.id);
     if (isCancelled(t as unknown as MaybeCancelled)) continue;
     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+    if (!(t as any).agent_id) continue;
     total += txnCollectedAmount(t);
   }
   return total;
