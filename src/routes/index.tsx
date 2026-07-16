@@ -8,6 +8,7 @@ import { getDashboardNetProfitData, getDashboardProfitSummaryData, getDashboardE
 import {
   fmtDL,
   fmtNum,
+  formatExchangeRate,
   tripValue,
   txnCollectedAmount,
   useLive,
