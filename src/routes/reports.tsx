@@ -1722,7 +1722,7 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
     sold_currency: t.sold_currency,
     sold_amount: fmtNum(Number(t.sold_amount || 0)),
     sold_amount__excel: Number(t.sold_amount || 0),
-    rate: t.exchange_rate ? fmtNum(Number(t.exchange_rate)) : "—",
+    rate: formatExchangeRate(t.exchange_rate),
     description: t.description || "",
   }));
 
