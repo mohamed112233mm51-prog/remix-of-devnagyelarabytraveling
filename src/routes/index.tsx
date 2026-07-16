@@ -624,7 +624,7 @@ function Dashboard() {
         <HeroKpi label="خزينة الجنيه المصري" value={treasury.egp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Landmark size={18} />} tone="primary" sub="إجمالي رصيد EGP" />
         <HeroKpi label="خزينة الدولار الأمريكي" value={treasury.usd} format={(n) => `${fmtNum(n)} $`} icon={<DollarSign size={18} />} tone="success" sub="إجمالي رصيد USD" />
         <HeroKpi label="خزينة الدينار الليبي" value={treasury.lyd} format={(n) => `${fmtNum(n)} د.ل`} icon={<Coins size={18} />} tone="warning" sub="إجمالي رصيد LYD" />
-        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub={`EGP + USD×${fmtNum(treasury.usdRate)} + LYD×${fmtNum(treasury.lydRate)}`} />
+        <HeroKpi label="إجمالي أرصدة الخزائن (ج.م)" value={treasury.totalEgp} format={(n) => `${fmtNum(n)} ج.م`} icon={<Wallet size={18} />} tone="navy" sub={`EGP + USD×${formatExchangeRate(treasury.usdRate)} + LYD×${formatExchangeRate(treasury.lydRate)}`} />
       </div>
 
       {/* === Treasuries audit panel === */}
