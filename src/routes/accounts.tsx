@@ -3,8 +3,14 @@ import { CurrencyLines } from "@/components/CurrencyLines";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
-import { useAgentsSummary, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
+import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Execution, type Merchant, type Transaction } from "@/lib/db";
+import { CurrencyMap, formatCurrencyMap } from "@/lib/financialSummary";
+import {
+  computeAgentServicesByCurrencyPerAgent,
+  computeAgentPaymentsByCurrencyPerAgent,
+  subtractCurrencyMaps,
+  sumAgentCurrencyMaps,
+} from "@/lib/dashboardCollections";
 
 
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
