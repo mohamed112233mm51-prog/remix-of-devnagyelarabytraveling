@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtNum, fmtCurrency, normalizeCurrency, type Merchant } from "@/lib/db";
+import { fmtNum, fmtCurrency, formatExchangeRate, normalizeCurrency, type Merchant } from "@/lib/db";
 import { toast } from "sonner";
 import { confirmDialog } from "@/lib/confirm";
 import { usePerm } from "@/hooks/usePerm";
@@ -370,7 +370,7 @@ function CurrencySupplierStatementPage() {
                     </td>}
                     {isVisible("cur") && <td data-label="العملة">{r.foreignCurrency}</td>}
                     {isVisible("amt") && <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>}
-                    {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
+                    {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{formatExchangeRate(r.rate)}</td>}
                     {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{r.egpAmount ? fmtNum(r.egpAmount) : "—"}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
                     {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.balanceCurrency)}</td>}
