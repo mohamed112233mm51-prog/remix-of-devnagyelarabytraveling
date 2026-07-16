@@ -640,6 +640,24 @@ export const fmtUSD = (n: number) =>
     maximumFractionDigits: 2,
   }).format(Number(n) || 0)} $`;
 
+/**
+ * Formatter مخصص لأسعار الصرف فقط.
+ * - لا يقرّب إلى عدد صحيح (بعكس fmtNum).
+ * - يعرض حتى 6 خانات عشرية بدون أصفار نهائية غير ضرورية.
+ * - يُستخدم أرقام إنجليزية بدون فواصل آلاف (سعر صرف عادةً أقل من 1000).
+ * أمثلة: 48 → "48"، 48.75 → "48.75"، 48.7500 → "48.75"، 10.356789 → "10.356789"
+ */
+export const formatExchangeRate = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined || value === "") return "—";
+  const rate = Number(value);
+  if (!Number.isFinite(rate)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 6,
+    useGrouping: false,
+  }).format(rate);
+};
+
 // Normalize any currency string (Arabic display name, symbol, code, empty) to
 // the canonical internal code. Everything written to the DB must go through
 // this so USD and "دولار" never split into two ledgers.
