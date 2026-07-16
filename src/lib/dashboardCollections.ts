@@ -115,11 +115,78 @@ export function computeAgentCollectionsByCurrency(
     seen.add(t.id);
     if (isCancelled(t as unknown as MaybeCancelled)) continue;
     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+    // تحصيلات الوكلاء = فقط الحركات المرتبطة بوكيل. الحركات بلا agent_id
+    // (تحويلات داخلية / تسويات) ليست تحصيلات وكلاء ولا تُحسب هنا.
+    if (!(t as any).agent_id) continue;
     const amount = txnCollectedAmount(t);
     if (!amount) continue;
     map.add(txnCurrency(t), amount);
   }
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Per-agent aggregators — نفس الدوال أعلاه لكن مفهرسة بـ agent_id.
+// الغاية: صفحة "حسابات الوكلاء" تعرض كل وكيل على حدة، ويجب أن يكون
+// إجمالي الصفحة = إجمالي الداشبورد بالبنية نفسها (بدون خلط عملات).
+// ---------------------------------------------------------------------------
+
+/**
+ * قيمة خدمات كل وكيل مفصولة حسب العملة (Map<agent_id, CurrencyMap>).
+ * المصدر: `executions.services` (kind=agent) لتنفيذات "منفذ" غير الملغاة،
+ * منسوبة إلى `executions.agent_id`.
+ */
+export function computeAgentServicesByCurrencyPerAgent(
+  executions: ReadonlyArray<ExecutionRow & { agent_id?: string | null; cancelled_at?: string | null }>,
+): Map<string, CurrencyMap> {
+  const out = new Map<string, CurrencyMap>();
+  for (const ex of executions) {
+    if ((ex as any).cancelled_at) continue;
+    if ((ex.operation_status || "") !== "منفذ") continue;
+    const aid = (ex as any).agent_id as string | null;
+    if (!aid) continue;
+    const { salesByCur } = aggregateExecutionByCurrency(ex);
+    let m = out.get(aid);
+    if (!m) { m = new CurrencyMap(); out.set(aid, m); }
+    for (const [cur, amt] of Object.entries(salesByCur)) m.add(cur, amt);
+  }
+  return out;
+}
+
+/**
+ * مدفوعات كل وكيل مفصولة حسب العملة (Map<agent_id, CurrencyMap>).
+ * المصدر: `transactions` مع نفس شروط `computeAgentCollectionsByCurrency`
+ * (dedupe id، استبعاد cancelled، تجاهل الصفوف بلا agent_id).
+ * القيمة = `txnCollectedAmount(t)` — بدون fallback إلى total_paid/paid.
+ */
+export function computeAgentPaymentsByCurrencyPerAgent(
+  transactions: ReadonlyArray<Transaction>,
+  predicate?: DatePredicate,
+): Map<string, CurrencyMap> {
+  const seen = new Set<string>();
+  const out = new Map<string, CurrencyMap>();
+  for (const t of transactions) {
+    if (!t || !t.id) continue;
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    if (isCancelled(t as unknown as MaybeCancelled)) continue;
+    if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+    const aid = (t as any).agent_id as string | null;
+    if (!aid) continue;
+    const amount = txnCollectedAmount(t);
+    if (!amount) continue;
+    let m = out.get(aid);
+    if (!m) { m = new CurrencyMap(); out.set(aid, m); }
+    m.add(txnCurrency(t), amount);
+  }
+  return out;
+}
+
+/** جمع خرائط عملة عبر جميع الوكلاء إلى خريطة عملة إجمالية واحدة (بدون خلط). */
+export function sumAgentCurrencyMaps(perAgent: Map<string, CurrencyMap>): CurrencyMap {
+  const out = new CurrencyMap();
+  for (const m of perAgent.values()) out.merge(m);
+  return out;
 }
 
 /**
