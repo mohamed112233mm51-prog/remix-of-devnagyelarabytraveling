@@ -1354,7 +1354,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
       movement: usdMovementLabel(r),
       egp: fmtDL(Number(r.egp_amount || 0)),
       egp__excel: Number(r.egp_amount || 0),
-      rate: r.exchange_rate ? Number(r.exchange_rate).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—",
+      rate: formatExchangeRate(r.exchange_rate),
       rate__excel: Number(r.exchange_rate || 0),
       usd: fmtUSD(Number(r.usd_amount || 0)),
       usd__excel: Number(r.usd_amount || 0),
