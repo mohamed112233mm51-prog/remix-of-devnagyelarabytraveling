@@ -7,6 +7,7 @@ import {
   fmtDL,
   fmtNum,
   fmtUSD,
+  formatExchangeRate,
   tripValue,
   txnTotalPaid,
   txnCollectedAmount,
