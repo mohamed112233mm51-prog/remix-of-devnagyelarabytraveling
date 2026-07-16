@@ -633,9 +633,9 @@ function Dashboard() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
           <AuditRow label="رصيد الخزينة المصرية" value={`${fmtNum(treasury.egp)} ج.م`} tone="success" />
           <AuditRow label="رصيد الخزينة الدولارية" value={`${fmtNum(treasury.usd)} $`} tone="success" />
-          <AuditRow label="سعر شراء الدولار المستخدم" value={`${fmtNum(treasury.usdRate)} ج.م/$`} tone="warning" />
+          <AuditRow label="سعر شراء الدولار المستخدم" value={`${formatExchangeRate(treasury.usdRate)} ج.م/$`} tone="warning" />
           <AuditRow label="رصيد الخزينة الدينار الليبي" value={`${fmtNum(treasury.lyd)} د.ل`} tone="success" />
-          <AuditRow label="سعر شراء الدينار المستخدم" value={`${fmtNum(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
+          <AuditRow label="سعر شراء الدينار المستخدم" value={`${formatExchangeRate(treasury.lydRate)} ج.م/د.ل`} tone="warning" />
           <AuditRow label="إجمالي أرصدة الخزائن (ج.م)" value={`${fmtNum(treasury.totalEgp)} ج.م`} tone="success" />
         </div>
       </div>
