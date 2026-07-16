@@ -370,7 +370,7 @@ function CurrencySupplierStatementPage() {
                     </td>}
                     {isVisible("cur") && <td data-label="العملة">{r.foreignCurrency}</td>}
                     {isVisible("amt") && <td className="num-col" data-label="المبلغ">{fmtNum(r.foreignAmount)}</td>}
-                    {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{r.rate ? r.rate.toFixed(4) : "—"}</td>}
+                    {isVisible("rate") && <td className="num-col" data-label="سعر الصرف">{formatExchangeRate(r.rate)}</td>}
                     {isVisible("egp") && <td className="num-col" data-label="القيمة بالجنيه">{r.egpAmount ? fmtNum(r.egpAmount) : "—"}</td>}
                     {isVisible("desc") && <td data-label="البيان">{r.description || ""}</td>}
                     {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtCurrency(Number(r.balance || 0), r.balanceCurrency)}</td>}
