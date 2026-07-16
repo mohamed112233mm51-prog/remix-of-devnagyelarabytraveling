@@ -55,23 +55,26 @@ function AccountsPage() {
   const [showAgentLookup, setShowAgentLookup] = useState(false);
 
 
-  const agentsSummary = useAgentsSummary();
-
-  // ⚠️ Currency-Safe: كل حقل CurrencyMap (لا خلط عبر EGP/USD/LYD).
-  // الكروت والصفوف تعرض سطراً لكل عملة عبر formatCurrencyMap.
+  // نفس مصدر الداشبورد بالضبط — لضمان تطابق كروت الوكلاء عملة بعملة:
+  //   الخدمات  = executions.services (kind=agent) لتنفيذات "منفذ"، منسوبة لـ agent_id.
+  //   المدفوعات = transactions مع agent_id، عبر txnCollectedAmount (بدون fallback).
+  //   المستحق  = الخدمات − المدفوعات لكل عملة على حدة (بدون خلط عملات).
+  const { rows: executions } = useLive<Execution>("executions");
   const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
+    const servicesPerAgent = computeAgentServicesByCurrencyPerAgent(executions as any);
+    const paymentsPerAgent = computeAgentPaymentsByCurrencyPerAgent(txns);
     const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
-    const tTrips = new CurrencyMap();
-    const tPaid = new CurrencyMap();
-    const tDue = new CurrencyMap();
-    for (const [id, s] of agentsSummary) {
-      map.set(id, { trips: s.totalDebit, paid: s.totalCredit, due: s.balance });
-      tTrips.merge(s.totalDebit);
-      tPaid.merge(s.totalCredit);
-      tDue.merge(s.balance);
+    for (const a of agents) {
+      const trips = servicesPerAgent.get(a.id) || new CurrencyMap();
+      const paid = paymentsPerAgent.get(a.id) || new CurrencyMap();
+      const due = subtractCurrencyMaps(trips, paid);
+      map.set(a.id, { trips, paid, due });
     }
+    const tTrips = sumAgentCurrencyMaps(servicesPerAgent);
+    const tPaid = sumAgentCurrencyMaps(paymentsPerAgent);
+    const tDue = subtractCurrencyMaps(tTrips, tPaid);
     return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tDue };
-  }, [agentsSummary]);
+  }, [agents, executions, txns]);
 
 
 
