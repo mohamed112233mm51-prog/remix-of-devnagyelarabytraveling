@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
 import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, isProfitPermissionKey, normalizePermissionBranch } from "@/lib/permissionKeys";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
-import { normalizeDropdownValue, refetchLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
+import { normalizeDropdownValue, refetchLiveTables, resetLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
 import { withFaviconVersion } from "@/lib/favicon";
 import {
@@ -3483,12 +3483,15 @@ function DemoDataCleanupCard() {
       setResult(res);
       setVerification({ verification: res.verification, errors: res.errors, ok: res.status === "clean" });
       console.info("[Reset Verification] cleanup", res.verification, res.errors);
-      await refetchLiveTables(["issuing_companies", "company_transactions", "usd_treasury_transactions", "submissions", "executions"]);
       await qc.invalidateQueries();
-      await refetch();
       if (res.status === "clean") {
+        resetLiveTables();
+        await qc.resetQueries();
         toast.success(`تم تنظيف النظام • الشركات الصادرة الآن ${res.verification.issuing_companies}`);
+        setTimeout(() => { window.location.reload(); }, 1500);
       } else {
+        await refetchLiveTables(["agents", "transactions", "payment_splits", "issuing_companies", "company_transactions", "usd_treasury_transactions", "submissions", "executions"]);
+        await refetch();
         toast.warning(`فشل التحقق النهائي: الشركات الصادرة ${res.verification.issuing_companies}`);
       }
     } catch (e: any) {
@@ -3723,6 +3726,7 @@ function ProductionWizardCard() {
       setResult(res);
       if (res.status === "clean") {
         toast.success(`اكتملت تهيئة الإنتاج • ${res.totalDeleted} سجل محذوف • كل الجداول = 0`);
+        resetLiveTables();
         // مسح أي ذاكرة مؤقتة قد تُبقي أسماء/أرقاماً قديمة على الشاشة.
         try {
           for (const k of Object.keys(localStorage)) {

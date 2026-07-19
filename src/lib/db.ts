@@ -555,6 +555,19 @@ export async function refetchLiveTables(tables?: readonly LiveTable[]) {
   }));
 }
 
+/** Replace shared realtime caches with an empty state after destructive server-side resets. */
+export function resetLiveTables(tables?: readonly LiveTable[]) {
+  const targets = tables?.length ? tables : Array.from(liveStores.keys());
+  targets.forEach((table) => {
+    const store = getStore(table);
+    store.rows = [];
+    store.loading = false;
+    store.error = null;
+    store.loaded = true;
+    notify(store);
+  });
+}
+
 /** Optimistic helper: mutate the local cache for a table immediately. */
 export function patchLive(table: LiveTable, change: { type: "insert" | "update" | "delete"; row: any }) {
   const store = liveStores.get(table);
