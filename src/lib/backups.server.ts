@@ -162,15 +162,12 @@ const UPSERT_CONFLICT_KEY: Record<string, string> = {
   user_roles: "user_id,role",
 };
 
-// ---- ROOT-CAUSE FIX (M1) ----------------------------------------------------
-// Every column in public.* that FKs auth.users(id). Rows referencing a source
-// user that doesn't exist in the target auth schema were previously killing
-// the entire table (transactions.cancelled_by → auth.users was the actual
-// cause of the 36 lost agent movements). We rewrite each such column to a
-// mapped target uuid (via profiles.email) or to NULL when unmapped.
-//
-// Data pulled from pg_constraint on 2026-07-19 — matches production schema.
-const AUTH_USER_FK_COLUMNS: Record<string, string[]> = {
+// ---- ROOT-CAUSE FIX (M1 + M1.1) --------------------------------------------
+// Every column in public.* that FKs auth.users(id). Split by nullability so
+// mandatory columns (profiles.id, user_roles.user_id) NEVER get NULLed;
+// unmapped identities for those columns halt the restore in preflight.
+// Nullability confirmed from information_schema on 2026-07-19.
+const AUTH_USER_FK_COLUMNS_OPTIONAL: Record<string, string[]> = {
   activity_logs: ["user_id"],
   company_transactions: ["cancelled_by"],
   currency_supplier_transactions: ["cancelled_by"],
@@ -180,19 +177,26 @@ const AUTH_USER_FK_COLUMNS: Record<string, string[]> = {
   payment_splits: ["cancelled_by"],
   transactions: ["cancelled_by"],
   usd_treasury_transactions: ["cancelled_by"],
-  user_roles: ["user_id"],
-  // profiles.id → auth.users(id) handled separately: skip rows whose profile
-  // email isn't in target auth (they'd fail anyway and we don't NULL a PK).
 };
 
-// Every column in public.* that FKs cash_boxes(id). Previously only
-// payment_splits got remapped; usd_treasury_transactions was silently failing.
+// NOT NULL columns FKing auth.users(id). MUST be remapped; NULL is illegal.
+// Unmapped source ids for these columns block the restore in preflight.
+const AUTH_USER_FK_COLUMNS_MANDATORY: Record<string, string[]> = {
+  profiles: ["id"],
+  user_roles: ["user_id"],
+};
+
+// Every column in public.* that FKs cash_boxes(id).
 const CASH_BOX_FK_COLUMNS: Record<string, string[]> = {
   payment_splits: ["cash_box_id"],
   usd_treasury_transactions: ["cash_box_id"],
 };
 
 type Warning = { table: string; row_id: any; column: string; from: any; reason: string };
+
+function normEmail(e: any): string {
+  return String(e ?? "").trim().toLowerCase();
+}
 
 function isDuplicateError(err: any): boolean {
   const code = String(err?.code ?? "");
@@ -206,18 +210,230 @@ function isDuplicateError(err: any): boolean {
   );
 }
 
-export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, {
-    restored: number;
-    skipped?: number;
-    skippedMissingUser?: number;
-    failed?: number;
-    mode: "upsert" | "wipe-insert" | "map-insert";
-    error?: string;
-    errors?: Array<{ id: any; code?: string; message: string }>;
-    details?: any;
-  }> = {};
+// ---- Target auth.users loader ----------------------------------------------
+// Reads REAL auth.users (not just public.profiles). profiles.id may be missing
+// for users that exist in auth but never got a profile row.
+async function loadTargetAuthUsers(): Promise<{ users: Array<{ id: string; email: string }>; byEmail: Map<string, string>; duplicateEmails: string[]; ids: Set<string> }> {
+  const users: Array<{ id: string; email: string }> = [];
+  const perPage = 1000;
+  let page = 1;
+  // Loop until an empty page or fewer than perPage returned.
+  while (true) {
+    const { data, error } = await (supabaseAdmin as any).auth.admin.listUsers({ page, perPage });
+    if (error) throw new Error(`listUsers: ${error.message}`);
+    const list = data?.users ?? [];
+    for (const u of list) users.push({ id: u.id, email: u.email ?? "" });
+    if (list.length < perPage) break;
+    page++;
+    if (page > 50) break; // safety cap: 50k users
+  }
+  const byEmail = new Map<string, string>();
+  const dupSet = new Set<string>();
+  for (const u of users) {
+    const e = normEmail(u.email);
+    if (!e) continue;
+    if (byEmail.has(e) && byEmail.get(e) !== u.id) dupSet.add(e);
+    else byEmail.set(e, u.id);
+  }
+  return {
+    users,
+    byEmail,
+    duplicateEmails: [...dupSet],
+    ids: new Set(users.map((u) => u.id)),
+  };
+}
 
+// ---- Identity preflight ----------------------------------------------------
+export type IdentityPreflight = {
+  sourceProfileCount: number;
+  targetAuthUserCount: number;
+  matched: Array<{ sourceId: string; targetId: string; email: string }>;
+  missingByEmail: Array<{ sourceId: string; email: string }>;
+  duplicateSourceEmails: Array<{ email: string; sourceIds: string[] }>;
+  emptySourceEmails: Array<{ sourceId: string }>;
+  duplicateTargetEmails: string[];
+  // Mandatory identities referenced by source data that MUST resolve to a
+  // target auth user. If any is unresolved and createMissing is off, restore
+  // is blocked BEFORE any wipe.
+  mandatoryUnmapped: Array<{ table: string; column: string; sourceUserId: string; email?: string; reason: string }>;
+  canProceed: boolean;
+};
+
+async function buildIdentityPreflight(payload: BackupPayload) {
+  const sourceProfiles: any[] = payload.data.profiles ?? [];
+  const target = await loadTargetAuthUsers();
+
+  // Detect source-side duplicate/empty emails.
+  const sourceByEmail = new Map<string, string[]>();
+  const emptySourceEmails: Array<{ sourceId: string }> = [];
+  for (const sp of sourceProfiles) {
+    if (!sp?.id) continue;
+    const e = normEmail(sp.email);
+    if (!e) { emptySourceEmails.push({ sourceId: sp.id }); continue; }
+    const arr = sourceByEmail.get(e) ?? [];
+    arr.push(sp.id);
+    sourceByEmail.set(e, arr);
+  }
+  const duplicateSourceEmails: Array<{ email: string; sourceIds: string[] }> = [];
+  for (const [e, ids] of sourceByEmail) if (ids.length > 1) duplicateSourceEmails.push({ email: e, sourceIds: ids });
+
+  // Build source→target map (only unambiguous matches).
+  const authUserIdMap = new Map<string, string>();
+  const matched: IdentityPreflight["matched"] = [];
+  const missingByEmail: IdentityPreflight["missingByEmail"] = [];
+  const emailBySourceId = new Map<string, string>();
+  for (const sp of sourceProfiles) {
+    if (!sp?.id) continue;
+    const e = normEmail(sp.email);
+    if (e) emailBySourceId.set(sp.id, e);
+    if (!e) continue;
+    // Refuse to map if source has duplicate emails — ambiguous.
+    if ((sourceByEmail.get(e)?.length ?? 0) > 1) continue;
+    // Refuse to map if target has duplicate emails.
+    if (target.duplicateEmails.includes(e)) continue;
+    const targetId = target.byEmail.get(e);
+    if (targetId) {
+      authUserIdMap.set(sp.id, targetId);
+      matched.push({ sourceId: sp.id, targetId, email: e });
+    } else {
+      missingByEmail.push({ sourceId: sp.id, email: e });
+    }
+  }
+
+  // Collect mandatory identity references across data.
+  const mandatoryUnmapped: IdentityPreflight["mandatoryUnmapped"] = [];
+  for (const [table, cols] of Object.entries(AUTH_USER_FK_COLUMNS_MANDATORY)) {
+    const rows: any[] = payload.data[table] ?? [];
+    for (const r of rows) {
+      for (const col of cols) {
+        const v = r?.[col];
+        if (!v) {
+          mandatoryUnmapped.push({ table, column: col, sourceUserId: String(v ?? ""), reason: "empty value in mandatory NOT NULL column" });
+          continue;
+        }
+        if (authUserIdMap.has(v)) continue;
+        // Diagnose why it wasn't mapped.
+        const email = emailBySourceId.get(v);
+        let reason: string;
+        if (!email) reason = "source user has no email in profiles";
+        else if (duplicateSourceEmails.some((d) => d.email === email)) reason = `duplicate email in source (${email})`;
+        else if (target.duplicateEmails.includes(email)) reason = `duplicate email in target auth (${email})`;
+        else if (!target.byEmail.has(email)) reason = `email not present in target auth.users (${email})`;
+        else reason = `unmapped (${email})`;
+        mandatoryUnmapped.push({ table, column: col, sourceUserId: v, email, reason });
+      }
+    }
+  }
+
+  const preflight: IdentityPreflight = {
+    sourceProfileCount: sourceProfiles.length,
+    targetAuthUserCount: target.users.length,
+    matched,
+    missingByEmail,
+    duplicateSourceEmails,
+    emptySourceEmails,
+    duplicateTargetEmails: target.duplicateEmails,
+    mandatoryUnmapped,
+    canProceed: mandatoryUnmapped.length === 0,
+  };
+  return { preflight, authUserIdMap, target, sourceProfiles, emailBySourceId };
+}
+
+// ---- Create missing dev auth users -----------------------------------------
+// Server-side only. Never sends email. Random unrecoverable password. Bans
+// the account so it can't sign in with password. Metadata records origin.
+async function createMissingDevIdentities(
+  missing: Array<{ sourceId: string; email: string }>,
+  authUserIdMap: Map<string, string>,
+): Promise<{ created: Array<{ sourceId: string; targetId: string; email: string }>; failed: Array<{ sourceId: string; email: string; error: string }> }> {
+  const created: Array<{ sourceId: string; targetId: string; email: string }> = [];
+  const failed: Array<{ sourceId: string; email: string; error: string }> = [];
+  for (const m of missing) {
+    try {
+      // 32-byte cryptographically random password, never returned to client.
+      const pwd = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, "0")).join("");
+      const { data, error } = await (supabaseAdmin as any).auth.admin.createUser({
+        email: m.email,
+        password: pwd,
+        email_confirm: true,
+        user_metadata: { imported_from_backup: true, source_user_id: m.sourceId },
+        // ban_duration is honored by GoTrue; keeps the account from logging in
+        // via password while allowing FK references. ~100 years.
+        ban_duration: "876000h",
+      });
+      if (error || !data?.user?.id) throw new Error(error?.message ?? "createUser returned no id");
+      authUserIdMap.set(m.sourceId, data.user.id);
+      created.push({ sourceId: m.sourceId, targetId: data.user.id, email: m.email });
+    } catch (e: any) {
+      failed.push({ sourceId: m.sourceId, email: m.email, error: e?.message ?? String(e) });
+    }
+  }
+  return { created, failed };
+}
+
+export type RestoreOptions = {
+  validateOnly?: boolean;
+  createMissingIdentities?: boolean;
+};
+
+export type RestoreResult = {
+  preflight: IdentityPreflight;
+  aborted?: { reason: string };
+  createdIdentities?: { created: number; failed: Array<{ sourceId: string; email: string; error: string }> };
+  summary?: Record<string, any>;
+};
+
+export async function restoreFromPayload(
+  payload: BackupPayload,
+  opts: RestoreOptions = {},
+): Promise<RestoreResult> {
+  // Preflight FIRST — never touch data until identities resolve.
+  const pre = await buildIdentityPreflight(payload);
+  let preflight = pre.preflight;
+  const authUserIdMap = pre.authUserIdMap;
+
+  if (opts.validateOnly) {
+    return { preflight };
+  }
+
+  // If preflight blocked, optionally create missing identities and re-check.
+  let createdIdentities: RestoreResult["createdIdentities"];
+  if (!preflight.canProceed) {
+    if (!opts.createMissingIdentities) {
+      return {
+        preflight,
+        aborted: {
+          reason: `Identity preflight failed: ${preflight.mandatoryUnmapped.length} mandatory reference(s) cannot be resolved. Re-run with createMissingIdentities=true to auto-create dev auth users for missing source users.`,
+        },
+      };
+    }
+    // Only auto-create for cases where an email exists in source but not in
+    // target (missingByEmail). Duplicates and empty-email cases stay blocked.
+    const toCreate = preflight.missingByEmail;
+    createdIdentities = await createMissingDevIdentities(toCreate, authUserIdMap);
+    // Rebuild preflight with updated map (mandatoryUnmapped will drop resolved refs).
+    // Cheap recompute in place — we've mutated authUserIdMap already.
+    preflight = {
+      ...preflight,
+      matched: [...preflight.matched, ...createdIdentities.created.map((c) => ({ sourceId: c.sourceId, targetId: c.targetId, email: c.email }))],
+      missingByEmail: preflight.missingByEmail.filter((m) => !authUserIdMap.has(m.sourceId)),
+      mandatoryUnmapped: preflight.mandatoryUnmapped.filter((m) => !authUserIdMap.has(m.sourceUserId)),
+    };
+    preflight.canProceed = preflight.mandatoryUnmapped.length === 0;
+    if (!preflight.canProceed) {
+      return {
+        preflight,
+        createdIdentities: { created: createdIdentities.created.length, failed: createdIdentities.failed },
+        aborted: {
+          reason: `Identity preflight still failing after creating missing users. Unresolved mandatory refs: ${preflight.mandatoryUnmapped.length}. Resolve duplicate/empty emails in the source and retry.`,
+        },
+      };
+    }
+  }
+
+  // Preflight OK → proceed with actual restore.
+  const summary: Record<string, any> = {};
   let guardsDisabled = false;
   try {
     const { error: dErr } = await (supabaseAdmin as any).rpc("restore_disable_guards");
@@ -227,44 +443,31 @@ export async function restoreFromPayload(payload: BackupPayload) {
     console.error("[restore] disable_guards exception", e);
   }
   try {
-    return await _restoreInner(payload, summary);
+    await _restoreInner(payload, summary, authUserIdMap, pre.target.ids);
   } finally {
     if (guardsDisabled) {
       try { await (supabaseAdmin as any).rpc("restore_enable_guards"); }
       catch (e) { console.error("[restore] enable_guards failed", e); }
     }
   }
+
+  return {
+    preflight,
+    createdIdentities: createdIdentities
+      ? { created: createdIdentities.created.length, failed: createdIdentities.failed }
+      : undefined,
+    summary,
+  };
 }
 
 async function _restoreInner(
   payload: BackupPayload,
   summary: Record<string, any>,
+  authUserIdMap: Map<string, string>,
+  targetAuthUserIds: Set<string>,
 ) {
   const warnings: Warning[] = [];
-
-  // ---- Build authUserIdMap: source_user_id -> target_user_id (via email) ----
-  // Source: payload.data.profiles (id + email from production).
-  // Target: current dev profiles (id + email). profiles.id == auth.users.id.
   const sourceProfiles: any[] = payload.data.profiles ?? [];
-  const authUserIdMap = new Map<string, string>();
-  const targetAuthUserIds = new Set<string>();
-  try {
-    const { data: targetProfiles } = await (supabaseAdmin.from as any)("profiles")
-      .select("id,email");
-    const byEmail = new Map<string, string>();
-    for (const p of targetProfiles ?? []) {
-      targetAuthUserIds.add(p.id);
-      if (p.email) byEmail.set(String(p.email).toLowerCase().trim(), p.id);
-    }
-    for (const sp of sourceProfiles) {
-      if (!sp?.id || !sp?.email) continue;
-      const targetId = byEmail.get(String(sp.email).toLowerCase().trim());
-      if (targetId) authUserIdMap.set(sp.id, targetId);
-    }
-    console.log(`[restore] user map built: ${authUserIdMap.size}/${sourceProfiles.length} source users mapped by email`);
-  } catch (e: any) {
-    console.error("[restore] user map build failed", e);
-  }
 
   // PHASE 1: wipe non-reference tables (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
@@ -281,18 +484,29 @@ async function _restoreInner(
   let cashBoxesMapped = 0;
   let cashBoxesCreated = 0;
 
-  // Row rewriter: nulls out unresolvable auth.users refs, remaps cash_box_ids.
+  // Row rewriter: mandatory user cols get remapped (preflight guarantees a
+  // mapping exists); optional user cols NULL out unresolved refs; cash boxes
+  // get remapped.
   function rewriteRow(table: string, row: any): any {
     const out = { ...row };
-    const userCols = AUTH_USER_FK_COLUMNS[table] ?? [];
-    for (const col of userCols) {
+    const mandatoryCols = AUTH_USER_FK_COLUMNS_MANDATORY[table] ?? [];
+    for (const col of mandatoryCols) {
+      const v = out[col];
+      if (!v) continue;
+      const mapped = authUserIdMap.get(v);
+      if (mapped) { if (mapped !== v) out[col] = mapped; }
+      // If unmapped despite preflight, leave as-is; row will fail cleanly and
+      // per-row retry will surface a real error instead of a NULL crash.
+    }
+    const optionalCols = AUTH_USER_FK_COLUMNS_OPTIONAL[table] ?? [];
+    for (const col of optionalCols) {
       const v = out[col];
       if (!v) continue;
       if (authUserIdMap.has(v)) {
         const mapped = authUserIdMap.get(v)!;
         if (mapped !== v) out[col] = mapped;
       } else if (!targetAuthUserIds.has(v)) {
-        warnings.push({ table, row_id: row.id, column: col, from: v, reason: "auth user not in target — set to NULL" });
+        warnings.push({ table, row_id: row.id, column: col, from: v, reason: "optional auth user ref not in target — set to NULL" });
         out[col] = null;
       }
     }
@@ -301,14 +515,7 @@ async function _restoreInner(
       const v = out[col];
       if (!v) continue;
       const mapped = cashBoxIdMap.get(v);
-      if (mapped) {
-        if (mapped !== v) out[col] = mapped;
-      } else {
-        // cash_box_id in source but not in map → box didn't exist in source
-        // payload either; leave as-is only if it exists in target, else NULL.
-        // We can't check target cheaply per-row; rely on FK to catch and
-        // fall through to per-row retry which will null it below.
-      }
+      if (mapped && mapped !== v) out[col] = mapped;
     }
     return out;
   }
@@ -362,10 +569,6 @@ async function _restoreInner(
         continue;
       }
 
-      // --- Generic insert with per-row fallback on error ---
-      // Every row is rewritten first (auth.users + cash_box remapping).
-      // On any batch failure we fall back to row-by-row so a single bad
-      // row can never take down the whole table.
       const prepared = rows.map((r) => rewriteRow(t, r));
       const CHUNK = 500;
       let written = 0;
@@ -382,15 +585,12 @@ async function _restoreInner(
           : await (supabaseAdmin.from as any)(t).insert(slice);
         if (!res.error) { written += slice.length; continue; }
 
-        // Batch failed → retry row-by-row to isolate offenders.
         for (const row of slice) {
           const r2 = isReference
             ? await (supabaseAdmin.from as any)(t).upsert(row, { onConflict })
             : await (supabaseAdmin.from as any)(t).insert(row);
           if (!r2.error) { written++; continue; }
           if (isReference && isDuplicateError(r2.error)) { skipped++; continue; }
-          // For FK to auth.users that slipped through (shouldn't happen after
-          // rewrite, but be defensive): count as skipped-missing-user.
           const msg = String(r2.error.message ?? "").toLowerCase();
           if (r2.error.code === "23503" && msg.includes("auth.users")) {
             skippedMissingUser++;
@@ -440,7 +640,6 @@ async function _restoreInner(
     console.error("[restore] cash_box balance reconcile failed", e);
   }
 
-  // Attach top-level metadata for the UI.
   (summary as any).__meta = {
     userMap: {
       sourceProfiles: sourceProfiles.length,
@@ -450,7 +649,6 @@ async function _restoreInner(
     warnings: warnings.length,
     warningsSample: warnings.slice(0, 50),
   };
-  return summary;
 }
 
 // Retention policy: daily 30d, weekly 6mo (~183d), monthly 1y (365d), manual/emergency kept.
