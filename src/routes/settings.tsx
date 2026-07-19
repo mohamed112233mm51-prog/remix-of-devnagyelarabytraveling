@@ -20,7 +20,7 @@ import {
   createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow, importBackup,
 } from "@/lib/backups.functions";
 
-import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, prepareForLaunch, resetVerification, type WipeCategory } from "@/lib/demo-data.functions";
+import { checkDemoData, generateDemoData, deleteDemoData, productionCleanup, productionWipe, previewProductionReset, prepareForLaunch, resetVerification } from "@/lib/demo-data.functions";
 import { getBackendDiagnostics, isProdEnv } from "@/lib/env";
 import { Settings as SettingsIcon, Users, UserPlus, ShieldCheck, SlidersHorizontal, DatabaseBackup, Search, Power, Trash2, KeyRound, Mail, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserCheck, UserCog, Clock, Building2, Palette, Image as ImageIcon, ListChecks, Plus, Pencil, Check, X as XIcon, Upload, Save, Inbox, MapPin, Plane, Wrench, Phone, DollarSign, Sparkles, AlertCircle, Trash, Database, HardDrive, Download, RotateCcw, Eye, RefreshCw, Calendar, Activity, FileArchive, XCircle, AlertTriangle, Cloud } from "lucide-react";
 
