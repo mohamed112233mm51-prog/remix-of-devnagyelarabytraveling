@@ -853,55 +853,28 @@ export const prepareForLaunch = createServerFn({ method: "POST" })
     }
     const sb = admin();
 
-    if (data.wipeCoreEntities) {
-      const { data: rpcData, error: rpcErr } = await sb.rpc(
-        "reset_production_business_data" as any,
-        { p_confirm: "تهيئة الإنتاج نهائياً", p_user_id: context.userId } as any,
-      );
-      if (rpcErr) throw new Error(`فشل تنفيذ التهيئة الذرّية: ${rpcErr.message}`);
-      const rpcResult: any = rpcData ?? {};
-      if (rpcResult.success !== true || Number(rpcResult.remaining?.agents ?? 1) !== 0 || Number(rpcResult.remaining?.agentReferences ?? 1) !== 0) {
-        throw new Error("فشل تحقق حذف الوكلاء داخل قاعدة البيانات");
-      }
-      const summary: Record<string, number> = rpcResult.deleted ?? {};
-      const totalDeleted = Object.entries(summary)
-        .filter(([k]) => k !== "cash_boxes_reset")
-        .reduce((sum, [, v]) => sum + (Number(v) || 0), 0);
-      return {
-        summary,
-        totalDeleted,
-        cashBoxesReset: Number(summary.cash_boxes_reset || 0),
-        status: "clean" as const,
-        resetProof: rpcResult,
-      };
+    const { data: rpcData, error: rpcErr } = await sb.rpc(
+      "reset_production_business_data" as any,
+      { p_confirm: "تهيئة الإنتاج نهائياً", p_user_id: context.userId } as any,
+    );
+    if (rpcErr) throw new Error(`فشل تنفيذ التهيئة الذرّية: ${rpcErr.message}`);
+    const rpcResult: any = rpcData ?? {};
+    if (rpcResult.success !== true || Number(rpcResult.remaining?.agents ?? 1) !== 0 || Number(rpcResult.remaining?.agentReferences ?? 1) !== 0) {
+      throw new Error("فشل تحقق حذف الوكلاء داخل قاعدة البيانات");
     }
-
-    const summary: Record<string, number> = {};
-    let totalDeleted = 0;
-
-    for (const t of LAUNCH_WIPE_ORDER) {
-      const { count, error } = await sb
-        .from(t as any)
-        .delete({ count: "exact" })
-        .not("id", "is", null);
-      if (error) {
-        throw new Error(`فشل حذف جدول ${t}: ${error.message}`);
-      }
-      summary[t] = count ?? 0;
-      totalDeleted += count ?? 0;
-    }
+    const summary: Record<string, number> = rpcResult.deleted ?? {};
+    const totalDeleted = Object.entries(summary)
+      .filter(([k]) => k !== "cash_boxes_reset")
+      .reduce((sum, [, v]) => sum + (Number(v) || 0), 0);
 
     // Reset cash box balances to zero (entities preserved).
-    const { count: boxesReset } = await sb
-      .from("cash_boxes")
-      .update({ balance: 0 } as any, { count: "exact" })
-      .not("id", "is", null);
-    summary["cash_boxes_reset"] = boxesReset ?? 0;
+    const boxesReset = Number(summary.cash_boxes_reset || 0);
 
     return {
       summary,
       totalDeleted,
-      cashBoxesReset: boxesReset ?? 0,
+      cashBoxesReset: boxesReset,
       status: "clean" as const,
+      resetProof: rpcResult,
     };
   });
