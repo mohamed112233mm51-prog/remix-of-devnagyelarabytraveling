@@ -685,16 +685,17 @@ export const productionWipe = createServerFn({ method: "POST" })
     // disables cash-box guards + payment_split triggers, deletes children
     // → parents, resets cash-box balances, then re-enables triggers. On any
     // error Postgres rolls the whole function back.
-    // context.supabase = authenticated user's Supabase client. RPC verifies
-    // admin role and confirmation phrase again inside the DB.
-    const { data: rpcData, error: rpcErr } = await context.supabase.rpc(
+    // Call through the trusted backend client only: direct browser execution is
+    // revoked at DB level, while the RPC still verifies the admin user id.
+    const { data: rpcData, error: rpcErr } = await sb.rpc(
       "reset_production_business_data" as any,
-      { p_confirm: data.confirm } as any,
+      { p_confirm: data.confirm, p_user_id: context.userId } as any,
     );
     if (rpcErr) {
       throw new Error(`فشل تنفيذ التهيئة الذرّية: ${rpcErr.message}`);
     }
-    const summary: Record<string, number> = (rpcData as any) ?? {};
+    const rpcResult: any = rpcData ?? {};
+    const summary: Record<string, number> = rpcResult.deleted ?? rpcResult ?? {};
 
     // 3) Post-wipe verification — every business table must be at 0.
     const verification: Record<string, number> = {};
@@ -737,6 +738,11 @@ export const productionWipe = createServerFn({ method: "POST" })
       remainingTotal,
       preserved,
       adminStillPresent,
+      resetProof: {
+        remaining: rpcResult.remaining ?? null,
+        computed: rpcResult.computed ?? null,
+        agentRelatedTables: rpcResult.agent_related_tables ?? [],
+      },
       status,
     };
   });
