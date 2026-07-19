@@ -1473,6 +1473,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      reset_production_business_data: {
+        Args: { p_confirm: string }
+        Returns: Json
+      }
       restore_disable_guards: { Args: never; Returns: undefined }
       restore_enable_guards: { Args: never; Returns: undefined }
       run_auto_expense_deductions: { Args: never; Returns: undefined }
