@@ -1994,7 +1994,7 @@ function BackupsTab() {
     fileInputRef.current?.click();
   };
 
-  const onImportFile = async (file: File) => {
+  const onImportFile = async (file: File, opts?: { createMissingIdentities?: boolean }) => {
     const name = (file.name || "").toLowerCase();
     const isGz = name.endsWith(".gz");
     const isJson = name.endsWith(".json");
@@ -2006,7 +2006,6 @@ function BackupsTab() {
     try {
       setBusy("import");
       const buf = new Uint8Array(await file.arrayBuffer());
-      // Base64 encode in chunks to avoid call-stack limits on large files
       let bin = "";
       const chunk = 0x8000;
       for (let i = 0; i < buf.length; i += chunk) {
@@ -2014,12 +2013,46 @@ function BackupsTab() {
       }
       const base64 = btoa(bin);
       console.log("[import-backup] uploading to server fn...", { base64Length: base64.length });
-      const r: any = await importFn({ data: { filename: file.name, base64, isGzipped: isGz } });
+      const r: any = await importFn({
+        data: { filename: file.name, base64, isGzipped: isGz, createMissingIdentities: !!opts?.createMissingIdentities },
+      });
       console.log("[import-backup] server result:", r);
       if (!r?.path || !r?.logId) {
         throw new Error("لم يتم إنشاء سجل في قائمة النسخ الاحتياطية");
       }
       await refetch();
+
+      // Preflight abort: nothing was written. Offer retry with auto-create.
+      if (r?.aborted) {
+        const pre = r.preflight ?? {};
+        const missing: Array<{ sourceId: string; email: string }> = pre.missingByEmail ?? [];
+        const dupSrc: Array<{ email: string }> = pre.duplicateSourceEmails ?? [];
+        const dupTgt: string[] = pre.duplicateTargetEmails ?? [];
+        const emptyEm: any[] = pre.emptySourceEmails ?? [];
+        const canAutoFix = missing.length > 0 && dupSrc.length === 0 && dupTgt.length === 0 && emptyEm.length === 0 && !opts?.createMissingIdentities;
+
+        const detailLines = [
+          `مراجع إلزامية غير محلولة: ${pre.mandatoryUnmapped?.length ?? 0}`,
+          `مستخدمون بالبريد غير موجودين في التطوير: ${missing.length}`,
+          dupSrc.length ? `بريد مكرر في المصدر: ${dupSrc.length}` : "",
+          dupTgt.length ? `بريد مكرر في التطوير: ${dupTgt.length}` : "",
+          emptyEm.length ? `بريد فارغ في المصدر: ${emptyEm.length}` : "",
+        ].filter(Boolean).join("\n");
+        toast.error(`⛔ لم يتم استيراد أي بيانات — فشل Preflight الهوية\n${detailLines}\n${r.aborted.reason}`, { duration: 20000 });
+
+        if (canAutoFix) {
+          setConfirm({
+            title: "إنشاء هويات تطوير للمستخدمين المفقودين؟",
+            message: `${missing.length} مستخدم موجود في النسخة لكن غير موجود في Auth التطوير. سيتم إنشاؤهم Server-side بدون إرسال بريد أو كلمة مرور قابلة للاستخدام، مع تعطيل تسجيل الدخول. المتابعة؟`,
+            danger: true,
+            onOk: async () => {
+              setConfirm(null);
+              await onImportFile(file, { createMissingIdentities: true });
+            },
+          });
+        }
+        return;
+      }
 
       const failed: Array<{ table: string; error: string }> = r.failed ?? [];
       const inserted: number = r.inserted ?? 0;
@@ -2032,6 +2065,7 @@ function BackupsTab() {
       const rowErrors: Array<{ table: string; id: any; code?: string; message: string }> = (r as any).rowErrors ?? [];
       const userMap = (r as any).userMap as { sourceProfiles: number; mapped: number; unmapped: number } | null;
       const warnings: number = (r as any).warnings ?? 0;
+      const createdIds = (r as any).createdIdentities as { created: number; failed: any[] } | null;
       const hasErrors: boolean = (r as any).hasErrors ?? (failed.length > 0 || failedRows > 0);
 
       if (hasErrors) {
@@ -2057,8 +2091,11 @@ function BackupsTab() {
       const userMapLine = userMap
         ? `\n👥 مطابقة المستخدمين: ${userMap.mapped}/${userMap.sourceProfiles} (غير مطابق: ${userMap.unmapped})`
         : "";
-      const warnLine = warnings > 0 ? `\n⚠️ تحذيرات: ${warnings} (حقول مستخدم غير موجود تم ضبطها NULL)` : "";
-      const baseMsg = `✅ تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}${skipLine}${missingUserLine}${userMapLine}${warnLine}\n❌ الفشل: 0`;
+      const createdLine = createdIds && createdIds.created > 0
+        ? `\n🆕 هويات تطوير أُنشئت: ${createdIds.created}${createdIds.failed?.length ? ` (فشل: ${createdIds.failed.length})` : ""}`
+        : "";
+      const warnLine = warnings > 0 ? `\n⚠️ تحذيرات: ${warnings} (حقول اختيارية لمستخدم غير موجود تم ضبطها NULL)` : "";
+      const baseMsg = `✅ تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}${skipLine}${missingUserLine}${userMapLine}${createdLine}${warnLine}\n❌ الفشل: 0`;
       if (r?.versionMismatch) {
         toast.warning(baseMsg + "\nملاحظة: النسخة من إصدار مختلف، قد تحتاج لتحديث قاعدة البيانات.", { duration: 12000 });
       } else {
