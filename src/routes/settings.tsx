@@ -3664,61 +3664,76 @@ function DemoDataCleanupCard() {
 }
 
 // ============================================================
-// Production Wizard — selective wipe of operational data
-// (works regardless of is_demo flag). Strong "CONFIRM" guard.
+// Production Wizard — FULL atomic reset (calls the RPC).
+// One button. Strong Arabic confirmation phrase. Mandatory backup.
+// Preview + post-verification. No partial state possible.
 // ============================================================
-const WIZARD_CATEGORIES: { key: WipeCategory; label: string; hint: string }[] = [
-  { key: "agents", label: "الوكلاء", hint: "جدول الوكلاء" },
-  { key: "companies", label: "الشركات المصدرة", hint: "الشركات + معاملاتها" },
-  { key: "merchants", label: "التجار", hint: "التجار + تحصيلاتهم" },
-  { key: "investors", label: "المستثمرين", hint: "المستثمرين + حركاتهم" },
-  { key: "transactions", label: "المعاملات/المدفوعات", hint: "كل البيع/التحصيل" },
-  { key: "collections", label: "التحصيلات", hint: "تحصيلات التجار النقدية" },
-  { key: "expenses", label: "المصروفات", hint: "المصروفات + خصوماتها" },
-  { key: "notifications", label: "الإشعارات وسجل النشاط", hint: "activity_logs" },
-  { key: "test_users", label: "المستخدمين التجريبيين", hint: "كل من ليس admin" },
-];
+const RESET_CONFIRM_PHRASE = "تهيئة الإنتاج نهائياً";
+
+const RESET_LABELS: Record<string, string> = {
+  payment_splits: "شرائح الدفع",
+  financial_audit_log: "سجل التدقيق المالي",
+  expense_deductions: "خصومات المصروفات",
+  expenses: "المصروفات",
+  investor_transactions: "حركات المستثمرين",
+  merchant_cash_collections: "تحصيلات تجار الكاش",
+  currency_supplier_transactions: "حركات موردي العملة",
+  usd_treasury_transactions: "حركات خزنة الدولار",
+  company_transactions: "معاملات الشركات",
+  transactions: "معاملات الوكلاء",
+  submissions: "التقديمات",
+  executions: "التنفيذات",
+  company_pricing_rules: "قواعد أسعار الشركات",
+  activity_logs: "سجل النشاط",
+  import_batches: "دفعات الاستيراد",
+  investors: "المستثمرين",
+  merchants: "التجار",
+  currency_suppliers: "موردي العملة",
+  issuing_companies: "الشركات المصدرة",
+  agents: "الوكلاء",
+  profiles: "الملفات الشخصية",
+  user_roles: "أدوار المستخدمين",
+  app_settings: "إعدادات النظام",
+  system_dropdown_options: "خيارات القوائم",
+  backup_logs: "سجل النسخ الاحتياطي",
+  cash_boxes: "الخزائن",
+  cash_boxes_reset: "إعادة تصفير الخزائن",
+};
 
 function ProductionWizardCard() {
+  const previewFn = useServerFn(previewProductionReset);
   const wipeFn = useServerFn(productionWipe);
   const qc = useQueryClient();
-  const [selected, setSelected] = useState<Set<WipeCategory>>(new Set());
+  const { data: preview, refetch: refetchPreview, isLoading: previewLoading } = useQuery({
+    queryKey: ["production-reset-preview"],
+    queryFn: () => previewFn(),
+  });
   const [withBackup, setWithBackup] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<null | Awaited<ReturnType<typeof productionWipe>>>(null);
 
-  const allKeys = WIZARD_CATEGORIES.map((c) => c.key);
-  const allSelected = allKeys.every((k) => selected.has(k));
-
-  function toggle(k: WipeCategory) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(k) ? next.delete(k) : next.add(k);
-      return next;
-    });
-  }
-  function toggleAll() {
-    setSelected(allSelected ? new Set() : new Set(allKeys));
-  }
+  const total = preview?.total ?? 0;
 
   async function doWipe() {
     setBusy(true);
     try {
-      const res = await wipeFn({
-        data: { categories: Array.from(selected), confirm: "CONFIRM", createBackup: withBackup },
-      });
+      const res = await wipeFn({ data: { confirm: RESET_CONFIRM_PHRASE, createBackup: withBackup } });
       setResult(res);
-      toast.success(`اكتملت تهيئة الإنتاج • ${res.totalDeleted} سجل محذوف`);
-      qc.invalidateQueries();
-      setSelected(new Set());
+      if (res.status === "clean") {
+        toast.success(`اكتملت تهيئة الإنتاج • ${res.totalDeleted} سجل محذوف • كل الجداول = 0`);
+      } else {
+        toast.warning(`تهيئة غير مكتملة — ${res.remainingTotal} صف متبقٍ`);
+      }
+      await qc.invalidateQueries();
+      await refetchPreview();
       setConfirmText("");
+      setConfirmOpen(false);
     } catch (e: any) {
       toast.error(e?.message || "فشلت العملية");
     } finally {
       setBusy(false);
-      setConfirmOpen(false);
     }
   }
 
@@ -3726,7 +3741,7 @@ function ProductionWizardCard() {
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ padding: "14px 16px", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 10 }}>
         <Sparkles size={18} color="#0F1F44" />
-        <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تهيئة نسخة الإنتاج</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#0F1F44" }}>تهيئة نسخة الإنتاج (مسح كامل ذرّي)</div>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#7F1D1D", background: "#FEE2E2", border: "1px solid #FECACA", padding: "2px 8px", borderRadius: 999 }}>
           خطر — لا رجعة
         </span>
@@ -3736,96 +3751,96 @@ function ProductionWizardCard() {
         <div style={{ display: "flex", gap: 12, padding: 14, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, alignItems: "flex-start" }}>
           <AlertTriangle size={18} color="#B45309" style={{ marginTop: 2, flexShrink: 0 }} />
           <div style={{ fontSize: 13, color: "#78350F", lineHeight: 1.7 }}>
-            تستخدم لإزالة جميع البيانات التشغيلية المُدخلة يدويًا (حتى لو لم تكن موسومة كتجريبية) قبل تسليم النظام للعميل.
+            يمسح <b>جميع</b> بيانات التشغيل والإدخالات (تنفيذات، تقديمات، معاملات، تحصيلات، شرائح الدفع، مصروفات، خصومات، حركات موردي العملة، حركات خزنة الدولار، سجل التدقيق، سجل النشاط، الوكلاء، الشركات، التجار، المستثمرين، موردي العملة، قواعد التسعير) — كل ذلك داخل معاملة قاعدة بيانات واحدة (إما الكل أو لا شيء).
             <br />
-            <b>يُحتفظ بـ:</b> حساب المسؤول، الإعدادات، الهوية البصرية، الصلاحيات، الأدوار، إعدادات النسخ الاحتياطي.
+            يعيد تصفير أرصدة الخزائن وأرصدتها الافتتاحية.
+            <br />
+            <b>يُحتفظ بـ:</b> المستخدمين وأدوارهم، إعدادات النظام، القوائم المنسدلة، الخزائن نفسها (كسجلات)، وسجل النسخ الاحتياطي.
           </div>
         </div>
 
+        {/* Preview */}
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44" }}>الفئات المراد تنظيفها</div>
-            <button
-              type="button"
-              onClick={toggleAll}
-              style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1px solid #0F1F44", background: allSelected ? "#0F1F44" : "#fff", color: allSelected ? "#F5D27A" : "#0F1F44", cursor: "pointer" }}
-            >
-              {allSelected ? "إلغاء تحديد الكل" : "حذف جميع بيانات التشغيل الحالية"}
-            </button>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1F44", marginBottom: 10 }}>
+            سيتم حذفه ({previewLoading ? "..." : total} صف)
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
-            {WIZARD_CATEGORIES.map((c) => {
-              const on = selected.has(c.key);
-              return (
-                <label key={c.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: on ? "#EEF2FF" : "#F8FAFC", border: `1px solid ${on ? "#C7D2FE" : "#E5E7EB"}`, borderRadius: 10, cursor: "pointer" }}>
-                  <input type="checkbox" checked={on} onChange={() => toggle(c.key)} style={{ marginTop: 3 }} />
-                  <div style={{ display: "grid", gap: 2 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0F1F44" }}>{c.label}</span>
-                    <span style={{ fontSize: 11, color: "#64748B" }}>{c.hint}</span>
-                  </div>
-                </label>
-              );
-            })}
+          {previewLoading ? (
+            <div style={{ color: "#94A3B8", fontSize: 13 }}>جارٍ التحميل...</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6 }}>
+              {Object.entries(preview?.willDelete ?? {}).map(([k, v]) => (
+                <div key={k} style={{ padding: "8px 10px", background: v ? "#FEF3C7" : "#F8FAFC", border: `1px solid ${v ? "#FDE68A" : "#E5E7EB"}`, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#475569" }}>{RESET_LABELS[k] || k}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: v ? "#92400E" : "#94A3B8" }}>{v as number}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F1F44", margin: "14px 0 6px" }}>سيتم الحفاظ عليه</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6 }}>
+            {Object.entries(preview?.preserved ?? {}).map(([k, v]) => (
+              <div key={k} style={{ padding: "8px 10px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#065F46" }}>{RESET_LABELS[k] || k}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#065F46" }}>{v as number}</span>
+              </div>
+            ))}
           </div>
         </div>
 
         <label style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 10, cursor: "pointer", fontSize: 13, color: "#334155" }}>
           <input type="checkbox" checked={withBackup} onChange={(e) => setWithBackup(e.target.checked)} />
-          <span>إنشاء نسخة احتياطية طارئة قبل التنفيذ (موصى به بشدة)</span>
+          <span>إنشاء نسخة احتياطية طارئة قبل التنفيذ (يُلغى الحذف عند فشل النسخة)</span>
         </label>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
           <button
             type="button"
             onClick={() => { setConfirmText(""); setConfirmOpen(true); }}
-            disabled={busy || selected.size === 0}
+            disabled={busy || total === 0}
             style={{
               display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", borderRadius: 10,
-              background: selected.size === 0 ? "#F1F5F9" : "#dc2626", color: selected.size === 0 ? "#94A3B8" : "#fff",
+              background: total === 0 ? "#F1F5F9" : "#dc2626", color: total === 0 ? "#94A3B8" : "#fff",
               border: 0, fontWeight: 800, fontSize: 14,
-              cursor: busy || selected.size === 0 ? "not-allowed" : "pointer",
+              cursor: busy || total === 0 ? "not-allowed" : "pointer",
             }}
           >
             <Trash2 size={16} />
-            <span>{busy ? "جارٍ التنفيذ..." : `تهيئة الإنتاج (${selected.size})`}</span>
+            <span>{busy ? "جارٍ التنفيذ..." : total === 0 ? "النظام نظيف بالفعل" : `تهيئة الإنتاج (${total})`}</span>
           </button>
         </div>
       </div>
 
       {confirmOpen && typeof document !== "undefined" && createPortal(
         <div dir="rtl" onClick={() => !busy && setConfirmOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 520, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 560, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#7F1D1D", display: "flex", alignItems: "center", gap: 8 }}>
               <AlertTriangle size={20} color="#dc2626" /> تأكيد تهيئة نسخة الإنتاج
             </h3>
             <p style={{ marginTop: 12, fontSize: 13.5, color: "#334155", lineHeight: 1.8 }}>
-              سيتم حذف جميع بيانات التشغيل الحالية نهائيًا وتحويل النظام إلى نسخة Production نظيفة.
-              لا يمكن التراجع عن هذه العملية.
+              سيتم حذف <b>جميع بيانات التشغيل والإدخالات</b> ({total} صف) نهائيًا داخل معاملة واحدة. لن يمكن التراجع إلا باستخدام النسخة الاحتياطية. سيتم الاحتفاظ بالمستخدمين والصلاحيات وإعدادات النظام.
             </p>
-            <div style={{ marginTop: 10, fontSize: 12.5, color: "#475569" }}>
-              الفئات المحددة:&nbsp;
-              <b style={{ color: "#0F1F44" }}>
-                {Array.from(selected).map((k) => WIZARD_CATEGORIES.find((c) => c.key === k)?.label).join(" • ")}
-              </b>
-            </div>
             <div style={{ marginTop: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>اكتب <code style={{ background: "#FEE2E2", padding: "2px 6px", borderRadius: 4, color: "#991B1B" }}>CONFIRM</code> للمتابعة</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>اكتب العبارة التالية للمتابعة:</label>
+              <div style={{ marginTop: 6, padding: "8px 12px", background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 8, textAlign: "center", fontWeight: 800, color: "#991B1B" }}>
+                {RESET_CONFIRM_PHRASE}
+              </div>
               <input
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
                 autoFocus
-                placeholder="CONFIRM"
-                style={{ marginTop: 6, width: "100%", padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 14, fontFamily: "monospace", letterSpacing: 2, textAlign: "center" }}
+                placeholder={RESET_CONFIRM_PHRASE}
+                dir="rtl"
+                style={{ marginTop: 8, width: "100%", padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 14, textAlign: "center" }}
               />
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
               <button onClick={() => setConfirmOpen(false)} disabled={busy} style={{ padding: "10px 18px", borderRadius: 8, border: "1px solid #e5e7eb", fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", background: "#fff", color: "#111" }}>إلغاء</button>
               <button
                 onClick={doWipe}
-                disabled={busy || confirmText !== "CONFIRM"}
+                disabled={busy || confirmText.trim() !== RESET_CONFIRM_PHRASE}
                 style={{
-                  padding: "10px 18px", borderRadius: 8, border: 0, fontWeight: 800, cursor: busy || confirmText !== "CONFIRM" ? "not-allowed" : "pointer",
-                  background: confirmText !== "CONFIRM" ? "#fca5a5" : "#dc2626", color: "#fff",
+                  padding: "10px 18px", borderRadius: 8, border: 0, fontWeight: 800, cursor: busy || confirmText.trim() !== RESET_CONFIRM_PHRASE ? "not-allowed" : "pointer",
+                  background: confirmText.trim() !== RESET_CONFIRM_PHRASE ? "#fca5a5" : "#dc2626", color: "#fff",
                 }}
               >
                 {busy ? "جارٍ التنفيذ..." : "تنفيذ نهائي"}
@@ -3838,9 +3853,10 @@ function ProductionWizardCard() {
 
       {result && typeof document !== "undefined" && createPortal(
         <div dir="rtl" onClick={() => setResult(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "grid", placeItems: "center", zIndex: 1000, padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 560, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0F1F44", display: "flex", alignItems: "center", gap: 8 }}>
-              <Check size={20} color="#16A34A" /> اكتملت تهيئة نسخة الإنتاج
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 24, maxWidth: 640, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)", maxHeight: "90vh", overflow: "auto" }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: result.status === "clean" ? "#0F1F44" : "#92400E", display: "flex", alignItems: "center", gap: 8 }}>
+              {result.status === "clean" ? <Check size={20} color="#16A34A" /> : <AlertTriangle size={20} color="#dc2626" />}
+              {result.status === "clean" ? "اكتملت تهيئة نسخة الإنتاج" : "تهيئة غير مكتملة"}
             </h3>
             <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, fontSize: 13 }}>
@@ -3848,13 +3864,9 @@ function ProductionWizardCard() {
                 <span style={{ fontWeight: 800, color: "#065F46" }}>{result.totalDeleted}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13 }}>
-                <span style={{ color: "#475569" }}>المستخدمون التجريبيون المحذوفون</span>
-                <span style={{ fontWeight: 800, color: "#0F1F44" }}>{result.usersDeleted}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8, fontSize: 13 }}>
                 <span style={{ color: "#475569" }}>النسخة الاحتياطية الطارئة</span>
                 <span style={{ fontWeight: 800, color: result.backup.ok ? "#065F46" : "#92400E" }}>
-                  {result.backup.ok ? "تم إنشاؤها" : (result.backup.error ? "فشل: " + result.backup.error : "تم تخطيها")}
+                  {result.backup.ok ? `تم إنشاؤها ${result.backup.path ? "✓" : ""}` : (result.backup.error ? "فشل: " + result.backup.error : "تم تخطيها")}
                 </span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: result.status === "clean" ? "#ECFDF5" : "#FEF3C7", border: `1px solid ${result.status === "clean" ? "#A7F3D0" : "#FDE68A"}`, borderRadius: 8, fontSize: 13 }}>
@@ -3863,13 +3875,32 @@ function ProductionWizardCard() {
                   {result.status === "clean" ? "نظيف وجاهز للإنتاج ✓" : `${result.remainingTotal} سجل متبقٍ`}
                 </span>
               </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: result.adminStillPresent ? "#ECFDF5" : "#FEF2F2", border: `1px solid ${result.adminStillPresent ? "#A7F3D0" : "#FECACA"}`, borderRadius: 8, fontSize: 13 }}>
+                <span style={{ color: "#334155", fontWeight: 700 }}>حساب المسؤول الحالي</span>
+                <span style={{ fontWeight: 800, color: result.adminStillPresent ? "#065F46" : "#991B1B" }}>
+                  {result.adminStillPresent ? "محفوظ ✓" : "مفقود ✗"}
+                </span>
+              </div>
               <details style={{ marginTop: 6, fontSize: 12, color: "#475569" }}>
-                <summary style={{ cursor: "pointer", fontWeight: 700 }}>تفاصيل الحذف لكل جدول</summary>
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>تفاصيل الحذف والتحقق لكل جدول</summary>
                 <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
                   {Object.entries(result.summary).map(([k, v]) => (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", background: "#F8FAFC", borderRadius: 6 }}>
-                      <span>{k}</span>
-                      <span style={{ fontWeight: 700, color: "#0F1F44" }}>{v}</span>
+                      <span>{RESET_LABELS[k] || k}</span>
+                      <span style={{ fontWeight: 700, color: "#0F1F44" }}>
+                        محذوف {String(v)} • متبقٍ {result.remaining[k] ?? "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+              <details style={{ fontSize: 12, color: "#475569" }}>
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>الجداول المحفوظة</summary>
+                <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+                  {Object.entries(result.preserved).map(([k, v]) => (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", background: "#ECFDF5", borderRadius: 6 }}>
+                      <span>{RESET_LABELS[k] || k}</span>
+                      <span style={{ fontWeight: 700, color: "#065F46" }}>{String(v)}</span>
                     </div>
                   ))}
                 </div>
@@ -3885,6 +3916,7 @@ function ProductionWizardCard() {
     </div>
   );
 }
+
 
 function ChangePasswordTab() {
   const { user } = useAuth();
