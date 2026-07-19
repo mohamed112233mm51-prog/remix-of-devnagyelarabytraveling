@@ -1474,7 +1474,7 @@ export type Database = {
         Returns: boolean
       }
       reset_production_business_data: {
-        Args: { p_confirm: string }
+        Args: { p_confirm: string; p_user_id: string }
         Returns: Json
       }
       restore_disable_guards: { Args: never; Returns: undefined }
