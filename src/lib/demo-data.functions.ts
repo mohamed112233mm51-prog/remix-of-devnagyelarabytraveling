@@ -587,72 +587,85 @@ export const productionCleanup = createServerFn({ method: "POST" })
   });
 
 // ============================================================
-// Production Wizard — selective wipe of operational data
-// regardless of is_demo flag. Preserves: profiles (admins),
-// user_roles, app_settings, system_dropdown_options, backup_logs,
-// storage (branding/logo), and auth users that hold admin role.
+// Production Wizard — FULL atomic wipe of all business/operational data.
+// Runs inside a single SECURITY DEFINER Postgres function so the DB
+// either wipes everything or nothing (no partial state).
+// Preserves: profiles, user_roles, app_settings, system_dropdown_options,
+// backup_logs, cash_boxes (as entities — balances reset to 0),
+// and all auth users.
 // ============================================================
-export type WipeCategory =
-  | "agents"
-  | "companies"
-  | "merchants"
-  | "investors"
-  | "transactions"
-  | "collections"
-  | "expenses"
-  | "notifications"
-  | "test_users";
+export type WipeCategory = "all";
 
-const CATEGORY_TABLES: Record<WipeCategory, readonly string[]> = {
-  agents: ["agents"],
-  companies: ["issuing_companies", "company_transactions", "usd_treasury_transactions"],
-  merchants: ["merchants", "merchant_cash_collections"],
-  investors: ["investors", "investor_transactions"],
-  transactions: ["transactions", "usd_treasury_transactions"],
-  collections: ["merchant_cash_collections"],
-  expenses: ["expenses", "expense_deductions"],
-  notifications: ["activity_logs"],
-  test_users: [],
-};
-
-// Deterministic deletion order — children first to avoid FK/relationship gaps.
-const DELETE_ORDER: readonly string[] = [
+// Tables the RPC wipes — mirror of reset_production_business_data() body.
+// Used ONLY for the preflight preview and the post-wipe verification.
+export const RESET_WIPE_TABLES = [
+  "payment_splits",
+  "financial_audit_log",
   "expense_deductions",
   "expenses",
   "investor_transactions",
   "merchant_cash_collections",
+  "currency_supplier_transactions",
   "usd_treasury_transactions",
   "company_transactions",
   "transactions",
+  "submissions",
+  "executions",
+  "company_pricing_rules",
+  "activity_logs",
+  "import_batches",
   "investors",
   "merchants",
+  "currency_suppliers",
   "issuing_companies",
   "agents",
-  "activity_logs",
-];
+] as const;
+
+const PRESERVED_TABLES = [
+  "profiles",
+  "user_roles",
+  "app_settings",
+  "system_dropdown_options",
+  "backup_logs",
+  "cash_boxes",
+] as const;
+
+export const previewProductionReset = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await ensureAdmin(context.supabase, context.userId);
+    const sb = admin();
+    const willDelete: Record<string, number> = {};
+    const preserved: Record<string, number> = {};
+    let total = 0;
+    for (const t of RESET_WIPE_TABLES) {
+      const { count } = await sb.from(t as any).select("*", { count: "exact", head: true });
+      willDelete[t] = count ?? 0;
+      total += count ?? 0;
+    }
+    for (const t of PRESERVED_TABLES) {
+      const { count } = await sb.from(t as any).select("*", { count: "exact", head: true });
+      preserved[t] = count ?? 0;
+    }
+    return { willDelete, preserved, total };
+  });
+
+const CONFIRM_PHRASE = "تهيئة الإنتاج نهائياً";
 
 export const productionWipe = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: {
-    categories: WipeCategory[];
-    confirm: string;
-    createBackup?: boolean;
-  }) => {
-    if (d.confirm !== "CONFIRM") throw new Error("Confirmation phrase required");
-    if (!Array.isArray(d.categories) || d.categories.length === 0) {
-      throw new Error("No categories selected");
+  .inputValidator((d: { confirm: string; createBackup?: boolean }) => {
+    if (d?.confirm !== CONFIRM_PHRASE) {
+      throw new Error("عبارة التأكيد غير مطابقة");
     }
-    return {
-      categories: d.categories,
-      confirm: d.confirm,
-      createBackup: d.createBackup !== false,
-    };
+    return { confirm: d.confirm, createBackup: d.createBackup !== false };
   })
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.supabase, context.userId);
     const sb = admin();
 
-    // 1) Safety snapshot
+    // 1) Mandatory backup. If backup requested and fails → abort without
+    // touching data (spec §9: never start the wipe on a failed backup).
     let backup: { ok: boolean; path?: string; error?: string } = { ok: false };
     if (data.createBackup) {
       try {
@@ -661,84 +674,73 @@ export const productionWipe = createServerFn({ method: "POST" })
         backup = { ok: true, path: (res as any)?.path };
       } catch (e: any) {
         backup = { ok: false, error: e?.message || "backup failed" };
+        throw new Error(
+          "فشل إنشاء النسخة الاحتياطية الطارئة — تم إلغاء التهيئة قبل حذف أي بيانات. " +
+            (backup.error ?? ""),
+        );
       }
     }
 
-    // 2) Resolve target tables from selected categories
-    const targets = new Set<string>();
-    for (const cat of data.categories) {
-      for (const t of CATEGORY_TABLES[cat] ?? []) targets.add(t);
+    // 2) Atomic wipe. The RPC runs in a single transaction inside Postgres,
+    // disables cash-box guards + payment_split triggers, deletes children
+    // → parents, resets cash-box balances, then re-enables triggers. On any
+    // error Postgres rolls the whole function back.
+    // context.supabase = authenticated user's Supabase client. RPC verifies
+    // admin role and confirmation phrase again inside the DB.
+    const { data: rpcData, error: rpcErr } = await context.supabase.rpc(
+      "reset_production_business_data" as any,
+      { p_confirm: data.confirm } as any,
+    );
+    if (rpcErr) {
+      throw new Error(`فشل تنفيذ التهيئة الذرّية: ${rpcErr.message}`);
     }
+    const summary: Record<string, number> = (rpcData as any) ?? {};
 
-    // 3) Wipe selected tables (full, not is_demo-scoped)
-    const summary: Record<string, number> = {};
-    let totalDeleted = 0;
-    for (const t of DELETE_ORDER) {
-      if (!targets.has(t)) continue;
-      // .delete() needs a filter; use an always-true predicate.
-      const { count, error } = await sb
-        .from(t as any)
-        .delete({ count: "exact" })
-        .not("id", "is", null);
-      if (error) {
-        summary[t] = 0;
-        continue;
-      }
-      summary[t] = count ?? 0;
-      totalDeleted += count ?? 0;
-    }
-
-    // 4) Optionally delete non-admin test users (profiles + auth + user_roles)
-    let usersDeleted = 0;
-    if (data.categories.includes("test_users")) {
-      // Collect admin user ids — these are never deleted.
-      const { data: admins } = await sb
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "admin");
-      const adminIds = new Set((admins ?? []).map((r: any) => r.user_id as string));
-
-      // List all auth users in pages, delete any non-admin.
-      let page = 1;
-      const perPage = 200;
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { data: list, error } = await sb.auth.admin.listUsers({ page, perPage });
-        if (error || !list?.users?.length) break;
-        for (const u of list.users) {
-          if (adminIds.has(u.id)) continue;
-          await sb.auth.admin.deleteUser(u.id).catch(() => null);
-          // Profile + roles fall through; clean up explicitly in case of stragglers.
-          await sb.from("profiles").delete().eq("id", u.id);
-          await sb.from("user_roles").delete().eq("user_id", u.id);
-          usersDeleted += 1;
-        }
-        if (list.users.length < perPage) break;
-        page += 1;
-      }
-    }
-
-    // 5) Verify integrity — counts after wipe for targeted tables
-    const remaining: Record<string, number> = {};
+    // 3) Post-wipe verification — every business table must be at 0.
+    const verification: Record<string, number> = {};
     let remainingTotal = 0;
-    for (const t of targets) {
-      const { count } = await sb
-        .from(t as any)
-        .select("*", { count: "exact", head: true });
-      remaining[t] = count ?? 0;
+    for (const t of RESET_WIPE_TABLES) {
+      const { count } = await sb.from(t as any).select("*", { count: "exact", head: true });
+      verification[t] = count ?? 0;
       remainingTotal += count ?? 0;
     }
+
+    // 4) Preserved-side sanity: the executing admin, their profile + role,
+    // and dropdown/settings rows must still exist.
+    const preserved: Record<string, number> = {};
+    for (const t of PRESERVED_TABLES) {
+      const { count } = await sb.from(t as any).select("*", { count: "exact", head: true });
+      preserved[t] = count ?? 0;
+    }
+    const { data: meRole } = await sb
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    const adminStillPresent = !!meRole;
+
+    let totalDeleted = 0;
+    for (const [k, v] of Object.entries(summary)) {
+      if (k === "cash_boxes_reset") continue;
+      totalDeleted += Number(v) || 0;
+    }
+
+    const status: "clean" | "partial" = remainingTotal === 0 && adminStillPresent ? "clean" : "partial";
 
     return {
       backup,
       summary,
       totalDeleted,
-      usersDeleted,
-      remaining,
+      usersDeleted: 0,
+      remaining: verification,
       remainingTotal,
-      status: remainingTotal === 0 ? "clean" : "partial",
+      preserved,
+      adminStillPresent,
+      status,
     };
   });
+
 
 // ============================================================
 // Prepare System for Launch (Super Admin only)
