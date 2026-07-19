@@ -398,7 +398,7 @@ export async function restoreFromPayload(
   }
 
   // If preflight blocked, optionally create missing identities and re-check.
-  let createdIdentities: RestoreResult["createdIdentities"];
+  let createdRaw: { created: Array<{ sourceId: string; targetId: string; email: string }>; failed: Array<{ sourceId: string; email: string; error: string }> } | undefined;
   if (!preflight.canProceed) {
     if (!opts.createMissingIdentities) {
       return {
@@ -410,21 +410,19 @@ export async function restoreFromPayload(
     }
     // Only auto-create for cases where an email exists in source but not in
     // target (missingByEmail). Duplicates and empty-email cases stay blocked.
-    const toCreate = preflight.missingByEmail;
-    createdIdentities = await createMissingDevIdentities(toCreate, authUserIdMap);
-    // Rebuild preflight with updated map (mandatoryUnmapped will drop resolved refs).
-    // Cheap recompute in place — we've mutated authUserIdMap already.
+    createdRaw = await createMissingDevIdentities(preflight.missingByEmail, authUserIdMap);
     preflight = {
       ...preflight,
-      matched: [...preflight.matched, ...createdIdentities.created.map((c) => ({ sourceId: c.sourceId, targetId: c.targetId, email: c.email }))],
+      matched: [...preflight.matched, ...createdRaw.created],
       missingByEmail: preflight.missingByEmail.filter((m) => !authUserIdMap.has(m.sourceId)),
       mandatoryUnmapped: preflight.mandatoryUnmapped.filter((m) => !authUserIdMap.has(m.sourceUserId)),
+      canProceed: true,
     };
     preflight.canProceed = preflight.mandatoryUnmapped.length === 0;
     if (!preflight.canProceed) {
       return {
         preflight,
-        createdIdentities: { created: createdIdentities.created.length, failed: createdIdentities.failed },
+        createdIdentities: { created: createdRaw.created.length, failed: createdRaw.failed },
         aborted: {
           reason: `Identity preflight still failing after creating missing users. Unresolved mandatory refs: ${preflight.mandatoryUnmapped.length}. Resolve duplicate/empty emails in the source and retry.`,
         },
@@ -453,8 +451,8 @@ export async function restoreFromPayload(
 
   return {
     preflight,
-    createdIdentities: createdIdentities
-      ? { created: createdIdentities.created.length, failed: createdIdentities.failed }
+    createdIdentities: createdRaw
+      ? { created: createdRaw.created.length, failed: createdRaw.failed }
       : undefined,
     summary,
   };
