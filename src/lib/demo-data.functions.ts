@@ -528,7 +528,9 @@ export const productionCleanup = createServerFn({ method: "POST" })
     await ensureAdmin(context.supabase, context.userId);
     const sb = admin();
 
-    // 1) Safety snapshot (best-effort; never block cleanup if backup fails)
+    // Legacy entry point kept for old UI code, but routed through the same
+    // atomic DB reset as ProductionWizardCard. Backup failure aborts before
+    // touching data.
     let backup: { ok: boolean; path?: string; error?: string } = { ok: false };
     if (data.createBackup) {
       try {
@@ -537,39 +539,33 @@ export const productionCleanup = createServerFn({ method: "POST" })
         backup = { ok: true, path: (res as any)?.path };
       } catch (e: any) {
         backup = { ok: false, error: e?.message || "backup failed" };
+        throw new Error(
+          "فشل إنشاء النسخة الاحتياطية الطارئة — تم إلغاء التهيئة قبل حذف أي بيانات. " +
+            (backup.error ?? ""),
+        );
       }
     }
 
-    // 2) Full operational wipe — children → parents.
-    // Deletes ALL rows (not is_demo-scoped) so the system becomes a clean
-    // production copy. Preserves: profiles, user_roles, app_settings,
-    // system_dropdown_options, backup_logs, cash_boxes (balances reset),
-    // storage (branding/logo) and any auth user that holds an admin role.
-    const summary: Record<string, number> = {};
+    const { data: rpcData, error: rpcErr } = await sb.rpc(
+      "reset_production_business_data" as any,
+      { p_confirm: "تهيئة الإنتاج نهائياً", p_user_id: context.userId } as any,
+    );
+    if (rpcErr) throw new Error(`فشل تنفيذ التهيئة الذرّية: ${rpcErr.message}`);
+
+    const rpcResult: any = rpcData ?? {};
+    const summary: Record<string, number> = rpcResult.deleted ?? {};
     const errors: CleanupErrors = {};
     let totalDeleted = 0;
-    for (const t of COMPANY_ACCOUNT_REPORT_TABLES) {
-      totalDeleted += await deleteOptionalRows(sb, t, summary, errors);
-    }
-    for (const t of PRODUCTION_DELETE_ORDER) {
-      totalDeleted += await deleteAllRows(sb, t, summary, errors);
+    for (const [k, v] of Object.entries(summary)) {
+      if (k === "cash_boxes_reset") continue;
+      totalDeleted += Number(v) || 0;
     }
 
-    // Reset cash box balances to zero (boxes themselves are preserved).
-    try {
-      await sb
-        .from("cash_boxes")
-        .update({ balance: 0 } as any)
-        .not("id", "is", null);
-    } catch {}
-
-    // 3) Verification — confirm wiped tables are now empty and specifically
-    // prove issuing_companies = 0 before reporting success.
+    const verification = await buildResetVerification(sb, errors);
     let remaining = 0;
     for (const t of PRODUCTION_DELETE_ORDER) {
       remaining += await countAllRows(sb, t, errors);
     }
-    const verification = await buildResetVerification(sb, errors);
     const clean = remaining === 0 && verification.issuing_companies === 0 && verification.company_related_total === 0;
     console.info("[Reset Verification] production cleanup result", { verification, summary, errors, remaining });
 
