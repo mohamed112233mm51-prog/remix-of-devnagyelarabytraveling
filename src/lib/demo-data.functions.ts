@@ -14,11 +14,22 @@ import {
 const APPROVAL_STATUSES = ["سريعة", "بطيئة", "رفض أمني"] as const;
 
 function admin() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  );
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing trusted backend credentials");
+  return createClient<Database>(url, key, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input, init) => {
+        const headers = new Headers(init?.headers);
+        if (key.startsWith("sb_") && headers.get("Authorization") === `Bearer ${key}`) {
+          headers.delete("Authorization");
+        }
+        headers.set("apikey", key);
+        return fetch(input, { ...init, headers });
+      },
+    },
+  });
 }
 
 async function ensureAdmin(supabase: any, userId: string) {
@@ -554,6 +565,24 @@ export const productionCleanup = createServerFn({ method: "POST" })
 
     const rpcResult: any = rpcData ?? {};
     const summary: Record<string, number> = rpcResult.deleted ?? {};
+    const rpcRemaining = rpcResult.remaining ?? {};
+    const rpcAgentReferences = Number(rpcRemaining.agentReferences ?? Number.POSITIVE_INFINITY);
+    if (rpcResult.success !== true || Number(rpcRemaining.agents ?? Number.POSITIVE_INFINITY) !== 0 || rpcAgentReferences !== 0) {
+      return {
+        backup,
+        summary,
+        errors: {
+          reset: "فشل تحقق حذف الوكلاء داخل قاعدة البيانات",
+        },
+        verification: await buildResetVerification(sb, {}),
+        companyAccountsDeleted: companyAccountsDeleted(summary),
+        totalDeleted: 0,
+        usersDeleted: 0,
+        remaining: 1,
+        status: "partial" as const,
+        resetProof: rpcResult,
+      };
+    }
     const errors: CleanupErrors = {};
     let totalDeleted = 0;
     for (const [k, v] of Object.entries(summary)) {
@@ -692,6 +721,23 @@ export const productionWipe = createServerFn({ method: "POST" })
     }
     const rpcResult: any = rpcData ?? {};
     const summary: Record<string, number> = rpcResult.deleted ?? rpcResult ?? {};
+    const rpcRemaining = rpcResult.remaining ?? {};
+    const rpcAgentReferences = Number(rpcRemaining.agentReferences ?? Number.POSITIVE_INFINITY);
+    const rpcAgents = Number(rpcRemaining.agents ?? Number.POSITIVE_INFINITY);
+    if (rpcResult.success !== true || rpcAgents !== 0 || rpcAgentReferences !== 0) {
+      return {
+        backup,
+        summary,
+        totalDeleted: 0,
+        usersDeleted: 0,
+        remaining: rpcRemaining,
+        remainingTotal: Number(rpcResult.remainingTotal ?? 1),
+        preserved: {},
+        adminStillPresent: true,
+        resetProof: rpcResult,
+        status: "partial" as const,
+      };
+    }
 
     // 3) Post-wipe verification — every business table must be at 0.
     const verification: Record<string, number> = {};
@@ -723,7 +769,13 @@ export const productionWipe = createServerFn({ method: "POST" })
       totalDeleted += Number(v) || 0;
     }
 
-    const status: "clean" | "partial" = remainingTotal === 0 && adminStillPresent ? "clean" : "partial";
+    const status: "clean" | "partial" = remainingTotal === 0
+      && adminStillPresent
+      && verification.agents === 0
+      && Number(rpcResult.remaining?.agents ?? 1) === 0
+      && Number(rpcResult.remaining?.agentReferences ?? 1) === 0
+        ? "clean"
+        : "partial";
 
     return {
       backup,
@@ -801,48 +853,28 @@ export const prepareForLaunch = createServerFn({ method: "POST" })
     }
     const sb = admin();
 
-    const summary: Record<string, number> = {};
-    let totalDeleted = 0;
-
-    for (const t of LAUNCH_WIPE_ORDER) {
-      const { count, error } = await sb
-        .from(t as any)
-        .delete({ count: "exact" })
-        .not("id", "is", null);
-      if (error) {
-        summary[t] = 0;
-        continue;
-      }
-      summary[t] = count ?? 0;
-      totalDeleted += count ?? 0;
+    const { data: rpcData, error: rpcErr } = await sb.rpc(
+      "reset_production_business_data" as any,
+      { p_confirm: "تهيئة الإنتاج نهائياً", p_user_id: context.userId } as any,
+    );
+    if (rpcErr) throw new Error(`فشل تنفيذ التهيئة الذرّية: ${rpcErr.message}`);
+    const rpcResult: any = rpcData ?? {};
+    if (rpcResult.success !== true || Number(rpcResult.remaining?.agents ?? 1) !== 0 || Number(rpcResult.remaining?.agentReferences ?? 1) !== 0) {
+      throw new Error("فشل تحقق حذف الوكلاء داخل قاعدة البيانات");
     }
-
-    if (data.wipeCoreEntities) {
-      for (const t of [...CORE_ENTITY_DEPENDENTS, ...CORE_ENTITIES]) {
-        const { count, error } = await sb
-          .from(t as any)
-          .delete({ count: "exact" })
-          .not("id", "is", null);
-        if (error) {
-          summary[t] = 0;
-          continue;
-        }
-        summary[t] = count ?? 0;
-        totalDeleted += count ?? 0;
-      }
-    }
+    const summary: Record<string, number> = rpcResult.deleted ?? {};
+    const totalDeleted = Object.entries(summary)
+      .filter(([k]) => k !== "cash_boxes_reset")
+      .reduce((sum, [, v]) => sum + (Number(v) || 0), 0);
 
     // Reset cash box balances to zero (entities preserved).
-    const { count: boxesReset } = await sb
-      .from("cash_boxes")
-      .update({ balance: 0 } as any, { count: "exact" })
-      .not("id", "is", null);
-    summary["cash_boxes_reset"] = boxesReset ?? 0;
+    const boxesReset = Number(summary.cash_boxes_reset || 0);
 
     return {
       summary,
       totalDeleted,
-      cashBoxesReset: boxesReset ?? 0,
+      cashBoxesReset: boxesReset,
       status: "clean" as const,
+      resetProof: rpcResult,
     };
   });
