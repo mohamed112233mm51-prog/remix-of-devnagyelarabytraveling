@@ -3723,11 +3723,25 @@ function ProductionWizardCard() {
       setResult(res);
       if (res.status === "clean") {
         toast.success(`اكتملت تهيئة الإنتاج • ${res.totalDeleted} سجل محذوف • كل الجداول = 0`);
+        // مسح أي ذاكرة مؤقتة قد تُبقي أسماء/أرقاماً قديمة على الشاشة.
+        try {
+          for (const k of Object.keys(localStorage)) {
+            if (k.startsWith("sb-") && k.endsWith("-auth-token")) continue;
+            if (/agent|dashboard|transaction|execution|merchant|compan|supplier|invest|expense|payment|financ|summary|ledger|cache|live|form:/i.test(k)) {
+              localStorage.removeItem(k);
+            }
+          }
+          sessionStorage.clear();
+        } catch {}
+        await qc.invalidateQueries();
+        await qc.resetQueries();
+        // إعادة تحميل كاملة لضمان تصفير كل الكروت والقوائم — لا اعتماد على realtime لبيانات الحذف الجماعي.
+        setTimeout(() => { window.location.reload(); }, 1500);
       } else {
         toast.warning(`تهيئة غير مكتملة — ${res.remainingTotal} صف متبقٍ`);
+        await qc.invalidateQueries();
+        await refetchPreview();
       }
-      await qc.invalidateQueries();
-      await refetchPreview();
       setConfirmText("");
       setConfirmOpen(false);
     } catch (e: any) {
