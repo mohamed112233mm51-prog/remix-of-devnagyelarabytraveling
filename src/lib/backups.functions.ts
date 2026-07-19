@@ -244,35 +244,44 @@ export const importBackup = createServerFn({ method: "POST" })
     }
 
     // 6) Restore for real
-    const summary = await restoreFromPayload(payload);
+    const summary: any = await restoreFromPayload(payload);
+    const meta = summary.__meta ?? {};
+    delete summary.__meta;
     const failed: Array<{ table: string; error: string }> = [];
+    const rowErrors: Array<{ table: string; id: any; code?: string; message: string }> = [];
     const skippedTables: Array<{ table: string; skipped: number }> = [];
     const skippedMissingUserTables: Array<{ table: string; skipped: number }> = [];
     let inserted = 0;
     let skipped = 0;
     let skippedMissingUser = 0;
+    let failedRows = 0;
     let tablesProcessed = 0;
-    for (const [t, v] of Object.entries(summary)) {
+    for (const [t, v] of Object.entries(summary) as any) {
       tablesProcessed++;
       if (v.error) failed.push({ table: t, error: v.error });
       else inserted += v.restored ?? 0;
-      const s = (v as any).skipped ?? 0;
-      if (s > 0) {
-        skipped += s;
-        skippedTables.push({ table: t, skipped: s });
-      }
-      const sm = (v as any).skippedMissingUser ?? 0;
-      if (sm > 0) {
-        skippedMissingUser += sm;
-        skippedMissingUserTables.push({ table: t, skipped: sm });
+      const s = v.skipped ?? 0;
+      if (s > 0) { skipped += s; skippedTables.push({ table: t, skipped: s }); }
+      const sm = v.skippedMissingUser ?? 0;
+      if (sm > 0) { skippedMissingUser += sm; skippedMissingUserTables.push({ table: t, skipped: sm }); }
+      const f = v.failed ?? 0;
+      if (f > 0) {
+        failedRows += f;
+        for (const err of (v.errors ?? [])) rowErrors.push({ table: t, ...err });
       }
     }
 
+    const hasErrors = failed.length > 0 || failedRows > 0;
     await logBackupRow({
       backup_type: "restore",
       file_path: path,
-      status: failed.length > 0 ? "failed" : "success",
-      failure_reason: failed.length > 0 ? failed.map((f) => `${f.table}: ${f.error}`).join("; ") : null,
+      status: hasErrors ? "failed" : "success",
+      failure_reason: hasErrors
+        ? [
+            ...failed.map((f) => `${f.table}: ${f.error}`),
+            ...(failedRows > 0 ? [`row-errors: ${failedRows}`] : []),
+          ].join("; ")
+        : null,
       restore_date: new Date().toISOString(),
       restored_by: context.userId,
       created_by: context.userId,
@@ -283,9 +292,14 @@ export const importBackup = createServerFn({ method: "POST" })
       path, logId, size: gzBuf.byteLength, versionMismatch, meta: payload.meta,
       summary, inserted, skipped, skippedTables,
       skippedMissingUser, skippedMissingUserTables,
+      failedRows, rowErrors: rowErrors.slice(0, 100),
       tablesProcessed,
       tablesWithData: tablesWithData.length,
       failed, emergencyPath,
+      userMap: meta.userMap ?? null,
+      warnings: meta.warnings ?? 0,
+      warningsSample: meta.warningsSample ?? [],
+      hasErrors,
     };
   });
 
