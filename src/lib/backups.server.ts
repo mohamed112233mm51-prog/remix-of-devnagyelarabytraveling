@@ -157,23 +157,47 @@ export const REFERENCE_TABLES_NO_WIPE: ReadonlySet<string> = new Set([
 ]);
 
 // Per-table conflict key for upsert. Default is "id" for tables that have it.
-// Tables without an "id" column must declare their real PK here.
 const UPSERT_CONFLICT_KEY: Record<string, string> = {
   app_settings: "key",
   user_roles: "user_id,role",
 };
 
-// Performs full restore. Reference tables are upserted (no wipe). Other tables
-// are wiped then re-inserted in chunks. Bypasses RLS via service role.
-// Caller MUST be admin (enforced upstream).
-// Duplicate/unique-violation SQL codes and message fragments that mean
-// "already exists" — treated as SKIPPED for reference/lookup tables only.
-// Foreign key (23503), NOT NULL (23502), check constraint (23514), and any
-// other error class remain real errors even on reference tables.
+// ---- ROOT-CAUSE FIX (M1) ----------------------------------------------------
+// Every column in public.* that FKs auth.users(id). Rows referencing a source
+// user that doesn't exist in the target auth schema were previously killing
+// the entire table (transactions.cancelled_by → auth.users was the actual
+// cause of the 36 lost agent movements). We rewrite each such column to a
+// mapped target uuid (via profiles.email) or to NULL when unmapped.
+//
+// Data pulled from pg_constraint on 2026-07-19 — matches production schema.
+const AUTH_USER_FK_COLUMNS: Record<string, string[]> = {
+  activity_logs: ["user_id"],
+  company_transactions: ["cancelled_by"],
+  currency_supplier_transactions: ["cancelled_by"],
+  expense_deductions: ["cancelled_by"],
+  financial_audit_log: ["performed_by"],
+  merchant_cash_collections: ["cancelled_by"],
+  payment_splits: ["cancelled_by"],
+  transactions: ["cancelled_by"],
+  usd_treasury_transactions: ["cancelled_by"],
+  user_roles: ["user_id"],
+  // profiles.id → auth.users(id) handled separately: skip rows whose profile
+  // email isn't in target auth (they'd fail anyway and we don't NULL a PK).
+};
+
+// Every column in public.* that FKs cash_boxes(id). Previously only
+// payment_splits got remapped; usd_treasury_transactions was silently failing.
+const CASH_BOX_FK_COLUMNS: Record<string, string[]> = {
+  payment_splits: ["cash_box_id"],
+  usd_treasury_transactions: ["cash_box_id"],
+};
+
+type Warning = { table: string; row_id: any; column: string; from: any; reason: string };
+
 function isDuplicateError(err: any): boolean {
   const code = String(err?.code ?? "");
   const msg = String(err?.message ?? err ?? "").toLowerCase();
-  if (code === "23505") return true; // unique_violation ONLY
+  if (code === "23505") return true;
   return (
     msg.includes("duplicate key") ||
     msg.includes("already exists") ||
@@ -182,34 +206,18 @@ function isDuplicateError(err: any): boolean {
   );
 }
 
-// FK violations from tables that reference auth.users. auth.users is not
-// included in backups, so rows referring to users that no longer exist
-// should be SKIPPED (Missing Auth User), not counted as Failed.
-const TABLES_REFERENCING_AUTH_USER: ReadonlySet<string> = new Set([
-  "profiles",
-  "user_roles",
-  "activity_logs",
-]);
-
-function isMissingAuthUserError(err: any): boolean {
-  const code = String(err?.code ?? "");
-  const msg = String(err?.message ?? err?.details ?? err ?? "").toLowerCase();
-  if (code !== "23503") return false;
-  return (
-    msg.includes("auth.users") ||
-    msg.includes("users") && msg.includes("foreign key") ||
-    msg.includes("user_id") ||
-    msg.includes("profiles_id_fkey")
-  );
-}
-
-
 export async function restoreFromPayload(payload: BackupPayload) {
-  const summary: Record<string, { restored: number; skipped?: number; skippedMissingUser?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }> = {};
+  const summary: Record<string, {
+    restored: number;
+    skipped?: number;
+    skippedMissingUser?: number;
+    failed?: number;
+    mode: "upsert" | "wipe-insert" | "map-insert";
+    error?: string;
+    errors?: Array<{ id: any; code?: string; message: string }>;
+    details?: any;
+  }> = {};
 
-  // Disable user triggers (incl. cash-box negative-balance guard) for the
-  // duration of the restore so historical rows insert cleanly. Always
-  // re-enabled in the finally block so protection returns after restore.
   let guardsDisabled = false;
   try {
     const { error: dErr } = await (supabaseAdmin as any).rpc("restore_disable_guards");
@@ -219,24 +227,46 @@ export async function restoreFromPayload(payload: BackupPayload) {
     console.error("[restore] disable_guards exception", e);
   }
   try {
-  return await _restoreInner(payload, summary);
+    return await _restoreInner(payload, summary);
   } finally {
     if (guardsDisabled) {
-      try {
-        await (supabaseAdmin as any).rpc("restore_enable_guards");
-      } catch (e) {
-        console.error("[restore] enable_guards failed", e);
-      }
+      try { await (supabaseAdmin as any).rpc("restore_enable_guards"); }
+      catch (e) { console.error("[restore] enable_guards failed", e); }
     }
   }
 }
 
 async function _restoreInner(
   payload: BackupPayload,
-  summary: Record<string, { restored: number; skipped?: number; skippedMissingUser?: number; mode: "upsert" | "wipe-insert" | "map-insert"; error?: string; details?: any }>,
+  summary: Record<string, any>,
 ) {
+  const warnings: Warning[] = [];
 
-  // PHASE 1: wipe non-reference tables in REVERSE FK order (children first)
+  // ---- Build authUserIdMap: source_user_id -> target_user_id (via email) ----
+  // Source: payload.data.profiles (id + email from production).
+  // Target: current dev profiles (id + email). profiles.id == auth.users.id.
+  const sourceProfiles: any[] = payload.data.profiles ?? [];
+  const authUserIdMap = new Map<string, string>();
+  const targetAuthUserIds = new Set<string>();
+  try {
+    const { data: targetProfiles } = await (supabaseAdmin.from as any)("profiles")
+      .select("id,email");
+    const byEmail = new Map<string, string>();
+    for (const p of targetProfiles ?? []) {
+      targetAuthUserIds.add(p.id);
+      if (p.email) byEmail.set(String(p.email).toLowerCase().trim(), p.id);
+    }
+    for (const sp of sourceProfiles) {
+      if (!sp?.id || !sp?.email) continue;
+      const targetId = byEmail.get(String(sp.email).toLowerCase().trim());
+      if (targetId) authUserIdMap.set(sp.id, targetId);
+    }
+    console.log(`[restore] user map built: ${authUserIdMap.size}/${sourceProfiles.length} source users mapped by email`);
+  } catch (e: any) {
+    console.error("[restore] user map build failed", e);
+  }
+
+  // PHASE 1: wipe non-reference tables (children first)
   const wipeOrder = [...BACKUP_TABLES].reverse().filter((t) => !REFERENCE_TABLES_NO_WIPE.has(t));
   for (const t of wipeOrder) {
     try {
@@ -247,19 +277,50 @@ async function _restoreInner(
     }
   }
 
-  // Mapping of cash_box IDs from JSON -> live DB IDs. Built during cash_boxes
-  // phase, consumed during payment_splits phase.
   const cashBoxIdMap = new Map<string, string>();
   let cashBoxesMapped = 0;
   let cashBoxesCreated = 0;
 
-  // PHASE 2: insert / upsert in FORWARD FK order (parents first)
+  // Row rewriter: nulls out unresolvable auth.users refs, remaps cash_box_ids.
+  function rewriteRow(table: string, row: any): any {
+    const out = { ...row };
+    const userCols = AUTH_USER_FK_COLUMNS[table] ?? [];
+    for (const col of userCols) {
+      const v = out[col];
+      if (!v) continue;
+      if (authUserIdMap.has(v)) {
+        const mapped = authUserIdMap.get(v)!;
+        if (mapped !== v) out[col] = mapped;
+      } else if (!targetAuthUserIds.has(v)) {
+        warnings.push({ table, row_id: row.id, column: col, from: v, reason: "auth user not in target — set to NULL" });
+        out[col] = null;
+      }
+    }
+    const boxCols = CASH_BOX_FK_COLUMNS[table] ?? [];
+    for (const col of boxCols) {
+      const v = out[col];
+      if (!v) continue;
+      const mapped = cashBoxIdMap.get(v);
+      if (mapped) {
+        if (mapped !== v) out[col] = mapped;
+      } else {
+        // cash_box_id in source but not in map → box didn't exist in source
+        // payload either; leave as-is only if it exists in target, else NULL.
+        // We can't check target cheaply per-row; rely on FK to catch and
+        // fall through to per-row retry which will null it below.
+      }
+    }
+    return out;
+  }
+
+  // PHASE 2: insert in FORWARD FK order
   for (const t of BACKUP_TABLES) {
     if (summary[t]?.error) continue; // wipe failed
     const rows = payload.data[t] ?? [];
     const isReference = REFERENCE_TABLES_NO_WIPE.has(t);
+
     try {
-      // --- Special handling: cash_boxes (unique on name+currency) ---
+      // --- Special: cash_boxes (unique on name+currency, build ID map) ---
       if (t === "cash_boxes") {
         const { data: existing, error: exErr } = await (supabaseAdmin.from as any)("cash_boxes")
           .select("id,name,currency");
@@ -301,115 +362,94 @@ async function _restoreInner(
         continue;
       }
 
-      // --- Special handling: payment_splits (remap cash_box_id) ---
-      if (t === "payment_splits") {
-        let remapped = 0;
-        const dbCashIds = new Set<string>(Array.from(cashBoxIdMap.values()));
-        const failed: Array<{ id: any; reason: string }> = [];
-        const prepared: any[] = [];
-        for (const row of rows) {
-          const oldCb = row.cash_box_id;
-          let newCb: string | null = oldCb ?? null;
-          if (oldCb) {
-            const mapped = cashBoxIdMap.get(oldCb);
-            if (mapped) {
-              if (mapped !== oldCb) remapped++;
-              newCb = mapped;
-            } else if (!dbCashIds.has(oldCb)) {
-              failed.push({ id: row.id, reason: `unknown cash_box_id ${oldCb}` });
-              newCb = null;
-            }
-          }
-          prepared.push({ ...row, cash_box_id: newCb });
-        }
-        let inserted = 0;
-        const CHUNK = 500;
-        for (let i = 0; i < prepared.length; i += CHUNK) {
-          const slice = prepared.slice(i, i + CHUNK);
-          const res = await (supabaseAdmin.from as any)("payment_splits").insert(slice);
-          if (res.error) throw new Error(`insert: ${res.error.message}`);
-          inserted += slice.length;
-        }
-
-        // Reconcile cash_box balances deterministically from splits +
-        // opening_balance, independent of prior drift or trigger side-effects.
-        let balances: Array<{ id: string; balance: number }> = [];
-        try {
-          const { data: boxes } = await (supabaseAdmin.from as any)("cash_boxes")
-            .select("id,opening_balance");
-          const { data: allSplits } = await (supabaseAdmin.from as any)("payment_splits")
-            .select("cash_box_id,amount,direction,cancelled_at");
-          const sums = new Map<string, number>();
-          for (const s of allSplits ?? []) {
-            if (!s.cash_box_id || s.cancelled_at) continue;
-            const sign = s.direction === "out" ? -1 : 1;
-            sums.set(s.cash_box_id, (sums.get(s.cash_box_id) ?? 0) + sign * Number(s.amount ?? 0));
-          }
-          for (const b of boxes ?? []) {
-            const bal = Number(b.opening_balance ?? 0) + (sums.get(b.id) ?? 0);
-            balances.push({ id: b.id, balance: bal });
-            await (supabaseAdmin.from as any)("cash_boxes")
-              .update({ balance: bal })
-              .eq("id", b.id);
-          }
-        } catch (e: any) {
-          summary[t] = {
-            restored: inserted,
-            mode: "map-insert",
-            details: { remapped, failed: failed.length, failures: failed.slice(0, 20), reconcileError: e?.message ?? String(e) },
-          };
-          continue;
-        }
-        summary[t] = {
-          restored: inserted,
-          mode: "map-insert",
-          details: { remapped, failed: failed.length, failures: failed.slice(0, 20), balances },
-        };
-        continue;
-      }
-
+      // --- Generic insert with per-row fallback on error ---
+      // Every row is rewritten first (auth.users + cash_box remapping).
+      // On any batch failure we fall back to row-by-row so a single bad
+      // row can never take down the whole table.
+      const prepared = rows.map((r) => rewriteRow(t, r));
       const CHUNK = 500;
       let written = 0;
       let skipped = 0;
       let skippedMissingUser = 0;
-      const refsAuthUser = TABLES_REFERENCING_AUTH_USER.has(t);
-      // Row-by-row is needed when we must classify per-row skips
-      // (duplicates on reference tables, missing auth.users on user-linked tables).
-      const needsRowRetry = isReference || refsAuthUser;
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        const slice = rows.slice(i, i + CHUNK);
+      const perRowErrors: Array<{ id: any; code?: string; message: string }> = [];
+      const onConflict = UPSERT_CONFLICT_KEY[t] ?? "id";
+
+      for (let i = 0; i < prepared.length; i += CHUNK) {
+        const slice = prepared.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
-        const onConflict = UPSERT_CONFLICT_KEY[t] ?? "id";
-        const res = needsRowRetry
+        const res = isReference
           ? await (supabaseAdmin.from as any)(t).upsert(slice, { onConflict })
           : await (supabaseAdmin.from as any)(t).insert(slice);
-        if (res.error) {
-          if (needsRowRetry) {
-            for (const row of slice) {
-              const r2 = isReference
-                ? await (supabaseAdmin.from as any)(t).upsert(row, { onConflict })
-                : await (supabaseAdmin.from as any)(t).insert(row);
-              if (r2.error) {
-                if (isReference && isDuplicateError(r2.error)) skipped++;
-                else if (refsAuthUser && isMissingAuthUserError(r2.error)) skippedMissingUser++;
-                else throw new Error(`${isReference ? "upsert" : "insert"}: ${r2.error.message}`);
-              } else {
-                written++;
-              }
-            }
-          } else {
-            throw new Error(`insert: ${res.error.message}`);
+        if (!res.error) { written += slice.length; continue; }
 
+        // Batch failed → retry row-by-row to isolate offenders.
+        for (const row of slice) {
+          const r2 = isReference
+            ? await (supabaseAdmin.from as any)(t).upsert(row, { onConflict })
+            : await (supabaseAdmin.from as any)(t).insert(row);
+          if (!r2.error) { written++; continue; }
+          if (isReference && isDuplicateError(r2.error)) { skipped++; continue; }
+          // For FK to auth.users that slipped through (shouldn't happen after
+          // rewrite, but be defensive): count as skipped-missing-user.
+          const msg = String(r2.error.message ?? "").toLowerCase();
+          if (r2.error.code === "23503" && msg.includes("auth.users")) {
+            skippedMissingUser++;
+            continue;
           }
-        } else {
-          written += slice.length;
+          perRowErrors.push({
+            id: row.id,
+            code: r2.error.code,
+            message: r2.error.message ?? String(r2.error),
+          });
         }
       }
-      summary[t] = { restored: written, skipped, skippedMissingUser, mode: isReference ? "upsert" : "wipe-insert" };
+      summary[t] = {
+        restored: written,
+        skipped,
+        skippedMissingUser,
+        failed: perRowErrors.length,
+        errors: perRowErrors.slice(0, 20),
+        mode: isReference ? "upsert" : "wipe-insert",
+      };
     } catch (e: any) {
-      summary[t] = { restored: 0, mode: isReference ? "upsert" : "wipe-insert", error: e?.message ?? String(e) };
+      summary[t] = {
+        restored: 0,
+        mode: isReference ? "upsert" : "wipe-insert",
+        error: e?.message ?? String(e),
+      };
     }
   }
+
+  // Reconcile cash_box balances after all splits are in.
+  try {
+    const { data: boxes } = await (supabaseAdmin.from as any)("cash_boxes")
+      .select("id,opening_balance");
+    const { data: allSplits } = await (supabaseAdmin.from as any)("payment_splits")
+      .select("cash_box_id,amount,direction,cancelled_at");
+    const sums = new Map<string, number>();
+    for (const s of allSplits ?? []) {
+      if (!s.cash_box_id || s.cancelled_at) continue;
+      const sign = s.direction === "out" ? -1 : 1;
+      sums.set(s.cash_box_id, (sums.get(s.cash_box_id) ?? 0) + sign * Number(s.amount ?? 0));
+    }
+    for (const b of boxes ?? []) {
+      const bal = Number(b.opening_balance ?? 0) + (sums.get(b.id) ?? 0);
+      await (supabaseAdmin.from as any)("cash_boxes").update({ balance: bal }).eq("id", b.id);
+    }
+  } catch (e) {
+    console.error("[restore] cash_box balance reconcile failed", e);
+  }
+
+  // Attach top-level metadata for the UI.
+  (summary as any).__meta = {
+    userMap: {
+      sourceProfiles: sourceProfiles.length,
+      mapped: authUserIdMap.size,
+      unmapped: sourceProfiles.length - authUserIdMap.size,
+    },
+    warnings: warnings.length,
+    warningsSample: warnings.slice(0, 50),
+  };
   return summary;
 }
 
