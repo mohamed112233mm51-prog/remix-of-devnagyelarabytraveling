@@ -86,11 +86,19 @@ export const previewBackup = createServerFn({ method: "POST" })
 
 export const restoreBackup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { path: string; confirm: boolean }) => d)
+  .inputValidator((d: { path: string; confirm: boolean; validateOnly?: boolean; createMissingIdentities?: boolean }) => d)
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
-    if (!data.confirm) throw new Error("confirmation required");
+    if (!data.confirm && !data.validateOnly) throw new Error("confirmation required");
     const { buildBackupPayload, uploadBackup, logBackupRow, downloadBackupPayload, restoreFromPayload } = await import("./backups.server");
+
+    const payload = await downloadBackupPayload(data.path);
+
+    // Validate-only: no emergency backup, no writes.
+    if (data.validateOnly) {
+      const result = await restoreFromPayload(payload, { validateOnly: true });
+      return { validateOnly: true, ...result };
+    }
 
     // 1) Emergency backup first
     const emergency = await buildBackupPayload("emergency");
@@ -103,22 +111,32 @@ export const restoreBackup = createServerFn({ method: "POST" })
       created_by: context.userId,
     });
 
-    // 2) Validate target
-    const payload = await downloadBackupPayload(data.path);
-
-    // 3) Restore
-    const summary = await restoreFromPayload(payload);
-    const failed = Object.entries(summary).filter(([, v]) => v.error);
+    // 2) Restore (may abort at preflight)
+    const result = await restoreFromPayload(payload, { createMissingIdentities: !!data.createMissingIdentities });
+    if (result.aborted) {
+      await logBackupRow({
+        backup_type: "restore",
+        file_path: data.path,
+        status: "failed",
+        failure_reason: `preflight: ${result.aborted.reason}`,
+        restore_date: new Date().toISOString(),
+        restored_by: context.userId,
+        created_by: context.userId,
+      });
+      return { ...result, emergency_path: up.path };
+    }
+    const summary = result.summary ?? {};
+    const failed = Object.entries(summary).filter(([k, v]: any) => k !== "__meta" && v?.error);
     await logBackupRow({
       backup_type: "restore",
       file_path: data.path,
       status: failed.length > 0 ? "failed" : "success",
-      failure_reason: failed.length > 0 ? failed.map(([t, v]) => `${t}: ${v.error}`).join("; ") : null,
+      failure_reason: failed.length > 0 ? failed.map(([t, v]: any) => `${t}: ${v.error}`).join("; ") : null,
       restore_date: new Date().toISOString(),
       restored_by: context.userId,
       created_by: context.userId,
     });
-    return { summary, emergency_path: up.path };
+    return { ...result, emergency_path: up.path };
   });
 
 export const runRetentionNow = createServerFn({ method: "POST" })
