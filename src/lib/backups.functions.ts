@@ -154,7 +154,7 @@ export const runRetentionNow = createServerFn({ method: "POST" })
 // success toast).
 export const importBackup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { filename: string; base64: string; isGzipped: boolean }) => d)
+  .inputValidator((d: { filename: string; base64: string; isGzipped: boolean; validateOnly?: boolean; createMissingIdentities?: boolean }) => d)
   .handler(async ({ data, context }) => {
     await ensureAdmin(context.userId);
     const { gzipSync, gunzipSync } = await import("node:zlib");
