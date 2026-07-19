@@ -2124,8 +2124,17 @@ function BackupsTab() {
     const path = restoreTarget.path;
     try {
       setBusy(path);
-      const r = await restoreFn({ data: { path, confirm: true } });
-      const failed = Object.entries(r.summary).filter(([, v]: any) => v.error);
+      const r: any = await restoreFn({ data: { path, confirm: true } });
+      if (r?.aborted) {
+        const pre = r.preflight ?? {};
+        toast.error(
+          `❌ الاستعادة أُوقفت في Preflight — مراجع إلزامية غير محلولة: ${pre.mandatoryUnmapped?.length ?? 0}. ${r.aborted.reason}`,
+          { duration: 15000 },
+        );
+        return;
+      }
+      const summary = r?.summary ?? {};
+      const failed = Object.entries(summary).filter(([k, v]: any) => k !== "__meta" && v?.error);
       if (failed.length === 0) toast.success("تمت الاستعادة بنجاح");
       else toast.error("اكتملت بأخطاء: " + failed.length + " جدول");
       refresh();
