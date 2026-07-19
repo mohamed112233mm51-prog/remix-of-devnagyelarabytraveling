@@ -2028,13 +2028,19 @@ function BackupsTab() {
       const skippedMissingUser: number = r.skippedMissingUser ?? 0;
       const skippedMissingUserTables: Array<{ table: string; skipped: number }> = r.skippedMissingUserTables ?? [];
       const tablesProcessed: number = r.tablesProcessed ?? 0;
+      const failedRows: number = (r as any).failedRows ?? 0;
+      const rowErrors: Array<{ table: string; id: any; code?: string; message: string }> = (r as any).rowErrors ?? [];
+      const userMap = (r as any).userMap as { sourceProfiles: number; mapped: number; unmapped: number } | null;
+      const warnings: number = (r as any).warnings ?? 0;
+      const hasErrors: boolean = (r as any).hasErrors ?? (failed.length > 0 || failedRows > 0);
 
-      if (failed.length > 0) {
-        const detail = failed.slice(0, 5).map((f) => `• ${f.table}: ${f.error}`).join("\n");
+      if (hasErrors) {
+        const tableLines = failed.slice(0, 5).map((f) => `• ${f.table}: ${f.error}`);
+        const rowLines = rowErrors.slice(0, 5).map((e) => `• ${e.table}#${e.id}: [${e.code ?? "?"}] ${e.message}`);
+        const detail = [...tableLines, ...rowLines].join("\n");
         toast.error(
-          `❌ فشل استيراد بعض الجداول (${failed.length}):\n${detail}` +
-          (failed.length > 5 ? `\n…و${failed.length - 5} أخرى` : ""),
-          { duration: 12000 }
+          `❌ استيراد غير مكتمل — جداول فاشلة: ${failed.length}، صفوف فاشلة: ${failedRows}\n${detail}`,
+          { duration: 15000 }
         );
         return;
       }
@@ -2048,7 +2054,11 @@ function BackupsTab() {
       const missingUserLine = skippedMissingUser > 0
         ? `\n⏭ تم التخطي: ${skippedMissingUser} سجل (مستخدم غير موجود${skippedMissingUserTables.length ? ` — ${skippedMissingUserTables.map(s => s.table).join("، ")}` : ""})`
         : "";
-      const baseMsg = `✅ تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}${skipLine}${missingUserLine}\n❌ الفشل: 0`;
+      const userMapLine = userMap
+        ? `\n👥 مطابقة المستخدمين: ${userMap.mapped}/${userMap.sourceProfiles} (غير مطابق: ${userMap.unmapped})`
+        : "";
+      const warnLine = warnings > 0 ? `\n⚠️ تحذيرات: ${warnings} (حقول مستخدم غير موجود تم ضبطها NULL)` : "";
+      const baseMsg = `✅ تم استيراد النسخة الاحتياطية بنجاح.\nالجداول: ${tablesProcessed}\nالسجلات المستوردة: ${inserted}${skipLine}${missingUserLine}${userMapLine}${warnLine}\n❌ الفشل: 0`;
       if (r?.versionMismatch) {
         toast.warning(baseMsg + "\nملاحظة: النسخة من إصدار مختلف، قد تحتاج لتحديث قاعدة البيانات.", { duration: 12000 });
       } else {
