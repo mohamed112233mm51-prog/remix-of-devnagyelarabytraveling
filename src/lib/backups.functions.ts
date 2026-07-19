@@ -244,6 +244,23 @@ export const importBackup = createServerFn({ method: "POST" })
       throw new Error("تم رفع الملف ولكن فشل تسجيله في قائمة النسخ الاحتياطية.");
     }
 
+    // 4.5) Validate-only: run preflight and stop before ANY writes to live data.
+    if (data.validateOnly) {
+      const result = await restoreFromPayload(payload, { validateOnly: true });
+      return {
+        path, logId, size: gzBuf.byteLength, versionMismatch: payload.meta.version !== 1, meta: payload.meta,
+        tablesWithData: tablesWithData.length,
+        validateOnly: true,
+        preflight: result.preflight,
+        aborted: result.aborted ?? null,
+        summary: {}, inserted: 0, skipped: 0, skippedTables: [],
+        skippedMissingUser: 0, skippedMissingUserTables: [],
+        failedRows: 0, rowErrors: [], tablesProcessed: 0,
+        failed: [], emergencyPath: null,
+        userMap: null, warnings: 0, warningsSample: [], hasErrors: false,
+      };
+    }
+
     // 5) Emergency backup BEFORE touching live data
     let emergencyPath: string | null = null;
     try {
@@ -261,8 +278,32 @@ export const importBackup = createServerFn({ method: "POST" })
       throw new Error("تعذر إنشاء نسخة طوارئ قبل الاستيراد: " + (e?.message ?? e));
     }
 
-    // 6) Restore for real
-    const summary: any = await restoreFromPayload(payload);
+    // 6) Restore for real (may abort at preflight before any wipe)
+    const result = await restoreFromPayload(payload, { createMissingIdentities: !!data.createMissingIdentities });
+    if (result.aborted) {
+      await logBackupRow({
+        backup_type: "restore",
+        file_path: path,
+        status: "failed",
+        failure_reason: `preflight: ${result.aborted.reason}`,
+        restore_date: new Date().toISOString(),
+        restored_by: context.userId,
+        created_by: context.userId,
+      });
+      return {
+        path, logId, size: gzBuf.byteLength, versionMismatch: payload.meta.version !== 1, meta: payload.meta,
+        tablesWithData: tablesWithData.length,
+        preflight: result.preflight,
+        aborted: result.aborted,
+        createdIdentities: result.createdIdentities ?? null,
+        summary: {}, inserted: 0, skipped: 0, skippedTables: [],
+        skippedMissingUser: 0, skippedMissingUserTables: [],
+        failedRows: 0, rowErrors: [], tablesProcessed: 0,
+        failed: [], emergencyPath,
+        userMap: null, warnings: 0, warningsSample: [], hasErrors: true,
+      };
+    }
+    const summary: any = result.summary ?? {};
     const meta = summary.__meta ?? {};
     delete summary.__meta;
     const failed: Array<{ table: string; error: string }> = [];
@@ -318,6 +359,9 @@ export const importBackup = createServerFn({ method: "POST" })
       warnings: meta.warnings ?? 0,
       warningsSample: meta.warningsSample ?? [],
       hasErrors,
+      preflight: result.preflight,
+      createdIdentities: result.createdIdentities ?? null,
+      aborted: null,
     };
   });
 
