@@ -556,13 +556,24 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     approvals: fmtNum(r.approvals), approvals__excel: r.approvals,
   }));
 
-  // Agent SERVICES only — exclude payment rows and require an agent + real value
-  const svcRows: SvcRow[] = fTxns
-    .filter((t) => !!t.agent_id
-      && (t as any).source_service_type !== "payment"
-      && t.service_type !== "دفعة من الوكيل"
-      && tripValue(t) > 0)
-    .map((t) => ({ service_type: t.service_type, value: tripValue(t) }));
+  // Financial column (sales value per service type). Ranking / counting is
+  // driven by DISTINCT executed executions, not by these transaction rows.
+  const agentValueByService = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of fTxns) {
+      if (!t.agent_id) continue;
+      if ((t as any).source_service_type === "payment") continue;
+      if (t.service_type === "دفعة من الوكيل") continue;
+      const v = tripValue(t);
+      if (!(v > 0)) continue;
+      const label = normalizeServiceType(t.service_type);
+      if (!label) continue;
+      map.set(label, (map.get(label) || 0) + v);
+    }
+    return map;
+  }, [fTxns]);
+  // Executions scoped to this agent report (already filtered by inRange + منفذ)
+  const agentExecutions = fFlights as any[];
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
@@ -578,7 +589,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
           onChange={(v) => setView(v as "summary" | "chart")}
         />
         {view === "chart" ? (
-          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
+          <ServiceTypeChartView executions={agentExecutions} valueByService={agentValueByService} totalLabel="إجمالي قيمة الخدمات" valueLabel="إجمالي المبيعات" />
         ) : (<>
 
         <KpiRow items={[
