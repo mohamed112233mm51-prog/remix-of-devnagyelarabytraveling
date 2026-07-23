@@ -798,7 +798,7 @@ function Dashboard() {
         {/* 3. Service type donut */}
         <div className="erp-panel">
           <div className="erp-panel-head">
-            <div className="erp-panel-title"><Briefcase size={14} /> توزيع أنواع الخدمات</div>
+            <div className="erp-panel-title"><Briefcase size={14} /> عدد التنفيذات المنفذة حسب نوع الخدمة</div>
             <span className="erp-chip erp-chip-strong">{fmtNum(serviceTotal)}</span>
           </div>
           <div className="erp-donut-wrap">
