@@ -490,30 +490,37 @@ function Dashboard() {
       .slice(0, 5);
   }, [executedRows, companies]);
 
-  // 3. Service type distribution — executions only (real executed work)
+  // 3. Service type distribution — executions only (real executed work).
+  // Counts OCCURRENCES of each service type (one per service entry). We do
+  // NOT multiply by the row-level `count` field: that field represents
+  // passenger/unit count and would let a single high-count row (e.g. a
+  // "نقل طرابلس" row with count=10000) dominate the donut and misrepresent
+  // "which service TYPES are most used".
   const serviceDist = useMemo(() => {
     const counts = new Map<string, number>();
-    const bump = (label: string, n = 1) => {
-      const k = label.trim();
+    const bump = (raw: string) => {
+      const k = String(raw || "").trim().replace(/\s+/g, " ");
       if (!k) return;
-      counts.set(k, (counts.get(k) || 0) + n);
+      counts.set(k, (counts.get(k) || 0) + 1);
     };
     const extract = (svc: any) => {
       if (!Array.isArray(svc)) return;
       for (const s of svc) {
         if (!s) continue;
         if (typeof s === "string") { bump(s); continue; }
-        const label = String((s as any).service_type || (s as any).type || (s as any).name || "").trim();
-        if (!label) continue;
-        const count = Math.max(1, Math.round(Number((s as any).count) || 1));
-        bump(label, count);
+        const label = (s as any).service_type || (s as any).type || (s as any).name || "";
+        bump(String(label));
       }
     };
     for (const ex of executedRows) extract((ex as any).services);
     const palette = [NAVY, GOLD, "#0EA5E9", "#10B981", "#EF4444", "#8B5CF6", "#F59E0B", "#14B8A6"];
-    const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-    const total = entries.reduce((s, [, n]) => s + n, 0) || 1;
-    return entries.map(([label, value], i) => ({
+    // Sort the unified item objects ONCE, then assign colors by post-sort
+    // index so label/value/pct/color stay bound together for both the donut
+    // arcs and the legend rows (both read from the same `serviceDist`).
+    const sorted = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ar"));
+    const total = sorted.reduce((s, [, n]) => s + n, 0) || 1;
+    return sorted.map(([label, value], i) => ({
       label,
       value,
       pct: Math.round((value / total) * 100),
