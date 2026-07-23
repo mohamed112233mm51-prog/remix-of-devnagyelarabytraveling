@@ -783,9 +783,9 @@ function Dashboard() {
             <span className="erp-chip erp-chip-strong">{fmtNum(serviceTotal)}</span>
           </div>
           <div className="erp-donut-wrap">
-            <Donut data={serviceDist} total={serviceTotal} />
+            <Donut data={serviceDist.list} total={serviceTotal} />
             <div className="erp-donut-legend">
-              {serviceDist.map((s) => (
+              {serviceDist.list.map((s) => (
                 <div key={s.label} className="erp-legend-row">
                   <span className="erp-legend-dot" style={{ background: s.color }} />
                   <span className="erp-legend-label">{s.label}</span>
