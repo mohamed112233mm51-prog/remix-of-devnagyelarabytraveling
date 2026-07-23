@@ -338,50 +338,52 @@ function groupBy<T>(items: T[], keyFn: (t: T) => string, valFn: (t: T) => number
 }
 
 // ---------- Service-type chart (shared by Agents + Companies) ----------
-type SvcRow = { service_type: string | null; value: number };
+// Ranking / count metric = DISTINCT executed executions per normalized
+// service_type (see src/lib/serviceDistribution.ts). The optional
+// `valueByService` map only feeds the financial column (agent price × count
+// or company price × count) and never influences the ranking.
+type SvcExecution = { id: string; operation_status?: string | null; services?: any };
 function ServiceTypeChartView({
-  rows,
+  executions,
+  valueByService,
   totalLabel,
   valueLabel,
 }: {
-  rows: SvcRow[];
+  executions: SvcExecution[];
+  valueByService?: Map<string, number>;
   totalLabel: string;
   valueLabel: string;
 }) {
-  const agg = useMemo(() => {
-    const map = new Map<string, { name: string; count: number; total: number }>();
-    for (const r of rows) {
-      const k = (r.service_type && String(r.service_type).trim()) || "غير محدد";
-      const cur = map.get(k) || { name: k, count: 0, total: 0 };
-      cur.count += 1;
-      cur.total += Number(r.value || 0);
-      map.set(k, cur);
-    }
-    return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [rows]);
+  const { agg, totalExecuted } = useMemo(() => {
+    const { items, totalExecuted } = computeServiceExecutionDistribution(executions as any);
+    const list = items.map((x) => ({
+      name: x.label,
+      count: x.executionCount,
+      total: Number(valueByService?.get(x.label) || 0),
+      pct: x.percentageOfExecutions,
+    }));
+    return { agg: list, totalExecuted };
+  }, [executions, valueByService]);
 
   const totalAll = agg.reduce((s, x) => s + x.total, 0);
-  const countAll = agg.reduce((s, x) => s + x.count, 0);
   const top = agg[0];
-  const topPct = top && totalAll > 0 ? (top.total / totalAll) * 100 : 0;
 
   const [selected, setSelected] = useState<string | null>(null);
   const sel = agg.find((x) => x.name === selected) || null;
-  const selPct = sel && totalAll > 0 ? (sel.total / totalAll) * 100 : 0;
 
-  const pieData = agg.map((x) => ({ name: x.name, value: x.total }));
+  const pieData = agg.map((x) => ({ name: x.name, value: x.count }));
   const barData = agg.map((x) => ({
     name: x.name,
+    "عدد التنفيذات": x.count,
     "إجمالي المبيعات": x.total,
-    "عدد العمليات": x.count,
   }));
 
   return (
     <div>
       <KpiRow items={[
-        { label: "إجمالي عدد الخدمات", value: fmtNum(countAll) },
-        { label: "أكثر خدمة مبيعاً", value: top ? top.name : "—", tone: "gold" },
-        { label: "نسبة أكثر خدمة", value: top ? `${topPct.toFixed(1)}%` : "—", tone: "green" },
+        { label: "إجمالي التنفيذات المنفذة", value: fmtNum(totalExecuted) },
+        { label: "أكثر خدمة تنفيذًا", value: top ? top.name : "—", tone: "gold" },
+        { label: "نسبة أكثر خدمة", value: top ? `${top.pct.toFixed(1)}%` : "—", tone: "green" },
         { label: totalLabel, value: fmtDL(totalAll), tone: "green" },
       ]} />
 
@@ -390,9 +392,9 @@ function ServiceTypeChartView({
           <div className="card-body" style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>الخدمة: {sel.name}</div>
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13, color: "#334155" }}>
-              <div><b>عدد العمليات:</b> {fmtNum(sel.count)}</div>
+              <div><b>عدد التنفيذات:</b> {fmtNum(sel.count)}</div>
               <div><b>{valueLabel}:</b> {fmtDL(sel.total)}</div>
-              <div><b>النسبة:</b> {selPct.toFixed(1)}%</div>
+              <div><b>النسبة:</b> {sel.pct.toFixed(1)}%</div>
             </div>
             <button className="export-btn" onClick={() => setSelected(null)}>إلغاء التحديد</button>
           </div>
@@ -400,13 +402,13 @@ function ServiceTypeChartView({
       )}
 
       <ChartsGrid>
-        <ChartCard title="توزيع الخدمات حسب النوع" subtitle="النسبة المئوية لكل نوع من إجمالي القيمة" isEmpty={pieData.length === 0}>
+        <ChartCard title="توزيع الخدمات حسب النوع" subtitle="النسبة المئوية من إجمالي التنفيذات المنفذة" isEmpty={pieData.length === 0}>
           <PieChart>
             <Tooltip
               contentStyle={tooltipStyle}
               formatter={(v: number, n: string) => {
-                const pct = totalAll > 0 ? ((v / totalAll) * 100).toFixed(1) : "0";
-                return [`${fmtTip(v)} (${pct}%)`, n];
+                const pct = totalExecuted > 0 ? ((v / totalExecuted) * 100).toFixed(1) : "0";
+                return [`${fmtCount(v)} تنفيذ (${pct}%)`, n];
               }}
             />
             <Legend verticalAlign="bottom" height={30} iconType="circle" />
@@ -423,7 +425,7 @@ function ServiceTypeChartView({
               strokeWidth={2}
               onClick={(e: any) => setSelected(e?.name ?? null)}
               label={(e: any) => {
-                const pct = totalAll > 0 ? ((e.value / totalAll) * 100).toFixed(0) : "0";
+                const pct = totalExecuted > 0 ? ((e.value / totalExecuted) * 100).toFixed(0) : "0";
                 return `${pct}%`;
               }}
             >
@@ -438,19 +440,19 @@ function ServiceTypeChartView({
           </PieChart>
         </ChartCard>
 
-        <ChartCard title="إجمالي مبيعات كل خدمة" subtitle="اضغط على العمود لعرض التفاصيل" isEmpty={barData.length === 0}>
+        <ChartCard title="أكثر الخدمات تنفيذًا" subtitle="اضغط على العمود لعرض التفاصيل" isEmpty={barData.length === 0}>
           <BarChart data={barData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="name" tick={axisTick} interval={0} angle={-15} textAnchor="end" height={70} />
-            <YAxis tick={axisTick} tickFormatter={fmtCount} width={70} />
+            <YAxis tick={axisTick} tickFormatter={fmtCount} width={70} allowDecimals={false} />
             <Tooltip
               contentStyle={tooltipStyle}
               labelStyle={tooltipLabelStyle}
-              formatter={(v: number, n: string) => (n === "عدد العمليات" ? [fmtCount(v), n] : [fmtTip(v), n])}
+              formatter={(v: number, n: string) => (n === "عدد التنفيذات" ? [fmtCount(v), n] : [fmtTip(v), n])}
             />
             <Legend verticalAlign="top" height={28} iconType="circle" />
             <Bar
-              dataKey="إجمالي المبيعات"
+              dataKey="عدد التنفيذات"
               radius={[8, 8, 0, 0]}
               maxBarSize={48}
               onClick={(d: any) => setSelected(d?.name ?? null)}
@@ -470,24 +472,26 @@ function ServiceTypeChartView({
 
       <div className="table-wrap">
         <table className="mobile-cards">
-          <thead><tr><th>نوع الخدمة</th><th>عدد العمليات</th><th>{valueLabel}</th><th>النسبة %</th></tr></thead>
+          <thead><tr><th>نوع الخدمة</th><th>عدد التنفيذات</th><th>{valueLabel}</th><th>النسبة %</th></tr></thead>
           <tbody>
             {agg.length === 0 ? (
               <tr><td colSpan={4}><div className="empty"><div className="empty-text">لا توجد بيانات لعرضها</div></div></td></tr>
             ) : agg.map((r) => {
-              const pct = totalAll > 0 ? (r.total / totalAll) * 100 : 0;
               const active = selected === r.name;
               return (
                 <tr key={r.name} onClick={() => setSelected(active ? null : r.name)} style={{ cursor: "pointer", background: active ? "#F1F5F9" : undefined }}>
                   <td className="bold" data-label="الخدمة">{r.name}</td>
-                  <td data-label="العمليات">{fmtNum(r.count)}</td>
+                  <td data-label="عدد التنفيذات">{fmtNum(r.count)}</td>
                   <td data-label="القيمة">{fmtDL(r.total)}</td>
-                  <td data-label="النسبة">{pct.toFixed(1)}%</td>
+                  <td data-label="النسبة">{r.pct.toFixed(1)}%</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        <div style={{ padding: "8px 12px", fontSize: 12, color: "#64748B" }}>
+          يتم احتساب كل نوع خدمة مرة واحدة فقط داخل التنفيذ الواحد. النسبة من إجمالي التنفيذات المنفذة؛ قد يتجاوز مجموع النسب 100% لأن التنفيذ الواحد قد يحتوي أكثر من نوع خدمة.
+        </div>
       </div>
     </div>
   );
