@@ -715,15 +715,39 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     count: fmtNum(r.count), count__excel: r.count,
   }));
 
-  // Company SERVICES only — require company link + real value
-  const svcRows: SvcRow[] = fCT
-    .filter((t) => !!t.company_id
-      && (t as any).source_service_type !== "payment"
-      && (Number(t.trip_value || 0) > 0 || Number(t.count || 0) * Number(t.price || 0) > 0))
-    .map((t) => ({
-      service_type: t.service_type,
-      value: Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0),
-    }));
+  // Financial column per service (company cost). Ranking uses DISTINCT
+  // executed executions containing a company-linked service of that type.
+  const companyValueByService = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of fCT) {
+      if (!t.company_id) continue;
+      if ((t as any).source_service_type === "payment") continue;
+      const v = Number(t.trip_value || 0) || Number(t.count || 0) * Number(t.price || 0);
+      if (!(v > 0)) continue;
+      const label = normalizeServiceType(t.service_type);
+      if (!label) continue;
+      map.set(label, (map.get(label) || 0) + v);
+    }
+    return map;
+  }, [fCT]);
+  const companyExecutions = useMemo(() => {
+    const list: any[] = [];
+    for (const ex of rd.executions) {
+      if ((ex.operation_status || "") !== "منفذ") continue;
+      const d = (ex.travel_date && String(ex.travel_date)) ||
+        (ex.created_at ? String(ex.created_at).slice(0, 10) : null);
+      if (!inRange(d)) continue;
+      const svc = Array.isArray(ex.services) ? ex.services : [];
+      const hasCompanyService = svc.some((s: any) => s && s.kind === "company" && s.company_id);
+      if (!hasCompanyService) continue;
+      // Keep only company-linked services so the metric reflects company work.
+      list.push({
+        ...ex,
+        services: svc.filter((s: any) => s && s.kind === "company"),
+      });
+    }
+    return list;
+  }, [rd.executions, inRange]);
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
@@ -739,7 +763,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
           onChange={(v) => setView(v as "summary" | "chart")}
         />
         {view === "chart" ? (
-          <ServiceTypeChartView rows={svcRows} totalLabel="إجمالي تكلفة الخدمات" valueLabel="إجمالي التكلفة" />
+          <ServiceTypeChartView executions={companyExecutions} valueByService={companyValueByService} totalLabel="إجمالي تكلفة الخدمات" valueLabel="إجمالي التكلفة" />
         ) : (<>
 
         <KpiRow items={[
