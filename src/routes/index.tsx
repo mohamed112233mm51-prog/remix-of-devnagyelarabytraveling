@@ -38,6 +38,7 @@ import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { usePerm } from "@/hooks/usePerm";
+import { computeServiceExecutionDistribution } from "@/lib/serviceDistribution";
 import {
   Users,
   Building2,
@@ -498,37 +499,17 @@ function Dashboard() {
   // executions (executedRows.length); sums across types can exceed 100%
   // because one execution can contain multiple service types.
   const serviceDist = useMemo(() => {
-    const executionIdsByService = new Map<string, Set<string>>();
-    for (const ex of executedRows) {
-      const svc = (ex as any).services;
-      if (!Array.isArray(svc)) continue;
-      const typesInExec = new Set<string>();
-      for (const s of svc) {
-        if (!s) continue;
-        const raw = typeof s === "string"
-          ? s
-          : ((s as any).service_type || (s as any).type || (s as any).name || "");
-        const label = String(raw).trim().replace(/\s+/g, " ");
-        if (!label) continue;
-        typesInExec.add(label);
-      }
-      for (const label of typesInExec) {
-        if (!executionIdsByService.has(label)) executionIdsByService.set(label, new Set());
-        executionIdsByService.get(label)!.add(ex.id);
-      }
-    }
+    const { items, totalExecuted } = computeServiceExecutionDistribution(executedRows as any);
     const palette = [NAVY, GOLD, "#0EA5E9", "#10B981", "#EF4444", "#8B5CF6", "#F59E0B", "#14B8A6"];
-    const denom = executedRows.length || 1;
-    const sorted = Array.from(executionIdsByService.entries())
-      .map(([label, ids]) => ({ label, value: ids.size }))
-      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "ar"));
-    return sorted.map((item, i) => ({
-      ...item,
-      pct: Math.round((item.value / denom) * 100),
+    const list = items.map((item, i) => ({
+      label: item.label,
+      value: item.executionCount,
+      pct: Math.round(item.percentageOfExecutions),
       color: palette[i % palette.length],
     }));
+    return { list, totalExecuted };
   }, [executedRows]);
-  const serviceTotal = executedRows.length;
+  const serviceTotal = serviceDist.totalExecuted;
 
   // 4. Travel destinations — executions only; fallback to submission's destination when execution lacks one
   const topAuthorities = useMemo(() => {
@@ -802,9 +783,9 @@ function Dashboard() {
             <span className="erp-chip erp-chip-strong">{fmtNum(serviceTotal)}</span>
           </div>
           <div className="erp-donut-wrap">
-            <Donut data={serviceDist} total={serviceTotal} />
+            <Donut data={serviceDist.list} total={serviceTotal} />
             <div className="erp-donut-legend">
-              {serviceDist.map((s) => (
+              {serviceDist.list.map((s) => (
                 <div key={s.label} className="erp-legend-row">
                   <span className="erp-legend-dot" style={{ background: s.color }} />
                   <span className="erp-legend-label">{s.label}</span>
