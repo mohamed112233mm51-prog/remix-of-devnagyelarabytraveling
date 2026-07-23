@@ -808,7 +808,7 @@ function Dashboard() {
                 <div key={s.label} className="erp-legend-row">
                   <span className="erp-legend-dot" style={{ background: s.color }} />
                   <span className="erp-legend-label">{s.label}</span>
-                  <span className="erp-legend-val">{s.pct}% · {fmtNum(s.value)}</span>
+                  <span className="erp-legend-val">{fmtNum(s.value)} تنفيذ · {s.pct}%</span>
                 </div>
               ))}
             </div>
