@@ -915,7 +915,8 @@ function DashboardWelcome() {
 function Donut({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
   const size = 160; const stroke = 22; const r = (size - stroke) / 2; const C = 2 * Math.PI * r;
   let offset = 0;
-  const safeTotal = total > 0 ? total : 1;
+  const arcSum = data.reduce((s, d) => s + d.value, 0);
+  const safeTotal = arcSum > 0 ? arcSum : 1;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="erp-donut-svg">
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F1F5F9" strokeWidth={stroke} />
