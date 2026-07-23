@@ -491,43 +491,44 @@ function Dashboard() {
   }, [executedRows, companies]);
 
   // 3. Service type distribution — executions only (real executed work).
-  // Counts OCCURRENCES of each service type (one per service entry). We do
-  // NOT multiply by the row-level `count` field: that field represents
-  // passenger/unit count and would let a single high-count row (e.g. a
-  // "نقل طرابلس" row with count=10000) dominate the donut and misrepresent
-  // "which service TYPES are most used".
+  // Metric: number of DISTINCT executions containing each normalized service
+  // type. We do NOT use `service.count` (passenger/unit count) nor the raw
+  // number of service rows — an execution with two rows of the same service
+  // type must be counted once. Percentage denominator = total executed
+  // executions (executedRows.length); sums across types can exceed 100%
+  // because one execution can contain multiple service types.
   const serviceDist = useMemo(() => {
-    const counts = new Map<string, number>();
-    const bump = (raw: string) => {
-      const k = String(raw || "").trim().replace(/\s+/g, " ");
-      if (!k) return;
-      counts.set(k, (counts.get(k) || 0) + 1);
-    };
-    const extract = (svc: any) => {
-      if (!Array.isArray(svc)) return;
+    const executionIdsByService = new Map<string, Set<string>>();
+    for (const ex of executedRows) {
+      const svc = (ex as any).services;
+      if (!Array.isArray(svc)) continue;
+      const typesInExec = new Set<string>();
       for (const s of svc) {
         if (!s) continue;
-        if (typeof s === "string") { bump(s); continue; }
-        const label = (s as any).service_type || (s as any).type || (s as any).name || "";
-        bump(String(label));
+        const raw = typeof s === "string"
+          ? s
+          : ((s as any).service_type || (s as any).type || (s as any).name || "");
+        const label = String(raw).trim().replace(/\s+/g, " ");
+        if (!label) continue;
+        typesInExec.add(label);
       }
-    };
-    for (const ex of executedRows) extract((ex as any).services);
+      for (const label of typesInExec) {
+        if (!executionIdsByService.has(label)) executionIdsByService.set(label, new Set());
+        executionIdsByService.get(label)!.add(ex.id);
+      }
+    }
     const palette = [NAVY, GOLD, "#0EA5E9", "#10B981", "#EF4444", "#8B5CF6", "#F59E0B", "#14B8A6"];
-    // Sort the unified item objects ONCE, then assign colors by post-sort
-    // index so label/value/pct/color stay bound together for both the donut
-    // arcs and the legend rows (both read from the same `serviceDist`).
-    const sorted = Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ar"));
-    const total = sorted.reduce((s, [, n]) => s + n, 0) || 1;
-    return sorted.map(([label, value], i) => ({
-      label,
-      value,
-      pct: Math.round((value / total) * 100),
+    const denom = executedRows.length || 1;
+    const sorted = Array.from(executionIdsByService.entries())
+      .map(([label, ids]) => ({ label, value: ids.size }))
+      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "ar"));
+    return sorted.map((item, i) => ({
+      ...item,
+      pct: Math.round((item.value / denom) * 100),
       color: palette[i % palette.length],
     }));
   }, [executedRows]);
-  const serviceTotal = serviceDist.reduce((s, x) => s + x.value, 0);
+  const serviceTotal = executedRows.length;
 
   // 4. Travel destinations — executions only; fallback to submission's destination when execution lacks one
   const topAuthorities = useMemo(() => {
