@@ -56,7 +56,7 @@ export const Route = createFileRoute("/reports")({
 });
 
 type Tab = "agents" | "companies" | "merchants" | "expenses" | "treasuries" | "currency_suppliers";
-type Period = "30d" | "1y" | "custom";
+type Period = "30d" | "1y" | "all" | "custom";
 
 // Professional, soft palette
 const COLORS = {
