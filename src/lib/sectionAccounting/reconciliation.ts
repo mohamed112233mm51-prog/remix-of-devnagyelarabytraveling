@@ -27,7 +27,7 @@ export function logReconciliation(
     const entries = delta.entries().filter((e) => Math.abs(e.amount) > 0.01);
     if (entries.length) {
       clean = false;
-      diff[k] = formatCurrencyMap(new (delta.constructor as any)().merge(delta), { emptyLabel: "0" });
+      diff[k] = formatCurrencyMap(delta, { emptyLabel: "0" });
     } else {
       diff[k] = "0";
     }
