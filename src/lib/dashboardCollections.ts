@@ -138,12 +138,18 @@ export function computeAgentCollectionsByCurrency(
  * منسوبة إلى `executions.agent_id`.
  */
 export function computeAgentServicesByCurrencyPerAgent(
-  executions: ReadonlyArray<ExecutionRow & { agent_id?: string | null; cancelled_at?: string | null }>,
+  executions: ReadonlyArray<ExecutionRow & { agent_id?: string | null; cancelled_at?: string | null; travel_date?: string | null; created_at?: string | null }>,
+  predicate?: DatePredicate,
 ): Map<string, CurrencyMap> {
   const out = new Map<string, CurrencyMap>();
   for (const ex of executions) {
     if ((ex as any).cancelled_at) continue;
     if ((ex.operation_status || "") !== "منفذ") continue;
+    if (predicate) {
+      const d = ((ex as any).travel_date && String((ex as any).travel_date)) ||
+        ((ex as any).created_at ? String((ex as any).created_at).slice(0, 10) : null);
+      if (!predicate(d)) continue;
+    }
     const aid = (ex as any).agent_id as string | null;
     if (!aid) continue;
     const { salesByCur } = aggregateExecutionByCurrency(ex);

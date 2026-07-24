@@ -16,7 +16,11 @@ import {
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { computeServiceExecutionDistribution, normalizeServiceType } from "@/lib/serviceDistribution";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
+import { computeAgentReport } from "@/lib/sectionAccounting/agentsReport";
+import { logReconciliation } from "@/lib/sectionAccounting/reconciliation";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
+import { useEffect } from "react";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -510,21 +514,48 @@ function SubTabsBar({ tabs, current, onChange }: { tabs: { id: string; label: st
 }
 
 // ---------- AGENTS ----------
+// Same source of truth as `src/routes/accounts.tsx` KPI cards (لضمان تطابق
+// إجمالي التقرير عند "كل الوقت" مع كروت صفحة حسابات الوكلاء عملة بعملة).
 function AgentsReport({ inRange, data: rd }: SectionProps) {
-  const { agents, transactions: txns, flights, executions, approvals, loading } = rd;
+  const { agents, transactions: txns, executions, approvals, loading } = rd;
+
+  // Predicate على travel_date/date/created_at (نفس منطق dashboardCollections).
+  const predicate = inRange;
 
   const rpt = useMemo(
-    () => summarizeAgentReport({ agents, transactions: txns, flights, executions, approvals, inRange }),
-    [agents, txns, flights, executions, approvals, inRange],
+    () => computeAgentReport({ agents, transactions: txns, executions, approvals, predicate }),
+    [agents, txns, executions, approvals, predicate],
   );
   const data = rpt.rows;
   const fTxns = rpt.filteredTxns;
-  const fFlights = rpt.filteredFlights;
+  const fExecs = rpt.filteredExecutions;
   const fApp = rpt.filteredApprovals;
 
-  const monthlyCollections = groupByMonth(fTxns, (t) => t.date, (t) => txnTotalPaid(t));
-  const flightsByDestination = groupBy(fFlights, (f) => f.destination || "غير محدد");
-  const approvalsByStatus = groupBy(fApp, (a) => a.status || "—");
+  // Aggregate KPI cards من نفس Hook صفحة القسم — لكن الأرقام هنا مفلترة بالفترة.
+  const agentAllTime = useAgentAccountTotals();
+
+  // Dev-only reconciliation: يقارن كروت الوكلاء "مدى الحياة" بين
+  // صفحة الحسابات والتقرير ويطبع أي فرق لكل عملة.
+  useEffect(() => {
+    const allTime = computeAgentReport({ agents, transactions: txns, executions, approvals });
+    logReconciliation(
+      "agents",
+      {
+        services: agentAllTime.services,
+        payments: agentAllTime.payments,
+        due: agentAllTime.due,
+      },
+      {
+        services: allTime.totals.services,
+        payments: allTime.totals.payments,
+        due: allTime.totals.due,
+      },
+    );
+  }, [agents, txns, executions, approvals, agentAllTime]);
+
+  const monthlyCollections = groupByMonth(fTxns, (t) => t.date, (t) => txnCollectedAmount(t));
+  const flightsByDestination = groupBy(fExecs as any[], (f: any) => f.destination || "غير محدد");
+  const approvalsByStatus = groupBy(fApp as any[], (a: any) => a.status || "—");
   const APPROVAL_STATUS_COLORS: Record<string, string> = {
     "سريعة": "#16A34A",
     "بطيئة": "#F59E0B",
@@ -534,30 +565,28 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     "معلق": "#6B7280",
   };
   const totalApprovals = approvalsByStatus.reduce((s, x) => s + (x.value || 0), 0);
-  const topAgents = [...data].sort((a, b) => b.paid - a.paid).slice(0, 5).map((d) => ({ name: d.name, value: d.paid }));
-
-  const totalCollections = rpt.totalCollections;
-  const totalValue = rpt.totalValue;
+  // ترتيب "أعلى الوكلاء تحصيلاً": نستخدم إجمالي المدفوعات بأي عملة (مجموع القيم كمؤشر ترتيب فقط).
+  const paidRank = (m: CurrencyMap) => m.entries().reduce((s, e) => s + Math.abs(e.amount), 0);
+  const topAgents = [...data].sort((a, b) => paidRank(b.payments) - paidRank(a.payments)).slice(0, 5).map((d) => ({ name: d.name, value: paidRank(d.payments) }));
 
   const cols = [
     { header: "اسم الوكيل", key: "name" },
-    { header: "إجمالي قيمة التنفيذات", key: "total" },
-    { header: "إجمالي المدفوع", key: "paid" },
+    { header: "إجمالي قيمة الخدمات", key: "services" },
+    { header: "إجمالي المدفوعات", key: "payments" },
     { header: "صافي المستحق", key: "due" },
-    { header: "عدد التنفيذات", key: "flights" },
+    { header: "عدد التنفيذات", key: "executions" },
     { header: "عدد التقديمات", key: "approvals" },
   ];
   const rows = data.map((r) => ({
-    ...r,
-    total: fmtDL(r.total), total__excel: r.total,
-    paid: fmtDL(r.paid), paid__excel: r.paid,
-    due: fmtDL(r.due), due__excel: r.due,
-    flights: fmtNum(r.flights), flights__excel: r.flights,
+    name: r.name,
+    services: formatCurrencyMap(r.services),
+    payments: formatCurrencyMap(r.payments),
+    due: formatCurrencyMap(r.due),
+    executions: fmtNum(r.executions), executions__excel: r.executions,
     approvals: fmtNum(r.approvals), approvals__excel: r.approvals,
   }));
 
-  // Financial column (sales value per service type). Ranking / counting is
-  // driven by DISTINCT executed executions, not by these transaction rows.
+  // Financial column (sales value per service type) — kept scalar for chart use only.
   const agentValueByService = useMemo(() => {
     const map = new Map<string, number>();
     for (const t of fTxns) {
@@ -572,8 +601,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     }
     return map;
   }, [fTxns]);
-  // Executions scoped to this agent report (already filtered by inRange + منفذ)
-  const agentExecutions = fFlights as any[];
+  const agentExecutions = fExecs as any[];
   const [view, setView] = useState<"summary" | "chart">("summary");
 
   return (
@@ -593,10 +621,11 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
         ) : (<>
 
         <KpiRow items={[
-          { label: "إجمالي التحصيلات", value: fmtDL(totalCollections), tone: "green" },
-          { label: "إجمالي قيمة الخدمات", value: fmtDL(totalValue), tone: "gold" },
-          { label: "عدد التنفيذات", value: fmtNum(fFlights.length) },
-          { label: "عدد التقديمات", value: fmtNum(fApp.length) },
+          { label: "إجمالي المدفوعات", value: <CurrencyLines map={rpt.totals.payments} />, tone: "green" },
+          { label: "إجمالي قيمة الخدمات", value: <CurrencyLines map={rpt.totals.services} />, tone: "gold" },
+          { label: "صافي المستحق", value: <CurrencyLines map={rpt.totals.due} />, tone: "red" },
+          { label: "عدد التنفيذات", value: fmtNum(rpt.totals.executionsCount) },
+          { label: "عدد التقديمات", value: fmtNum(rpt.totals.approvalsCount) },
         ]} />
 
         <ChartsGrid>
@@ -665,13 +694,13 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
             <tbody>
               {data.length === 0 ? (
                 <EmptyOrLoading loading={loading} label="لا يوجد وكلاء" colSpan={cols.length} />
-              ) : data.map((r, i) => (
-                <tr key={i}>
+              ) : data.map((r) => (
+                <tr key={r.id}>
                   <td className="bold" data-label="الوكيل">{r.name}</td>
-                  <td data-label="القيمة">{fmtDL(r.total)}</td>
-                  <td data-label="المدفوع">{fmtDL(r.paid)}</td>
-                  <td data-label="المستحق">{fmtDL(r.due)}</td>
-                  <td data-label="تنفيذات">{fmtNum(r.flights)}</td>
+                  <td data-label="القيمة"><CurrencyLines map={r.services} /></td>
+                  <td data-label="المدفوعات"><CurrencyLines map={r.payments} /></td>
+                  <td data-label="المستحق"><CurrencyLines map={r.due} /></td>
+                  <td data-label="تنفيذات">{fmtNum(r.executions)}</td>
                   <td data-label="موافقات">{fmtNum(r.approvals)}</td>
                 </tr>
               ))}
@@ -683,6 +712,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
     </div>
   );
 }
+
 
 // ---------- COMPANIES ----------
 function CompaniesReport({ inRange, data: rd }: SectionProps) {
