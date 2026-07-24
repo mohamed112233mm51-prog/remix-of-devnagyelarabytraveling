@@ -9,8 +9,8 @@ import {
   computeAgentServicesByCurrencyPerAgent,
   computeAgentPaymentsByCurrencyPerAgent,
   subtractCurrencyMaps,
-  sumAgentCurrencyMaps,
 } from "@/lib/dashboardCollections";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 
 
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
