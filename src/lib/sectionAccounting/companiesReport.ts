@@ -18,7 +18,7 @@ import {
 } from "@/lib/financialSummary";
 
 // نفس شكل الصف الذي يقبله resolveSplitCurrencyByRef (payment_splits lite).
-type SplitCurrencyRowLite = {
+type SplitCurrencyRowLiteLite = {
   source_table: string | null;
   source_id: string | null;
   currency: string | null;
@@ -59,7 +59,7 @@ function approvalDateOf(a: any): string | null {
 export function computeCompanyReport(input: {
   companies: Pick<IssuingCompany, "id" | "company_name">[];
   companyTransactions: ReadonlyArray<CompanyTransaction>;
-  paymentSplits?: ReadonlyArray<SplitCurrencyRow> | null;
+  paymentSplits?: ReadonlyArray<SplitCurrencyRowLite> | null;
   approvals?: ReadonlyArray<any>;
   predicate?: DatePredicate;
 }): CompanyReportSummaryV2 {
