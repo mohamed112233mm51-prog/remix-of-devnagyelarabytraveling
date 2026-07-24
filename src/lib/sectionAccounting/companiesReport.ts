@@ -15,8 +15,15 @@ import {
   CurrencyMap,
   summarizeCompany,
   resolveSplitCurrencyByRef,
-  type SplitCurrencyRow,
 } from "@/lib/financialSummary";
+
+// نفس شكل الصف الذي يقبله resolveSplitCurrencyByRef (payment_splits lite).
+type SplitCurrencyRowLite = {
+  source_table: string | null;
+  source_id: string | null;
+  currency: string | null;
+  cancelled_at?: string | null;
+};
 
 export type DatePredicate = (d: string | null | undefined) => boolean;
 
