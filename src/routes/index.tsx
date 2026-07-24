@@ -145,6 +145,8 @@ function Dashboard() {
     profileLoaded,
   });
   const { rows: agents } = useLive<Agent>("agents");
+  // Shared source of truth with صفحة حسابات الوكلاء — تُطابق كروتها عملة بعملة.
+  const agentAccountTotals = useAgentAccountTotals();
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
