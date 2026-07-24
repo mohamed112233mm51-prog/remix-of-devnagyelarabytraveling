@@ -56,7 +56,7 @@ export const Route = createFileRoute("/reports")({
 });
 
 type Tab = "agents" | "companies" | "merchants" | "expenses" | "treasuries" | "currency_suppliers";
-type Period = "30d" | "1y" | "custom";
+type Period = "30d" | "1y" | "all" | "custom";
 
 // Professional, soft palette
 const COLORS = {
@@ -214,6 +214,7 @@ function ReportsPage() {
     setPeriod(p);
     if (p === "30d") { setFrom(def30); setTo(iso(today)); }
     else if (p === "1y") { setFrom(def365); setTo(iso(today)); }
+    else if (p === "all") { setFrom(""); setTo(""); }
   };
 
   const applyToday = () => { const t = iso(today); setFrom(t); setTo(t); setPeriod("custom"); };
@@ -272,6 +273,7 @@ function ReportsPage() {
               <button className={`preset-chip ${period === "30d" ? "active" : ""}`} onClick={() => applyPeriod("30d")}>آخر 30 يوم</button>
               <button className="preset-chip" onClick={applyThisMonth}>هذا الشهر</button>
               <button className={`preset-chip ${period === "1y" ? "active" : ""}`} onClick={() => applyPeriod("1y")}>آخر سنة</button>
+              <button className={`preset-chip ${period === "all" ? "active" : ""}`} onClick={() => applyPeriod("all")}>كل الوقت</button>
               <button className={`preset-chip ${period === "custom" ? "active" : ""}`} onClick={() => setPeriod("custom")}>فترة مخصصة</button>
             </div>
             <div className="filter-range">
