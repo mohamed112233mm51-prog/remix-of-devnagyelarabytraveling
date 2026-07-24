@@ -1,71 +1,50 @@
-## الهدف
-منع أي عملية حسابية بين عملتين مختلفتين في كامل النظام. كل رصيد/إجمالي يجب أن يكون **CurrencyMap** (خريطة عملة→قيمة)، لا رقماً واحداً.
+# توحيد مصادر التقارير مع صفحات الأقسام
 
-## نتائج المسح — الأماكن التي تخلط العملات فعلياً
+## المشكلة
+تقارير `src/routes/reports.tsx` تستخدم دوال `summarize*Report` من `src/lib/financialSummary.ts` مستقلة عن الدوال المستخدمة في صفحات الأقسام (`accounts.tsx`, `companies.tsx`, `merchants.tsx`, `expenses.tsx`, `currency-suppliers.tsx`, `executions.tsx`, `submissions.tsx`) — فتنشأ فروقات في الأرقام، خصوصًا بين الكروت الإجمالية للقسم وكروت التقرير عند "كل الوقت".
 
-| # | المكان | السطر | السبب |
-|---|--------|------|-------|
-| 1 | `src/components/AgentLedger.tsx` | 166–169 | `totalServices/totalPayments/net = byCurrency.reduce(s+b.debit/credit,0)` ثم `accountStatus` مبني على `net` المدموج. يُصدَّر في summary التصدير. |
-| 2 | `src/routes/companies.tsx` (CompanyStatementTab) | 344–347 | نفس النمط (شركات). |
-| 3 | `src/routes/accounts.tsx` (كروت الوكلاء + صفوف + tfoot + بروفايل) | 54–66, 179–192, 227–230 | `s.totalDebit.total()` / `.totalCredit.total()` تجمع EGP+USD+LYD في `fmtDL`. |
-| 4 | `src/routes/companies.tsx` (كروت الشركات + صفوف + tfoot + بروفايل) | 95–107, 140–154, 214–235, 270–273 | نفس النمط. |
-| 5 | `src/routes/merchants.tsx` (كروت التجار + صفوف قائمة التجار) | 70–77, 200–203 | `useMerchantTotals()` و `merchantTotals.get(id).balance/incoming/outgoing/collected/paidOut` كلها Scalars مدموجة. |
-| 6 | `src/lib/financialSummary.ts` — `summarizeMerchantMovementTotals` | 1690–1710 | `balance += m.delta` و `totalIncoming += m.net` بغض النظر عن العملة. |
-| 7 | `src/lib/financialSummary.ts` — `MerchantAggregate` + `computeMerchantAggregates` + `useMerchantTotals` | 340–559 | يعتمد على النقطة 6 → كل الحقول Scalars مدموجة. |
-| 8 | `src/lib/financialSummary.ts` — `summarizeMerchantMovements` (تقارير) | 1349–1367 | يجمع `merchantCashNet` و`merchant_cash_amount` عبر جميع العملات في رقم واحد. يظهر في `MerchantsReport` بـ `fmtDL`. |
-| 9 | `CurrencyMap.total()` نفسه | 111–116 | Footgun — يعيد رقماً واحداً عبر كل العملات. سيُعلَّم كـ `@deprecated` ولن يبقى مستخدَماً إلا في سياقات عملة واحدة مثبتة. |
+## نطاق العمل (كبير — ~9600 سطر تقارير+صفحات)
 
-## المعمارية الجديدة
+هذا العمل يحتاج تنفيذ على **6 مراحل مستقلة** حتى نتمكن من التحقق (typecheck + مطابقة أرقام) بعد كل مرحلة قبل الانتقال للمرحلة التالية. تنفيذ كل التقارير في جلسة واحدة سيؤدي إلى تراجعات صامتة يصعب اكتشافها.
 
-كل ملخص يُرجع خرائط عملة بدل رقم واحد:
+### قبل البدء — تدقيق مكتوب لكل تقرير
+لكل تقرير أنتج جدولاً في المستودع `.lovable/reports-audit.md` يتضمن الأعمدة التي طلبتها (الصفحة المرجعية / مصدر الكروت / مصدر التقرير / الجداول / الدوال / سبب الاختلاف). هذا يحوّل التدقيق إلى مرجع دائم بدلاً من رسالة عابرة.
 
-```
-EntitySummary
-  totalDebit  : CurrencyMap
-  totalCredit : CurrencyMap
-  balance     : CurrencyMap
-MerchantAggregate → { incoming, outgoing, collected, paidOut, converted, balance } : كل حقل CurrencyMap
-```
+### المرحلة 1 — البنية التحتية المشتركة (بدون تغيير أرقام)
+- استخراج currency resolver موحد + date-field موحد لكل قسم إلى `src/lib/sectionAccounting/` مع تعليقات محاسبية.
+- إضافة helper `applyRange<T>(rows, dateField, inRange)` — نفس التوقيع يُستخدم في القسم والتقرير.
+- Reconciliation Debug Hook (dev فقط، خلف `import.meta.env.DEV`) يطبع `{departmentTotals, reportAllTimeTotals, diffByCurrency}` في الكونسول لكل قسم.
 
-مساعد عرض جديد `formatCurrencyLines(map)` يُرجع سطراً لكل عملة (EGP → USD → LYD → أبجدي، بدون العملات الصفرية).
+### المرحلة 2 — الوكلاء
+- تعميم `useAgentAccountTotals` (الموجود بالفعل) ليقبل `inRange` اختياري ودالة summarize لكل وكيل.
+- استبدال `summarizeAgentReport` بالاعتماد على نفس دوال `dashboardCollections.ts` مع الفلترة.
+- تطابق: كروت التقرير @ "كل الوقت" = كروت `accounts.tsx` لكل عملة.
 
-## التغييرات على `financialSummary.ts`
+### المرحلة 3 — الشركات الصادرة
+- استخراج `summarizeCompany` / `buildCompanyLedgerRows` من `companies.tsx` إلى `src/lib/companyAccounting.ts`.
+- إعادة كتابة `summarizeCompanyReport` باستدعاء الدوال المشتركة.
 
-1. **`MerchantAggregate`** → كل حقل يصبح `CurrencyMap` بدل `number`.
-2. **`summarizeMerchantMovementTotals`** → تُرجع `balance/totalIncoming/…` كـ `CurrencyMap` (يُضاف `m.delta` إلى `balanceByCurrency` تحت `m.currency`).
-3. **`computeMerchantAggregates`** / **`useMerchantAggregates`** → توزّع النتائج CurrencyMap.
-4. **`useMerchantTotals`** → يعيد CurrencyMaps مجمَّعة عبر كل التجار (كل عملة على حدة).
-5. **`summarizeMerchantMovements`** (تقرير الفترة) → يضيف حقول `*ByCurrency: CurrencyMap`؛ الحقول الحالية (`incoming/outgoing/collected/fee/balance` كأرقام) تُحذف أو تظل EGP-only فقط عندما جميع الحركات EGP.
-6. **`summarizeMerchantReport`** → صفوفه تحمل `MerchantReportRowByCurrency`.
-7. **`CurrencyMap.total()`** → JSDoc `@deprecated — do not use for balances/aggregates that may contain multiple currencies`.
-8. مساعد جديد **`formatCurrencyLines(map)`** (موجود بالفعل، سيُوسَّع).
+### المرحلة 4 — تجار الكاش + موردي العملة
+- توحيد `buildMerchantMovements` (من `merchants.tsx`) واستخدامه في التقرير مع payment_splits لعملة التحصيل.
+- توحيد `computeCurrencySupplierStatsByCurrency` (موجود بـ `dashboardCollections`) في صفحة الموردين والتقرير.
 
-## التغييرات على الصفحات (KPI cells تعرض سطراً لكل عملة)
+### المرحلة 5 — المصروفات + التنفيذات + التقديمات + أنواع الخدمات
+- المصروفات: `computeExpensesByCurrency` مصدر واحد، إزالة أي جمع لـ `expense_deductions.amount`.
+- التنفيذات/التقديمات: صفوف مباشرة من `executions`/`submissions` بنفس الفلاتر.
+- أنواع الخدمات: `computeServiceExecutionDistribution` (موجود) — التحقق أنه مستخدم في كل مكان.
 
-- **`accounts.tsx`**: `stats.get(id) = { debit: CurrencyMap, credit: CurrencyMap, balance: CurrencyMap }`. الكروت والصفوف وtfoot والبروفايل تعرض `formatCurrencyLines(map)` (سطر لكل عملة، نفس مكان `fmtDL` القديم).
-- **`companies.tsx`** (list + statement): نفس النمط.
-- **`merchants.tsx`**: كروت KPI + صفوف قائمة التجار تعرض CurrencyMap.
-- **`AgentLedger.tsx`** + **`CompanyStatementTab`**: يُحذف `totalServices/totalPayments/net` المدموج؛ `accountStatus` يصبح **سطراً لكل عملة** في summary التصدير (`مستحق على الوكيل (EGP): X` / `مستحق للوكيل (LYD): Y`).
-- **`reports.tsx`** — `MerchantsReport`: أعمدة الوارد/الصادر/المحصل/الرصيد تعرض CurrencyMap. KPI الأعلى كذلك.
+### المرحلة 6 — التصدير (PDF/Excel/طباعة) + اختبارات القبول
+- المصدر = نفس `rows`/`summary` الظاهرين على الشاشة، بدون إعادة حساب.
+- تشغيل يدوي لسيناريوهات القبول السبعة التي حددتها.
 
-## الملفات المعدَّلة
+## قرارات تحتاج تأكيدك قبل التنفيذ
 
-- `src/lib/financialSummary.ts` (النقاط 1–8)
-- `src/components/AgentLedger.tsx` (accountStatus per currency)
-- `src/routes/accounts.tsx` (KPI + صفوف + tfoot + بروفايل)
-- `src/routes/companies.tsx` (KPI + صفوف + tfoot + بروفايل + CompanyStatementTab.accountStatus)
-- `src/routes/merchants.tsx` (KPI + صفوف قائمة التجار)
-- `src/routes/reports.tsx` (MerchantsReport فقط — التقارير الأخرى EGP-only بطبيعتها)
+1. **حجم التنفيذ في هذه الجلسة**: هل تريد التنفيذ الكامل الآن (6 مراحل، احتمال تراجعات ووقت طويل جدًا)؟ أم مرحلة واحدة كل جلسة مع تقرير مطابقة أرقام بعد كل مرحلة؟ توصيتي: **مرحلة واحدة الآن (الوكلاء — الأعلى أثرًا)** ثم تقييم قبل الاستمرار.
 
-## Invariant النهائي المضمون
+2. **حقل التاريخ الموحد لكل قسم**: هل نعتمد `date` مع fallback إلى `created_at` (السياسة الحالية في `dashboardCollections.rowAccountingDate`) كمرجع لكل التقارير؟ أم لكل قسم قراره الخاص الموثق؟
 
-بعد الانتهاء: **لا يوجد أي `.reduce(s+b.currency-bearing)` عبر عملات مختلفة، ولا `.total()` على CurrencyMap متعددة العملات.** كل قيمة تظهر في UI أو تُصدَّر مصحوبة بعملتها. لا تحويلات صرف ضمنية إطلاقاً.
+3. **Reconciliation Debug**: كونسول dev فقط، أم صفحة `/reports/reconcile` مخفية خلف صلاحية admin؟
 
-## التقرير بعد التنفيذ
-سأعطي:
-1. قائمة الأماكن التي كانت تخلط العملات (كما في جدول المسح أعلاه).
-2. سبب حدوث كل حالة.
-3. الإصلاح المُطبَّق.
-4. تأكيد أن النظام Currency-Safe.
+4. **العملة الافتراضية**: `normalizeCurrency` الحالي يعيد `EGP` عند الفراغ — تريد الإبقاء أم تغييره إلى "غير محدد" لسجلات جديدة (سيغير أرقام تاريخية)؟
 
-هل أبدأ التنفيذ؟
+**لا أستطيع بدء التعديل بمسؤولية دون هذه الإجابات لأنها تؤثر على كل مرحلة.**
