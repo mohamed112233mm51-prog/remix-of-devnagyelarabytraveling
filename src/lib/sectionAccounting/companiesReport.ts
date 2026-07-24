@@ -18,7 +18,7 @@ import {
 } from "@/lib/financialSummary";
 
 // نفس شكل الصف الذي يقبله resolveSplitCurrencyByRef (payment_splits lite).
-type SplitCurrencyRowLiteLite = {
+type SplitCurrencyRowLite = {
   source_table: string | null;
   source_id: string | null;
   currency: string | null;
