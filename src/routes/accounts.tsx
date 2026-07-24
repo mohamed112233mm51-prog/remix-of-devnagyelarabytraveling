@@ -9,8 +9,8 @@ import {
   computeAgentServicesByCurrencyPerAgent,
   computeAgentPaymentsByCurrencyPerAgent,
   subtractCurrencyMaps,
-  sumAgentCurrencyMaps,
 } from "@/lib/dashboardCollections";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 
 
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
@@ -60,7 +60,11 @@ function AccountsPage() {
   //   المدفوعات = transactions مع agent_id، عبر txnCollectedAmount (بدون fallback).
   //   المستحق  = الخدمات − المدفوعات لكل عملة على حدة (بدون خلط عملات).
   const { rows: executions } = useLive<Execution>("executions");
-  const { stats, totalTrips, totalPaid, totalDue } = useMemo(() => {
+  // Aggregate KPI boxes come from the shared source of truth
+  // (`useAgentAccountTotals`) — same hook the dashboard consumes.
+  const { services: totalTrips, payments: totalPaid, due: totalDue } = useAgentAccountTotals();
+  // Per-agent breakdown for the table stays local (needs per-agent maps).
+  const stats = useMemo(() => {
     const servicesPerAgent = computeAgentServicesByCurrencyPerAgent(executions as any);
     const paymentsPerAgent = computeAgentPaymentsByCurrencyPerAgent(txns);
     const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
@@ -70,10 +74,7 @@ function AccountsPage() {
       const due = subtractCurrencyMaps(trips, paid);
       map.set(a.id, { trips, paid, due });
     }
-    const tTrips = sumAgentCurrencyMaps(servicesPerAgent);
-    const tPaid = sumAgentCurrencyMaps(paymentsPerAgent);
-    const tDue = subtractCurrencyMaps(tTrips, tPaid);
-    return { stats: map, totalTrips: tTrips, totalPaid: tPaid, totalDue: tDue };
+    return map;
   }, [agents, executions, txns]);
 
 

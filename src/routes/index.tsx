@@ -38,6 +38,7 @@ import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { usePerm } from "@/hooks/usePerm";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { computeServiceExecutionDistribution } from "@/lib/serviceDistribution";
 import {
   Users,
@@ -144,6 +145,8 @@ function Dashboard() {
     profileLoaded,
   });
   const { rows: agents } = useLive<Agent>("agents");
+  // Shared source of truth with صفحة حسابات الوكلاء — تُطابق كروتها عملة بعملة.
+  const agentAccountTotals = useAgentAccountTotals();
   const { rows: txns } = useLive<Transaction>("transactions");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
@@ -823,10 +826,10 @@ function Dashboard() {
       <div className="erp-section-title">تفاصيل الأقسام</div>
       <div className="dash-groups">
         <SectionCard title="الوكلاء" icon={<Users size={16} />} accent="navy">
-          <Stat label="عدد الوكلاء" value={fmtNum(agents.filter((a: any) => (a.status || "نشط") === "نشط").length)} />
-          <Stat label="قيمة الخدمات" valueNode={<CurrencyLines map={agentServicesByCurrency} />} />
-          <Stat label="إجمالي المدفوعات" valueNode={<CurrencyLines map={agentCollectionsNetByCurrency} />} tone="green" />
-          <Stat label="المستحق" valueNode={<CurrencyLines map={agentDueByCurrency} />} tone="red" highlight />
+          <Stat label="عدد الوكلاء" value={fmtNum(agentAccountTotals.agentCount)} />
+          <Stat label="قيمة الخدمات" valueNode={<CurrencyLines map={agentAccountTotals.services} />} />
+          <Stat label="إجمالي المدفوعات" valueNode={<CurrencyLines map={agentAccountTotals.payments} />} tone="green" />
+          <Stat label="المستحق" valueNode={<CurrencyLines map={agentAccountTotals.due} />} tone="red" highlight />
         </SectionCard>
 
         <SectionCard title="الشركات الصادرة" icon={<Building2 size={16} />} accent="navy">
