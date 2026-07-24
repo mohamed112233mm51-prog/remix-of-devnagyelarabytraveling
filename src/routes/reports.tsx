@@ -16,8 +16,9 @@ import {
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { computeServiceExecutionDistribution, normalizeServiceType } from "@/lib/serviceDistribution";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap, CurrencyMap, useCompaniesSummary } from "@/lib/financialSummary";
 import { computeAgentReport } from "@/lib/sectionAccounting/agentsReport";
+import { computeCompanyReport } from "@/lib/sectionAccounting/companiesReport";
 import { logReconciliation } from "@/lib/sectionAccounting/reconciliation";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { useEffect } from "react";
@@ -718,37 +719,74 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- COMPANIES ----------
 function CompaniesReport({ inRange, data: rd }: SectionProps) {
-  const { companies, companyTransactions: cTxns, approvals, loading } = rd;
+  const { companies, companyTransactions: cTxns, paymentSplits, approvals, loading } = rd;
 
+  // Currency-Safe: نفس مصدر صفحة الشركات (summarizeCompany + buildCompanyLedgerRows).
+  const predicate = inRange;
   const rpt = useMemo(
-    () => summarizeCompanyReport({ companies, companyTransactions: cTxns, approvals, inRange }),
-    [companies, cTxns, approvals, inRange],
+    () => computeCompanyReport({
+      companies,
+      companyTransactions: cTxns,
+      paymentSplits,
+      approvals,
+      predicate,
+    }),
+    [companies, cTxns, paymentSplits, approvals, predicate],
   );
   const data = rpt.rows;
   const fCT = rpt.filteredTxns;
-  const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => txnCollectedAmount(t));
-  const topCompanies = [...data].sort((a, b) => b.count - a.count).slice(0, 5).map((d) => ({ name: d.name, value: d.count }));
-  const servicesByCompany = data.filter((d) => d.paid > 0).slice(0, 6).map((d) => ({ name: d.name, value: d.paid }));
 
-  const totalPaid = rpt.totalPaid;
+  // Reconciliation: كروت "مدى الحياة" في التقرير يجب أن تطابق كروت
+  // صفحة حسابات الشركات بالضبط لكل عملة.
+  const companiesAllTime = useCompaniesSummary();
+  useEffect(() => {
+    const totalDebit = new CurrencyMap();
+    const totalCredit = new CurrencyMap();
+    const totalBalance = new CurrencyMap();
+    for (const [, sum] of companiesAllTime) {
+      totalDebit.merge(sum.totalDebit);
+      totalCredit.merge(sum.totalCredit);
+      totalBalance.merge(sum.balance);
+    }
+    const allTime = computeCompanyReport({
+      companies, companyTransactions: cTxns, paymentSplits, approvals,
+    });
+    logReconciliation(
+      "companies",
+      { services: totalDebit, paid: totalCredit, due: totalBalance },
+      { services: allTime.totals.services, paid: allTime.totals.paid, due: allTime.totals.due },
+    );
+  }, [companies, cTxns, paymentSplits, approvals, companiesAllTime]);
+
+  const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => txnCollectedAmount(t));
+  // ترتيب "أعلى الشركات": بعدد الحركات المميزة ضمن الفترة.
+  const topCompanies = [...data].sort((a, b) => b.txnCount - a.txnCount).slice(0, 5)
+    .map((d) => ({ name: d.name, value: d.txnCount }));
+  // مؤشر Pie: إجمالي المدفوعات (بأي عملة كمؤشر ترتيبي فقط، لا يتم جمع العملات).
+  const paidRank = (m: CurrencyMap) => m.entries().reduce((s, e) => s + Math.abs(e.amount), 0);
+  const servicesByCompany = data.filter((d) => paidRank(d.paid) > 0)
+    .sort((a, b) => paidRank(b.paid) - paidRank(a.paid))
+    .slice(0, 6)
+    .map((d) => ({ name: d.name, value: paidRank(d.paid) }));
 
   const cols = [
     { header: "اسم الشركة", key: "name" },
-    { header: "إجمالي الخدمات", key: "total" },
+    { header: "إجمالي الخدمات", key: "services" },
     { header: "إجمالي المدفوع", key: "paid" },
     { header: "صافي المستحق", key: "due" },
-    { header: "عدد الحركات/التقديمات", key: "count" },
+    { header: "عدد الحركات", key: "txnCount" },
+    { header: "عدد التقديمات", key: "approvalCount" },
   ];
   const rows = data.map((r) => ({
-    ...r,
-    total: fmtDL(r.total), total__excel: r.total,
-    paid: fmtDL(r.paid), paid__excel: r.paid,
-    due: fmtDL(r.due), due__excel: r.due,
-    count: fmtNum(r.count), count__excel: r.count,
+    name: r.name,
+    services: formatCurrencyMap(r.services),
+    paid: formatCurrencyMap(r.paid),
+    due: formatCurrencyMap(r.due),
+    txnCount: fmtNum(r.txnCount), txnCount__excel: r.txnCount,
+    approvalCount: fmtNum(r.approvalCount), approvalCount__excel: r.approvalCount,
   }));
 
-  // Financial column per service (company cost). Ranking uses DISTINCT
-  // executed executions containing a company-linked service of that type.
+  // Financial column per service (company cost) — for the chart view only.
   const companyValueByService = useMemo(() => {
     const map = new Map<string, number>();
     for (const t of fCT) {
@@ -772,7 +810,6 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
       const svc = Array.isArray(ex.services) ? ex.services : [];
       const hasCompanyService = svc.some((s: any) => s && s.kind === "company" && s.company_id);
       if (!hasCompanyService) continue;
-      // Keep only company-linked services so the metric reflects company work.
       list.push({
         ...ex,
         services: svc.filter((s: any) => s && s.kind === "company"),
@@ -799,9 +836,11 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
         ) : (<>
 
         <KpiRow items={[
-          { label: "إجمالي المدفوعات", value: fmtDL(totalPaid), tone: "red" },
+          { label: "إجمالي المدفوعات", value: <CurrencyLines map={rpt.totals.paid} />, tone: "red" },
+          { label: "إجمالي قيمة الخدمات", value: <CurrencyLines map={rpt.totals.services} />, tone: "gold" },
+          { label: "صافي المستحق", value: <CurrencyLines map={rpt.totals.due} />, tone: "green" },
           { label: "عدد الشركات", value: fmtNum(companies.length) },
-          { label: "إجمالي الحركات", value: fmtNum(fCT.length) },
+          { label: "عدد الحركات", value: fmtNum(rpt.totals.txnCount) },
         ]} />
 
         <ChartsGrid>
@@ -836,7 +875,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [fmtTip(v), n]} />
               <Legend verticalAlign="bottom" height={30} iconType="circle" />
               <Pie data={servicesByCompany} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius={60} outerRadius={95} paddingAngle={3} stroke="var(--card,#fff)" strokeWidth={2}>
-                {servicesByCompany.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                {servicesByCompany.map((_e, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Pie>
             </PieChart>
           </ChartCard>
@@ -852,13 +891,14 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
             <tbody>
               {data.length === 0 ? (
                 <EmptyOrLoading loading={loading} label="لا توجد شركات" colSpan={cols.length} />
-              ) : data.map((r, i) => (
-                <tr key={i}>
+              ) : data.map((r) => (
+                <tr key={r.id}>
                   <td className="bold" data-label="الشركة">{r.name}</td>
-                  <td data-label="الخدمات">{fmtDL(r.total)}</td>
-                  <td data-label="المدفوع">{fmtDL(r.paid)}</td>
-                  <td data-label="المستحق">{fmtDL(r.due)}</td>
-                  <td data-label="العدد">{fmtNum(r.count)}</td>
+                  <td data-label="الخدمات"><CurrencyLines map={r.services} /></td>
+                  <td data-label="المدفوع"><CurrencyLines map={r.paid} /></td>
+                  <td data-label="المستحق"><CurrencyLines map={r.due} /></td>
+                  <td data-label="الحركات">{fmtNum(r.txnCount)}</td>
+                  <td data-label="التقديمات">{fmtNum(r.approvalCount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -869,6 +909,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
     </div>
   );
 }
+
 
 // ---------- MERCHANTS ----------
 function MerchantsReport({ inRange, data: rd }: SectionProps) {
