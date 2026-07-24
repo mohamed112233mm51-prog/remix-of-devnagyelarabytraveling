@@ -214,6 +214,7 @@ function ReportsPage() {
     setPeriod(p);
     if (p === "30d") { setFrom(def30); setTo(iso(today)); }
     else if (p === "1y") { setFrom(def365); setTo(iso(today)); }
+    else if (p === "all") { setFrom(""); setTo(""); }
   };
 
   const applyToday = () => { const t = iso(today); setFrom(t); setTo(t); setPeriod("custom"); };
