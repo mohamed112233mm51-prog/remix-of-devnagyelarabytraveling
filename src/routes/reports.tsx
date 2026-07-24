@@ -273,6 +273,7 @@ function ReportsPage() {
               <button className={`preset-chip ${period === "30d" ? "active" : ""}`} onClick={() => applyPeriod("30d")}>آخر 30 يوم</button>
               <button className="preset-chip" onClick={applyThisMonth}>هذا الشهر</button>
               <button className={`preset-chip ${period === "1y" ? "active" : ""}`} onClick={() => applyPeriod("1y")}>آخر سنة</button>
+              <button className={`preset-chip ${period === "all" ? "active" : ""}`} onClick={() => applyPeriod("all")}>كل الوقت</button>
               <button className={`preset-chip ${period === "custom" ? "active" : ""}`} onClick={() => setPeriod("custom")}>فترة مخصصة</button>
             </div>
             <div className="filter-range">
