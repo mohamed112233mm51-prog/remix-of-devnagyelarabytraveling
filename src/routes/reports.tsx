@@ -16,7 +16,11 @@ import {
 } from "@/lib/db";
 import { useReportsData, type ReportsData } from "@/lib/reportsData";
 import { computeServiceExecutionDistribution, normalizeServiceType } from "@/lib/serviceDistribution";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeAgentReport, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeCompanyReport, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
+import { computeAgentReport } from "@/lib/sectionAccounting/agentsReport";
+import { logReconciliation } from "@/lib/sectionAccounting/reconciliation";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
+import { useEffect } from "react";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
