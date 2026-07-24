@@ -38,6 +38,7 @@ import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { usePerm } from "@/hooks/usePerm";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { computeServiceExecutionDistribution } from "@/lib/serviceDistribution";
 import {
   Users,
