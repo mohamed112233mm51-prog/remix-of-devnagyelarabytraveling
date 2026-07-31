@@ -324,9 +324,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                   {displayRows.length === 0 ? (
                     <tr><td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
                   ) : displayRows.map((e, i) => {
-                    const absent = absentLookup.isAbsentMovement(e.raw as any);
+                    const opening = Boolean((e as any).isOpeningCarryForward);
+                    const absent = !opening && absentLookup.isAbsentMovement(e.raw as any);
                     return (
-                    <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
+                    <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : opening ? { background: "rgba(30,58,138,0.06)", fontWeight: 700 } : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                       {isVisible("n") && <td data-label="#">{i + 1}</td>}
                       {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
                       {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
@@ -342,8 +343,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
-                          <EditTransactionButton table="transactions" id={e.id} cancelled={false} />
-                          <CancelTransactionButton table="transactions" id={e.id} cancelled={false} />
+                          {!opening && <>
+                            <EditTransactionButton table="transactions" id={e.id} cancelled={false} />
+                            <CancelTransactionButton table="transactions" id={e.id} cancelled={false} />
+                          </>}
                         </td>
                       )}
                     </tr>
@@ -352,6 +355,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 </tbody>
               </table>
             </div>
+            <MonthlyLedgerFooter view={monthlyView} />
             <CurrencyTotalsCards totals={byCurrency} entityKind="agent" />
           </div>
         </div>
