@@ -203,14 +203,16 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
 
   const buildExportData = () => ({
-    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
-    subtitle: agent?.name || "",
+    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${currencyFilter})` : ""}`,
+    subtitle: `${agent?.name || ""} — من ${period.start} إلى ${period.endInclusive}`,
     fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name, currencyFilter),
     summary: [
-      ...byCurrency.flatMap((b) => [
-        { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
-        { label: `إجمالي دائن (${b.currency})`, value: fmtCurrency(b.credit, b.currency) },
-        { label: `الصافي (${b.currency})`, value: fmtCurrency(Math.abs(b.net), b.currency) },
+      { label: "الفترة", value: `${period.start} → ${period.endInclusive}` },
+      ...Object.keys(monthlyView.closingBalanceByCurrency).sort().flatMap((cur) => [
+        { label: `رصيد سابق (${cur})`, value: fmtCurrency(monthlyView.openingByCurrency[cur] || 0, cur) },
+        { label: `إجمالي مدين الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyDebitByCurrency[cur] || 0, cur) },
+        { label: `إجمالي دائن الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyCreditByCurrency[cur] || 0, cur) },
+        { label: `الرصيد الختامي (${cur})`, value: fmtCurrency(monthlyView.closingBalanceByCurrency[cur] || 0, cur) },
       ]),
       { label: "حالة الحساب", value: accountStatus },
     ],
