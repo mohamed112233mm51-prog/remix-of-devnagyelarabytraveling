@@ -247,7 +247,32 @@ function ExecutionsPage() {
   const [visible, setVisible] = usePersistentColumnVisibility("executions", EXECUTION_COLUMNS);
   const visibleColumns = EXECUTION_COLUMNS.filter((c) => visible[c.key] !== false);
 
-  const filtered = useMemo(() => executions.filter((e) => {
+  // أرشفة تنظيمية فقط (لا تؤثر على التقارير/الداشبورد/الحركات المالية):
+  // التنفيذات التي تاريخ مغادرتها قبل أول يوم في الشهر الحالي (توقيت القاهرة) تُعتبر مؤرشفة.
+  const cairoTodayISO = cairoToday();
+  const currentMonthStart = `${cairoTodayISO.slice(0, 7)}-01`;
+  const [archiveMode, setArchiveMode] = useState(false);
+  const [archiveMonth, setArchiveMonth] = useState<string>("");
+  const travelISO = (e: Execution) => {
+    const raw = String((e as any).travel_date || "").trim();
+    if (!raw) return "";
+    return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : (parseDisplayDate(raw) || "");
+  };
+  const isArchived = (e: Execution) => {
+    const iso = travelISO(e);
+    return Boolean(iso) && iso < currentMonthStart;
+  };
+  const archivedRows = useMemo(() => executions.filter(isArchived), [executions, currentMonthStart]);
+  const archiveMonthOptions = useMemo(
+    () => Array.from(new Set(archivedRows.map((e) => travelISO(e).slice(0, 7)).filter(Boolean))).sort().reverse(),
+    [archivedRows],
+  );
+  const scopedExecutions = useMemo(() => {
+    if (!archiveMode) return executions.filter((e) => !isArchived(e));
+    return archiveMonth ? archivedRows.filter((e) => travelISO(e).slice(0, 7) === archiveMonth) : archivedRows;
+  }, [executions, archivedRows, archiveMode, archiveMonth, currentMonthStart]);
+
+  const filtered = useMemo(() => scopedExecutions.filter((e) => {
     for (const c of EXECUTION_COLUMNS) {
       const fs = safeFilters[c.key];
       if (!CF.isFilterActive(fs)) continue;
@@ -257,7 +282,7 @@ function ExecutionsPage() {
       if (c.filter === "text" && !CF.matchText(v, fs)) return false;
     }
     return true;
-  }), [executions, agents, companies, safeFilters, validityDays]);
+  }), [scopedExecutions, agents, companies, safeFilters, validityDays]);
 
   const optionsFor = (key: string) => {
     if (key === "validity") return ["جارية", "منتهية"];
