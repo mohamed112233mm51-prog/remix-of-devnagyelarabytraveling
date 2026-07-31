@@ -74,6 +74,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
+  const today = cairoToday();
+  const [monthKey, setMonthKey] = useState<string>(() => currentMonthKey(today));
 
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => ({
