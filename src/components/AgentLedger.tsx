@@ -140,9 +140,24 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     () => (currencyFilter ? ledger.filter((e) => (e.currency || "EGP") === currencyFilter) : ledger),
     [ledger, currencyFilter],
   );
+  const monthOptions = useMemo(() => buildMonthOptions(ledger.map((e) => e.date), today), [ledger, today]);
+  const period = useMemo(() => monthPeriodFor(monthKey, today), [monthKey, today]);
+  // عرض شهري + صف «رصيد سابق» افتراضي (Synthetic) — لا سجل في قاعدة البيانات.
+  const monthlyView = useMemo(() => buildMonthlyLedgerView<LedgerEntry>({
+    ledgerRows: filteredLedger,
+    period,
+    entityId: selectedAgentId,
+    makeOpeningRow: ({ id, date, currency, debit, credit, description }) => ({
+      id, date, currency, debit, credit, description,
+      kind: "service" as const,
+      destination: "—", service: "—", count: 0, price: 0,
+      serviceValue: 0, payment: 0, paymentMethod: "—", note: "—",
+      raw: null as any,
+    }),
+  }), [filteredLedger, period, selectedAgentId]);
   const ledgerWithBalance = useMemo(
-    () => attachLedgerRunningBalance(filteredLedger),
-    [filteredLedger],
+    () => attachLedgerRunningBalance(monthlyView.rowsWithOpening),
+    [monthlyView],
   );
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
