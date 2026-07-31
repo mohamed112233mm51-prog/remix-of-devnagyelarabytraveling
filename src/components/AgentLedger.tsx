@@ -21,6 +21,10 @@ import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
 import { summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildAgentLedgerRows, type LedgerRow } from "@/lib/financialSummary";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import CurrencyFilter from "@/components/CurrencyFilter";
+import { cairoToday } from "@/lib/approvalFines";
+import { buildMonthlyLedgerView, currentMonthKey, monthPeriodFor } from "@/lib/monthlyLedger";
+import { MonthPeriodPicker, buildMonthOptions, monthLabel } from "@/components/MonthPeriodPicker";
+import { MonthlyLedgerFooter } from "@/components/MonthlyLedgerFooter";
 
 const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "n", label: "#" },
@@ -70,6 +74,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
+  const today = cairoToday();
+  const [monthKey, setMonthKey] = useState<string>(() => currentMonthKey(today));
 
 
   const initialFilters = (): Record<string, CF.ColumnFilterState> => ({
@@ -134,9 +140,24 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     () => (currencyFilter ? ledger.filter((e) => (e.currency || "EGP") === currencyFilter) : ledger),
     [ledger, currencyFilter],
   );
+  const monthOptions = useMemo(() => buildMonthOptions(ledger.map((e) => e.date), today), [ledger, today]);
+  const period = useMemo(() => monthPeriodFor(monthKey, today), [monthKey, today]);
+  // عرض شهري + صف «رصيد سابق» افتراضي (Synthetic) — لا سجل في قاعدة البيانات.
+  const monthlyView = useMemo(() => buildMonthlyLedgerView<LedgerEntry>({
+    ledgerRows: filteredLedger,
+    period,
+    entityId: selectedAgentId,
+    makeOpeningRow: ({ id, date, currency, debit, credit, description }) => ({
+      id, date, currency, debit, credit, description,
+      kind: "service" as const,
+      destination: "—", service: "—", count: 0, price: 0,
+      serviceValue: 0, payment: 0, paymentMethod: "—", note: "—",
+      raw: null as any,
+    }),
+  }), [filteredLedger, period, selectedAgentId]);
   const ledgerWithBalance = useMemo(
-    () => attachLedgerRunningBalance(filteredLedger),
-    [filteredLedger],
+    () => attachLedgerRunningBalance(monthlyView.rowsWithOpening),
+    [monthlyView],
   );
   const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
     ...e,
@@ -164,14 +185,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return true;
   }), [rowsWithMethodLabel, safeFilters]);
 
-  // Per-currency totals for the footer — via Financial Summary Engine.
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredLedger), [filteredLedger]);
+  // Per-currency totals for the footer — حركات الشهر فقط (بدون صف الرصيد السابق).
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(monthlyView.monthlyRows), [monthlyView]);
   // ⚠️ Currency-Safe: لا يجوز جمع debit/credit عبر عملات مختلفة.
-  // حالة الحساب تُحسب لكل عملة على حدة (سطر مستقل في التصدير).
-  const statusPerCurrency = byCurrency.map((b) => ({
-    currency: b.currency,
-    net: b.net,
-    status: b.net > 0 ? "مستحق على الوكيل" : b.net < 0 ? "مستحق للوكيل" : "متوازن",
+  // حالة الحساب تُحسب من الرصيد الختامي لكل عملة على حدة.
+  const statusPerCurrency = Object.entries(monthlyView.closingBalanceByCurrency).map(([currency, net]) => ({
+    currency,
+    net,
+    status: net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن",
   }));
   const accountStatus = statusPerCurrency.length === 0
     ? "متوازن"
@@ -182,14 +203,16 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
 
   const buildExportData = () => ({
-    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
-    subtitle: agent?.name || "",
+    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${currencyFilter})` : ""}`,
+    subtitle: `${agent?.name || ""} — من ${period.start} إلى ${period.endInclusive}`,
     fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name, currencyFilter),
     summary: [
-      ...byCurrency.flatMap((b) => [
-        { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
-        { label: `إجمالي دائن (${b.currency})`, value: fmtCurrency(b.credit, b.currency) },
-        { label: `الصافي (${b.currency})`, value: fmtCurrency(Math.abs(b.net), b.currency) },
+      { label: "الفترة", value: `${period.start} → ${period.endInclusive}` },
+      ...Object.keys(monthlyView.closingBalanceByCurrency).sort().flatMap((cur) => [
+        { label: `رصيد سابق (${cur})`, value: fmtCurrency(monthlyView.openingByCurrency[cur] || 0, cur) },
+        { label: `إجمالي مدين الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyDebitByCurrency[cur] || 0, cur) },
+        { label: `إجمالي دائن الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyCreditByCurrency[cur] || 0, cur) },
+        { label: `الرصيد الختامي (${cur})`, value: fmtCurrency(monthlyView.closingBalanceByCurrency[cur] || 0, cur) },
       ]),
       { label: "حالة الحساب", value: accountStatus },
     ],
@@ -269,6 +292,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
           <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div className="card-title">كشف حساب الوكيل</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <MonthPeriodPicker monthKey={monthKey} onChange={setMonthKey} options={monthOptions} period={period} today={today} />
               <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
@@ -300,9 +324,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                   {displayRows.length === 0 ? (
                     <tr><td colSpan={LEDGER_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
                   ) : displayRows.map((e, i) => {
-                    const absent = absentLookup.isAbsentMovement(e.raw as any);
+                    const opening = Boolean((e as any).isOpeningCarryForward);
+                    const absent = !opening && absentLookup.isAbsentMovement(e.raw as any);
                     return (
-                    <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
+                    <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : opening ? { background: "rgba(30,58,138,0.06)", fontWeight: 700 } : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                       {isVisible("n") && <td data-label="#">{i + 1}</td>}
                       {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
                       {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
@@ -318,8 +343,10 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
-                          <EditTransactionButton table="transactions" id={e.id} cancelled={false} />
-                          <CancelTransactionButton table="transactions" id={e.id} cancelled={false} />
+                          {!opening && <>
+                            <EditTransactionButton table="transactions" id={e.id} cancelled={false} />
+                            <CancelTransactionButton table="transactions" id={e.id} cancelled={false} />
+                          </>}
                         </td>
                       )}
                     </tr>
@@ -328,6 +355,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 </tbody>
               </table>
             </div>
+            <MonthlyLedgerFooter view={monthlyView} />
             <CurrencyTotalsCards totals={byCurrency} entityKind="agent" />
           </div>
         </div>

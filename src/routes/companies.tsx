@@ -16,6 +16,10 @@ import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import CurrencyFilter from "@/components/CurrencyFilter";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
+import { buildMonthlyLedgerView, currentMonthKey, monthPeriodFor } from "@/lib/monthlyLedger";
+import { MonthPeriodPicker, buildMonthOptions, monthLabel } from "@/components/MonthPeriodPicker";
+import { MonthlyLedgerFooter } from "@/components/MonthlyLedgerFooter";
+import { cairoToday } from "@/lib/approvalFines";
 import { usePerm, checkPerm } from "@/hooks/usePerm";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -335,18 +339,36 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [allEntries, currencyFilter],
   );
 
+  const today = cairoToday();
+  const [monthKey, setMonthKey] = useState<string>(() => currentMonthKey(today));
+  const monthOptions = useMemo(() => buildMonthOptions(allEntries.map((e) => e.date), today), [allEntries, today]);
+  const period = useMemo(() => monthPeriodFor(monthKey, today), [monthKey, today]);
+  // عرض شهري + صف «رصيد سابق» افتراضي (Synthetic) — لا سجل في قاعدة البيانات.
+  const monthlyView = useMemo(() => buildMonthlyLedgerView<CompanyLedgerEntry>({
+    ledgerRows: filteredEntries,
+    period,
+    entityId: companyId,
+    makeOpeningRow: ({ id, date, currency, debit, credit, description }) => ({
+      id, date, currency, debit, credit, description,
+      kind: "service" as const,
+      destination: "—", service: "—", count: 0, price: 0,
+      serviceValue: 0, payment: 0, paymentMethod: "—", note: "—",
+      raw: null as any,
+    }),
+  }), [filteredEntries, period, companyId]);
+
   // Per-currency running balance — via Financial Summary Engine.
   const allWithBalance = useMemo(
-    () => attachLedgerRunningBalance(filteredEntries),
-    [filteredEntries],
+    () => attachLedgerRunningBalance(monthlyView.rowsWithOpening),
+    [monthlyView],
   );
 
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
-  // ⚠️ Currency-Safe: كل عملة تُحسب حالتها مستقلة (لا خلط EGP/USD/LYD).
-  const statusPerCurrency = byCurrency.map((b) => ({
-    currency: b.currency,
-    net: b.net,
-    status: b.net > 0 ? "مستحق للشركة" : b.net < 0 ? "مستحق على الشركة" : "متوازن",
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(monthlyView.monthlyRows), [monthlyView]);
+  // ⚠️ Currency-Safe: كل عملة تُحسب حالتها مستقلة (لا خلط EGP/USD/LYD) — من الرصيد الختامي.
+  const statusPerCurrency = Object.entries(monthlyView.closingBalanceByCurrency).map(([currency, net]) => ({
+    currency,
+    net,
+    status: net > 0 ? "مستحق للشركة" : net < 0 ? "مستحق على الشركة" : "متوازن",
   }));
   const accountStatus = statusPerCurrency.length === 0
     ? "متوازن"
@@ -404,14 +426,16 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   }), [rowsWithMethodLabel, safeFilters]);
 
   const buildData = () => ({
-    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
-    subtitle: company ? company.company_name : "كل الشركات",
+    title: `كشف حساب الشركة${company?.company_name ? ` — ${company.company_name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${currencyFilter})` : ""}`,
+    subtitle: `${company ? company.company_name : "كل الشركات"} — من ${period.start} إلى ${period.endInclusive}`,
     fileName: buildArabicFileName("كشف حساب الشركة", company?.company_name, currencyFilter),
     summary: [
-      ...byCurrency.flatMap((b) => [
-        { label: `إجمالي مدين (${b.currency})`, value: fmtCurrency(b.debit, b.currency) },
-        { label: `إجمالي دائن (${b.currency})`, value: fmtCurrency(b.credit, b.currency) },
-        { label: `الصافي (${b.currency})`, value: fmtCurrency(Math.abs(b.net), b.currency) },
+      { label: "الفترة", value: `${period.start} → ${period.endInclusive}` },
+      ...Object.keys(monthlyView.closingBalanceByCurrency).sort().flatMap((cur) => [
+        { label: `رصيد سابق (${cur})`, value: fmtCurrency(monthlyView.openingByCurrency[cur] || 0, cur) },
+        { label: `إجمالي مدين الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyDebitByCurrency[cur] || 0, cur) },
+        { label: `إجمالي دائن الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyCreditByCurrency[cur] || 0, cur) },
+        { label: `الرصيد الختامي (${cur})`, value: fmtCurrency(monthlyView.closingBalanceByCurrency[cur] || 0, cur) },
       ]),
       { label: "حالة الحساب", value: accountStatus },
     ],
@@ -455,6 +479,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div className="card-title">كشف حساب الشركة الصادرة</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <MonthPeriodPicker monthKey={monthKey} onChange={setMonthKey} options={monthOptions} period={period} today={today} />
           <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
           {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
           <ColumnVisibility columns={COMPANY_STATEMENT_COLUMNS} visible={visible} onChange={setVisible} />
@@ -492,9 +517,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
               {displayRows.length === 0 ? (
                 <tr><td colSpan={COMPANY_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length}><div className="empty"><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
               ) : displayRows.map((e, i) => {
-                const absent = absentLookup.isAbsentMovement(e.raw as any);
+                const opening = Boolean((e as any).isOpeningCarryForward);
+                const absent = !opening && absentLookup.isAbsentMovement(e.raw as any);
                 return (
-                <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
+                <tr key={e.id} style={absent ? ABSENT_ROW_STYLE : opening ? { background: "rgba(30,58,138,0.06)", fontWeight: 700 } : { background: e.kind === "payment" ? "rgba(22,163,74,0.04)" : undefined }}>
                   {isVisible("n") && <td data-label="#">{i + 1}</td>}
                   {isVisible("date") && <td data-label="التاريخ">{e.date}</td>}
                   {isVisible("description") && <td data-label="البيان" className="bold">{e.description}</td>}
@@ -510,8 +536,10 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
                   {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
                   {isVisible("actions") && (
                     <td data-label="إجراءات">
-                      <EditTransactionButton table="company_transactions" id={e.id} cancelled={false} />
-                      <CancelTransactionButton table="company_transactions" id={e.id} cancelled={false} />
+                      {!opening && <>
+                        <EditTransactionButton table="company_transactions" id={e.id} cancelled={false} />
+                        <CancelTransactionButton table="company_transactions" id={e.id} cancelled={false} />
+                      </>}
                     </td>
                   )}
                 </tr>
@@ -520,6 +548,7 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
             </tbody>
           </table>
         </div>
+        <MonthlyLedgerFooter view={monthlyView} />
         <CurrencyTotalsCards totals={byCurrency} entityKind="company" />
       </div>
     </div>
