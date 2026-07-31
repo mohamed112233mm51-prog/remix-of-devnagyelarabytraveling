@@ -292,6 +292,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
           <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div className="card-title">كشف حساب الوكيل</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <MonthPeriodPicker monthKey={monthKey} onChange={setMonthKey} options={monthOptions} period={period} today={today} />
               <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
