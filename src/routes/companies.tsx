@@ -335,18 +335,36 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
     [allEntries, currencyFilter],
   );
 
+  const today = cairoToday();
+  const [monthKey, setMonthKey] = useState<string>(() => currentMonthKey(today));
+  const monthOptions = useMemo(() => buildMonthOptions(allEntries.map((e) => e.date), today), [allEntries, today]);
+  const period = useMemo(() => monthPeriodFor(monthKey, today), [monthKey, today]);
+  // عرض شهري + صف «رصيد سابق» افتراضي (Synthetic) — لا سجل في قاعدة البيانات.
+  const monthlyView = useMemo(() => buildMonthlyLedgerView<CompanyLedgerEntry>({
+    ledgerRows: filteredEntries,
+    period,
+    entityId: companyId,
+    makeOpeningRow: ({ id, date, currency, debit, credit, description }) => ({
+      id, date, currency, debit, credit, description,
+      kind: "service" as const,
+      destination: "—", service: "—", count: 0, price: 0,
+      serviceValue: 0, payment: 0, paymentMethod: "—", note: "—",
+      raw: null as any,
+    }),
+  }), [filteredEntries, period, companyId]);
+
   // Per-currency running balance — via Financial Summary Engine.
   const allWithBalance = useMemo(
-    () => attachLedgerRunningBalance(filteredEntries),
-    [filteredEntries],
+    () => attachLedgerRunningBalance(monthlyView.rowsWithOpening),
+    [monthlyView],
   );
 
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredEntries), [filteredEntries]);
-  // ⚠️ Currency-Safe: كل عملة تُحسب حالتها مستقلة (لا خلط EGP/USD/LYD).
-  const statusPerCurrency = byCurrency.map((b) => ({
-    currency: b.currency,
-    net: b.net,
-    status: b.net > 0 ? "مستحق للشركة" : b.net < 0 ? "مستحق على الشركة" : "متوازن",
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(monthlyView.monthlyRows), [monthlyView]);
+  // ⚠️ Currency-Safe: كل عملة تُحسب حالتها مستقلة (لا خلط EGP/USD/LYD) — من الرصيد الختامي.
+  const statusPerCurrency = Object.entries(monthlyView.closingBalanceByCurrency).map(([currency, net]) => ({
+    currency,
+    net,
+    status: net > 0 ? "مستحق للشركة" : net < 0 ? "مستحق على الشركة" : "متوازن",
   }));
   const accountStatus = statusPerCurrency.length === 0
     ? "متوازن"
