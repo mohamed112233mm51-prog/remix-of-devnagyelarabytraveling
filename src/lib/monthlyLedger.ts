@@ -9,7 +9,7 @@
  *  تعريف أي معادلة محاسبية هنا، ولا يُخلط بين العملات.
  * ============================================================ */
 
-import { cairoToday } from "@/lib/absentApproval";
+import { cairoToday } from "@/lib/approvalFines";
 
 export type MonthlyPeriod = {
   /** "YYYY-MM" */
