@@ -185,14 +185,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     return true;
   }), [rowsWithMethodLabel, safeFilters]);
 
-  // Per-currency totals for the footer — via Financial Summary Engine.
-  const byCurrency = useMemo(() => summarizeLedgerByCurrency(filteredLedger), [filteredLedger]);
+  // Per-currency totals for the footer — حركات الشهر فقط (بدون صف الرصيد السابق).
+  const byCurrency = useMemo(() => summarizeLedgerByCurrency(monthlyView.monthlyRows), [monthlyView]);
   // ⚠️ Currency-Safe: لا يجوز جمع debit/credit عبر عملات مختلفة.
-  // حالة الحساب تُحسب لكل عملة على حدة (سطر مستقل في التصدير).
-  const statusPerCurrency = byCurrency.map((b) => ({
-    currency: b.currency,
-    net: b.net,
-    status: b.net > 0 ? "مستحق على الوكيل" : b.net < 0 ? "مستحق للوكيل" : "متوازن",
+  // حالة الحساب تُحسب من الرصيد الختامي لكل عملة على حدة.
+  const statusPerCurrency = Object.entries(monthlyView.closingBalanceByCurrency).map(([currency, net]) => ({
+    currency,
+    net,
+    status: net > 0 ? "مستحق على الوكيل" : net < 0 ? "مستحق للوكيل" : "متوازن",
   }));
   const accountStatus = statusPerCurrency.length === 0
     ? "متوازن"
