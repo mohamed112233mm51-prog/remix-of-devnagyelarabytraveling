@@ -392,8 +392,23 @@ function ExecutionsPage() {
       {tab === "list" ? (
         <>
           <div className="card" style={{ padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, color: "#64748b" }}>{filtered.length.toLocaleString("ar")} سجل</span>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              {filtered.length.toLocaleString("ar")} سجل — {archiveMode ? "الأرشيف" : "الشهر الحالي والقادم"}
+            </span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => { setArchiveMode((v) => !v); setArchiveMonth(""); }}
+              >
+                {archiveMode ? "عرض الحالي" : `الأرشيف (${archivedRows.length.toLocaleString("ar")})`}
+              </button>
+              {archiveMode && (
+                <select value={archiveMonth} onChange={(e) => setArchiveMonth(e.target.value)} style={{ height: 34, borderRadius: 8 }}>
+                  <option value="">كل الأرشيف</option>
+                  {archiveMonthOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={EXECUTION_COLUMNS} visible={visible} onChange={setVisible} />
               <ExportButton disabled={filtered.length === 0} getData={() => buildExportData()} whatsapp={{ phone: null }} />
