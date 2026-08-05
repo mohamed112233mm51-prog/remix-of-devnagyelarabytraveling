@@ -16,6 +16,7 @@
  * التاريخ المعتمد لفلترة الفترة:
  *   - transactions              → date  ثم created_at كـ fallback.
  *   - merchant_cash_collections → date  ثم created_at كـ fallback.
+ *   - executed services         → financial_posting_date ثم created_at للسجلات القديمة.
  * =============================================================================
  */
 
@@ -37,6 +38,22 @@ export function rowAccountingDate(
 ): string | null {
   if (!row) return null;
   return row.date || row.created_at || null;
+}
+
+/**
+ * تاريخ الاعتراف المالي للتنفيذ المنفذ.
+ * لا نستخدم travel_date لأنه تاريخ تشغيلي وقد يكون في شهر لاحق عن تاريخ
+ * اعتماد المديونية. created_at موجود فقط كـ fallback قبل تشغيل الـ backfill.
+ */
+export function executionFinancialDate(
+  row: { financial_posting_date?: string | null; created_at?: string | null } | null | undefined,
+): string | null {
+  if (!row) return null;
+  return row.financial_posting_date
+    ? String(row.financial_posting_date).slice(0, 10)
+    : row.created_at
+      ? String(row.created_at).slice(0, 10)
+      : null;
 }
 
 export type DatePredicate = (dateISO: string | null) => boolean;
@@ -116,8 +133,6 @@ export function computeAgentCollectionsByCurrency(
     seen.add(t.id);
     if (isCancelled(t as unknown as MaybeCancelled)) continue;
     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
-    // تحصيلات الوكلاء = فقط الحركات المرتبطة بوكيل. الحركات بلا agent_id
-    // (تحويلات داخلية / تسويات) ليست تحصيلات وكلاء ولا تُحسب هنا.
     if (!(t as any).agent_id) continue;
     const amount = txnCollectedAmount(t);
     if (!amount) continue;
@@ -128,28 +143,28 @@ export function computeAgentCollectionsByCurrency(
 
 // ---------------------------------------------------------------------------
 // Per-agent aggregators — نفس الدوال أعلاه لكن مفهرسة بـ agent_id.
-// الغاية: صفحة "حسابات الوكلاء" تعرض كل وكيل على حدة، ويجب أن يكون
-// إجمالي الصفحة = إجمالي الداشبورد بالبنية نفسها (بدون خلط عملات).
 // ---------------------------------------------------------------------------
 
 /**
  * قيمة خدمات كل وكيل مفصولة حسب العملة (Map<agent_id, CurrencyMap>).
- * المصدر: `executions.services` (kind=agent) لتنفيذات "منفذ" غير الملغاة،
- * منسوبة إلى `executions.agent_id`.
+ * المصدر: `executions.services` (kind=agent) لتنفيذات "منفذ" غير الملغاة.
+ * فلترة الفترة تعتمد على financial_posting_date وليس travel_date.
  */
 export function computeAgentServicesByCurrencyPerAgent(
-  executions: ReadonlyArray<ExecutionRow & { agent_id?: string | null; cancelled_at?: string | null; travel_date?: string | null; created_at?: string | null }>,
+  executions: ReadonlyArray<ExecutionRow & {
+    agent_id?: string | null;
+    cancelled_at?: string | null;
+    financial_posting_date?: string | null;
+    travel_date?: string | null;
+    created_at?: string | null;
+  }>,
   predicate?: DatePredicate,
 ): Map<string, CurrencyMap> {
   const out = new Map<string, CurrencyMap>();
   for (const ex of executions) {
     if ((ex as any).cancelled_at) continue;
     if ((ex.operation_status || "") !== "منفذ") continue;
-    if (predicate) {
-      const d = ((ex as any).travel_date && String((ex as any).travel_date)) ||
-        ((ex as any).created_at ? String((ex as any).created_at).slice(0, 10) : null);
-      if (!predicate(d)) continue;
-    }
+    if (predicate && !predicate(executionFinancialDate(ex as any))) continue;
     const aid = (ex as any).agent_id as string | null;
     if (!aid) continue;
     const { salesByCur } = aggregateExecutionByCurrency(ex);
@@ -162,9 +177,7 @@ export function computeAgentServicesByCurrencyPerAgent(
 
 /**
  * مدفوعات كل وكيل مفصولة حسب العملة (Map<agent_id, CurrencyMap>).
- * المصدر: `transactions` مع نفس شروط `computeAgentCollectionsByCurrency`
- * (dedupe id، استبعاد cancelled، تجاهل الصفوف بلا agent_id).
- * القيمة = `txnCollectedAmount(t)` — بدون fallback إلى total_paid/paid.
+ * المصدر: `transactions` مع نفس شروط `computeAgentCollectionsByCurrency`.
  */
 export function computeAgentPaymentsByCurrencyPerAgent(
   transactions: ReadonlyArray<Transaction>,
@@ -196,11 +209,6 @@ export function sumAgentCurrencyMaps(perAgent: Map<string, CurrencyMap>): Curren
   return out;
 }
 
-/**
- * صف split نستخدمه لاستخراج عملة التحصيل الحقيقية.
- * `merchant_cash_collections` لا يحفظ عملة التحصيل — العملة تُحفظ في
- * `payment_splits.currency` عبر خزنة الشركة المختارة (Financial Engine).
- */
 export type CollectionSplitRow = {
   source_table?: string | null;
   source_id?: string | null;
@@ -208,11 +216,6 @@ export type CollectionSplitRow = {
   cancelled_at?: string | null;
 };
 
-/**
- * يبني خريطة `collectionId → currency` من `payment_splits`:
- *  - يتجاهل الـ splits الملغاة.
- *  - يعتمد العملة فقط إذا كانت كل splits التحصيل بعملة واحدة (وإلا يترك التحصيل بدون عملة محسومة).
- */
 export function buildCollectionCurrencyMap(
   splits: readonly CollectionSplitRow[] | null | undefined,
 ): Map<string, string> {
@@ -234,16 +237,6 @@ export function buildCollectionCurrencyMap(
   return result;
 }
 
-/**
- * إجمالي تحصيلات تجار الكاش مفصّلاً حسب العملة.
- *
- * ترتيب حسم العملة لكل صف (fallback موثّق):
- *  1. عملة `payment_splits.currency` المرتبطة بالتحصيل (المصدر الحقيقي — الخزنة المختارة).
- *  2. `opening_currency` (سجلات الرصيد الافتتاحي فقط).
- *  3. EGP (سلوك تاريخي: لا يوجد حقل عملة على الصف).
- *
- * القيمة = `merchant_cash_collections.amount` (مرة واحدة لكل id — لا نجمع splits).
- */
 export function computeMerchantCashCollectionsByCurrency(
   collections: MerchantCashCollection[],
   predicate?: DatePredicate,
@@ -261,25 +254,18 @@ export function computeMerchantCashCollectionsByCurrency(
     const amount = Number((c as any).amount || 0);
     if (!amount) continue;
     const fromSplit = currencyById.get(c.id);
-    const currency = fromSplit
-      ? normalizeCurrency(fromSplit)
-      : collectionCurrency(c);
+    const currency = fromSplit ? normalizeCurrency(fromSplit) : collectionCurrency(c);
     map.add(currency, amount);
   }
   return map;
 }
 
-/** دمج عدة خرائط عملة في خريطة واحدة (لا يجمع عملات مختلفة في رقم واحد). */
 export function mergeCurrencyTotals(...maps: CurrencyMap[]): CurrencyMap {
   const out = new CurrencyMap();
   for (const m of maps) out.merge(m);
   return out;
 }
 
-/**
- * طرح خريطة عملات من أخرى — لكل عملة على حدة، بدون خلط.
- * `a[cur] - b[cur]` لكل عملة تظهر في أي من الطرفين.
- */
 export function subtractCurrencyMaps(a: CurrencyMap, b: CurrencyMap): CurrencyMap {
   const out = new CurrencyMap();
   for (const { currency, amount } of a.entries({ includeZero: true })) out.add(currency, amount);
@@ -300,14 +286,8 @@ export function inRangePredicate(range: { start: Date; end: Date }): DatePredica
 
 // ---------------------------------------------------------------------------
 // إجماليات تفاصيل الأقسام في الداشبورد — مفصولة حسب العملة.
-// كل دالة تُرجع CurrencyMap لكل حقل مالي؛ لا يتم خلط العملات ولا تحويلها.
 // ---------------------------------------------------------------------------
 
-/**
- * قيمة خدمات الوكلاء لكل عملة — من `executions.services` (kind=agent).
- * يُطابق مصدر مبيعات الوكلاء لكنه يعرض القيم بعملتها الأصلية بدل تحويلها إلى EGP.
- * يستبعد التنفيذات غير "منفذ" و`cancelled_at`.
- */
 export function computeExecutionAgentSalesByCurrency(
   rows: ReadonlyArray<ExecutionRow & { cancelled_at?: string | null }>,
 ): CurrencyMap {
@@ -321,13 +301,6 @@ export function computeExecutionAgentSalesByCurrency(
   return map;
 }
 
-/**
- * إجماليات الشركات الصادرة مفصولة حسب العملة (مصدر أصل موحّد مع كارت الشركات).
- * services: من `trip_value || count*price`
- * paid: من `txnCollectedAmount`
- * due: services - paid لكل عملة على حدة (بدون خلط عملات)
- * مصدر العملة: `payment_currency || currency || EGP`.
- */
 export function computeCompanyStatsByCurrency(
   cTxns: ReadonlyArray<CompanyTransaction & { cancelled_at?: string | null }>,
 ): { services: CurrencyMap; paid: CurrencyMap; due: CurrencyMap } {
@@ -336,9 +309,7 @@ export function computeCompanyStatsByCurrency(
   for (const t of cTxns) {
     if ((t as any).cancelled_at) continue;
     const cur = normalizeCurrency((t as any).payment_currency ?? (t as any).currency);
-    const sv =
-      Number((t as any).trip_value || 0) ||
-      Number((t as any).count || 0) * Number((t as any).price || 0);
+    const sv = Number((t as any).trip_value || 0) || Number((t as any).count || 0) * Number((t as any).price || 0);
     if (sv) services.add(cur, sv);
     const pd = txnCollectedAmount(t);
     if (pd) paid.add(cur, pd);
@@ -346,11 +317,6 @@ export function computeCompanyStatsByCurrency(
   return { services, paid, due: subtractCurrencyMaps(services, paid) };
 }
 
-/**
- * إجماليات المصروفات مفصولة حسب العملة (`expenses.currency` fallback EGP).
- * المبلغ من `expenses.amount` فقط — لا نضيف `expense_deductions` أبداً
- * لأنها شرائح سداد لنفس المصروف (يؤدي إلى تضاعف الحساب).
- */
 export function computeExpensesByCurrency(
   expenses: ReadonlyArray<Expense & { cancelled_at?: string | null }>,
 ): { total: CurrencyMap; fixed: CurrencyMap; variable: CurrencyMap } {
@@ -381,13 +347,6 @@ type CurrencyTxnLike = {
   cancelled_at?: string | null;
 };
 
-/**
- * إجماليات موردي العملة مفصولة حسب العملة (لا تحويل ولا خلط).
- * - `purchases[sold_currency] += sold_amount` (المبلغ المستحق للمورد بعملة السداد)
- * - `payments[split.currency ?? sold_currency] += split.amount`
- * - `due = purchases - payments` لكل عملة
- * (يبقى كل مورد بعملته الأصلية بدون تحويل.)
- */
 export function computeCurrencySupplierStatsByCurrency(
   txns: ReadonlyArray<CurrencyTxnLike>,
   activeSupplierIds: ReadonlySet<string>,
@@ -411,5 +370,3 @@ export function computeCurrencySupplierStatsByCurrency(
   }
   return { purchases, payments, due: subtractCurrencyMaps(purchases, payments) };
 }
-
-
