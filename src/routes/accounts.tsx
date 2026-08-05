@@ -3,13 +3,8 @@ import { CurrencyLines } from "@/components/CurrencyLines";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Execution, type Merchant, type Transaction } from "@/lib/db";
-import { CurrencyMap, formatCurrencyMap } from "@/lib/financialSummary";
-import {
-  computeAgentServicesByCurrencyPerAgent,
-  computeAgentPaymentsByCurrencyPerAgent,
-  subtractCurrencyMaps,
-} from "@/lib/dashboardCollections";
+import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
+import { CurrencyMap, formatCurrencyMap, useAgentsSummary } from "@/lib/financialSummary";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 
 
@@ -55,27 +50,23 @@ function AccountsPage() {
   const [showAgentLookup, setShowAgentLookup] = useState(false);
 
 
-  // نفس مصدر الداشبورد بالضبط — لضمان تطابق كروت الوكلاء عملة بعملة:
-  //   الخدمات  = executions.services (kind=agent) لتنفيذات "منفذ"، منسوبة لـ agent_id.
-  //   المدفوعات = transactions مع agent_id، عبر txnCollectedAmount (بدون fallback).
-  //   المستحق  = الخدمات − المدفوعات لكل عملة على حدة (بدون خلط عملات).
-  const { rows: executions } = useLive<Execution>("executions");
-  // Aggregate KPI boxes come from the shared source of truth
-  // (`useAgentAccountTotals`) — same hook the dashboard consumes.
+  // مصدر الحقيقة المحاسبي الوحيد هو نفس دفتر كشف حساب الوكيل.
+  // المدين/الدائن/الرصيد هنا مبنية من buildAgentLedgerRows عبر useAgentsSummary،
+  // لذلك تشمل الحركات القديمة والأرصدة الافتتاحية وتستبعد الملغي بنفس قواعد الكشف.
+  const agentSummaries = useAgentsSummary();
   const { services: totalTrips, payments: totalPaid, due: totalDue } = useAgentAccountTotals();
-  // Per-agent breakdown for the table stays local (needs per-agent maps).
   const stats = useMemo(() => {
-    const servicesPerAgent = computeAgentServicesByCurrencyPerAgent(executions as any);
-    const paymentsPerAgent = computeAgentPaymentsByCurrencyPerAgent(txns);
     const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
     for (const a of agents) {
-      const trips = servicesPerAgent.get(a.id) || new CurrencyMap();
-      const paid = paymentsPerAgent.get(a.id) || new CurrencyMap();
-      const due = subtractCurrencyMaps(trips, paid);
-      map.set(a.id, { trips, paid, due });
+      const summary = agentSummaries.get(a.id);
+      map.set(a.id, {
+        trips: summary?.totalDebit || new CurrencyMap(),
+        paid: summary?.totalCredit || new CurrencyMap(),
+        due: summary?.balance || new CurrencyMap(),
+      });
     }
     return map;
-  }, [agents, executions, txns]);
+  }, [agents, agentSummaries]);
 
 
 
@@ -424,6 +415,5 @@ function AgentForm({ onDone }: { onDone: () => void }) {
 function TxnForm(props: { agents: Agent[]; merchants: Merchant[]; txns: Transaction[]; onDone: () => void }) {
   return <AgentPaymentForm agents={props.agents} merchants={props.merchants} onDone={props.onDone} />;
 }
-
 
 
