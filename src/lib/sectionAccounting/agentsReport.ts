@@ -47,14 +47,20 @@ export type AgentReportSummaryV2 = {
 };
 
 /**
- * تاريخ اعتماد التنفيذ: `travel_date` ثم `created_at` كـ fallback.
- * (نفس القاعدة داخل computeAgentServicesByCurrencyPerAgent.)
+ * تاريخ الاعتراف المالي لخدمة التنفيذ:
+ * `financial_posting_date` ثم `created_at` كـ fallback للسجلات القديمة فقط.
+ *
+ * لا نستخدم `travel_date` هنا؛ فهو تاريخ تشغيلي للسفر والأرشفة، وقد يكون
+ * مستقبليًا بالنسبة إلى اليوم الذي تم فيه اعتماد المديونية على الوكيل.
  */
 export function executionAccountingDate(
-  ex: { travel_date?: string | null; created_at?: string | null } | null | undefined,
+  ex: {
+    financial_posting_date?: string | null;
+    created_at?: string | null;
+  } | null | undefined,
 ): string | null {
   if (!ex) return null;
-  return (ex.travel_date && String(ex.travel_date)) ||
+  return (ex.financial_posting_date && String(ex.financial_posting_date).slice(0, 10)) ||
     (ex.created_at ? String(ex.created_at).slice(0, 10) : null);
 }
 
@@ -81,7 +87,7 @@ export function computeAgentReport(input: {
   const servicesPerAgent = computeAgentServicesByCurrencyPerAgent(executions as any, predicate);
   const paymentsPerAgent = computeAgentPaymentsByCurrencyPerAgent(transactions, predicate);
 
-  // Counts per agent (executions distinct per agent within the range).
+  // Counts per agent (executions distinct per agent within the accounting range).
   const execCountByAgent = new Map<string, number>();
   const filteredExecutions: Execution[] = [];
   for (const ex of executions) {
