@@ -132,6 +132,7 @@ import { AuthProvider, useAuth } from "../hooks/useAuth";
 import { useGlobalKeyboardNav } from "../hooks/useKeyboardNav";
 import { ConfirmSaveModalHost } from "../components/ConfirmSaveModal";
 import { installServerFnAuthFetch } from "../lib/serverFnAuth";
+import { installMonthSelectEnhancer } from "../lib/monthSelectEnhancer";
 import { loadBranding, applyBrandingCssVars, useBrandingReady, BRAND_NAVY, BRAND_GOLD } from "../lib/branding";
 
 function SplashScreen(_props: { stage?: string; warning?: string }) {
@@ -171,7 +172,7 @@ function AuthGate() {
   const { session, loading, profileLoaded, profileError, needsPassword, blocked, setPasswordDone, refreshProfile } = useAuth();
   const brandingReady = useBrandingReady();
   useGlobalKeyboardNav();
-  useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); import("@/lib/dragScroll").then(m => m.installDragScroll()).catch(() => {}); }, []);
+  useEffect(() => { installStartupSafety(); installServerFnAuthFetch(); installMonthSelectEnhancer(); import("@/lib/dragScroll").then(m => m.installDragScroll()).catch(() => {}); }, []);
   useEffect(() => { loadBranding().then(applyBrandingCssVars).catch(() => {}); }, []);
   useEffect(() => { if (!loading) loadBranding().then(applyBrandingCssVars).catch(() => {}); }, [loading, session?.user?.id]);
 
