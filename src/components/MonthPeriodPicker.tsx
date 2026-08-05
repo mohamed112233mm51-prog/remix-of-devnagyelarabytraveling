@@ -32,18 +32,83 @@ export function MonthPeriodPicker({
 }) {
   const isCurrent = monthKey === currentMonthKey(today);
   return (
-    <div style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      <label style={{ fontSize: 12, color: "var(--muted, #64748b)" }}>الشهر</label>
-      <select value={monthKey} onChange={(e) => onChange(e.target.value)} style={{ height: 34 }}>
+    <div className="month-period-picker">
+      <label className="month-period-picker__label" htmlFor="month-period-select">الشهر</label>
+      <select
+        id="month-period-select"
+        className="month-select-readable month-period-picker__select"
+        value={monthKey}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="اختيار شهر كشف الحساب"
+        title={monthLabel(monthKey)}
+      >
         {options.map((k) => <option key={k} value={k}>{monthLabel(k)}</option>)}
       </select>
       {!isCurrent && (
-        <button type="button" className="action-btn" onClick={() => onChange(currentMonthKey(today))}>الشهر الحالي</button>
+        <button type="button" className="action-btn month-period-picker__current" onClick={() => onChange(currentMonthKey(today))}>
+          الشهر الحالي
+        </button>
       )}
-      <span style={{ fontSize: 12, color: "var(--muted, #64748b)" }}>
+      <span className="month-period-picker__range">
         من {period.start} إلى {period.endInclusive}
         {!isCurrent && period.endInclusive !== monthLastDay(monthKey) ? "" : ""}
       </span>
+      <style>{`
+        .month-period-picker {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
+        .month-period-picker__label {
+          flex: 0 0 auto;
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--muted, #64748b);
+          white-space: nowrap;
+        }
+        .month-period-picker__select {
+          flex: 0 1 210px;
+          width: 210px;
+          min-width: 190px !important;
+        }
+        .month-period-picker__current {
+          flex: 0 0 auto;
+          min-height: 40px;
+          white-space: nowrap;
+        }
+        .month-period-picker__range {
+          flex: 1 1 220px;
+          min-width: 0;
+          font-size: 12px;
+          line-height: 1.8;
+          color: var(--muted, #64748b);
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+        @media (max-width: 560px) {
+          .month-period-picker {
+            align-items: stretch;
+          }
+          .month-period-picker__label {
+            width: 100%;
+          }
+          .month-period-picker__select {
+            flex: 1 1 100%;
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .month-period-picker__current {
+            flex: 1 1 auto;
+          }
+          .month-period-picker__range {
+            flex-basis: 100%;
+            width: 100%;
+          }
+        }
+      `}</style>
     </div>
   );
 }
