@@ -1,23 +1,19 @@
 /**
- * Agents section — shared pure functions used by BOTH:
- *   - src/routes/accounts.tsx        (section KPI cards + per-agent table)
- *   - src/routes/reports.tsx         (AgentsReport — period-scoped view)
+ * Agents section — shared pure functions used by reports.
  *
- * الاعتماد الحصري:
- *   - `computeAgentServicesByCurrencyPerAgent` (executions "منفذ")
- *   - `computeAgentPaymentsByCurrencyPerAgent` (transactions.agent_id, txnCollectedAmount)
- * حتى يكون:
- *   إجمالي كروت التقرير عند "كل الوقت"  ==  إجمالي كروت صفحة حسابات الوكلاء.
+ * المصدر المالي الوحيد هو نفس دفتر كشف حساب الوكيل:
+ * `buildAgentLedgerRows(transactions)`.
  *
- * القاعدة: التقرير يضيف فقط طبقة inRange (تصفية زمنية) فوق نفس الدوال.
+ * التنفيذات تُستخدم فقط للعدادات التشغيلية (عدد التنفيذات)، وليست مصدرًا
+ * لحساب المدين أو الدائن أو الرصيد.
  */
 import type { Agent, Execution, Transaction } from "@/lib/db";
-import { CurrencyMap } from "@/lib/financialSummary";
 import {
-  computeAgentServicesByCurrencyPerAgent,
-  computeAgentPaymentsByCurrencyPerAgent,
-  subtractCurrencyMaps,
-  sumAgentCurrencyMaps,
+  CurrencyMap,
+  buildAgentLedgerRows,
+  resolveSplitCurrencyByRef,
+} from "@/lib/financialSummary";
+import {
   rowAccountingDate,
   type DatePredicate,
 } from "@/lib/dashboardCollections";
@@ -46,13 +42,14 @@ export type AgentReportSummaryV2 = {
   filteredApprovals: any[];
 };
 
-/**
- * تاريخ الاعتراف المالي لخدمة التنفيذ:
- * `financial_posting_date` ثم `created_at` كـ fallback للسجلات القديمة فقط.
- *
- * لا نستخدم `travel_date` هنا؛ فهو تاريخ تشغيلي للسفر والأرشفة، وقد يكون
- * مستقبليًا بالنسبة إلى اليوم الذي تم فيه اعتماد المديونية على الوكيل.
- */
+type PaymentSplitLite = {
+  source_table?: string | null;
+  source_id?: string | null;
+  transaction_id?: string | null;
+  currency?: string | null;
+};
+
+/** التاريخ التشغيلي لعدّ التنفيذات داخل الفترة فقط. */
 export function executionAccountingDate(
   ex: {
     financial_posting_date?: string | null;
@@ -70,41 +67,30 @@ function approvalDateOf(a: any): string | null {
     (a?.created_at ? String(a.created_at).slice(0, 10) : null);
 }
 
+function addMap(target: CurrencyMap, source: CurrencyMap): void {
+  target.merge(source);
+}
+
 /**
- * الدالة النقية المشتركة لتقرير الوكلاء.
- * عند `predicate == null` النتيجة "مدى الحياة" وتطابق كروت صفحة الحسابات
- * حرفيًا لكل عملة (نفس المصدر ونفس دوال الجمع).
+ * عند عدم وجود predicate تكون النتيجة مدى الحياة، ويجب أن تطابق كشف الحساب
+ * وكروت صفحة حسابات الوكلاء حرفيًا لكل عملة.
  */
 export function computeAgentReport(input: {
   agents: Pick<Agent, "id" | "name">[];
   transactions: ReadonlyArray<Transaction>;
   executions: ReadonlyArray<Execution>;
   approvals?: ReadonlyArray<any>;
+  paymentSplits?: ReadonlyArray<PaymentSplitLite>;
   predicate?: DatePredicate;
 }): AgentReportSummaryV2 {
-  const { agents, transactions, executions, approvals = [], predicate } = input;
-
-  const servicesPerAgent = computeAgentServicesByCurrencyPerAgent(executions as any, predicate);
-  const paymentsPerAgent = computeAgentPaymentsByCurrencyPerAgent(transactions, predicate);
-
-  // Counts per agent (executions distinct per agent within the accounting range).
-  const execCountByAgent = new Map<string, number>();
-  const filteredExecutions: Execution[] = [];
-  for (const ex of executions) {
-    if ((ex as any).cancelled_at) continue;
-    if (((ex as any).operation_status || "") !== "منفذ") continue;
-    const d = executionAccountingDate(ex as any);
-    if (predicate && !predicate(d)) continue;
-    filteredExecutions.push(ex);
-    const seen = new Set<string>();
-    if ((ex as any).agent_id) seen.add(String((ex as any).agent_id));
-    const services = Array.isArray((ex as any).services) ? (ex as any).services : [];
-    for (const s of services) {
-      const aid = s && (s.agent_id ?? s.agentId);
-      if (aid) seen.add(String(aid));
-    }
-    for (const aid of seen) execCountByAgent.set(aid, (execCountByAgent.get(aid) || 0) + 1);
-  }
+  const {
+    agents,
+    transactions,
+    executions,
+    approvals = [],
+    paymentSplits = [],
+    predicate,
+  } = input;
 
   const filteredTxns: Transaction[] = [];
   for (const t of transactions) {
@@ -113,19 +99,78 @@ export function computeAgentReport(input: {
     filteredTxns.push(t);
   }
 
+  const splitCurrencyByTxnId = resolveSplitCurrencyByRef(
+    paymentSplits as any,
+    "transactions",
+  );
+
+  const txnsByAgent = new Map<string, Transaction[]>();
+  for (const a of agents) txnsByAgent.set(a.id, []);
+  for (const t of filteredTxns) {
+    const aid = (t as any).agent_id as string | null;
+    if (!aid) continue;
+    const list = txnsByAgent.get(aid);
+    if (list) list.push(t);
+  }
+
+  // Counts per agent remain operational and come from executed operations.
+  const execCountByAgent = new Map<string, number>();
+  const filteredExecutions: Execution[] = [];
+  for (const ex of executions) {
+    if ((ex as any).cancelled_at) continue;
+    if (((ex as any).operation_status || "") !== "منفذ") continue;
+    const d = executionAccountingDate(ex as any);
+    if (predicate && !predicate(d)) continue;
+    filteredExecutions.push(ex);
+
+    const seen = new Set<string>();
+    if ((ex as any).agent_id) seen.add(String((ex as any).agent_id));
+    const services = Array.isArray((ex as any).services) ? (ex as any).services : [];
+    for (const s of services) {
+      const aid = s && (s.agent_id ?? s.agentId);
+      if (aid) seen.add(String(aid));
+    }
+    for (const aid of seen) {
+      execCountByAgent.set(aid, (execCountByAgent.get(aid) || 0) + 1);
+    }
+  }
+
   const filteredApprovals: any[] = [];
   const approvalCountByAgent = new Map<string, number>();
   for (const a of approvals) {
     if (predicate && !predicate(approvalDateOf(a))) continue;
     filteredApprovals.push(a);
     const aid = (a as any).agent_id;
-    if (aid) approvalCountByAgent.set(String(aid), (approvalCountByAgent.get(String(aid)) || 0) + 1);
+    if (aid) {
+      const key = String(aid);
+      approvalCountByAgent.set(key, (approvalCountByAgent.get(key) || 0) + 1);
+    }
   }
 
+  const totalServices = new CurrencyMap();
+  const totalPayments = new CurrencyMap();
+  const totalDue = new CurrencyMap();
+
   const rows: AgentReportRow[] = agents.map((a) => {
-    const services = servicesPerAgent.get(a.id) || new CurrencyMap();
-    const payments = paymentsPerAgent.get(a.id) || new CurrencyMap();
-    const due = subtractCurrencyMaps(services, payments);
+    const ledgerRows = buildAgentLedgerRows(
+      txnsByAgent.get(a.id) || [],
+      splitCurrencyByTxnId,
+    );
+
+    const services = new CurrencyMap();
+    const payments = new CurrencyMap();
+    const due = new CurrencyMap();
+
+    for (const row of ledgerRows) {
+      services.add(row.currency, row.debit);
+      payments.add(row.currency, row.credit);
+      due.add(row.currency, row.debit - row.credit);
+    }
+
+    addMap(totalServices, services);
+    addMap(totalPayments, payments);
+    addMap(totalDue, due);
+
     return {
       id: a.id,
       name: a.name,
@@ -140,12 +185,9 @@ export function computeAgentReport(input: {
   return {
     rows,
     totals: {
-      services: sumAgentCurrencyMaps(servicesPerAgent),
-      payments: sumAgentCurrencyMaps(paymentsPerAgent),
-      due: subtractCurrencyMaps(
-        sumAgentCurrencyMaps(servicesPerAgent),
-        sumAgentCurrencyMaps(paymentsPerAgent),
-      ),
+      services: totalServices,
+      payments: totalPayments,
+      due: totalDue,
       executionsCount: filteredExecutions.length,
       approvalsCount: filteredApprovals.length,
     },
