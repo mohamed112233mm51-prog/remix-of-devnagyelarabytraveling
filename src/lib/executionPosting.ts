@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { ExecutionServiceItem } from "@/lib/db";
 import { logCreate } from "@/lib/financialAudit";
+import { cairoToday } from "@/lib/approvalFines";
 
 /**
  * Execution financial posting.
@@ -19,6 +20,13 @@ import { logCreate } from "@/lib/financialAudit";
  * Status policy (uses حالة العملية / operation_status — NOT approval status):
  *  - operationStatus === "منفذ" → rows exist
  *  - any other value             → rows are removed
+ *
+ * Accounting-date policy:
+ *  - `executions.financial_posting_date` is set once, when the execution is
+ *    first posted as "منفذ", using Africa/Cairo's current calendar date.
+ *  - Re-posting after edits keeps that original date.
+ *  - `travel_date` remains operational only (travel/archive/FX history) and
+ *    never moves the agent/company debt into a future accounting period.
  */
 
 export interface ExecutionPostingInput {
@@ -26,7 +34,8 @@ export interface ExecutionPostingInput {
   /** حالة العملية (operation_status). Financial posting only happens when "منفذ". */
   operationStatus: string;
   agentId: string | null;
-  date: string | null;          // travel_date or today
+  /** @deprecated Kept for caller compatibility; financial rows use financial_posting_date. */
+  date: string | null;
   destination: string | null;
   airline: string | null;
   passengerName: string | null;
@@ -35,10 +44,52 @@ export interface ExecutionPostingInput {
   services: ExecutionServiceItem[];
 }
 
+/**
+ * Returns the immutable accounting date for an executed operation.
+ *
+ * The compare-and-set update (`is(..., null)`) prevents two concurrent saves
+ * from replacing each other's first posting date. The follow-up read handles
+ * the race where another request stored the value first.
+ */
+async function resolveFinancialPostingDate(executionId: string): Promise<string> {
+  const table = (supabase as any).from("executions");
+  const { data: current, error: readError } = await table
+    .select("financial_posting_date")
+    .eq("id", executionId)
+    .maybeSingle();
+  if (readError) throw new Error(`تعذر قراءة تاريخ الاعتماد المالي: ${readError.message}`);
 
-function safeDate(d: string | null | undefined): string {
-  if (d && typeof d === "string" && d.length >= 8) return d;
-  return new Date().toISOString().slice(0, 10);
+  const existing = current?.financial_posting_date
+    ? String(current.financial_posting_date).slice(0, 10)
+    : null;
+  if (existing) return existing;
+
+  const today = cairoToday();
+  const { data: updated, error: updateError } = await (supabase as any)
+    .from("executions")
+    .update({ financial_posting_date: today })
+    .eq("id", executionId)
+    .is("financial_posting_date", null)
+    .select("financial_posting_date")
+    .maybeSingle();
+  if (updateError) throw new Error(`تعذر تثبيت تاريخ الاعتماد المالي: ${updateError.message}`);
+
+  if (updated?.financial_posting_date) {
+    return String(updated.financial_posting_date).slice(0, 10);
+  }
+
+  // A concurrent save may have won the compare-and-set update.
+  const { data: afterRace, error: raceReadError } = await (supabase as any)
+    .from("executions")
+    .select("financial_posting_date")
+    .eq("id", executionId)
+    .maybeSingle();
+  if (raceReadError) throw new Error(`تعذر التحقق من تاريخ الاعتماد المالي: ${raceReadError.message}`);
+  const resolved = afterRace?.financial_posting_date
+    ? String(afterRace.financial_posting_date).slice(0, 10)
+    : null;
+  if (!resolved) throw new Error("تعذر تحديد تاريخ الاعتماد المالي للتنفيذ");
+  return resolved;
 }
 
 async function deleteLinked(executionId: string) {
@@ -57,10 +108,17 @@ async function deleteLinked(executionId: string) {
  * (if status === "منفذ") inserts fresh rows for every service item.
  */
 export async function postExecutionFinancials(input: ExecutionPostingInput): Promise<void> {
-  await deleteLinked(input.executionId);
-  if (input.operationStatus !== "منفذ") return;
+  if (input.operationStatus !== "منفذ") {
+    await deleteLinked(input.executionId);
+    return;
+  }
 
-  const date = safeDate(input.date);
+  // Resolve and persist the immutable posting date BEFORE deleting old rows.
+  // If the migration/column is missing, the existing financial rows remain
+  // untouched instead of disappearing after a failed re-post.
+  const date = await resolveFinancialPostingDate(input.executionId);
+  await deleteLinked(input.executionId);
+
   const passenger = input.passengerName?.trim() || null;
   const execNotes = input.executionNotes?.trim() || null;
 
@@ -82,7 +140,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     const serviceNote = (s.note && String(s.note).trim()) ? String(s.note).trim() : null;
     // الملاحظات على السطر = ملاحظة الخدمة أو ملاحظات التنفيذ أو اسم المسافر — بدون توليد نص.
     const itemNote = serviceNote || execNotes || passenger;
-
 
     // ── سطر شركة صادرة فقط (شراء من شركة) ──
     if (kind === "company") {
@@ -106,7 +163,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           source_service_id: linkId,
           source_service_type: "execution",
         });
-
       }
       return; // لا يُسجَّل أي شيء على الوكيل
     }
@@ -135,7 +191,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
           source_service_id: linkId,
           source_service_type: "execution",
         });
-
       }
       return; // لا يُسجَّل أي شيء على الشركة
     }
@@ -173,8 +228,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
         currency,
         note: itemNote,
         source_service_id: linkId, source_service_type: "execution",
-
-
       });
     }
     if (s.company_id && companyValue > 0) {
@@ -192,7 +245,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
         payment_currency: currency,
         note: itemNote,
         source_service_id: linkId, source_service_type: "execution",
-
       });
     }
   });
