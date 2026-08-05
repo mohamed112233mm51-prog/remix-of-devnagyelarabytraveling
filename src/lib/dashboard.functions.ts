@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
@@ -15,35 +15,21 @@ import {
 
 type Period = "today" | "week" | "month" | "year" | "all";
 
-function admin() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  );
-}
-
-async function getProfitAuthorization(userId: string) {
-  const sb = admin();
+async function getProfitAuthorization(sb: SupabaseClient<Database>, userId: string) {
   const [profileResult, roleResult] = await Promise.all([
     sb
       .from("profiles")
       .select("permissions, is_super_admin")
       .eq("id", userId)
       .maybeSingle(),
-    sb
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle(),
+    sb.rpc("has_role", { _user_id: userId, _role: "admin" }),
   ]);
   if (profileResult.error) throw new Error(profileResult.error.message || "تعذر التحقق من صلاحيات الأرباح");
   if (roleResult.error) throw new Error(roleResult.error.message || "تعذر التحقق من دور المستخدم");
   const profile = profileResult.data;
   const permissions = normalizePermissionsForLoad(((profile as any)?.permissions ?? {}) as Record<string, any>);
   const isSuperAdmin = !!(profile as any)?.is_super_admin;
-  const roles = roleResult.data ? ["admin"] : [];
+  const roles = roleResult.data === true ? ["admin"] : [];
   return {
     sb,
     canNetProfit: canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY),
@@ -51,7 +37,7 @@ async function getProfitAuthorization(userId: string) {
   };
 }
 
-async function loadProfitRows(sb: ReturnType<typeof admin>) {
+async function loadProfitRows(sb: SupabaseClient<Database>) {
   const [
     { data: executions, error: executionsError },
     { data: expenses, error: expensesError },
@@ -172,7 +158,8 @@ export const getDashboardNetProfitData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { period: Period }) => d)
   .handler(async ({ context, data }) => {
-    const { sb, canNetProfit } = await getProfitAuthorization(context.userId);
+    const sb = context.supabase;
+    const { canNetProfit } = await getProfitAuthorization(sb, context.userId);
     if (!canNetProfit) {
       return { canNetProfit, netProfit: null };
     }
@@ -200,7 +187,8 @@ export const getDashboardNetProfitData = createServerFn({ method: "POST" })
 export const getDashboardProfitSummaryData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { sb, canProfitSummary } = await getProfitAuthorization(context.userId);
+    const sb = context.supabase;
+    const { canProfitSummary } = await getProfitAuthorization(sb, context.userId);
     if (!canProfitSummary) {
       return { canProfitSummary, profitSummary: null };
     }
