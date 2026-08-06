@@ -5,6 +5,7 @@ import {
   buildAgentLedgerRows,
   CurrencyMap,
   resolveSplitCurrencyByRef,
+  useAgentsSummary,
 } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 
@@ -24,16 +25,30 @@ export type AgentPeriodTotals = {
 
 /**
  * إجماليات عرض فقط مبنية من نفس دفاتر كشف حساب الوكلاء الموجودين.
- * الحركات بلا وكيل أو التابعة لوكيل محذوف لا تدخل في كروت حسابات الوكلاء،
- * وهو نفس سلوك useAgentsSummary المستخدم في الصفحة الأصلية.
+ * الحركات بلا وكيل أو التابعة لوكيل محذوف لا تدخل في كروت حسابات الوكلاء.
+ * وضع إجمالي النظام يستخدم useAgentsSummary نفسه المستخدم في الصفحة الأصلية.
  */
 export function useAgentPeriodTotals(period: SummaryPeriod): AgentPeriodTotals {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: transactions } = useLive<Transaction>("transactions");
   const { rows: paymentSplits } = useLive<PaymentSplitCurrencyRow>("payment_splits");
+  const lifetimeSummaries = useAgentsSummary();
   const todayISO = cairoToday();
 
   return useMemo(() => {
+    const debit = new CurrencyMap();
+    const credit = new CurrencyMap();
+    const movement = new CurrencyMap();
+
+    if (period === "all") {
+      for (const summary of lifetimeSummaries.values()) {
+        debit.merge(summary.totalDebit);
+        credit.merge(summary.totalCredit);
+        movement.merge(summary.balance);
+      }
+      return { debit, credit, movement };
+    }
+
     const splitCurrencyByTxnId = resolveSplitCurrencyByRef(paymentSplits as any, "transactions");
     const transactionsByAgent = new Map<string, Transaction[]>();
 
@@ -44,10 +59,6 @@ export function useAgentPeriodTotals(period: SummaryPeriod): AgentPeriodTotals {
       const rows = transactionsByAgent.get(agentId);
       if (rows) rows.push(transaction);
     }
-
-    const debit = new CurrencyMap();
-    const credit = new CurrencyMap();
-    const movement = new CurrencyMap();
 
     for (const agentTransactions of transactionsByAgent.values()) {
       const ledgerRows = buildAgentLedgerRows(agentTransactions, splitCurrencyByTxnId);
@@ -60,5 +71,5 @@ export function useAgentPeriodTotals(period: SummaryPeriod): AgentPeriodTotals {
     }
 
     return { debit, credit, movement };
-  }, [agents, transactions, paymentSplits, period, todayISO]);
+  }, [agents, transactions, paymentSplits, lifetimeSummaries, period, todayISO]);
 }
