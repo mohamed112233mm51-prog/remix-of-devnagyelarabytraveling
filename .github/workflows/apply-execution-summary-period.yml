@@ -1,11 +1,9 @@
 name: Apply execution summary period filter
 
 on:
-  push:
-    branches:
-      - devo
-    paths:
-      - .github/workflows/apply-execution-summary-period.yml
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: write
