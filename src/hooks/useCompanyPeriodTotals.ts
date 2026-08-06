@@ -5,6 +5,7 @@ import {
   buildCompanyLedgerRows,
   CurrencyMap,
   resolveSplitCurrencyByRef,
+  useCompaniesSummary,
 } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 
@@ -24,16 +25,30 @@ export type CompanyPeriodTotals = {
 
 /**
  * إجماليات عرض فقط مبنية من نفس دفاتر كشف حساب الشركات الموجودة.
- * الحركات بلا شركة أو التابعة لشركة محذوفة لا تدخل في كروت حسابات الشركات،
- * وهو نفس سلوك useCompaniesSummary المستخدم في الصفحة الأصلية.
+ * الحركات بلا شركة أو التابعة لشركة محذوفة لا تدخل في كروت حسابات الشركات.
+ * وضع إجمالي النظام يستخدم useCompaniesSummary نفسه المستخدم في الصفحة الأصلية.
  */
 export function useCompanyPeriodTotals(period: SummaryPeriod): CompanyPeriodTotals {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: transactions } = useLive<CompanyTransaction>("company_transactions");
   const { rows: paymentSplits } = useLive<PaymentSplitCurrencyRow>("payment_splits");
+  const lifetimeSummaries = useCompaniesSummary();
   const todayISO = cairoToday();
 
   return useMemo(() => {
+    const debit = new CurrencyMap();
+    const credit = new CurrencyMap();
+    const movement = new CurrencyMap();
+
+    if (period === "all") {
+      for (const summary of lifetimeSummaries.values()) {
+        debit.merge(summary.totalDebit);
+        credit.merge(summary.totalCredit);
+        movement.merge(summary.balance);
+      }
+      return { debit, credit, movement };
+    }
+
     const splitCurrencyByTxnId = resolveSplitCurrencyByRef(paymentSplits as any, "company_transactions");
     const transactionsByCompany = new Map<string, CompanyTransaction[]>();
 
@@ -44,10 +59,6 @@ export function useCompanyPeriodTotals(period: SummaryPeriod): CompanyPeriodTota
       const rows = transactionsByCompany.get(companyId);
       if (rows) rows.push(transaction);
     }
-
-    const debit = new CurrencyMap();
-    const credit = new CurrencyMap();
-    const movement = new CurrencyMap();
 
     for (const companyTransactions of transactionsByCompany.values()) {
       const ledgerRows = buildCompanyLedgerRows(companyTransactions, splitCurrencyByTxnId);
@@ -60,5 +71,5 @@ export function useCompanyPeriodTotals(period: SummaryPeriod): CompanyPeriodTota
     }
 
     return { debit, credit, movement };
-  }, [companies, transactions, paymentSplits, period, todayISO]);
+  }, [companies, transactions, paymentSplits, lifetimeSummaries, period, todayISO]);
 }
