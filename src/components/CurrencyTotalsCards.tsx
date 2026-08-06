@@ -39,9 +39,12 @@ const ENTITY_LABELS: Record<EntityKind, { debit: string; credit: string }> = {
 export function CurrencyTotalsCards({
   totals,
   entityKind = "agent",
+  movementMode = false,
 }: {
   totals: CurrencyTotal[];
   entityKind?: EntityKind;
+  /** عند true تعرض الكروت حركة الفترة، وليس رصيدًا أو استحقاقًا تراكميًا. */
+  movementMode?: boolean;
 }) {
   const labels = ENTITY_LABELS[entityKind] || ENTITY_LABELS.agent;
   // Defensive: accept only a valid array
@@ -68,8 +71,9 @@ export function CurrencyTotalsCards({
           icon: Wallet,
         };
         const Icon = meta.icon;
-        const status =
-          t.net > 0 ? labels.debit : t.net < 0 ? labels.credit : "متوازن";
+        const status = movementMode
+          ? (t.net > 0 ? "حركة مدين" : t.net < 0 ? "حركة دائن" : "متوازن")
+          : (t.net > 0 ? labels.debit : t.net < 0 ? labels.credit : "متوازن");
         const statusColor =
           t.net > 0
             ? "var(--red, #dc2626)"
@@ -145,7 +149,7 @@ export function CurrencyTotalsCards({
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 11, color: "var(--muted-foreground, #64748b)" }}>
-                  الصافي
+                  {movementMode ? "صافي حركة الفترة" : "الصافي"}
                 </span>
                 <span style={{ fontSize: 16, fontWeight: 800, color: statusColor }}>
                   {fmt(Math.abs(t.net))} {meta.symbol}
