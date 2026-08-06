@@ -97,7 +97,10 @@ function ExecutionSummaryCards({ onTodayClick }: { onTodayClick: () => void }) {
 
   const summaryExecutions = useMemo(
     () => executions.filter((execution) => {
-      const accountingDate = (execution as any).financial_posting_date || execution.created_at || null;
+      const isExecuted = String(execution.operation_status || "").trim() === "منفذ";
+      const accountingDate = isExecuted
+        ? ((execution as any).financial_posting_date || execution.created_at || null)
+        : (execution.created_at || null);
       return isDateInSummaryPeriod(accountingDate, summaryPeriod, todayISO);
     }),
     [executions, summaryPeriod, todayISO],
