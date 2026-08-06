@@ -14,6 +14,15 @@ export const Route = createFileRoute("/companies")({
   component: CompaniesRouteWithPeriod,
 });
 
+function stretchPortalTarget(target: HTMLElement) {
+  target.style.width = "100%";
+  target.style.minWidth = "0";
+  target.style.maxWidth = "none";
+  target.style.gridColumn = "1 / -1";
+  target.style.flex = "1 1 100%";
+  target.style.alignSelf = "stretch";
+}
+
 function CompaniesRouteWithPeriod() {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -30,6 +39,7 @@ function CompaniesRouteWithPeriod() {
 
       const existingTarget = pageRoot.querySelector<HTMLElement>("#company-account-summary-period-portal");
       if (existingTarget) {
+        stretchPortalTarget(existingTarget);
         mountedTarget = existingTarget;
         hiddenSummary = pageRoot.querySelector<HTMLElement>('[data-company-original-summary="true"]');
         setPortalTarget(existingTarget);
@@ -41,6 +51,7 @@ function CompaniesRouteWithPeriod() {
 
       const target = document.createElement("div");
       target.id = "company-account-summary-period-portal";
+      stretchPortalTarget(target);
       originalSummary.parentElement?.insertBefore(target, originalSummary);
 
       originalSummary.dataset.companyOriginalSummary = "true";
@@ -98,9 +109,9 @@ function CompanyAccountPeriodSummary() {
       : "المتبقي للشركات";
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gap: 10, width: "100%", minWidth: 0, gridColumn: "1 / -1" }}>
       <SummaryPeriodFilter value={period} onChange={setPeriod} />
-      <div className="account-summary kpi-rich">
+      <div className="account-summary kpi-rich" style={{ width: "100%", minWidth: 0 }}>
         <div className="sum-box gold">
           <div className="kpi-icon"><Briefcase size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
