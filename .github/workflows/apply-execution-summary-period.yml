@@ -2,8 +2,6 @@ name: Apply execution summary period filter
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/5 * * * *"
 
 permissions:
   contents: write
@@ -25,36 +23,30 @@ jobs:
           path = Path("src/routes/executions.tsx")
           text = path.read_text(encoding="utf-8")
 
-          replacements = [
-              (
-                  'import { usePersistentState } from "@/hooks/usePersistentState";\n',
-                  'import { usePersistentState } from "@/hooks/usePersistentState";\nimport { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";\nimport { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";\n',
-              ),
-              (
-                  '  const [tab, setTab] = useState<"list" | "add">(initialPrefill ? "add" : "list");\n  const [editing, setEditing] = useState<Execution | null>(initialPrefill);\n',
-                  '  const [tab, setTab] = useState<"list" | "add">(initialPrefill ? "add" : "list");\n  const [editing, setEditing] = useState<Execution | null>(initialPrefill);\n  const [summaryPeriod, setSummaryPeriod] = useState<SummaryPeriod>("month");\n',
-              ),
-              (
-                  '  const totalCount = executions.length;\n  const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;\n  const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;\n',
-                  '  // كروت العرض فقط: لا تعديل على التنفيذات أو الحركات المالية.\n  // المنفذ يعتمد على تاريخ الاعتماد المالي، وباقي الحالات على تاريخ الإنشاء.\n  const summaryExecutions = useMemo(() => executions.filter((e) => {\n    const accountingDate = (e as any).financial_posting_date || e.created_at || null;\n    return isDateInSummaryPeriod(accountingDate, summaryPeriod, cairoTodayISO);\n  }), [executions, summaryPeriod, cairoTodayISO]);\n\n  const totalCount = summaryExecutions.length;\n  const doneCount = summaryExecutions.filter((e) => e.operation_status === "منفذ").length;\n  const pendingCount = summaryExecutions.filter((e) => e.operation_status === "قيد التنفيذ").length;\n',
-              ),
-              (
-                  '      {/* KPI strip */}\n      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>\n',
-                  '      <SummaryPeriodFilter value={summaryPeriod} onChange={setSummaryPeriod} />\n\n      {/* KPI strip */}\n      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>\n',
-              ),
-          ]
-
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit(f"Missing expected executions.tsx block:\n{old}")
-              text = text.replace(old, new, 1)
-
-          if text.count("SummaryPeriodFilter") != 2:
-              raise SystemExit("Unexpected SummaryPeriodFilter occurrence count")
-          if text.count("summaryExecutions") != 4:
-              raise SystemExit("Unexpected summaryExecutions occurrence count")
-
-          path.write_text(text, encoding="utf-8")
+          if 'SummaryPeriodFilter' not in text:
+              replacements = [
+                  (
+                      'import { usePersistentState } from "@/hooks/usePersistentState";\n',
+                      'import { usePersistentState } from "@/hooks/usePersistentState";\nimport { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";\nimport { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";\n',
+                  ),
+                  (
+                      '  const [tab, setTab] = useState<"list" | "add">(initialPrefill ? "add" : "list");\n  const [editing, setEditing] = useState<Execution | null>(initialPrefill);\n',
+                      '  const [tab, setTab] = useState<"list" | "add">(initialPrefill ? "add" : "list");\n  const [editing, setEditing] = useState<Execution | null>(initialPrefill);\n  const [summaryPeriod, setSummaryPeriod] = useState<SummaryPeriod>("month");\n',
+                  ),
+                  (
+                      '  const totalCount = executions.length;\n  const doneCount = executions.filter((e) => e.operation_status === "منفذ").length;\n  const pendingCount = executions.filter((e) => e.operation_status === "قيد التنفيذ").length;\n',
+                      '  // كروت العرض فقط: لا تعديل على التنفيذات أو الحركات المالية.\n  // المنفذ يعتمد على تاريخ الاعتماد المالي، وباقي الحالات على تاريخ الإنشاء.\n  const summaryExecutions = useMemo(() => executions.filter((e) => {\n    const accountingDate = (e as any).financial_posting_date || e.created_at || null;\n    return isDateInSummaryPeriod(accountingDate, summaryPeriod, cairoTodayISO);\n  }), [executions, summaryPeriod, cairoTodayISO]);\n\n  const totalCount = summaryExecutions.length;\n  const doneCount = summaryExecutions.filter((e) => e.operation_status === "منفذ").length;\n  const pendingCount = summaryExecutions.filter((e) => e.operation_status === "قيد التنفيذ").length;\n',
+                  ),
+                  (
+                      '      {/* KPI strip */}\n      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>\n',
+                      '      <SummaryPeriodFilter value={summaryPeriod} onChange={setSummaryPeriod} />\n\n      {/* KPI strip */}\n      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>\n',
+                  ),
+              ]
+              for old, new in replacements:
+                  if old not in text:
+                      raise SystemExit(f"Missing expected executions.tsx block:\n{old}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
 
       - name: Commit code and remove temporary workflow
         shell: bash
@@ -62,6 +54,9 @@ jobs:
           rm -f .github/workflows/apply-execution-summary-period.yml
           git config user.name "sync-bot"
           git config user.email "sync-bot@users.noreply.github.com"
-          git add src/routes/executions.tsx .github/workflows/apply-execution-summary-period.yml
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
           git commit -m "feat(executions): filter KPI cards by selected period"
           git push origin HEAD:devo
