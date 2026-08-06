@@ -127,6 +127,7 @@ import RouteGuard from "../components/RouteGuard";
 import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import Login from "../components/Login";
 import SetPassword from "../components/SetPassword";
+import { DashboardAccountPeriodEnhancer } from "../components/DashboardAccountPeriodEnhancer";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "../hooks/useAuth";
 import { useGlobalKeyboardNav } from "../hooks/useKeyboardNav";
@@ -228,6 +229,7 @@ function RootComponent() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <AuthGate />
+          <DashboardAccountPeriodEnhancer />
           <ConfirmSaveModalHost />
           <Toaster position="top-center" dir="rtl" richColors />
         </AuthProvider>
