@@ -24,8 +24,25 @@ export function summaryPeriodStart(period: SummaryPeriod, todayISO: string): str
 }
 
 /**
+ * Exclusive end boundary, matching the dashboard period selector:
+ * - current month → first day of next month
+ * - current year  → first day of next year
+ */
+export function summaryPeriodEndExclusive(period: SummaryPeriod, todayISO: string): string | null {
+  const today = toSummaryDate(todayISO);
+  if (!today || period === "all") return null;
+
+  const year = Number(today.slice(0, 4));
+  if (period === "year") return `${String(year + 1).padStart(4, "0")}-01-01`;
+
+  const month = Number(today.slice(5, 7));
+  if (month === 12) return `${String(year + 1).padStart(4, "0")}-01-01`;
+  return `${String(year).padStart(4, "0")}-${String(month + 1).padStart(2, "0")}-01`;
+}
+
+/**
  * UI-only date filter for aggregate cards.
- * - month/year: from period start through Cairo today, inclusive.
+ * - month/year: the complete current calendar period, like the dashboard.
  * - all: no filtering at all.
  *
  * This function never writes, moves or recalculates accounting entries.
@@ -37,10 +54,10 @@ export function isDateInSummaryPeriod(
 ): boolean {
   if (period === "all") return true;
   const date = toSummaryDate(value);
-  const today = toSummaryDate(todayISO);
   const start = summaryPeriodStart(period, todayISO);
-  if (!date || !today || !start) return false;
-  return date >= start && date <= today;
+  const endExclusive = summaryPeriodEndExclusive(period, todayISO);
+  if (!date || !start || !endExclusive) return false;
+  return date >= start && date < endExclusive;
 }
 
 export function summaryPeriodCaption(period: SummaryPeriod): string {
