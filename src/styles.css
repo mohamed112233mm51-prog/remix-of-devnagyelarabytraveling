@@ -38,3 +38,8 @@ body { font-family: 'Cairo', 'Tajawal', sans-serif; }
   .bk-summary-wrap { box-shadow: 0 1px 2px rgba(15,23,42,0.03), 0 3px 10px -6px rgba(15,23,42,0.06) !important; }
   .bk-summary-card:hover { box-shadow: none !important; transform: none !important; }
 }
+
+/* Dashboard primary row: keep the submissions note only. */
+.erp-period-bar + .erp-hero-grid .erp-hero:not(.erp-hero-navy) > .erp-hero-foot {
+  display: none !important;
+}
