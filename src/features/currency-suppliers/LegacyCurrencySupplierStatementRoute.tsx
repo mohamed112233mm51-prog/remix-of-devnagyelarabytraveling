@@ -11,6 +11,9 @@ import { ExportButton } from "@/components/ExportButton";
 import { ChevronLeft, Coins, ArrowDownCircle, ArrowUpCircle, Wallet } from "lucide-react";
 import { buildArabicFileName, arabicCurrencyName, type StatementExportData } from "@/lib/exportStatement";
 import CurrencyFilter from "@/components/CurrencyFilter";
+import { cairoToday } from "@/lib/approvalFines";
+import { currentMonthKey, monthPeriodFor } from "@/lib/monthlyLedger";
+import { MonthPeriodPicker, buildMonthOptions, monthLabel } from "@/components/MonthPeriodPicker";
 import {
   PaymentSplits,
   type PaymentSplitRow,
@@ -32,6 +35,7 @@ import {
   summarizeCurrencySupplierNetByCurrency,
   attachRunningBalances,
   buildCurrencySupplierLedgerRows,
+  currencySupplierDelta,
 } from "@/lib/financialSummary";
 
 
@@ -75,6 +79,7 @@ type Tx = {
   payment_splits: SplitJson[] | null;
   opening_currency?: string | null;
   created_at: string;
+  isOpeningCarryForward?: boolean;
 };
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean; method_key?: string | null };
 
@@ -109,8 +114,8 @@ function CurrencySupplierStatementPage() {
   
 
   // Filters
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const today = cairoToday();
+  const [monthKey, setMonthKey] = useState<string>(() => currentMonthKey(today));
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
 
@@ -164,7 +169,7 @@ function CurrencySupplierStatementPage() {
     return () => { supabase.removeChannel(ch); };
   }, [supplierId]);
 
-  const filtered = useMemo(() => {
+  const canonicalRows = useMemo(() => {
     // Normalize legacy Arabic currency values to canonical codes so old rows
     // group correctly with new ones.
     const normalized = txns.map((t) => ({
@@ -172,18 +177,59 @@ function CurrencySupplierStatementPage() {
       bought_currency: normalizeCurrency(t.bought_currency),
       sold_currency: normalizeCurrency(t.sold_currency),
     }));
-    // Single Source of Truth: استبعاد الحركات الملغاة + الترتيب الحتمي
-    // (tx_date ASC → created_at ASC → id ASC) يتم داخل المحرك الموحد،
-    // بحيث يعتمد العرض والرصيد الجاري على تاريخ الحركة الذي أدخله المستخدم.
-    const canonical = buildCurrencySupplierLedgerRows(normalized);
-    return canonical.filter((t) => {
-      if (from && t.tx_date < from) return false;
-      if (to && t.tx_date > to) return false;
-      if (typeFilter && t.tx_type !== typeFilter) return false;
-      if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter) return false;
-      return true;
-    });
-  }, [txns, from, to, typeFilter, currencyFilter]);
+    // Single Source of Truth: استبعاد الحركات الملغاة + الترتيب الحتمي.
+    return buildCurrencySupplierLedgerRows(normalized);
+  }, [txns]);
+
+  const monthOptions = useMemo(
+    () => buildMonthOptions(canonicalRows.map((t) => t.tx_date), today),
+    [canonicalRows, today],
+  );
+  const period = useMemo(() => monthPeriodFor(monthKey, today), [monthKey, today]);
+
+  // نفس منطق الوكيل/الشركة: نحسب صافي كل ما قبل بداية الشهر لكل عملة
+  // ونضيفه كسطر «رصيد سابق» افتراضي بدون أي INSERT في قاعدة البيانات.
+  const periodRows = useMemo<Tx[]>(() => {
+    const opening = new Map<string, number>();
+    const monthRows: Tx[] = [];
+    for (const t of canonicalRows) {
+      const d = String(t.tx_date || "").slice(0, 10);
+      const { currency, delta } = currencySupplierDelta(t);
+      if (!d || d < period.start) {
+        opening.set(currency, (opening.get(currency) || 0) + delta);
+        continue;
+      }
+      if (d >= period.endExclusive) continue;
+      monthRows.push(t);
+    }
+    const openingRows: Tx[] = Array.from(opening.entries())
+      .filter(([, net]) => Math.abs(net) > 0.0000001)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, net]) => ({
+        id: `opening:${supplierId}:${period.monthKey}:${currency}`,
+        supplier_id: supplierId,
+        tx_date: period.start,
+        tx_type: "رصيد سابق",
+        bought_currency: currency,
+        bought_amount: net > 0 ? net : 0,
+        sold_currency: currency,
+        sold_amount: net < 0 ? Math.abs(net) : 0,
+        exchange_rate: null,
+        description: "رصيد سابق",
+        payment_splits: null,
+        opening_currency: currency,
+        created_at: "",
+        isOpeningCarryForward: true,
+      }));
+    return [...openingRows, ...monthRows];
+  }, [canonicalRows, period, supplierId]);
+
+  const filtered = useMemo(() => periodRows.filter((t) => {
+    const opening = Boolean(t.isOpeningCarryForward);
+    if (!opening && typeFilter && t.tx_type !== typeFilter) return false;
+    if (currencyFilter && t.bought_currency !== currencyFilter && t.sold_currency !== currencyFilter && t.opening_currency !== currencyFilter) return false;
+    return true;
+  }), [periodRows, typeFilter, currencyFilter]);
 
 
   // ============================================================
@@ -238,8 +284,8 @@ function CurrencySupplierStatementPage() {
 
 
   const exportData = (): StatementExportData => ({
-    title: `كشف حساب مورد العملة${supplier?.name ? ` — ${supplier.name}` : ""}${currencyFilter ? ` (${arabicCurrencyName(currencyFilter)})` : ""}`,
-    subtitle: currencyFilter ? `العملة: ${arabicCurrencyName(currencyFilter)}` : undefined,
+    title: `كشف حساب مورد العملة${supplier?.name ? ` — ${supplier.name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${arabicCurrencyName(currencyFilter)})` : ""}`,
+    subtitle: `${monthLabel(period.monthKey)} — من ${period.start} إلى ${period.endInclusive}${currencyFilter ? ` — العملة: ${arabicCurrencyName(currencyFilter)}` : ""}`,
     summary: summary.map((s) => ({ label: s.currency, value: `${fmtNum(s.net)}` })),
     columns: ([
       { header: "التاريخ", key: "date" },
@@ -306,14 +352,7 @@ function CurrencySupplierStatementPage() {
       </div>
 
       <div className="filter-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div className="form-group" style={{ minWidth: 140 }}>
-          <label>من تاريخ</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div className="form-group" style={{ minWidth: 140 }}>
-          <label>إلى تاريخ</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
+        <MonthPeriodPicker monthKey={monthKey} onChange={setMonthKey} options={monthOptions} period={period} today={today} />
         <div className="form-group" style={{ minWidth: 160 }}>
           <label>نوع الحركة</label>
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
@@ -326,8 +365,8 @@ function CurrencySupplierStatementPage() {
           </select>
         </div>
         <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={ALL_FILTER_CURRENCIES as unknown as string[]} />
-        {(from || to || typeFilter || currencyFilter) && (
-          <button className="action-btn" style={{ alignSelf: "end" }} onClick={() => { setFrom(""); setTo(""); setTypeFilter(""); setCurrencyFilter(""); }}>
+        {(typeFilter || currencyFilter) && (
+          <button className="action-btn" style={{ alignSelf: "end" }} onClick={() => { setTypeFilter(""); setCurrencyFilter(""); }}>
             مسح الفلاتر
           </button>
         )}
@@ -377,8 +416,10 @@ function CurrencySupplierStatementPage() {
                     {isVisible("actions") && (
                       <td data-label="إجراءات">
                         <div style={{ display: "inline-flex", gap: 6 }}>
-                          <EditTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
-                          <CancelTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
+                          {!r.isOpeningCarryForward && <>
+                            <EditTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
+                            <CancelTransactionButton table="currency_supplier_transactions" id={r.id} cancelled={false} onDone={refresh} />
+                          </>}
                         </div>
                       </td>
                     )}

@@ -19,6 +19,9 @@ import { MerchantCashOutForm } from "@/components/CashMovementForms";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import CurrencyFilter from "@/components/CurrencyFilter";
+import { cairoToday } from "@/lib/approvalFines";
+import { currentMonthKey, monthPeriodFor } from "@/lib/monthlyLedger";
+import { MonthPeriodPicker, buildMonthOptions, monthLabel } from "@/components/MonthPeriodPicker";
 import {
   PaymentSplits,
   newPaymentSplitRow,
@@ -817,6 +820,7 @@ type StatementMovement = {
   currency: string; // "EGP" by default; opening rows carry the user-chosen currency
   sourceTable: CancellableTable;
   sourceId: string;
+  isOpeningCarryForward?: boolean;
 };
 
 
@@ -832,8 +836,8 @@ function MerchantStatementTab({
   splits: CollectionSplitLite[];
 }) {
   const [merchantId, setMerchantId] = useState<string>(merchants[0]?.id || "");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const today = cairoToday();
+  const [monthKey, setMonthKey] = useState<string>(() => currentMonthKey(today));
   const [typeFilter, setTypeFilter] = useState<"all" | "incoming" | "outgoing" | "collection" | "cashout" | "conversion">("all");
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -855,19 +859,60 @@ function MerchantStatementTab({
     }) as unknown as StatementMovement[];
   }, [merchantId, incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, splits]);
 
+  const monthOptions = useMemo(
+    () => buildMonthOptions(movements.map((m) => m.date), today),
+    [movements, today],
+  );
+  const period = useMemo(() => monthPeriodFor(monthKey, today), [monthKey, today]);
+
+  // نفس منطق الوكيل/الشركة: رصيد ما قبل بداية الشهر يظهر كسطر افتراضي فقط.
+  // لا يتم إنشاء أو تعديل أي حركة في قاعدة البيانات.
+  const monthlyMovements = useMemo<StatementMovement[]>(() => {
+    const opening = new Map<string, number>();
+    const monthRows: StatementMovement[] = [];
+    for (const m of movements) {
+      const cur = m.currency || "EGP";
+      const d = String(m.date || "").slice(0, 10);
+      if (!d || d < period.start) {
+        opening.set(cur, (opening.get(cur) || 0) + Number(m.delta || 0));
+        continue;
+      }
+      if (d >= period.endExclusive) continue;
+      monthRows.push(m);
+    }
+    const openingRows: StatementMovement[] = Array.from(opening.entries())
+      .filter(([, net]) => Math.abs(net) > 0.0000001)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, net]) => ({
+        id: `opening:${merchantId || "merchant"}:${period.monthKey}:${currency}`,
+        date: period.start,
+        createdAt: "",
+        type: "رصيد سابق",
+        statement: "رصيد سابق",
+        gross: Math.abs(net),
+        commission: 0,
+        net: Math.abs(net),
+        delta: net,
+        currency,
+        sourceTable: "transactions" as CancellableTable,
+        sourceId: "",
+        isOpeningCarryForward: true,
+      }));
+    return [...openingRows, ...monthRows];
+  }, [movements, period, merchantId]);
+
   const debouncedSearch = useDebouncedValue(search, 250);
-  const filtered = useMemo(() => movements.filter((m) => {
-    if (from && m.date < from) return false;
-    if (to && m.date > to) return false;
-    if (typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
-    if (typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
-    if (typeFilter === "collection" && m.type !== "تحصيل نقدية من التاجر") return false;
-    if (typeFilter === "cashout" && m.type !== "صرف نقدية للتاجر") return false;
-    if (typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
+  const filtered = useMemo(() => monthlyMovements.filter((m) => {
+    const opening = Boolean(m.isOpeningCarryForward);
+    if (!opening && typeFilter === "incoming" && m.type !== "وارد من وكيل") return false;
+    if (!opening && typeFilter === "outgoing" && m.type !== "صادر لشركة") return false;
+    if (!opening && typeFilter === "collection" && m.type !== "تحصيل نقدية من التاجر") return false;
+    if (!opening && typeFilter === "cashout" && m.type !== "صرف نقدية للتاجر") return false;
+    if (!opening && typeFilter === "conversion" && m.type !== "تحويل لـ USD") return false;
     if (currencyFilter && (m.currency || "EGP") !== currencyFilter) return false;
-    if (debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
+    if (!opening && debouncedSearch && !`${m.type} ${m.statement}`.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  }), [movements, from, to, typeFilter, currencyFilter, debouncedSearch]);
+  }), [monthlyMovements, typeFilter, currencyFilter, debouncedSearch]);
   const currencyOptions = useMemo(
     () => Array.from(new Set(movements.map((m) => m.currency || "EGP"))).sort(),
     [movements],
@@ -909,8 +954,8 @@ function MerchantStatementTab({
   const visibleCount = MERCHANT_STATEMENT_COLUMNS.filter((c) => isVisible(c.key)).length;
 
   const buildExport = () => ({
-    title: `كشف حساب تاجر الكاش${merchant?.merchant_name ? ` — ${merchant.merchant_name}` : ""}${currencyFilter ? ` (${currencyFilter})` : ""}`,
-    subtitle: `${merchant?.merchant_name || ""}${from || to ? ` — من ${from || "..."} إلى ${to || "..."}` : ""}`,
+    title: `كشف حساب تاجر الكاش${merchant?.merchant_name ? ` — ${merchant.merchant_name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${currencyFilter})` : ""}`,
+    subtitle: `${merchant?.merchant_name || ""} — من ${period.start} إلى ${period.endInclusive}`,
     fileName: buildArabicFileName("كشف حساب تاجر الكاش", merchant?.merchant_name, currencyFilter),
     summary: (() => {
       const CUR_NAMES: Record<string, string> = {
@@ -982,8 +1027,7 @@ function MerchantStatementTab({
               <label>التاجر</label>
               <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} allowClear={false} />
             </div>
-            <div className="form-group"><label><Calendar size={12} /> من تاريخ</label><DateInput value={from} onChange={setFrom} /></div>
-            <div className="form-group"><label><Calendar size={12} /> إلى تاريخ</label><DateInput value={to} onChange={setTo} /></div>
+            <MonthPeriodPicker monthKey={monthKey} onChange={setMonthKey} options={monthOptions} period={period} today={today} />
             <div className="form-group">
               <label>نوع الحركة</label>
               <SearchableSelect
@@ -1077,9 +1121,10 @@ function MerchantStatementTab({
                   <tr><td colSpan={visibleCount}><div className="empty"><div className="empty-icon">💳</div><div className="empty-text">لا توجد حركات مطابقة</div></div></td></tr>
                 ) : pageMovements.map((m, i) => {
                   const idx = page * pageSize + i;
+                  const opening = Boolean(m.isOpeningCarryForward);
                   const color = m.type === "وارد من وكيل" ? "#15803D" : "#B91C1C";
                   return (
-                    <tr key={m.id}>
+                    <tr key={m.id} style={opening ? { background: "rgba(30,58,138,0.06)", fontWeight: 700 } : undefined}>
                       {isVisible("n") && <td data-label="#">{idx + 1}</td>}
                       {isVisible("date") && <td data-label="التاريخ">{m.date}</td>}
                       {isVisible("type") && <td data-label="نوع الحركة"><span className="badge">{m.type}</span></td>}
@@ -1090,8 +1135,10 @@ function MerchantStatementTab({
                       {isVisible("balance") && <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: m.balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtCurrency(m.balance, m.currency)}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
-                          <EditTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
-                          <CancelTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
+                          {!opening && <>
+                            <EditTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
+                            <CancelTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
+                          </>}
                         </td>
                       )}
                     </tr>
