@@ -150,9 +150,12 @@ function ColumnFilterInner({ label, state, onChange, options }: Props) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const safeState = sanitizeColumnFilterState(state);
   const safeOptions = (() => {
-    if (!Array.isArray(options)) return [];
+    const source = [
+      ...(Array.isArray(options) ? options : []),
+      ...(safeState.type === "multiSelect" ? safeState.selected : []),
+    ];
     const seen = new Set<string>();
-    return options
+    return source
       .map(normalizeMultiSelectValue)
       .filter((option) => {
         if (!option || seen.has(option)) return false;
