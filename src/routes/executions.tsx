@@ -18,11 +18,34 @@ function ExecutionsRouteWithPeriod() {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [originalKpiStrip, setOriginalKpiStrip] = useState<HTMLElement | null>(null);
 
-  // عند الرجوع من إضافة وكيل/شركة جديدة لا نعتمد فقط على وصول Realtime INSERT.
-  // نعمل قراءة حديثة مرة واحدة لضمان أن فلاتر الوكيل وجهة الموافقة تستخدم
-  // أحدث IDs وأسماء حتى لو حدث الإدخال أثناء انتقال الصفحات أو فات حدث Realtime.
+  // فلاتر الوكيل وجهة الموافقة تعتمد على جداول مرجعية منفصلة عن التنفيذات.
+  // لا نعتمد فقط على وصول Realtime INSERT: نعيد قراءة القوائم عند فتح الصفحة
+  // وعند الرجوع للتبويب/النافذة حتى تظهر الكيانات الجديدة فورًا بدون تعديل وحفظ يدوي.
   useEffect(() => {
-    void refetchLiveTables(["agents", "issuing_companies", "executions"]);
+    let disposed = false;
+    const refreshFilterSources = async () => {
+      if (disposed) return;
+      try {
+        await refetchLiveTables(["agents", "issuing_companies", "executions"]);
+      } catch {
+        // احتفظ بآخر نسخة سليمة لو فشل التحديث المؤقت.
+      }
+    };
+
+    void refreshFilterSources();
+
+    const onFocus = () => void refreshFilterSources();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshFilterSources();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      disposed = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
