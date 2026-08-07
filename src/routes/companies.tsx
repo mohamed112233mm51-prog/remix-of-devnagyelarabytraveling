@@ -14,13 +14,17 @@ export const Route = createFileRoute("/companies")({
   component: CompaniesRouteWithPeriod,
 });
 
-function stretchPortalTarget(target: HTMLElement) {
-  target.style.width = "100%";
+function stretchPortalTarget(target: HTMLElement, reference?: HTMLElement | null) {
+  target.style.display = "block";
+  target.style.boxSizing = "border-box";
+  target.style.width = reference ? `${reference.getBoundingClientRect().width}px` : "100%";
   target.style.minWidth = "0";
-  target.style.maxWidth = "none";
+  target.style.maxWidth = "100%";
   target.style.gridColumn = "1 / -1";
   target.style.flex = "1 1 100%";
   target.style.alignSelf = "stretch";
+  target.style.justifySelf = "stretch";
+  target.style.marginInline = "0";
 }
 
 function CompaniesRouteWithPeriod() {
@@ -28,6 +32,7 @@ function CompaniesRouteWithPeriod() {
 
   useEffect(() => {
     let observer: MutationObserver | null = null;
+    let resizeObserver: ResizeObserver | null = null;
     let mountedTarget: HTMLElement | null = null;
     let hiddenSummary: HTMLElement | null = null;
 
@@ -37,25 +42,32 @@ function CompaniesRouteWithPeriod() {
       const pageRoot = heading?.closest(".accounts-page") as HTMLElement | null;
       if (!pageRoot) return false;
 
+      const originalSummary = pageRoot.querySelector<HTMLElement>(".account-summary.kpi-rich");
       const existingTarget = pageRoot.querySelector<HTMLElement>("#company-account-summary-period-portal");
+
       if (existingTarget) {
-        stretchPortalTarget(existingTarget);
+        const reference = pageRoot.querySelector<HTMLElement>('[data-company-original-summary="true"]') || originalSummary;
+        stretchPortalTarget(existingTarget, reference);
         mountedTarget = existingTarget;
-        hiddenSummary = pageRoot.querySelector<HTMLElement>('[data-company-original-summary="true"]');
+        hiddenSummary = reference;
         setPortalTarget(existingTarget);
         return true;
       }
 
-      const originalSummary = pageRoot.querySelector<HTMLElement>(".account-summary.kpi-rich");
       if (!originalSummary) return false;
 
       const target = document.createElement("div");
       target.id = "company-account-summary-period-portal";
-      stretchPortalTarget(target);
+      stretchPortalTarget(target, originalSummary);
       originalSummary.parentElement?.insertBefore(target, originalSummary);
 
       originalSummary.dataset.companyOriginalSummary = "true";
       originalSummary.style.display = "none";
+
+      resizeObserver = new ResizeObserver(() => {
+        stretchPortalTarget(target, pageRoot);
+      });
+      resizeObserver.observe(pageRoot);
 
       mountedTarget = target;
       hiddenSummary = originalSummary;
@@ -72,6 +84,7 @@ function CompaniesRouteWithPeriod() {
 
     return () => {
       observer?.disconnect();
+      resizeObserver?.disconnect();
       if (hiddenSummary) {
         hiddenSummary.style.removeProperty("display");
         delete hiddenSummary.dataset.companyOriginalSummary;
@@ -109,9 +122,17 @@ function CompanyAccountPeriodSummary() {
       : "المتبقي للشركات";
 
   return (
-    <div style={{ display: "grid", gap: 10, width: "100%", minWidth: 0, gridColumn: "1 / -1" }}>
+    <div style={{ display: "grid", gap: 10, width: "100%", minWidth: 0 }}>
       <SummaryPeriodFilter value={period} onChange={setPeriod} />
-      <div className="account-summary kpi-rich" style={{ width: "100%", minWidth: 0 }}>
+      <div
+        className="account-summary kpi-rich"
+        style={{
+          width: "100%",
+          minWidth: 0,
+          maxWidth: "none",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        }}
+      >
         <div className="sum-box gold">
           <div className="kpi-icon"><Briefcase size={18} strokeWidth={2} /></div>
           <div className="kpi-text">
