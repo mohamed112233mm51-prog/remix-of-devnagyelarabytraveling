@@ -1022,7 +1022,7 @@ function MerchantStatementTab({
           </div>
         </div>
         <div className="card-body">
-          <div className="form-grid" style={{ marginBottom: 12 }}>
+          <div className="form-grid" style={{ marginBottom: 12, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
             <div className="form-group">
               <label>التاجر</label>
               <SearchableSelect value={merchantId} onChange={setMerchantId} options={merchants.map((m) => ({ value: m.id, label: m.merchant_name }))} allowClear={false} />
