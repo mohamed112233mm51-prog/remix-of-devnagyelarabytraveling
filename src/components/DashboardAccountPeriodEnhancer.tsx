@@ -7,6 +7,7 @@ import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { useAgentPeriodTotals } from "@/hooks/useAgentPeriodTotals";
 import { useCompanyPeriodTotals } from "@/hooks/useCompanyPeriodTotals";
 import { useExpensePeriodTotals } from "@/hooks/useExpensePeriodTotals";
+import { useExecutionAgentSalesPeriod } from "@/hooks/useExecutionAgentSalesPeriod";
 import { useMerchantPeriodTotals } from "@/hooks/useMerchantPeriodTotals";
 import { fmtDL, fmtNum, useLive, type IssuingCompany, type Merchant } from "@/lib/db";
 import { type SummaryPeriod } from "@/lib/summaryPeriod";
@@ -98,6 +99,7 @@ function DashboardAccountPeriodPortals() {
   const companyTotals = useCompanyPeriodTotals(period);
   const merchantTotals = useMerchantPeriodTotals(period);
   const expenseTotals = useExpensePeriodTotals(period);
+  const executionAgentSales = useExecutionAgentSalesPeriod(period);
   const agentAccountTotals = useAgentAccountTotals();
 
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
@@ -306,11 +308,11 @@ function DashboardAccountPeriodPortals() {
 
       {slots.agentSales && createPortal(
         <DashboardHeroCard
-          label={isLifetime ? "إجمالي مبيعات الوكلاء" : `خدمات الوكلاء — ${periodLabel}`}
-          value={<CurrencyLines map={agentTotals.debit} />}
+          label={isLifetime ? "إجمالي مبيعات الوكلاء" : `مبيعات الوكلاء — ${periodLabel}`}
+          value={<CurrencyLines map={executionAgentSales} />}
           icon={<Users size={18} />}
           tone="success"
-          sub={isLifetime ? "إجمالي دفتر حسابات الوكلاء" : "حركة الفترة المختارة"}
+          sub="من خدمات التنفيذات المنفذة فقط"
         />,
         slots.agentSales,
       )}

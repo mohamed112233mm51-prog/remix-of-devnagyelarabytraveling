@@ -44,8 +44,8 @@ async function canViewProfitSummary(sb: SupabaseClient<Database>, userId: string
 
 /**
  * ملخص أرباح الفترة للعرض فقط.
- * التنفيذات تستخدم financial_posting_date ثم created_at.
- * المصروفات تستخدم date ثم created_at.
+ * التنفيذات تستخدم created_at كما كان الداشبورد قبل تعديل الفلاتر.
+ * المصروفات تستخدم created_at كما كان الداشبورد قبل تعديل الفلاتر.
  * التحويل إلى EGP يعتمد حصراً على أسعار الصرف التاريخية المقفلة.
  */
 export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POST" })
@@ -84,7 +84,7 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
         operation_status?: string | null;
       };
       if (String(execution.operation_status || "").trim() !== "منفذ") continue;
-      const accountingDate = execution.financial_posting_date || execution.created_at || null;
+      const accountingDate = execution.created_at || null;
       if (!isDateInSummaryPeriod(accountingDate, data.period, todayISO)) continue;
 
       const result = computeExecutionProfitEGP(execution);
@@ -104,7 +104,7 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
         date?: string | null;
         created_at?: string | null;
       };
-      const accountingDate = expense.date || expense.created_at || null;
+      const accountingDate = expense.created_at || null;
       if (!isDateInSummaryPeriod(accountingDate, data.period, todayISO)) continue;
       if (!Number(expense.amount || 0)) continue;
 
