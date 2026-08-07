@@ -87,6 +87,7 @@ jobs:
       - name: Verify only requested files changed
         shell: bash
         run: |
+          git add -N src/hooks/useExecutionAgentSalesPeriod.ts
           changed="$(git diff --name-only | sort)"
           expected="$(printf '%s\n' \
             'src/components/DashboardAccountPeriodEnhancer.tsx' \
