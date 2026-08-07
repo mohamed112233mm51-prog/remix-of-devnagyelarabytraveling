@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Filter } from "lucide-react";
 
@@ -15,6 +15,15 @@ export const emptyDateRange = (): ColumnFilterState => ({ type: "dateRange", fro
 export const emptyMultiSelect = (): ColumnFilterState => ({ type: "multiSelect", selected: [] });
 export const emptyNumeric = (): ColumnFilterState => ({ type: "numeric", op: "eq", a: "", b: "" });
 
+/**
+ * توحيد قيم الفلاتر النصية متعددة الاختيار دون تعديل البيانات الأصلية.
+ * يعالج السجلات القديمة التي تحتوي على مسافات زائدة في بداية/نهاية الاسم
+ * أو أكثر من مسافة بين الكلمات.
+ */
+export function normalizeMultiSelectValue(value: unknown): string {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
 export function sanitizeColumnFilterState(value: unknown, fallback: ColumnFilterState = emptyText()): ColumnFilterState {
   if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
   const state = value as Partial<ColumnFilterState> & Record<string, unknown>;
@@ -29,8 +38,12 @@ export function sanitizeColumnFilterState(value: unknown, fallback: ColumnFilter
   if (state.type === "multiSelect") {
     const seen = new Set<string>();
     const selected = (Array.isArray(state.selected) ? state.selected : [])
-      .map((v) => String(v ?? "").trim())
-      .filter((v) => v && !seen.has(v) && seen.add(v));
+      .map(normalizeMultiSelectValue)
+      .filter((option) => {
+        if (!option || seen.has(option)) return false;
+        seen.add(option);
+        return true;
+      });
     return { type: "multiSelect", selected };
   }
   if (state.type === "numeric") {
@@ -85,7 +98,7 @@ export function matchMultiSelect(val: string, s: ColumnFilterState | undefined):
   if (!s) return true;
   s = sanitizeColumnFilterState(s);
   if (s.type !== "multiSelect" || s.selected.length === 0) return true;
-  return s.selected.includes(String(val || ""));
+  return s.selected.includes(normalizeMultiSelectValue(val));
 }
 
 export function matchNumeric(val: number, s: ColumnFilterState | undefined): boolean {
@@ -112,7 +125,7 @@ type Props = {
   label: string;
   state?: ColumnFilterState;
   onChange: (s: ColumnFilterState) => void;
-  options?: string[]; // for multiSelect
+  options?: string[];
 };
 
 class ColumnFilterBoundary extends Component<{ label: string; children: ReactNode }, { error: Error | null }> {
@@ -136,7 +149,17 @@ function ColumnFilterInner({ label, state, onChange, options }: Props) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const safeState = sanitizeColumnFilterState(state);
-  const safeOptions = Array.isArray(options) ? options.map((v) => String(v ?? "")).filter(Boolean) : [];
+  const safeOptions = (() => {
+    if (!Array.isArray(options)) return [];
+    const seen = new Set<string>();
+    return options
+      .map(normalizeMultiSelectValue)
+      .filter((option) => {
+        if (!option || seen.has(option)) return false;
+        seen.add(option);
+        return true;
+      });
+  })();
   const active = isFilterActive(safeState);
 
   useEffect(() => {
@@ -149,14 +172,14 @@ function ColumnFilterInner({ label, state, onChange, options }: Props) {
       if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
       setPos({ top: rect.bottom + window.scrollY + 4, left });
     }
-    const onDoc = (e: MouseEvent) => {
-      const target = e.target as Node;
+    const onDoc = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (btnRef.current?.contains(target)) return;
       const pop = document.getElementById("__colfilter_pop");
       if (pop && pop.contains(target)) return;
       setOpen(false);
     };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onEsc = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onEsc);
     return () => {
@@ -170,7 +193,7 @@ function ColumnFilterInner({ label, state, onChange, options }: Props) {
       <button
         ref={btnRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}
         title={`فلتر: ${label}`}
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -197,7 +220,7 @@ function ColumnFilterInner({ label, state, onChange, options }: Props) {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 10 }}>
             <button
               type="button"
-              onClick={() => { onChange(resetFilter(safeState)); }}
+              onClick={() => onChange(resetFilter(safeState))}
               style={{ flex: 1, padding: "4px 8px", fontSize: 11, border: "1px solid var(--border, #e5e7eb)", background: "transparent", borderRadius: 4, cursor: "pointer" }}
             >مسح</button>
             <button
@@ -221,52 +244,61 @@ function resetFilter(s: ColumnFilterState): ColumnFilterState {
 }
 
 function FilterBody({ state, onChange, options }: { state: ColumnFilterState; onChange: (s: ColumnFilterState) => void; options?: string[] }) {
-  const inputStyle: React.CSSProperties = { width: "100%", padding: "4px 6px", fontSize: 12, border: "1px solid var(--border, #e5e7eb)", borderRadius: 4, background: "var(--card, #fff)", boxSizing: "border-box" };
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    padding: "4px 6px",
+    fontSize: 12,
+    border: "1px solid var(--border, #e5e7eb)",
+    borderRadius: 4,
+    background: "var(--card, #fff)",
+    boxSizing: "border-box",
+  };
 
   if (state.type === "text") {
-    return <input value={state.value} onChange={(e) => onChange({ type: "text", value: e.target.value })} placeholder="بحث نصي..." style={inputStyle} autoFocus />;
+    return <input value={state.value} onChange={(event) => onChange({ type: "text", value: event.target.value })} placeholder="بحث نصي..." style={inputStyle} autoFocus />;
   }
   if (state.type === "dateRange") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <label style={{ fontSize: 11, color: "var(--muted, #6b7280)" }}>من تاريخ</label>
-        <input type="date" value={state.from} onChange={(e) => onChange({ ...state, from: e.target.value })} style={inputStyle} />
+        <input type="date" value={state.from} onChange={(event) => onChange({ ...state, from: event.target.value })} style={inputStyle} />
         <label style={{ fontSize: 11, color: "var(--muted, #6b7280)" }}>إلى تاريخ</label>
-        <input type="date" value={state.to} onChange={(e) => onChange({ ...state, to: e.target.value })} style={inputStyle} />
+        <input type="date" value={state.to} onChange={(event) => onChange({ ...state, to: event.target.value })} style={inputStyle} />
       </div>
     );
   }
   if (state.type === "multiSelect") {
     const opts = options || [];
-    const toggle = (v: string) => {
-      const set = new Set(state.selected);
-      if (set.has(v)) set.delete(v); else set.add(v);
-      onChange({ type: "multiSelect", selected: Array.from(set) });
+    const toggle = (value: string) => {
+      const normalized = normalizeMultiSelectValue(value);
+      const selected = new Set(state.selected.map(normalizeMultiSelectValue));
+      if (selected.has(normalized)) selected.delete(normalized);
+      else selected.add(normalized);
+      onChange({ type: "multiSelect", selected: Array.from(selected) });
     };
     return (
       <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, border: "1px solid var(--border, #e5e7eb)", borderRadius: 4, padding: 6 }}>
         {opts.length === 0 && <div style={{ fontSize: 11, color: "var(--muted, #6b7280)" }}>لا توجد قيم</div>}
-        {opts.map((v) => (
-          <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12 }}>
-            <input type="checkbox" checked={state.selected.includes(v)} onChange={() => toggle(v)} />
-            <span>{v || "—"}</span>
+        {opts.map((option) => (
+          <label key={option} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={state.selected.includes(option)} onChange={() => toggle(option)} />
+            <span>{option || "—"}</span>
           </label>
         ))}
       </div>
     );
   }
-  // numeric
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <select value={state.op} onChange={(e) => onChange({ ...state, op: e.target.value as NumericOp })} style={inputStyle}>
+      <select value={state.op} onChange={(event) => onChange({ ...state, op: event.target.value as NumericOp })} style={inputStyle}>
         <option value="eq">يساوي</option>
         <option value="gt">أكبر من</option>
         <option value="lt">أقل من</option>
         <option value="between">بين قيمتين</option>
       </select>
-      <input type="number" value={state.a} onChange={(e) => onChange({ ...state, a: e.target.value })} placeholder={state.op === "between" ? "من" : "القيمة"} style={inputStyle} />
+      <input type="number" value={state.a} onChange={(event) => onChange({ ...state, a: event.target.value })} placeholder={state.op === "between" ? "من" : "القيمة"} style={inputStyle} />
       {state.op === "between" && (
-        <input type="number" value={state.b} onChange={(e) => onChange({ ...state, b: e.target.value })} placeholder="إلى" style={inputStyle} />
+        <input type="number" value={state.b} onChange={(event) => onChange({ ...state, b: event.target.value })} placeholder="إلى" style={inputStyle} />
       )}
     </div>
   );
