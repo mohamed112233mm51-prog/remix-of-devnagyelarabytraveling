@@ -4,7 +4,6 @@ import {
   merchantCompanyOutflowAmount,
   useLive,
   type CompanyTransaction,
-  type Merchant,
   type MerchantCashCollection,
   type Transaction,
   type UsdTreasuryTransaction,
@@ -27,10 +26,10 @@ type CollectionSplitRow = {
 
 /**
  * إجماليات عرض فقط من نفس حركات كشف حساب تاجر الكاش.
- * لا تعدّل الحركات ولا رصيد أي تاجر.
+ * تدخل كل حركة مرتبطة بتاجر حتى لو حُذفت بطاقة التاجر لاحقاً،
+ * وتستخدم date ثم createdAt كـ fallback للسجلات القديمة.
  */
 export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovementTotals {
-  const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: transactions } = useLive<Transaction>("transactions");
   const { rows: companyTransactions } = useLive<CompanyTransaction>("company_transactions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
@@ -62,24 +61,38 @@ export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovement
       ].includes(String(row.source_service_type || "")),
     );
 
+    // نفس سياسة computeMerchantAggregates: المعرّفات تأتي من الحركات نفسها،
+    // وليس فقط من بطاقات التجار الموجودة حالياً.
+    const merchantIds = new Set<string>();
+    for (const row of transactions) if (row.merchant_id) merchantIds.add(row.merchant_id);
+    for (const row of companyTransactions) {
+      const merchantId = (row as any).merchant_id as string | null | undefined;
+      if (merchantId) merchantIds.add(merchantId);
+    }
+    for (const row of collections) if (row.merchant_id) merchantIds.add(row.merchant_id);
+    for (const row of conversions) {
+      const merchantId = (row as any).merchant_id as string | null | undefined;
+      if (merchantId) merchantIds.add(merchantId);
+    }
+
     const movements: MerchantMovementItem[] = [];
-    for (const merchant of merchants) {
-      movements.push(...buildMerchantMovements(merchant.id, {
+    for (const merchantId of merchantIds) {
+      movements.push(...buildMerchantMovements(merchantId, {
         incomingTxns,
         outgoingTxns,
         cashMoveTxns,
         collections,
         conversions,
         splits: paymentSplits as any,
-      }));
+      }) as MerchantMovementItem[]);
     }
 
-    const periodMovements = movements.filter((movement) =>
-      isDateInSummaryPeriod(movement.date, period, todayISO),
-    );
+    const periodMovements = movements.filter((movement) => {
+      const accountingDate = movement.date || (movement as any).createdAt || null;
+      return isDateInSummaryPeriod(accountingDate, period, todayISO);
+    });
     return summarizeMerchantMovementTotals(periodMovements);
   }, [
-    merchants,
     transactions,
     companyTransactions,
     collections,
