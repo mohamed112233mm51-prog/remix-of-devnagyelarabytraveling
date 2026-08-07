@@ -40,7 +40,7 @@ const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "balance", label: "الرصيد الحالي" },
   { key: "method", label: "وسيلة الدفع" },
   { key: "note", label: "ملاحظات" },
-  { key: "departureDate", label: "جهة المغادرة" },
+  { key: "departureDate", label: "تاريخ المغادرة" },
   { key: "actions", label: "إجراءات" },
 ];
 
@@ -93,6 +93,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     balance: CF.emptyNumeric(),
     method: CF.emptyMultiSelect(),
     note: CF.emptyText(),
+    departureDate: CF.emptyDateRange(),
   });
   const [filters, setFilters] = useState<Record<string, CF.ColumnFilterState>>(() => CF.sanitizeFilterMap(undefined, initialFilters()));
   const setF = (k: string, s: CF.ColumnFilterState) => setFilters((p) => CF.sanitizeFilterMap({ ...p, [k]: s }, initialFilters()));
@@ -199,6 +200,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     if (!CF.matchNumeric(e.balance, safeFilters.balance)) return false;
     if (!CF.matchMultiSelect(e.methodLabel, safeFilters.method)) return false;
     if (!CF.matchText(e.note, safeFilters.note)) return false;
+    if (CF.isFilterActive(safeFilters.departureDate) && (!e.departureDate || e.departureDate === "—")) return false;
+    if (!CF.matchDateRange(e.departureDate === "—" ? "" : e.departureDate, safeFilters.departureDate)) return false;
     return true;
   }), [rowsWithMethodLabel, safeFilters]);
 
@@ -239,7 +242,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
       { header: "قيمة الرحلة", key: "serviceValue", exportKey: "sv" },
       { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
-      { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" }, { header: "جهة المغادرة", key: "departureDate" },
+      { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" }, { header: "تاريخ المغادرة", key: "departureDate" },
     ] as Array<{ header: string; key: string; exportKey?: string }>)
       .filter((c) => isVisible(c.key))
       .map((c) => ({ header: c.header, key: c.exportKey || c.key })),
@@ -334,7 +337,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                     {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
                     {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
                     {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
-                    {isVisible("departureDate") && <th>جهة المغادرة</th>}
+                    {isVisible("departureDate") && <Th filterKey="departureDate">تاريخ المغادرة</Th>}
                     {isVisible("actions") && <th>إجراءات</th>}
                   </tr>
                 </thead>
@@ -359,7 +362,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                       {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
-                      {isVisible("departureDate") && <td data-label="جهة المغادرة">{e.departureDate}</td>}
+                      {isVisible("departureDate") && <td data-label="تاريخ المغادرة">{e.departureDate}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
                           {!opening && <>
