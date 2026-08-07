@@ -198,10 +198,20 @@ function DashboardAccountPeriodPortals() {
       return target;
     };
 
+    const hideMainIndicatorDescriptions = (grid: HTMLElement | null) => {
+      if (!grid) return;
+      grid.querySelectorAll<HTMLElement>(".erp-hero-foot").forEach((foot) => {
+        foot.dataset.dashboardMainKpiDescription = "hidden";
+        foot.style.display = "none";
+      });
+    };
+
     const mountSlots = () => {
       const primaryGrid = findPrimaryGrid();
       const mainGrid = findFollowingGrid("المؤشرات الرئيسية", ".erp-hero-grid");
       const detailsGrid = findFollowingGrid("تفاصيل الأقسام", ".dash-groups");
+
+      hideMainIndicatorDescriptions(mainGrid);
 
       const next: PortalSlots = {
         expenseHero: makeSlot(
@@ -262,6 +272,10 @@ function DashboardAccountPeriodPortals() {
       document.querySelectorAll<HTMLElement>("[data-dashboard-period-original]").forEach((original) => {
         original.style.removeProperty("display");
         delete original.dataset.dashboardPeriodOriginal;
+      });
+      document.querySelectorAll<HTMLElement>("[data-dashboard-main-kpi-description]").forEach((foot) => {
+        foot.style.removeProperty("display");
+        delete foot.dataset.dashboardMainKpiDescription;
       });
       for (const id of SLOT_IDS) document.getElementById(id)?.remove();
     };
