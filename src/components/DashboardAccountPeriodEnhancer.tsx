@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Building2, HandCoins, Users, Wallet } from "lucide-react";
 import { CurrencyLines } from "@/components/CurrencyLines";
+import { DashboardOperationalPeriodEnhancer } from "@/components/DashboardOperationalPeriodEnhancer";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { useAgentPeriodTotals } from "@/hooks/useAgentPeriodTotals";
 import { useCompanyPeriodTotals } from "@/hooks/useCompanyPeriodTotals";
@@ -81,7 +82,12 @@ export function DashboardAccountPeriodEnhancer() {
     return () => observer.disconnect();
   }, []);
 
-  return dashboardMounted ? <DashboardAccountPeriodPortals /> : null;
+  return (
+    <>
+      {dashboardMounted ? <DashboardAccountPeriodPortals /> : null}
+      <DashboardOperationalPeriodEnhancer />
+    </>
+  );
 }
 
 function DashboardAccountPeriodPortals() {
