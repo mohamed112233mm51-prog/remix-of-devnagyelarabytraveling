@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";
 import { cairoToday } from "@/lib/approvalFines";
 import { parseDisplayDate } from "@/lib/dateFormat";
-import { useLive, type Execution } from "@/lib/db";
+import { refetchLiveTables, useLive, type Execution } from "@/lib/db";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 import { Route as LegacyExecutionsRoute } from "@/features/executions/LegacyExecutionsRoute";
 
@@ -17,6 +17,13 @@ export const Route = createFileRoute("/executions")({
 function ExecutionsRouteWithPeriod() {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [originalKpiStrip, setOriginalKpiStrip] = useState<HTMLElement | null>(null);
+
+  // عند الرجوع من إضافة وكيل/شركة جديدة لا نعتمد فقط على وصول Realtime INSERT.
+  // نعمل قراءة حديثة مرة واحدة لضمان أن فلاتر الوكيل وجهة الموافقة تستخدم
+  // أحدث IDs وأسماء حتى لو حدث الإدخال أثناء انتقال الصفحات أو فات حدث Realtime.
+  useEffect(() => {
+    void refetchLiveTables(["agents", "issuing_companies", "executions"]);
+  }, []);
 
   useEffect(() => {
     let observer: MutationObserver | null = null;
