@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Briefcase, Building2, HandCoins, Users, Wallet } from "lucide-react";
+import { Building2, HandCoins, Users, Wallet } from "lucide-react";
 import { CurrencyLines } from "@/components/CurrencyLines";
+import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { useAgentPeriodTotals } from "@/hooks/useAgentPeriodTotals";
 import { useCompanyPeriodTotals } from "@/hooks/useCompanyPeriodTotals";
-import { useLive, type Agent, type IssuingCompany } from "@/lib/db";
-import { SUMMARY_PERIOD_LABELS, type SummaryPeriod } from "@/lib/summaryPeriod";
+import { useExpensePeriodTotals } from "@/hooks/useExpensePeriodTotals";
+import { useMerchantPeriodTotals } from "@/hooks/useMerchantPeriodTotals";
+import { fmtDL, fmtNum, useLive, type IssuingCompany, type Merchant } from "@/lib/db";
+import { type SummaryPeriod } from "@/lib/summaryPeriod";
 
 const DASHBOARD_PERIOD_BY_LABEL: Record<string, SummaryPeriod> = {
   اليوم: "today",
@@ -15,21 +18,52 @@ const DASHBOARD_PERIOD_BY_LABEL: Record<string, SummaryPeriod> = {
   "إجمالي النظام": "all",
 };
 
+const DASHBOARD_PERIOD_LABELS: Record<SummaryPeriod, string> = {
+  today: "اليوم",
+  week: "هذا الأسبوع",
+  month: "هذا الشهر",
+  year: "السنة الحالية",
+  all: "إجمالي النظام",
+};
+
 type PortalSlots = {
+  expenseHero: HTMLElement | null;
   agentSales: HTMLElement | null;
   companyMovement: HTMLElement | null;
   agentPayments: HTMLElement | null;
+  merchantCollections: HTMLElement | null;
+  merchantBalance: HTMLElement | null;
   agentDetails: HTMLElement | null;
   companyDetails: HTMLElement | null;
+  merchantDetails: HTMLElement | null;
+  expenseDetails: HTMLElement | null;
 };
 
 const EMPTY_SLOTS: PortalSlots = {
+  expenseHero: null,
   agentSales: null,
   companyMovement: null,
   agentPayments: null,
+  merchantCollections: null,
+  merchantBalance: null,
   agentDetails: null,
   companyDetails: null,
+  merchantDetails: null,
+  expenseDetails: null,
 };
+
+const SLOT_IDS = [
+  "dashboard-expense-hero-period-slot",
+  "dashboard-agent-sales-period-slot",
+  "dashboard-company-movement-period-slot",
+  "dashboard-agent-payments-period-slot",
+  "dashboard-merchant-collections-period-slot",
+  "dashboard-merchant-balance-period-slot",
+  "dashboard-agent-details-period-slot",
+  "dashboard-company-details-period-slot",
+  "dashboard-merchant-details-period-slot",
+  "dashboard-expense-details-period-slot",
+];
 
 /**
  * يُركَّب مرة واحدة داخل Root، ولا يشغّل اشتراكات الحسابات إلا عندما تكون
@@ -53,14 +87,24 @@ export function DashboardAccountPeriodEnhancer() {
 function DashboardAccountPeriodPortals() {
   const [period, setPeriod] = useState<SummaryPeriod>("month");
   const [slots, setSlots] = useState<PortalSlots>(EMPTY_SLOTS);
+
   const agentTotals = useAgentPeriodTotals(period);
   const companyTotals = useCompanyPeriodTotals(period);
-  const { rows: agents } = useLive<Agent>("agents");
-  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
+  const merchantTotals = useMerchantPeriodTotals(period);
+  const expenseTotals = useExpensePeriodTotals(period);
+  const agentAccountTotals = useAgentAccountTotals();
 
+  const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
+  const { rows: merchants } = useLive<Merchant>("merchants");
+
+  // نفس مصادر العدد المستخدمة في الداشبورد الأصلي وبنفس fmtNum.
   const activeCompanyCount = useMemo(
     () => companies.filter((company) => ((company as any).status || "نشط") === "نشط").length,
     [companies],
+  );
+  const activeMerchantCount = useMemo(
+    () => merchants.filter((merchant) => ((merchant as any).status || "نشط") === "نشط").length,
+    [merchants],
   );
 
   useEffect(() => {
@@ -100,10 +144,27 @@ function DashboardAccountPeriodPortals() {
       return null;
     };
 
+    const findPrimaryGrid = (): HTMLElement | null => {
+      const periodBar = document.querySelector<HTMLElement>(".erp-period-bar");
+      let sibling = periodBar?.nextElementSibling as HTMLElement | null;
+      while (sibling) {
+        if (sibling.matches(".erp-hero-grid")) return sibling;
+        if (sibling.classList.contains("erp-section-title")) return null;
+        sibling = sibling.nextElementSibling as HTMLElement | null;
+      }
+      return null;
+    };
+
     const findHeroCard = (grid: HTMLElement | null, label: string): HTMLElement | null => {
       if (!grid) return null;
       return Array.from(grid.querySelectorAll<HTMLElement>(":scope > .erp-hero"))
         .find((card) => card.querySelector<HTMLElement>(".erp-hero-label")?.textContent?.trim() === label) || null;
+    };
+
+    const findHeroCardByPrefix = (grid: HTMLElement | null, prefix: string): HTMLElement | null => {
+      if (!grid) return null;
+      return Array.from(grid.querySelectorAll<HTMLElement>(":scope > .erp-hero"))
+        .find((card) => card.querySelector<HTMLElement>(".erp-hero-label")?.textContent?.trim().startsWith(prefix)) || null;
     };
 
     const findDetailsCard = (grid: HTMLElement | null, title: string): HTMLElement | null => {
@@ -132,10 +193,15 @@ function DashboardAccountPeriodPortals() {
     };
 
     const mountSlots = () => {
+      const primaryGrid = findPrimaryGrid();
       const mainGrid = findFollowingGrid("المؤشرات الرئيسية", ".erp-hero-grid");
       const detailsGrid = findFollowingGrid("تفاصيل الأقسام", ".dash-groups");
 
       const next: PortalSlots = {
+        expenseHero: makeSlot(
+          findHeroCardByPrefix(primaryGrid, "المصروفات —"),
+          "dashboard-expense-hero-period-slot",
+        ),
         agentSales: makeSlot(
           findHeroCard(mainGrid, "إجمالي مبيعات الوكلاء"),
           "dashboard-agent-sales-period-slot",
@@ -148,6 +214,14 @@ function DashboardAccountPeriodPortals() {
           findHeroCard(mainGrid, "إجمالي تحصيلات الوكلاء"),
           "dashboard-agent-payments-period-slot",
         ),
+        merchantCollections: makeSlot(
+          findHeroCard(mainGrid, "إجمالي تحصيلات تجار الكاش"),
+          "dashboard-merchant-collections-period-slot",
+        ),
+        merchantBalance: makeSlot(
+          findHeroCard(mainGrid, "رصيد تجار الكاش"),
+          "dashboard-merchant-balance-period-slot",
+        ),
         agentDetails: makeSlot(
           findDetailsCard(detailsGrid, "الوكلاء"),
           "dashboard-agent-details-period-slot",
@@ -156,16 +230,20 @@ function DashboardAccountPeriodPortals() {
           findDetailsCard(detailsGrid, "الشركات الصادرة"),
           "dashboard-company-details-period-slot",
         ),
+        merchantDetails: makeSlot(
+          findDetailsCard(detailsGrid, "تاجر الكاش"),
+          "dashboard-merchant-details-period-slot",
+        ),
+        expenseDetails: makeSlot(
+          findDetailsCard(detailsGrid, "المصروفات"),
+          "dashboard-expense-details-period-slot",
+        ),
       };
 
       setSlots((previous) => (
-        previous.agentSales === next.agentSales
-        && previous.companyMovement === next.companyMovement
-        && previous.agentPayments === next.agentPayments
-        && previous.agentDetails === next.agentDetails
-        && previous.companyDetails === next.companyDetails
-          ? previous
-          : next
+        Object.keys(next).every(
+          (key) => previous[key as keyof PortalSlots] === next[key as keyof PortalSlots],
+        ) ? previous : next
       ));
     };
 
@@ -179,22 +257,33 @@ function DashboardAccountPeriodPortals() {
         original.style.removeProperty("display");
         delete original.dataset.dashboardPeriodOriginal;
       });
-      Object.values(slots).forEach((target) => target?.remove());
+      for (const id of SLOT_IDS) document.getElementById(id)?.remove();
     };
-  // slots intentionally omitted: cleanup queries every managed original and targets are removed on unmount.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const periodLabel = SUMMARY_PERIOD_LABELS[period];
+  const periodLabel = DASHBOARD_PERIOD_LABELS[period];
   const isLifetime = period === "all";
+
   const agentMovementLabel = isLifetime ? "المستحق" : `صافي حركة ${periodLabel}`;
   const companyMovementLabel = isLifetime ? "المتبقي" : `صافي حركة ${periodLabel}`;
   const servicesLabel = isLifetime ? "قيمة الخدمات" : `خدمات ${periodLabel}`;
   const paymentsLabel = isLifetime ? "إجمالي المدفوعات" : `مدفوعات ${periodLabel}`;
   const companyServicesLabel = isLifetime ? "إجمالي الخدمات" : `خدمات ${periodLabel}`;
+  const merchantBalanceLabel = isLifetime ? "رصيد تاجر الكاش" : `صافي حركة ${periodLabel}`;
 
   return (
     <>
+      {slots.expenseHero && createPortal(
+        <DashboardHeroCard
+          label={`المصروفات — ${periodLabel}`}
+          value={fmtDL(expenseTotals.total)}
+          icon={<Wallet size={18} />}
+          tone="warning"
+          sub="من سجل المصروفات حسب تاريخ الحركة"
+        />,
+        slots.expenseHero,
+      )}
+
       {slots.agentSales && createPortal(
         <DashboardHeroCard
           label={isLifetime ? "إجمالي مبيعات الوكلاء" : `خدمات الوكلاء — ${periodLabel}`}
@@ -228,9 +317,31 @@ function DashboardAccountPeriodPortals() {
         slots.agentPayments,
       )}
 
+      {slots.merchantCollections && createPortal(
+        <DashboardHeroCard
+          label={isLifetime ? "إجمالي تحصيلات تجار الكاش" : `تحصيلات تجار الكاش — ${periodLabel}`}
+          value={<CurrencyLines map={merchantTotals.totalCollected} />}
+          icon={<HandCoins size={18} />}
+          tone="navy"
+          sub="من نفس حركات كشف حساب تاجر الكاش"
+        />,
+        slots.merchantCollections,
+      )}
+
+      {slots.merchantBalance && createPortal(
+        <DashboardHeroCard
+          label={isLifetime ? "رصيد تجار الكاش" : `صافي حركة تجار الكاش — ${periodLabel}`}
+          value={<CurrencyLines map={merchantTotals.balance} />}
+          icon={<Wallet size={18} />}
+          tone="navy"
+          sub={isLifetime ? "إجمالي الرصيد الحالي لكل عملة" : "صافي تأثير حركات الفترة"}
+        />,
+        slots.merchantBalance,
+      )}
+
       {slots.agentDetails && createPortal(
         <DashboardSectionCard title="الوكلاء" icon={<Users size={16} />}>
-          <DashboardStat label="عدد الوكلاء" value={agents.length.toLocaleString("ar-EG")} />
+          <DashboardStat label="عدد الوكلاء" value={fmtNum(agentAccountTotals.agentCount)} />
           <DashboardStat label={servicesLabel} valueNode={<CurrencyLines map={agentTotals.debit} />} />
           <DashboardStat label={paymentsLabel} valueNode={<CurrencyLines map={agentTotals.credit} />} tone="green" />
           <DashboardStat label={agentMovementLabel} valueNode={<CurrencyLines map={agentTotals.movement} />} tone="red" highlight />
@@ -240,12 +351,32 @@ function DashboardAccountPeriodPortals() {
 
       {slots.companyDetails && createPortal(
         <DashboardSectionCard title="الشركات الصادرة" icon={<Building2 size={16} />}>
-          <DashboardStat label="عدد الشركات" value={activeCompanyCount.toLocaleString("ar-EG")} />
+          <DashboardStat label="عدد الشركات" value={fmtNum(activeCompanyCount)} />
           <DashboardStat label={companyServicesLabel} valueNode={<CurrencyLines map={companyTotals.debit} />} />
           <DashboardStat label={paymentsLabel} valueNode={<CurrencyLines map={companyTotals.credit} />} tone="green" />
           <DashboardStat label={companyMovementLabel} valueNode={<CurrencyLines map={companyTotals.movement} />} tone="red" highlight />
         </DashboardSectionCard>,
         slots.companyDetails,
+      )}
+
+      {slots.merchantDetails && createPortal(
+        <DashboardSectionCard title="تاجر الكاش" icon={<HandCoins size={16} />}>
+          <DashboardStat label="عدد التجار" value={fmtNum(activeMerchantCount)} />
+          <DashboardStat label={isLifetime ? "الوارد (صافي)" : `الوارد — ${periodLabel}`} valueNode={<CurrencyLines map={merchantTotals.totalIncoming} />} tone="green" />
+          <DashboardStat label={isLifetime ? "الصادر" : `الصادر — ${periodLabel}`} valueNode={<CurrencyLines map={merchantTotals.totalOutgoing} />} tone="red" />
+          <DashboardStat label="نسبة التاجر 1%" valueNode={<CurrencyLines map={merchantTotals.totalCommission} />} />
+          <DashboardStat label={merchantBalanceLabel} valueNode={<CurrencyLines map={merchantTotals.balance} />} highlight />
+        </DashboardSectionCard>,
+        slots.merchantDetails,
+      )}
+
+      {slots.expenseDetails && createPortal(
+        <DashboardSectionCard title="المصروفات" icon={<Wallet size={16} />}>
+          <DashboardStat label={isLifetime ? "الإجمالي" : `إجمالي ${periodLabel}`} value={fmtDL(expenseTotals.total)} tone="red" />
+          <DashboardStat label={isLifetime ? "ثابتة" : `ثابتة — ${periodLabel}`} value={fmtDL(expenseTotals.fixed)} />
+          <DashboardStat label={isLifetime ? "متغيرة" : `متغيرة — ${periodLabel}`} value={fmtDL(expenseTotals.variable)} />
+        </DashboardSectionCard>,
+        slots.expenseDetails,
       )}
     </>
   );
