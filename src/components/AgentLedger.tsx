@@ -40,6 +40,7 @@ const LEDGER_COLUMNS: ColumnDef[] = [
   { key: "balance", label: "الرصيد الحالي" },
   { key: "method", label: "وسيلة الدفع" },
   { key: "note", label: "ملاحظات" },
+  { key: "departureDate", label: "جهة المغادرة" },
   { key: "actions", label: "إجراءات" },
 ];
 
@@ -159,10 +160,26 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     () => attachLedgerRunningBalance(monthlyView.rowsWithOpening),
     [monthlyView],
   );
-  const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => ({
-    ...e,
-    methodLabel: e.paymentMethod,
-  })), [ledgerWithBalance]);
+  const executionTravelDateById = useMemo(() => new Map(
+    (Array.isArray(liveExecutions) ? liveExecutions : []).map((execution) => [
+      String(execution.id),
+      String((execution as any).travel_date || "").trim().slice(0, 10),
+    ]),
+  ), [liveExecutions]);
+
+  const rowsWithMethodLabel = useMemo(() => ledgerWithBalance.map((e) => {
+    const raw = e.raw as any;
+    const sourceRef = String(raw?.source_service_id || "");
+    const executionId = String(raw?.source_service_type || "") === "execution"
+      ? sourceRef.split("::")[0]
+      : "";
+    const departureDate = executionId ? (executionTravelDateById.get(executionId) || "—") : "—";
+    return {
+      ...e,
+      methodLabel: e.paymentMethod,
+      departureDate,
+    };
+  }), [ledgerWithBalance, executionTravelDateById]);
 
   const serviceOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.service).filter(Boolean))).sort(), [rowsWithMethodLabel]);
   const destOptions = useMemo(() => Array.from(new Set(rowsWithMethodLabel.map((e) => e.destination).filter(Boolean))).sort(), [rowsWithMethodLabel]);
@@ -222,7 +239,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
       { header: "قيمة الرحلة", key: "serviceValue", exportKey: "sv" },
       { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
-      { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" },
+      { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" }, { header: "جهة المغادرة", key: "departureDate" },
     ] as Array<{ header: string; key: string; exportKey?: string }>)
       .filter((c) => isVisible(c.key))
       .map((c) => ({ header: c.header, key: c.exportKey || c.key })),
@@ -233,7 +250,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
       debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
       credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
       balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
-      method: e.methodLabel, note: e.note,
+      method: e.methodLabel, note: e.note, departureDate: e.departureDate,
     })),
   });
 
@@ -317,6 +334,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                     {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
                     {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
                     {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
+                    {isVisible("departureDate") && <th>جهة المغادرة</th>}
                     {isVisible("actions") && <th>إجراءات</th>}
                   </tr>
                 </thead>
@@ -341,6 +359,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                       {isVisible("balance") && <td data-label="الرصيد الحالي" style={{ fontWeight: 800, color: e.balance > 0 ? "var(--red)" : e.balance < 0 ? "var(--green)" : undefined }}>{fmtCurrency(e.balance, e.currency)}</td>}
                       {isVisible("method") && <td data-label="وسيلة الدفع">{e.methodLabel}</td>}
                       {isVisible("note") && <td data-label="ملاحظات">{e.note}</td>}
+                      {isVisible("departureDate") && <td data-label="جهة المغادرة">{e.departureDate}</td>}
                       {isVisible("actions") && (
                         <td data-label="إجراءات">
                           {!opening && <>
