@@ -1,0 +1,44 @@
+name: Fix export branding scope
+
+on:
+  push:
+    branches:
+      - devo
+    paths:
+      - .github/workflows/fix-export-branding-scope.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scope fix
+        run: python3 .github/fix-export-branding-scope.py
+
+      - name: Verify export builder
+        run: |
+          changed="$(git diff --name-only)"
+          test "$changed" = "src/lib/exportStatement.ts"
+          git diff --check
+          grep -q 'const branding = await loadBranding();' src/lib/exportStatement.ts
+          grep -q 'const PRIMARY_ARGB = hexToArgb(branding.primaryColor);' src/lib/exportStatement.ts
+          ! grep -q 'تم التوليد آلي' src/lib/exportStatement.ts
+          ! grep -q 'branding.logoUrl' src/lib/exportStatement.ts
+          ! grep -q 'branding.logoDataUrl' src/lib/exportStatement.ts
+
+      - name: Commit fix and remove temporary files
+        run: |
+          rm -f .github/workflows/fix-export-branding-scope.yml .github/fix-export-branding-scope.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/exportStatement.ts .github/workflows/fix-export-branding-scope.yml .github/fix-export-branding-scope.py
+          git diff --cached --check
+          git commit -m "fix(exports): keep export builder variables scoped correctly"
+          git push origin devo
