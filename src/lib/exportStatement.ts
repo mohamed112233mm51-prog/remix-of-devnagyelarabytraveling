@@ -173,6 +173,8 @@ export async function exportStatementToExcel(data: StatementExportData) {
 async function _buildExcel(data: StatementExportData): Promise<{ blob: Blob; fileName: string }> {
   debugStatementExportValues(data);
 
+  const branding = await loadBranding();
+  const companyName = branding.companyName || COMPANY_NAME;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = companyName;
@@ -198,6 +200,7 @@ async function _buildExcel(data: StatementExportData): Promise<{ blob: Blob; fil
     const m = /^#?([a-f\d]{6})$/i.exec((hex || "").trim());
     return m ? `FF${m[1].toUpperCase()}` : "FF0F1B3D";
   };
+  const PRIMARY_ARGB = hexToArgb(branding.primaryColor);
   const SECONDARY_ARGB = hexToArgb(branding.secondaryColor);
 
   // ===== REPORT HEADER (no logo/company branding) =====
@@ -383,10 +386,8 @@ function thinBorder(argb: string): ExcelJS.Borders {
 // ---------- PDF ----------
 async function buildStatementPdfHtml(
   data: StatementExportData,
-  opts?: { arabicAsEntities?: boolean },
+  _opts?: { arabicAsEntities?: boolean },
 ): Promise<{ html: string; landscape: boolean }> {
-  const branding = await loadBranding();
-  const companyName = branding.companyName || COMPANY_NAME;
   const esc = (v: unknown) =>
     String(v ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
