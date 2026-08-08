@@ -43,13 +43,6 @@ export function buildArabicFileName(kind: string, entityName?: string | null, cu
   return parts.join(" - ").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
 }
 
-function dataUrlToExcelImage(dataUrl: string): { base64: string; ext: "png" | "jpeg" | "gif" } | null {
-  if (!dataUrl || !dataUrl.startsWith("data:")) return null;
-  const m = /^data:image\/(png|jpeg|jpg|gif);base64,(.+)$/i.exec(dataUrl);
-  if (!m) return null;
-  const ext = m[1].toLowerCase() === "jpg" ? "jpeg" : (m[1].toLowerCase() as "png" | "jpeg" | "gif");
-  return { base64: m[2], ext };
-}
 const CURRENCY = "ج.م";
 
 // ---------- helpers ----------
@@ -180,8 +173,6 @@ export async function exportStatementToExcel(data: StatementExportData) {
 async function _buildExcel(data: StatementExportData): Promise<{ blob: Blob; fileName: string }> {
   debugStatementExportValues(data);
 
-  const branding = await loadBranding();
-  const companyName = branding.companyName || COMPANY_NAME;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = companyName;
@@ -207,53 +198,29 @@ async function _buildExcel(data: StatementExportData): Promise<{ blob: Blob; fil
     const m = /^#?([a-f\d]{6})$/i.exec((hex || "").trim());
     return m ? `FF${m[1].toUpperCase()}` : "FF0F1B3D";
   };
-  const PRIMARY_ARGB = hexToArgb(branding.primaryColor);
   const SECONDARY_ARGB = hexToArgb(branding.secondaryColor);
 
-  // ===== BRAND BAND (logo + company name) =====
+  // ===== REPORT HEADER (no logo/company branding) =====
   ws.mergeCells(`A1:${lastColLetter}1`);
   const r1 = ws.getCell("A1");
-  r1.value = `        ${companyName}`;
-  r1.font = { name: "Cairo", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+  r1.value = data.title;
+  r1.font = { name: "Cairo", size: 14, bold: true, color: { argb: SECONDARY_ARGB } };
   r1.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl" };
-  r1.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PRIMARY_ARGB } };
-  ws.getRow(1).height = 56;
+  r1.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+  ws.getRow(1).height = 26;
 
-  // Embed logo image (if available)
-  const img = dataUrlToExcelImage(branding.logoDataUrl);
-  if (img) {
-    try {
-      const imageId = wb.addImage({ base64: img.base64, extension: img.ext });
-      // Anchor to top-right area of the band (row 1)
-      ws.addImage(imageId, {
-        tl: { col: 0.15, row: 0.15 },
-        ext: { width: 60, height: 60 },
-        editAs: "oneCell",
-      });
-    } catch { /* ignore */ }
-  }
-
-  // Row 2: report title
-  ws.mergeCells(`A2:${lastColLetter}2`);
-  const r2 = ws.getCell("A2");
-  r2.value = data.title;
-  r2.font = { name: "Cairo", size: 14, bold: true, color: { argb: SECONDARY_ARGB } };
-  r2.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl" };
-  r2.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
-  ws.getRow(2).height = 26;
-
-  // Row 3: subtitle / meta line (export date + user)
-  const metaRow = 3;
+  // Row 2: subtitle / export date
+  const metaRow = 2;
   ws.mergeCells(`A${metaRow}:${lastColLetter}${metaRow}`);
-  const r3 = ws.getCell(`A${metaRow}`);
+  const r2 = ws.getCell(`A${metaRow}`);
   const subtitleBit = data.subtitle ? `${data.subtitle}  •  ` : "";
-  r3.value = `${subtitleBit}تاريخ التصدير: ${todayLabel()}`;
-  r3.font = { name: "Cairo", size: 10, color: { argb: "FF475569" } };
-  r3.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl", wrapText: true };
-  r3.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+  r2.value = `${subtitleBit}تاريخ التصدير: ${todayLabel()}`;
+  r2.font = { name: "Cairo", size: 10, color: { argb: "FF475569" } };
+  r2.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl", wrapText: true };
+  r2.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
   ws.getRow(metaRow).height = 22;
 
-  let nextRow = 4;
+  let nextRow = 3;
 
   // ===== SUMMARY BOX =====
   if (data.summary && data.summary.length) {
@@ -390,14 +357,6 @@ async function _buildExcel(data: StatementExportData): Promise<{ blob: Blob; fil
   // Repeat header on every printed page
   (ws as any).pageSetup.printTitlesRow = `${headerRowIdx}:${headerRowIdx}`;
 
-  // ===== Footer =====
-  const footerIdx = headerRowIdx + data.rows.length + 2;
-  ws.mergeCells(`A${footerIdx}:${lastColLetter}${footerIdx}`);
-  const f = ws.getCell(`A${footerIdx}`);
-  f.value = `${companyName}  •  تم التوليد آليًا`;
-  f.font = { name: "Cairo", size: 9, italic: true, color: { argb: "FF94A3B8" } };
-  f.alignment = { horizontal: "center", vertical: "middle", readingOrder: "rtl" };
-
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -421,7 +380,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
   return { top: side, bottom: side, left: side, right: side } as ExcelJS.Borders;
 }
 
-// ---------- PDF (branded header) ----------
+// ---------- PDF ----------
 async function buildStatementPdfHtml(
   data: StatementExportData,
   opts?: { arabicAsEntities?: boolean },
@@ -432,15 +391,6 @@ async function buildStatementPdfHtml(
     String(v ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
     );
-  // Convert Arabic/RTL chars to HTML numeric entities so html2canvas rasterises
-  // them from raw code points (avoids broken shaping in the WhatsApp PDF path).
-  const toEntities = (s: string) =>
-    s.replace(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g, (ch) =>
-      `&#x${ch.charCodeAt(0).toString(16).toUpperCase()};`,
-    );
-  const companyNameHtml = opts?.arabicAsEntities
-    ? toEntities(esc(companyName))
-    : esc(companyName);
   const summaryHtml =
     data.summary && data.summary.length
       ? `<div class="summary">${data.summary
@@ -493,9 +443,7 @@ tfoot td{font-weight:700;background:#fffaf0}
 </style></head><body>
 <div class="page">
 <div class="header">
-  ${branding.logoUrl ? `<img class="logo" src="${esc(branding.logoUrl)}" alt="" />` : ""}
   <div class="meta">
-    <div class="co-name" style="font-family:'Cairo',Arial,sans-serif;direction:rtl;unicode-bidi:embed;text-align:right;">${companyNameHtml}</div>
     <div class="report-title">${esc(data.title)}</div>
     <div class="meta-line">${data.subtitle ? esc(data.subtitle) + " • " : ""}تاريخ التصدير: ${esc(todayLabel())}</div>
   </div>
@@ -509,7 +457,6 @@ ${summaryHtml}
         `<tr>${data.columns.map((c) => `<td style="text-align:center;vertical-align:middle;">${esc(pdfCellValue(r, c.key))}</td>`).join("")}</tr>`,
     )
     .join("")}</tbody></table></div>
-<div class="foot">${esc(companyName)} • تم التوليد آليًا</div>
 </div>
 </body></html>`;
   return { html, landscape: useLandscape };
