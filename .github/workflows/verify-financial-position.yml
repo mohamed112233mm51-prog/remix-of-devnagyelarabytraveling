@@ -1,0 +1,42 @@
+name: Verify financial position
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/verify-financial-position.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+      - name: Restore generated files and remove verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/routeTree.gen.ts || true
+          unexpected="$(git diff --name-only | grep -v '^\.github/workflows/verify-financial-position\.yml$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected build changes:"
+            echo "$unexpected"
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/verify-financial-position.yml
+          git commit -m 'chore: remove financial position verifier'
+          git push origin devo
