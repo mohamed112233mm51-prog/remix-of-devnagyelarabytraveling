@@ -11,6 +11,7 @@ import {
   tripValue,
   txnTotalPaid,
   txnCollectedAmount,
+  refetchLiveTables,
   useLive,
   type UsdTreasuryTransaction,
 } from "@/lib/db";
@@ -26,7 +27,7 @@ import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatem
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCashBoxOpeningBalance } from "@/lib/openingBalance";
-import { postMovement } from "@/lib/financialEngine";
+import { checkOutflowAllowed, postCashBoxTransfer, postMovement } from "@/lib/financialEngine";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import {
@@ -1601,10 +1602,16 @@ function TreasuriesReport() {
 
   const [editBox, setEditBox] = useState<CashBoxRow | null>(null);
   const [reconcileBox, setReconcileBox] = useState<CashBoxRow | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">🏦 تقرير الخزائن</div></div>
+      <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div className="card-title">🏦 تقرير الخزائن</div>
+        <button type="button" className="btn btn-gold" onClick={() => setTransferOpen(true)} disabled={active.length < 2}>
+          ⇄ تحويل بين الخزائن
+        </button>
+      </div>
       <div className="card-body">
         <KpiRow items={[
           ...totals.map((t) => ({
@@ -1645,6 +1652,7 @@ function TreasuriesReport() {
         </div>
         {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}
         {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}
+        {transferOpen && <CashBoxTransferModal boxes={active} onClose={() => setTransferOpen(false)} />}
       </div>
     </div>
   );
@@ -1688,6 +1696,120 @@ function CashBoxOpeningModal({ box, onClose }: { box: CashBoxRow; onClose: () =>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
           <button type="button" className="btn btn-gold" onClick={save} disabled={saving}>💾 حفظ</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose: () => void }) {
+  const supportedBoxes = useMemo(
+    () => boxes.filter((box) => box.is_active && ["EGP", "USD", "LYD"].includes(String(box.currency || "").toUpperCase())),
+    [boxes],
+  );
+  const cashDefault = supportedBoxes.find((box) => /نقد|cash/i.test(box.name));
+  const instaDefault = supportedBoxes.find((box) => /انستا|insta/i.test(box.name) && box.id !== cashDefault?.id);
+  const [fromId, setFromId] = useState(cashDefault?.id || supportedBoxes[0]?.id || "");
+  const [toId, setToId] = useState(instaDefault?.id || supportedBoxes.find((box) => box.id !== (cashDefault?.id || supportedBoxes[0]?.id))?.id || "");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const fromBox = supportedBoxes.find((box) => box.id === fromId) || null;
+  const destinationOptions = supportedBoxes.filter(
+    (box) => box.id !== fromId && (!fromBox || box.currency === fromBox.currency),
+  );
+  const toBox = destinationOptions.find((box) => box.id === toId) || null;
+  const amountNum = Number(amount);
+  const validAmount = Number.isFinite(amountNum) && amountNum > 0;
+
+  useEffect(() => {
+    if (!fromBox) return;
+    if (toBox) return;
+    setToId(destinationOptions[0]?.id || "");
+  }, [fromBox, toBox, destinationOptions]);
+
+  const swap = () => {
+    if (!fromBox || !toBox) return;
+    setFromId(toBox.id);
+    setToId(fromBox.id);
+  };
+
+  const save = async () => {
+    if (!fromBox || !toBox) { toast.error("اختر الخزينة المحول منها والخزينة المحول إليها"); return; }
+    if (fromBox.id === toBox.id) { toast.error("لا يمكن التحويل إلى نفس الخزينة"); return; }
+    if (fromBox.currency !== toBox.currency) { toast.error("التحويل المباشر يجب أن يكون بين خزائن بنفس العملة"); return; }
+    if (!validAmount) { toast.error("أدخل مبلغ تحويل صحيح أكبر من صفر"); return; }
+
+    setSaving(true);
+    try {
+      const outflowError = await checkOutflowAllowed(fromBox.id, amountNum, fromBox.name);
+      if (outflowError) { toast.error(outflowError); return; }
+
+      const method = `تحويل بين الخزائن: ${fromBox.name} ← ${toBox.name}`;
+      const result = await postCashBoxTransfer({
+        fromCashBoxId: fromBox.id,
+        toCashBoxId: toBox.id,
+        amount: amountNum,
+        currency: fromBox.currency as "EGP" | "USD" | "LYD",
+        date: new Date().toISOString().slice(0, 10),
+        method,
+      });
+      if (!result.ok) throw new Error(result.error || "فشل التحويل بين الخزائن");
+      await refetchLiveTables(["cash_boxes", "payment_splits"]);
+      toast.success(`تم تحويل ${fmtNum(amountNum)} ${CURRENCY_LABEL[fromBox.currency] || fromBox.currency} من ${fromBox.name} إلى ${toBox.name}`);
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل التحويل بين الخزائن");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 560, width: "100%", margin: 0 }}>
+        <div className="card-header"><div className="card-title">⇄ تحويل بين خزائن الشركة</div></div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label>من خزينة *</label>
+            <select value={fromId} onChange={(e) => setFromId(e.target.value)}>
+              {supportedBoxes.map((box) => (
+                <option key={box.id} value={box.id}>{box.name} — {fmtNum(Number(box.balance || 0))} {box.currency}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>إلى خزينة *</label>
+            <select value={toId} onChange={(e) => setToId(e.target.value)} disabled={!fromBox || destinationOptions.length === 0}>
+              {destinationOptions.map((box) => (
+                <option key={box.id} value={box.id}>{box.name} — {fmtNum(Number(box.balance || 0))} {box.currency}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group full" style={{ display: "flex", justifyContent: "center" }}>
+            <button type="button" className="action-btn" onClick={swap} disabled={!fromBox || !toBox || saving}>⇅ عكس اتجاه التحويل</button>
+          </div>
+          <div className="form-group full">
+            <label>المبلغ *</label>
+            <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          {fromBox && toBox && (
+            <div className="form-group full">
+              <div className="card" style={{ margin: 0, padding: 10, background: "var(--surface, #f8f9fb)" }}>
+                <div><strong>الخزينة المصدر:</strong> {fromBox.name} — الرصيد الحالي {fmtNum(Number(fromBox.balance || 0))} {fromBox.currency}</div>
+                <div><strong>الخزينة المستلمة:</strong> {toBox.name} — الرصيد الحالي {fmtNum(Number(toBox.balance || 0))} {toBox.currency}</div>
+                {validAmount && <div><strong>المبلغ:</strong> {fmtNum(amountNum)} {fromBox.currency}</div>}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button type="button" className="btn btn-gold" onClick={save} disabled={saving || !fromBox || !toBox || !validAmount}>
+            {saving ? "جارٍ التحويل..." : "⇄ تنفيذ التحويل"}
+          </button>
         </div>
       </div>
     </div>,

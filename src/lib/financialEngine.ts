@@ -242,7 +242,8 @@ export async function postMovement(
 }
 
 /**
- * تحويل بين خزينتين → صفّان في payment_splits (out + in) بنفس transaction_id.
+ * تحويل بين خزينتين → صفّان في payment_splits (out + in) بنفس source_id.
+ * source_id هنا مرجع داخلي للتحويل وليس FK، لأن transaction_id مرتبط بجدول transactions.
  */
 export async function postCashBoxTransfer(args: {
   fromCashBoxId: string;
@@ -254,12 +255,17 @@ export async function postCashBoxTransfer(args: {
   method?: string;
 }): Promise<PostMovementResult> {
   const method = args.method || "تحويل بين الخزائن";
+  const transferRef = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return postMovement({
     partyType: "treasury",
     partyId: null,
     kind: "transfer",
     date: args.date,
     note: args.note,
+    sourceTable: "cash_box_transfer",
+    sourceId: transferRef,
     splits: [
       {
         method,
