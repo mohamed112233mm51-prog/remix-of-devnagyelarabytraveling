@@ -180,6 +180,21 @@ function mergeSignedBalances(
   }
 }
 
+function groupById<T>(
+  rows: readonly T[],
+  idOf: (row: T) => string | null | undefined,
+): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = idOf(row);
+    if (!id) continue;
+    const list = grouped.get(id) || [];
+    list.push(row);
+    grouped.set(id, list);
+  }
+  return grouped;
+}
+
 function subtractMaps(a: CurrencyMap, b: CurrencyMap): CurrencyMap {
   const out = a.clone();
   for (const { currency, amount } of b.entries({ includeZero: true })) out.add(currency, -amount);
@@ -205,17 +220,25 @@ export function useFinancialPosition(): FinancialPosition {
     ];
     const [agentsSection, companiesSection, merchantsSection, suppliersSection] = sections;
 
-    // الوكلاء: موجب كشف الوكيل = حق للشركة عند الوكيل.
-    const agentRows = transactions.filter((row) => Boolean(row.agent_id));
+    // مهم: نحدد المدين/الدائن لكل جهة منفردة أولاً، ثم نجمع الأقسام.
+    // لا نعمل Netting بين وكيل مدين ووكيل آخر دائن قبل تصنيفهما.
+
+    // الوكلاء: موجب كشف الوكيل = حق للشركة عند هذا الوكيل.
     const agentCurrencyMap = resolveSplitCurrencyByRef(paymentSplits as any, "transactions");
-    mergeSignedBalances(agentsSection, summarizeAgent(agentRows, agentCurrencyMap).balance, 1);
+    const agentGroups = groupById(transactions, (row) => row.agent_id);
+    for (const rows of agentGroups.values()) {
+      mergeSignedBalances(agentsSection, summarizeAgent(rows, agentCurrencyMap).balance, 1);
+    }
 
-    // الشركات الصادرة: موجب كشف الشركة = متبقي للشركة الصادرة (التزام علينا)، لذلك نعكس الإشارة.
-    const companyRows = companyTransactions.filter((row) => Boolean((row as any).company_id));
+    // الشركات الصادرة: موجب كشف الشركة = متبقي لهذه الشركة الصادرة (التزام علينا)، لذلك نعكس الإشارة.
     const companyCurrencyMap = resolveSplitCurrencyByRef(paymentSplits as any, "company_transactions");
-    mergeSignedBalances(companiesSection, summarizeCompany(companyRows, companyCurrencyMap).balance, -1);
+    const companyGroups = groupById(companyTransactions, (row) => (row as any).company_id);
+    for (const rows of companyGroups.values()) {
+      mergeSignedBalances(companiesSection, summarizeCompany(rows, companyCurrencyMap).balance, -1);
+    }
 
-    // تجار الكاش: موجب كشف التاجر = رصيد لدى النظام لصالح التاجر (التزام علينا)، لذلك نعكس الإشارة.
+    // تجار الكاش: computeMerchantAggregates يعيد صافي كل تاجر منفرداً.
+    // موجب كشف التاجر = رصيد لدى النظام لصالح هذا التاجر (التزام علينا)، لذلك نعكس الإشارة.
     const merchantAggregates = computeMerchantAggregates({
       txns: transactions,
       companyTxns: companyTransactions,
@@ -227,10 +250,22 @@ export function useFinancialPosition(): FinancialPosition {
       mergeSignedBalances(merchantsSection, aggregate.balance, -1);
     }
 
-    // مورد العملة: currencySupplierDelta موجب = المورد مدين للنظام، سالب = النظام مدين للمورد.
+    // مورّد العملة: نكوّن صافي كل مورد/عملة أولاً ثم نحدد هل هو أصل أم التزام.
+    // currencySupplierDelta موجب = المورد مدين للنظام، سالب = النظام مدين للمورد.
+    const supplierBalances = new Map<string, CurrencyMap>();
     for (const row of buildCurrencySupplierLedgerRows(supplierTransactions as CurrencySupplierTx[])) {
+      const supplierId = String((row as any).supplier_id || "").trim();
+      if (!supplierId) continue;
       const { currency, delta } = currencySupplierDelta(row);
-      addSigned(suppliersSection, currency, delta);
+      let map = supplierBalances.get(supplierId);
+      if (!map) {
+        map = new CurrencyMap();
+        supplierBalances.set(supplierId, map);
+      }
+      map.add(currency, delta);
+    }
+    for (const balance of supplierBalances.values()) {
+      mergeSignedBalances(suppliersSection, balance, 1);
     }
 
     const treasury = new CurrencyMap();
