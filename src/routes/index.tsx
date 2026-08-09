@@ -37,6 +37,7 @@ import {
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
+import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
 import { usePerm } from "@/hooks/usePerm";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { computeServiceExecutionDistribution } from "@/lib/serviceDistribution";
@@ -631,6 +632,8 @@ function Dashboard() {
           <AuditRow label="إجمالي أرصدة الخزائن (ج.م)" value={`${fmtNum(treasury.totalEgp)} ج.م`} tone="success" />
         </div>
       </div>
+
+      <FinancialPositionPanel variant="dashboard" />
 
       {/* === System-wide KPIs === */}
       <div className="erp-section-title">المؤشرات الرئيسية</div>

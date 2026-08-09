@@ -51,6 +51,7 @@ const NAV: { label: string; items: Item[] }[] = [
       { to: "/companies", icon: Building2, label: "حسابات الشركات الصادرة", section: "الحسابات المالية", permKey: "companies" },
       { to: "/merchants", icon: HandCoins, label: "حسابات تاجر الكاش", section: "الحسابات المالية", permKey: "merchants" },
       { to: "/currency-suppliers", icon: Coins, label: "حسابات موردي العملة", section: "الحسابات المالية", permKey: "currency_suppliers" },
+      { to: "/investors", icon: Landmark, label: "حساب المالك / المستثمرين", section: "الحسابات المالية", permKey: "investors" },
       
     ],
   },
@@ -88,6 +89,7 @@ const TITLES: Record<string, ReactNode> = {
   "/companies": (<>حسابات <span>الشركات الصادرة</span></>),
   "/merchants": (<>حسابات <span>تاجر الكاش</span></>),
   "/currency-suppliers": (<>حسابات <span>موردي العملة</span></>),
+  "/investors": (<>حساب <span>المالك / المستثمرين</span></>),
   
   "/expenses": (<>إدارة <span>المصروفات</span></>),
   "/reports": (<>التقارير <span>والإحصائيات</span></>),

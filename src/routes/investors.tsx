@@ -1,10 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtDL, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
-import { useInvestorsSummary, useInvestorsTotals, summarizeInvestor } from "@/lib/financialSummary";
+import { fmtCurrency, refetchLiveTables, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
+import { formatCurrencyMap } from "@/lib/financialSummary";
+import { CurrencyLines } from "@/components/CurrencyLines";
+import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
+import { buildInvestorCapitalSummary, investorTransactionCurrency, type FinancialPositionSplit } from "@/hooks/useFinancialPosition";
+import { checkOutflowAllowed, postMovement } from "@/lib/financialEngine";
+import { usePerm } from "@/hooks/usePerm";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
 import { useRegisterStatementCapture } from "@/lib/statementCapture";
@@ -17,17 +22,23 @@ export const Route = createFileRoute("/investors")({
   component: InvestorsPage,
 });
 
-const PAYMENT_METHODS = ["انستا", "نقدي", "كاش"] as const;
 const TXN_TYPES = ["صرف نقدية", "توريد نقدية"] as const;
+
+type OwnerCashBox = { id: string; name: string; currency: string; balance: number | string | null; is_active: boolean };
 
 type Tab = "list" | "add" | "history" | "statement" | "withdraw" | "deposit";
 
 function InvestorsPage() {
+  const perm = usePerm("investors");
   const { rows: investors } = useLive<Investor>("investors");
   const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
+  const { rows: paymentSplits } = useLive<FinancialPositionSplit>("payment_splits");
   const [tab, setTab] = useState<Tab>("history");
 
-  const { deposit: totalDeposit, withdraw: totalWithdraw, balance } = useInvestorsTotals();
+  const capitalTotals = useMemo(
+    () => buildInvestorCapitalSummary(txns, paymentSplits, { includeLegacy: true }),
+    [txns, paymentSplits],
+  );
 
   const investorName = (id: string) => investors.find((i) => i.id === id)?.investor_name || "—";
 
@@ -39,33 +50,37 @@ function InvestorsPage() {
           <div className="breadcrumb-row">
             <span>الحسابات المالية</span>
             <span>›</span>
-            <span className="crumb-current">حسابات المستثمرين</span>
+            <span className="crumb-current">حساب المالك / المستثمرين</span>
           </div>
-          <h1 className="page-h1"><Briefcase size={22} strokeWidth={2.2} /> حسابات المستثمرين</h1>
-          <div className="page-sub">إدارة الإيداعات والسحوبات وأرصدة المستثمرين</div>
+          <h1 className="page-h1"><Briefcase size={22} strokeWidth={2.2} /> حساب المالك / المستثمرين</h1>
+          <div className="page-sub">فصل تمويل المالك عن أرباح التشغيل وربط التوريد والسحب بالخزائن الفعلية</div>
         </div>
-        <button className="page-head-cta" onClick={() => setTab("add")}>
-          <UserPlus size={16} strokeWidth={2.4} /> إضافة مستثمر
-        </button>
+        {perm.create && (
+          <button className="page-head-cta" onClick={() => setTab("add")}>
+            <UserPlus size={16} strokeWidth={2.4} /> إضافة مالك / مستثمر
+          </button>
+        )}
       </div>
       <div className="account-summary kpi-rich kpi-investors">
         <div className="sum-box green">
           <span className="kpi-icon"><ArrowDownCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">إجمالي الإيداعات</div><div className="val">{fmtDL(totalDeposit)}</div></div>
+          <div className="kpi-text"><div className="label">إجمالي التمويل / التوريدات</div><div className="val"><CurrencyLines map={capitalTotals.deposit} /></div></div>
         </div>
         <div className="sum-box red">
           <span className="kpi-icon"><ArrowUpCircle size={20} strokeWidth={2} /></span>
-          <div className="kpi-text"><div className="label">إجمالي السحوبات</div><div className="val">{fmtDL(totalWithdraw)}</div></div>
+          <div className="kpi-text"><div className="label">إجمالي السحوبات</div><div className="val"><CurrencyLines map={capitalTotals.withdraw} /></div></div>
         </div>
         <div className="sum-box hero">
           <span className="kpi-icon"><Wallet size={22} strokeWidth={2} /></span>
           <div className="kpi-text">
-            <div className="label">صافي الرصيد</div>
-            <div className="val">{fmtDL(balance)}</div>
-            <div className="kpi-sub">الرصيد الصافي للمستثمرين</div>
+            <div className="label">صافي حساب المالك / المستثمرين</div>
+            <div className="val"><CurrencyLines map={capitalTotals.balance} /></div>
+            <div className="kpi-sub">التوريدات ناقص السحوبات — كل عملة مستقلة</div>
           </div>
         </div>
       </div>
+
+      <FinancialPositionPanel variant="full" />
 
       <div className="action-toolbar">
         <div className={`tool-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>
@@ -77,17 +92,21 @@ function InvestorsPage() {
         <div className={`tool-tab ${tab === "statement" ? "active" : ""}`} onClick={() => setTab("statement")}>
           <FileText size={15} strokeWidth={2} /> <span>كشف حساب</span>
         </div>
-        <div className={`tool-tab ${tab === "deposit" ? "active" : ""}`} onClick={() => setTab("deposit")}>
-          <ArrowDownLeft size={15} strokeWidth={2} /> <span>توريد نقدية</span>
-        </div>
-        <div className={`tool-tab ${tab === "withdraw" ? "active" : ""}`} onClick={() => setTab("withdraw")}>
-          <ArrowUpRight size={15} strokeWidth={2} /> <span>صرف نقدية</span>
-        </div>
+        {perm.create && (
+          <div className={`tool-tab ${tab === "deposit" ? "active" : ""}`} onClick={() => setTab("deposit")}>
+            <ArrowDownLeft size={15} strokeWidth={2} /> <span>توريد تمويل</span>
+          </div>
+        )}
+        {perm.create && (
+          <div className={`tool-tab ${tab === "withdraw" ? "active" : ""}`} onClick={() => setTab("withdraw")}>
+            <ArrowUpRight size={15} strokeWidth={2} /> <span>سحب من التمويل</span>
+          </div>
+        )}
       </div>
 
-      {tab === "list" && <InvestorsListTab investors={investors} txns={txns} />}
+      {tab === "list" && <InvestorsListTab investors={investors} txns={txns} splits={paymentSplits} canEdit={perm.edit} />}
 
-      {tab === "add" && (
+      {tab === "add" && perm.create && (
         <>
           <InvestorForm />
           <div className="card" style={{ marginTop: 16 }}>
@@ -115,10 +134,10 @@ function InvestorsPage() {
         </>
       )}
 
-      {tab === "history" && <HistoryTab txns={txns} investorName={investorName} investors={investors} />}
-      {tab === "statement" && <StatementTab txns={txns} investors={investors} />}
-      {tab === "withdraw" && <TxnForm investors={investors} kind="صرف نقدية" methodLabel="وسيلة الصرف" title="⬆️ صرف نقدية" />}
-      {tab === "deposit" && <TxnForm investors={investors} kind="توريد نقدية" methodLabel="وسيلة التوريد" title="⬇️ توريد نقدية" />}
+      {tab === "history" && <HistoryTab txns={txns} investorName={investorName} investors={investors} splits={paymentSplits} />}
+      {tab === "statement" && <StatementTab txns={txns} investors={investors} splits={paymentSplits} canExport={perm.export} />}
+      {tab === "withdraw" && perm.create && <TxnForm investors={investors} kind="صرف نقدية" methodLabel="الخزينة" title="⬆️ سحب من تمويل المالك / المستثمر" />}
+      {tab === "deposit" && perm.create && <TxnForm investors={investors} kind="توريد نقدية" methodLabel="الخزينة" title="⬇️ توريد تمويل المالك / المستثمر" />}
     </div>
   );
 }
@@ -150,53 +169,122 @@ function InvestorForm() {
 }
 
 function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[]; kind: typeof TXN_TYPES[number]; methodLabel: string; title: string }) {
+  const { rows: boxes } = useLive<OwnerCashBox>("cash_boxes");
+  const activeBoxes = useMemo(
+    () => boxes.filter((box) => box.is_active !== false && ["EGP", "USD", "LYD"].includes(String(box.currency || "").toUpperCase())),
+    [boxes],
+  );
   const [form, setForm] = useState({
     investor_id: "",
     date: new Date().toISOString().slice(0, 10),
     amount: "",
-    payment_method: "",
+    cash_box_id: "",
     note: "",
     statement: "",
   });
+  const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (!form.cash_box_id && activeBoxes[0]?.id) set("cash_box_id", activeBoxes[0].id);
+  }, [activeBoxes, form.cash_box_id]);
+
+  const selectedBox = activeBoxes.find((box) => box.id === form.cash_box_id) || null;
+
   const save = async () => {
-    if (!form.investor_id) return toast.error("اختر المستثمر");
-    if (!Number(form.amount)) return toast.error("أدخل المبلغ");
-    if (!form.payment_method) return toast.error(`اختر ${methodLabel}`);
-    const { error } = await supabase.from("investor_transactions").insert({
-      investor_id: form.investor_id,
-      transaction_type: kind,
-      date: form.date,
-      amount: Math.round(Number(form.amount || 0)),
-      payment_method: form.payment_method,
-      note: form.note.trim() ? form.note.trim() : null,
-      statement: form.statement.trim() ? form.statement.trim() : null,
-    } as any);
-    if (error) return toast.error(error.message);
-    setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payment_method: "", note: "", statement: "" });
+    if (!form.investor_id) return toast.error("اختر المالك / المستثمر");
+    const amount = Math.round(Number(form.amount || 0));
+    if (amount <= 0) return toast.error("أدخل المبلغ");
+    if (!selectedBox) return toast.error(`اختر ${methodLabel}`);
+
+    setSaving(true);
+    let parentId: string | null = null;
+    try {
+      if (kind === "صرف نقدية") {
+        const outflowError = await checkOutflowAllowed(selectedBox.id, amount, selectedBox.name);
+        if (outflowError) { toast.error(outflowError); return; }
+      }
+
+      const { data: parent, error: parentError } = await supabase
+        .from("investor_transactions")
+        .insert({
+          investor_id: form.investor_id,
+          transaction_type: kind,
+          date: form.date,
+          amount,
+          payment_method: selectedBox.name,
+          note: form.note.trim() ? form.note.trim() : null,
+          statement: form.statement.trim() ? form.statement.trim() : null,
+        } as any)
+        .select("id")
+        .single();
+      if (parentError || !parent) throw new Error(parentError?.message || "تعذر حفظ حركة المالك");
+      parentId = parent.id;
+
+      const movement = await postMovement({
+        partyType: "investor",
+        partyId: form.investor_id,
+        kind: kind === "توريد نقدية" ? "receipt" : "payment",
+        date: form.date,
+        note: form.note.trim() || undefined,
+        statement: form.statement.trim() || undefined,
+        sourceTable: "investor_transactions",
+        sourceId: parent.id,
+        splits: [{
+          method: selectedBox.name,
+          currency: String(selectedBox.currency).toUpperCase() as "EGP" | "USD" | "LYD",
+          cashBoxId: selectedBox.id,
+          amount,
+          direction: kind === "توريد نقدية" ? "in" : "out",
+        }],
+      });
+      if (!movement.ok) throw new Error(movement.error || "فشل ربط حركة المالك بالخزينة");
+
+      await refetchLiveTables(["investor_transactions", "payment_splits", "cash_boxes"]);
+      toast.success(kind === "توريد نقدية" ? "تم توريد التمويل إلى الخزينة" : "تم سحب المبلغ من الخزينة");
+      setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", cash_box_id: activeBoxes[0]?.id || "", note: "", statement: "" });
+    } catch (error: any) {
+      if (parentId) await supabase.from("investor_transactions").delete().eq("id", parentId);
+      toast.error(error?.message || "فشل حفظ حركة المالك / المستثمر");
+    } finally {
+      setSaving(false);
+    }
   };
+
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">{title}</div></div>
       <div className="form-grid">
-        <div className="form-group"><label>المستثمر</label>
+        <div className="form-group"><label>المالك / المستثمر</label>
           <SearchableSelect value={form.investor_id} onChange={(v) => set("investor_id", v)} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="اختر..." />
         </div>
         <div className="form-group"><label>التاريخ</label><DateInput value={form.date} onChange={(iso) => set("date", iso)} defaultToday /></div>
         <div className="form-group"><label>المبلغ</label><NumberInput value={Number(form.amount) || 0} onChange={(n) => set("amount", n === 0 ? "" : String(n))} min={0} /></div>
         <div className="form-group"><label>{methodLabel}</label>
-          <SearchableSelect value={form.payment_method} onChange={(v) => set("payment_method", v)} options={PAYMENT_METHODS as unknown as string[]} placeholder="اختر..." />
+          <select value={form.cash_box_id} onChange={(e) => set("cash_box_id", e.target.value)}>
+            <option value="">اختر الخزينة...</option>
+            {activeBoxes.map((box) => (
+              <option key={box.id} value={box.id}>{box.name} — {fmtCurrency(Number(box.balance || 0), box.currency)}</option>
+            ))}
+          </select>
         </div>
+        {selectedBox && (
+          <div className="form-group full">
+            <div style={{ padding: 10, borderRadius: 9, background: "#F8FAFC", color: "#475569", fontSize: 12 }}>
+              العملة: {selectedBox.currency} — الرصيد الحالي: {fmtCurrency(Number(selectedBox.balance || 0), selectedBox.currency)}. هذه الحركة ستؤثر على الخزينة فقط ولن تدخل في صافي الأرباح.
+            </div>
+          </div>
+        )}
         <div className="form-group full"><label>البيان</label><input value={form.statement} onChange={(e) => set("statement", e.target.value)} /></div>
         <div className="form-group full"><label>ملاحظات</label><input value={form.note} onChange={(e) => set("note", e.target.value)} /></div>
       </div>
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "جارٍ الحفظ..." : "💾 حفظ الحركة"}</button></div>
     </div>
   );
 }
 
 
-function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransaction[]; investorName: (id: string) => string; investors: Investor[] }) {
+function HistoryTab({ txns, investorName, investors, splits }: { txns: InvestorTransaction[]; investorName: (id: string) => string; investors: Investor[]; splits: FinancialPositionSplit[] }) {
   const [investorId, setInvestorId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -207,36 +295,37 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
   );
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">📜 سجل الحركات المالية للمستثمرين</div></div>
+      <div className="card-header"><div className="card-title">📜 سجل حركات المالك / المستثمرين</div></div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="كل المستثمرين" />
+          <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="كل المالكين / المستثمرين" />
           <DateInput value={from} onChange={setFrom} placeholder="من" />
           <DateInput value={to} onChange={setTo} placeholder="إلى" />
           <button className="action-btn" onClick={() => { setInvestorId(""); setFrom(""); setTo(""); }}>إعادة ضبط</button>
         </div>
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>البيان</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>المالك / المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>العملة</th><th>الخزينة</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={8}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية للمستثمرين بعد</div></div></td></tr>
+                <tr><td colSpan={9}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية بعد</div></div></td></tr>
               ) : filtered.map((t, i) => {
                 const isDep = t.transaction_type === "توريد نقدية";
+                const currency = investorTransactionCurrency(t.id, splits);
                 return (
                   <tr key={t.id}>
                     <td data-label="#">{i + 1}</td>
                     <td data-label="التاريخ">{t.date}</td>
-                    <td className="bold" data-label="المستثمر">{investorName(t.investor_id)}</td>
+                    <td className="bold" data-label="المالك / المستثمر">{investorName(t.investor_id)}</td>
                     <td data-label="نوع الحركة">{t.transaction_type}</td>
-                    <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
-                    <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
+                    <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtCurrency(Number(t.amount || 0), currency)}</td>
+                    <td data-label="العملة">{currency}</td>
+                    <td data-label="الخزينة">{t.payment_method || "حركة قديمة غير مربوطة"}</td>
                     <td data-label="البيان">{(t as any).statement || ""}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
                 );
               })}
-
             </tbody>
           </table>
         </div>
@@ -245,50 +334,52 @@ function HistoryTab({ txns, investorName, investors }: { txns: InvestorTransacti
   );
 }
 
-function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; investors: Investor[] }) {
+function StatementTab({ txns, investors, splits, canExport }: { txns: InvestorTransaction[]; investors: Investor[]; splits: FinancialPositionSplit[]; canExport: boolean }) {
   const [investorId, setInvestorId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
   const investor = investors.find((i) => i.id === investorId);
-  const filtered = txns.filter((t) =>
+  const filtered = useMemo(() => txns.filter((t) =>
     (!investorId || t.investor_id === investorId) &&
     (!from || t.date >= from) &&
     (!to || t.date <= to)
+  ), [txns, investorId, from, to]);
+  const totals = useMemo(
+    () => buildInvestorCapitalSummary(filtered, splits, { includeLegacy: true }),
+    [filtered, splits],
   );
-  const { deposit: totalDeposit, withdraw: totalWithdraw, balance } = useMemo(
-    () => summarizeInvestor(filtered),
-    [filtered],
-  );
-
 
   const buildData = () => ({
-    title: `كشف حساب المستثمر${investor?.investor_name ? ` — ${investor.investor_name}` : ""}`,
-    subtitle: investor ? investor.investor_name : "كل المستثمرين",
-    fileName: buildArabicFileName("كشف حساب المستثمر", investor?.investor_name),
+    title: `كشف حساب المالك / المستثمر${investor?.investor_name ? ` — ${investor.investor_name}` : ""}`,
+    subtitle: investor ? investor.investor_name : "كل المالكين / المستثمرين",
+    fileName: buildArabicFileName("كشف حساب المالك المستثمر", investor?.investor_name),
     summary: [
-      { label: "إجمالي التوريد", value: fmtDL(totalDeposit) },
-      { label: "إجمالي الصرف", value: fmtDL(totalWithdraw) },
-      { label: "الرصيد", value: fmtDL(balance) },
+      { label: "إجمالي التوريد", value: formatCurrencyMap(totals.deposit) },
+      { label: "إجمالي الصرف", value: formatCurrencyMap(totals.withdraw) },
+      { label: "الرصيد", value: formatCurrencyMap(totals.balance) },
     ],
     columns: [
       { header: "#", key: "n" },
       { header: "التاريخ", key: "date" },
       { header: "نوع الحركة", key: "type" },
       { header: "المبلغ", key: "amount" },
-      { header: "وسيلة الدفع", key: "method" },
+      { header: "العملة", key: "currency" },
+      { header: "الخزينة", key: "method" },
       { header: "البيان", key: "statement" },
       { header: "ملاحظات", key: "note" },
     ],
     rows: filtered.map((t, i) => {
       const amount = Number(t.amount || 0);
+      const currency = investorTransactionCurrency(t.id, splits);
       return {
         n: i + 1,
         date: t.date,
         type: t.transaction_type,
-        amount: fmtDL(amount),
+        amount: fmtCurrency(amount, currency),
         amount__excel: amount,
-        method: t.payment_method || "—",
+        currency,
+        method: t.payment_method || "حركة قديمة غير مربوطة",
         statement: (t as any).statement || "",
         note: t.note || "—",
       };
@@ -297,18 +388,18 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
 
   useRegisterStatementCapture(
     () => ({ data: buildData(), whatsapp: (investor as any)?.whatsapp || null, contextId: investor?.id || null }),
-    [investor, from, to, filtered.length, totalDeposit, totalWithdraw],
+    [investor, from, to, filtered.length, splits.length, totals.linkedTransactionCount, totals.legacyTransactionCount],
   );
 
   return (
     <div className="card">
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <div className="card-title">🧾 كشف حساب المستثمر</div>
-        <ExportButton disabled={filtered.length === 0} getData={buildData} whatsapp={{ phone: (investor as any)?.whatsapp || (investor as any)?.phone || null, recipientName: (investor as any)?.investor_name || null }} />
+        <div className="card-title">🧾 كشف حساب المالك / المستثمر</div>
+        {canExport && <ExportButton disabled={filtered.length === 0} getData={buildData} whatsapp={{ phone: (investor as any)?.whatsapp || (investor as any)?.phone || null, recipientName: (investor as any)?.investor_name || null }} />}
       </div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 12 }}>
-          <div className="form-group"><label>المستثمر</label>
+          <div className="form-group"><label>المالك / المستثمر</label>
             <SearchableSelect value={investorId} onChange={setInvestorId} options={investors.map((i) => ({ value: i.id, label: i.investor_name }))} placeholder="اختر..." />
           </div>
           <div className="form-group"><label>التاريخ من</label><DateInput value={from} onChange={setFrom} /></div>
@@ -317,30 +408,30 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
 
         {investor && (
           <div className="account-summary" style={{ marginBottom: 12 }}>
-            <div className="sum-box"><div className="label">المستثمر</div><div className="val">{investor.investor_name}</div></div>
-            <div className="sum-box"><div className="label">الهاتف</div><div className="val">{investor.phone || "—"}</div></div>
-            <div className="sum-box"><div className="label">الواتساب</div><div className="val">{investor.whatsapp || "—"}</div></div>
-            <div className="sum-box green"><div className="label">إجمالي التوريد</div><div className="val">{fmtDL(totalDeposit)}</div></div>
-            <div className="sum-box red"><div className="label">إجمالي الصرف</div><div className="val">{fmtDL(totalWithdraw)}</div></div>
-            <div className="sum-box gold"><div className="label">الرصيد</div><div className="val">{fmtDL(balance)}</div></div>
+            <div className="sum-box"><div className="label">المالك / المستثمر</div><div className="val">{investor.investor_name}</div></div>
+            <div className="sum-box green"><div className="label">إجمالي التوريد</div><div className="val"><CurrencyLines map={totals.deposit} /></div></div>
+            <div className="sum-box red"><div className="label">إجمالي الصرف</div><div className="val"><CurrencyLines map={totals.withdraw} /></div></div>
+            <div className="sum-box gold"><div className="label">الرصيد</div><div className="val"><CurrencyLines map={totals.balance} /></div></div>
           </div>
         )}
 
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>وسيلة الدفع</th><th>البيان</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>العملة</th><th>الخزينة</th><th>البيان</th><th>ملاحظات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7}><div className="empty"><div className="empty-icon">🧾</div><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
+                <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🧾</div><div className="empty-text">لا توجد حركات في الفترة المحددة</div></div></td></tr>
               ) : filtered.map((t, i) => {
                 const isDep = t.transaction_type === "توريد نقدية";
+                const currency = investorTransactionCurrency(t.id, splits);
                 return (
                   <tr key={t.id}>
                     <td data-label="#">{i + 1}</td>
                     <td data-label="التاريخ">{t.date}</td>
                     <td className="bold" data-label="نوع الحركة">{t.transaction_type}</td>
-                    <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtDL(Number(t.amount || 0))}</td>
-                    <td data-label="وسيلة الدفع">{t.payment_method || "—"}</td>
+                    <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtCurrency(Number(t.amount || 0), currency)}</td>
+                    <td data-label="العملة">{currency}</td>
+                    <td data-label="الخزينة">{t.payment_method || "حركة قديمة غير مربوطة"}</td>
                     <td data-label="البيان">{(t as any).statement || ""}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
                   </tr>
@@ -348,12 +439,10 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
               })}
               {filtered.length > 0 && (
                 <tr style={{ background: "#F8FAFC", fontWeight: 800 }}>
-                  <td colSpan={3} data-label="الإجمالي">الإجمالي</td>
-                  <td className="num-col" data-label="الرصيد" style={{ color: balance >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(balance)}</td>
-                  <td colSpan={3}></td>
+                  <td colSpan={3} data-label="الإجمالي">الرصيد</td>
+                  <td colSpan={5} data-label="الرصيد"><CurrencyLines map={totals.balance} /></td>
                 </tr>
               )}
-
             </tbody>
           </table>
         </div>
@@ -362,42 +451,49 @@ function StatementTab({ txns, investors }: { txns: InvestorTransaction[]; invest
   );
 }
 
-function InvestorsListTab({ investors, txns: _txns }: { investors: Investor[]; txns: InvestorTransaction[] }) {
+function InvestorsListTab({ investors, txns, splits, canEdit }: { investors: Investor[]; txns: InvestorTransaction[]; splits: FinancialPositionSplit[]; canEdit: boolean }) {
   const [edit, setEdit] = useState<Investor | null>(null);
-  const totals = useInvestorsSummary();
+  const totals = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildInvestorCapitalSummary>>();
+    for (const investor of investors) {
+      map.set(
+        investor.id,
+        buildInvestorCapitalSummary(txns.filter((t) => t.investor_id === investor.id), splits, { includeLegacy: true }),
+      );
+    }
+    return map;
+  }, [investors, txns, splits]);
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">🧑‍💼 قائمة المستثمرين</div></div>
+      <div className="card-header"><div className="card-title">🧑‍💼 قائمة المالكين / المستثمرين</div></div>
       <div className="card-body">
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>اسم المستثمر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي التوريد</th><th className="num-col">إجمالي الصرف</th><th className="num-col">الرصيد</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>المالك / المستثمر</th><th>الهاتف</th><th>الواتساب</th><th className="num-col">إجمالي التوريد</th><th className="num-col">إجمالي الصرف</th><th className="num-col">الرصيد</th><th>إجراءات</th></tr></thead>
             <tbody>
               {investors.length === 0 ? (
-                <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🧑‍💼</div><div className="empty-text">لا يوجد مستثمرين</div></div></td></tr>
+                <tr><td colSpan={8}><div className="empty"><div className="empty-icon">🧑‍💼</div><div className="empty-text">لا يوجد مالكون / مستثمرون</div></div></td></tr>
               ) : investors.map((inv, i) => {
-                const t = totals.get(inv.id) || { deposit: 0, withdraw: 0, balance: 0, count: 0 };
-                const bal = t.balance;
+                const t = totals.get(inv.id) || buildInvestorCapitalSummary([], [], { includeLegacy: true });
                 return (
                   <tr key={inv.id}>
                     <td data-label="#">{i + 1}</td>
-                    <td className="bold" data-label="اسم المستثمر">{inv.investor_name}</td>
+                    <td className="bold" data-label="المالك / المستثمر">{inv.investor_name}</td>
                     <td data-label="الهاتف">{inv.phone || "—"}</td>
                     <td data-label="الواتساب">{inv.whatsapp || "—"}</td>
-                    <td className="num-col" data-label="إجمالي التوريد" style={{ color: "#15803D", fontWeight: 700 }}>{fmtDL(t.deposit)}</td>
-                    <td className="num-col" data-label="إجمالي الصرف" style={{ color: "#B91C1C", fontWeight: 700 }}>{fmtDL(t.withdraw)}</td>
-                    <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800, color: bal >= 0 ? "#15803D" : "#B91C1C" }}>{fmtDL(bal)}</td>
-                    <td data-label="إجراءات"><button className="action-btn" onClick={() => setEdit(inv)}>✏️ تعديل</button></td>
+                    <td className="num-col" data-label="إجمالي التوريد" style={{ color: "#15803D", fontWeight: 700 }}><CurrencyLines map={t.deposit} /></td>
+                    <td className="num-col" data-label="إجمالي الصرف" style={{ color: "#B91C1C", fontWeight: 700 }}><CurrencyLines map={t.withdraw} /></td>
+                    <td className="num-col" data-label="الرصيد" style={{ fontWeight: 800 }}><CurrencyLines map={t.balance} /></td>
+                    <td data-label="إجراءات">{canEdit ? <button className="action-btn" onClick={() => setEdit(inv)}>✏️ تعديل</button> : "—"}</td>
                   </tr>
                 );
               })}
-
             </tbody>
           </table>
         </div>
       </div>
-      {edit && <EditInvestorModal investor={edit} onClose={() => setEdit(null)} />}
+      {edit && canEdit && <EditInvestorModal investor={edit} onClose={() => setEdit(null)} />}
     </div>
   );
 }

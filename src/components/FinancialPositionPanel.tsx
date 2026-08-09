@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Building2, HandCoins, Landmark, Scale, Users, WalletCards } from "lucide-react";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { useFinancialPosition } from "@/hooks/useFinancialPosition";
@@ -12,7 +13,7 @@ function DashboardCard({
 }: {
   label: string;
   map: import("@/lib/financialSummary").CurrencyMap;
-  icon: React.ReactNode;
+  icon: ReactNode;
   tone: "primary" | "navy" | "success" | "warning";
   sub?: string;
 }) {

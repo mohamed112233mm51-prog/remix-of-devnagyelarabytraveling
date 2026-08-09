@@ -37,6 +37,7 @@ export type PartyType =
   | "company"
   | "currency_supplier"
   | "merchant"
+  | "investor"
   | "expense"
   | "treasury";
 
@@ -108,6 +109,7 @@ const PARTY_TO_SOURCE_TABLE: Record<PartyType, string> = {
   company: "company_transactions",
   currency_supplier: "currency_supplier_transactions",
   merchant: "merchant_cash_collections",
+  investor: "investor_transactions",
   expense: "expenses",
   treasury: "cash_transfers",
 };
@@ -117,6 +119,7 @@ const PARTY_ID_COLUMN: Record<PartyType, string> = {
   company: "company_id",
   currency_supplier: "supplier_id",
   merchant: "merchant_id",
+  investor: "investor_id",
   expense: "id",
   treasury: "id",
 };
@@ -591,6 +594,7 @@ function defaultNoteFor(kind: MovementKind, party: PartyType): string {
     company: "الشركة",
     currency_supplier: "مورد العملة",
     merchant: "التاجر",
+    investor: "المالك / المستثمر",
     expense: "المصروف",
     treasury: "الخزينة",
   };

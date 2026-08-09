@@ -15,6 +15,7 @@ export const SECTION_KEYS = [
   "companies",
   "merchants",
   "currency_suppliers",
+  "investors",
   "expenses",
   "reports",
   "data_import",
@@ -45,6 +46,8 @@ export function sectionForFinancialTable(table: string): string | null {
       return "currency_suppliers";
     case "merchant_cash_collections":
       return "merchants";
+    case "investor_transactions":
+      return "investors";
     case "expense_deductions":
       return "expenses";
     case "usd_treasury_transactions":
@@ -107,6 +110,7 @@ export const ROUTE_PERM: Record<string, string | null> = {
   "/companies": "companies",
   "/merchants": "merchants",
   "/currency-suppliers": "currency_suppliers",
+  "/investors": "investors",
   "/expenses": "expenses",
   "/reports": "reports",
   "/data-import": "data_import",

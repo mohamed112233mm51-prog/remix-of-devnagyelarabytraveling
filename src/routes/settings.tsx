@@ -46,6 +46,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "companies",          label: "حسابات الشركات الصادرة",   route: "/companies" },
   { key: "merchants",          label: "حسابات تاجر الكاش",        route: "/merchants" },
   { key: "currency_suppliers", label: "حسابات موردي العملة",      route: "/currency-suppliers" },
+  { key: "investors",          label: "حساب المالك / المستثمرين",   route: "/investors" },
   
   { key: "expenses",           label: "المصروفات",                route: "/expenses" },
   
