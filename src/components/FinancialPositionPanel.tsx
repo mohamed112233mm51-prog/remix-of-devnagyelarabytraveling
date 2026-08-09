@@ -52,8 +52,12 @@ function FullCard({
 
 export function FinancialPositionPanel({ variant = "dashboard" }: { variant?: "dashboard" | "full" }) {
   const perm = usePerm("investors");
-  const position = useFinancialPosition();
   if (!perm.view) return null;
+  return <FinancialPositionPanelInner variant={variant} />;
+}
+
+function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full" }) {
+  const position = useFinancialPosition();
 
   if (variant === "dashboard") {
     return (
@@ -72,14 +76,14 @@ export function FinancialPositionPanel({ variant = "dashboard" }: { variant?: "d
             map={position.receivables}
             icon={<HandCoins size={18} />}
             tone="success"
-            sub="حسب صافي أرصدة كل جهة فعلياً"
+            sub="حسب صافي رصيد كل جهة منفردة"
           />
           <DashboardCard
             label="مستحق على الشركة للغير"
             map={position.payables}
             icon={<Building2 size={18} />}
             tone="warning"
-            sub="حسب صافي أرصدة كل جهة فعلياً"
+            sub="حسب صافي رصيد كل جهة منفردة"
           />
           <DashboardCard
             label="صافي المركز المالي"
@@ -113,7 +117,7 @@ export function FinancialPositionPanel({ variant = "dashboard" }: { variant?: "d
         <div>
           <div className="card-title">⚖️ المركز المالي الحالي للشركة</div>
           <div style={{ color: "var(--text3, #64748B)", fontSize: 12, marginTop: 3 }}>
-            كل جهة قد تكون مدينة للشركة أو دائنة لها؛ الحساب يعتمد على إشارة صافي كشفها الفعلية وليس على نوع الجهة.
+            كل وكيل أو شركة صادرة أو تاجر كاش أو مورد عملة يُقيّم منفرداً: إن كان رصيده لصالح الشركة يدخل ضمن الحقوق، وإن كان على الشركة يدخل ضمن الالتزامات.
           </div>
         </div>
       </div>
