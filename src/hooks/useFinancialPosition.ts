@@ -238,7 +238,8 @@ export function useFinancialPosition(): FinancialPosition {
     }
 
     // تجار الكاش: computeMerchantAggregates يعيد صافي كل تاجر منفرداً.
-    // موجب كشف التاجر = رصيد لدى النظام لصالح هذا التاجر (التزام علينا)، لذلك نعكس الإشارة.
+    // موجب كشف التاجر = أموال للشركة موجودة لدى هذا التاجر (أصل شبيه بالخزينة).
+    // سالب كشف التاجر = التزام على الشركة لصالح هذا التاجر.
     const merchantAggregates = computeMerchantAggregates({
       txns: transactions,
       companyTxns: companyTransactions,
@@ -247,7 +248,7 @@ export function useFinancialPosition(): FinancialPosition {
       splits: paymentSplits as any,
     });
     for (const aggregate of merchantAggregates.values()) {
-      mergeSignedBalances(merchantsSection, aggregate.balance, -1);
+      mergeSignedBalances(merchantsSection, aggregate.balance, 1);
     }
 
     // مورّد العملة: نكوّن صافي كل مورد/عملة أولاً ثم نحدد هل هو أصل أم التزام.
@@ -280,10 +281,15 @@ export function useFinancialPosition(): FinancialPosition {
       else treasuryLiabilities.add(currency, Math.abs(amount));
     }
 
+    // رصيد تاجر الكاش الموجب يعتبر من أموال الشركة المتاحة مثل الخزينة،
+    // لذلك نضيفه للخزائن/الأصول ولا نكرره مرة ثانية ضمن المستحقات.
+    treasury.merge(merchantsSection.receivable);
+    treasuryAssets.merge(merchantsSection.receivable);
+
     const receivables = new CurrencyMap();
     const payables = new CurrencyMap();
     for (const section of sections) {
-      receivables.merge(section.receivable);
+      if (section.key !== "merchants") receivables.merge(section.receivable);
       payables.merge(section.payable);
     }
 

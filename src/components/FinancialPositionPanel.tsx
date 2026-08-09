@@ -65,11 +65,11 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
         <div className="erp-section-title">المركز المالي الحالي</div>
         <div className="erp-hero-grid">
           <DashboardCard
-            label="أرصدة خزائن الشركة"
+            label="الخزائن + أموال الشركة لدى تجار الكاش"
             map={position.treasury}
             icon={<Landmark size={18} />}
             tone="primary"
-            sub="الأموال الموجودة فعلياً في الخزائن"
+            sub="الخزائن الفعلية + أرصدة تجار الكاش الموجبة"
           />
           <DashboardCard
             label="مستحق للشركة عند الغير"
@@ -123,7 +123,7 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
       </div>
       <div className="card-body">
         <div className="account-summary kpi-rich" style={{ marginBottom: 16 }}>
-          <FullCard label="الخزائن" map={position.treasury} className="gold" />
+          <FullCard label="الخزائن + أموال الشركة لدى تجار الكاش" map={position.treasury} className="gold" />
           <FullCard label="مستحق للشركة" map={position.receivables} className="green" />
           <FullCard label="مستحق على الشركة" map={position.payables} className="red" />
           <FullCard label="صافي المركز المالي" map={position.netPosition} className="hero" />
@@ -155,7 +155,7 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
         </div>
 
         <div style={{ fontSize: 12, lineHeight: 1.8, color: "var(--text3, #64748B)" }}>
-          المصروفات المدفوعة لا تُخصم مرة ثانية هنا لأنها خفّضت رصيد الخزائن بالفعل؛ وهي تظل مخصومة في معادلة صافي الأرباح التشغيلية. تمويل المالك لا يدخل في صافي الأرباح.
+          رصيد تاجر الكاش الموجب يُعامل كأموال للشركة ضمن الخزائن/الأصول، بينما الرصيد السالب يُعامل كالتزام على الشركة. المصروفات المدفوعة لا تُخصم مرة ثانية هنا لأنها خفّضت رصيد الخزائن بالفعل؛ وهي تظل مخصومة في معادلة صافي الأرباح التشغيلية. تمويل المالك لا يدخل في صافي الأرباح.
         </div>
         {position.legacyInvestorTransactionCount > 0 && (
           <div style={{ marginTop: 8, padding: "9px 11px", borderRadius: 9, background: "#FFF7ED", color: "#9A3412", fontSize: 12, lineHeight: 1.7 }}>
