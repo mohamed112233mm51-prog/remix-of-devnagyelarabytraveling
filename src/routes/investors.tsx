@@ -53,7 +53,6 @@ function InvestorsPage() {
             <span className="crumb-current">حساب المالك / المستثمرين</span>
           </div>
           <h1 className="page-h1"><Briefcase size={22} strokeWidth={2.2} /> حساب المالك / المستثمرين</h1>
-          <div className="page-sub">فصل تمويل المالك عن أرباح التشغيل وربط التوريد والسحب بالخزائن الفعلية</div>
         </div>
         {perm.create && (
           <button className="page-head-cta" onClick={() => setTab("add")}>

@@ -116,9 +116,6 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
       <div className="card-header">
         <div>
           <div className="card-title">⚖️ المركز المالي الحالي للشركة</div>
-          <div style={{ color: "var(--text3, #64748B)", fontSize: 12, marginTop: 3 }}>
-            كل وكيل أو شركة صادرة أو تاجر كاش أو مورد عملة يُقيّم منفرداً: إن كان رصيده لصالح الشركة يدخل ضمن الحقوق، وإن كان على الشركة يدخل ضمن الالتزامات.
-          </div>
         </div>
       </div>
       <div className="card-body">
@@ -154,9 +151,6 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
           </table>
         </div>
 
-        <div style={{ fontSize: 12, lineHeight: 1.8, color: "var(--text3, #64748B)" }}>
-          رصيد تاجر الكاش الموجب يُعامل كأموال للشركة ضمن الخزائن/الأصول، بينما الرصيد السالب يُعامل كالتزام على الشركة. المصروفات المدفوعة لا تُخصم مرة ثانية هنا لأنها خفّضت رصيد الخزائن بالفعل؛ وهي تظل مخصومة في معادلة صافي الأرباح التشغيلية. تمويل المالك لا يدخل في صافي الأرباح.
-        </div>
         {position.legacyInvestorTransactionCount > 0 && (
           <div style={{ marginTop: 8, padding: "9px 11px", borderRadius: 9, background: "#FFF7ED", color: "#9A3412", fontSize: 12, lineHeight: 1.7 }}>
             يوجد {position.legacyInvestorTransactionCount} حركة مستثمر قديمة غير مربوطة بخزينة فعلية. ظلت محفوظة في كشف المستثمر، لكنها لا تُستخدم لاستبعاد تمويل المالك من المركز المالي حتى لا يتم افتراض أو تحريك أرصدة قديمة بأثر رجعي.
