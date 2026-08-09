@@ -1,0 +1,272 @@
+name: Add cash box transfer
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/add-cashbox-transfer.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scoped treasury transfer feature
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)
+
+          # financialEngine: give the two transfer splits one shared reference.
+          p = Path('src/lib/financialEngine.ts')
+          s = p.read_text(encoding='utf-8')
+          old = '''/**
+ * تحويل بين خزينتين → صفّان في payment_splits (out + in) بنفس transaction_id.
+ */
+export async function postCashBoxTransfer(args: {
+  fromCashBoxId: string;
+  toCashBoxId: string;
+  amount: number;
+  currency: "EGP" | "USD" | "LYD";
+  date: string;
+  note?: string;
+  method?: string;
+}): Promise<PostMovementResult> {
+  const method = args.method || "تحويل بين الخزائن";
+  return postMovement({
+    partyType: "treasury",
+    partyId: null,
+    kind: "transfer",
+    date: args.date,
+    note: args.note,
+    splits: [
+'''
+          new = '''/**
+ * تحويل بين خزينتين → صفّان في payment_splits (out + in) بنفس source_id.
+ * source_id هنا مرجع داخلي للتحويل وليس FK، لأن transaction_id مرتبط بجدول transactions.
+ */
+export async function postCashBoxTransfer(args: {
+  fromCashBoxId: string;
+  toCashBoxId: string;
+  amount: number;
+  currency: "EGP" | "USD" | "LYD";
+  date: string;
+  note?: string;
+  method?: string;
+}): Promise<PostMovementResult> {
+  const method = args.method || "تحويل بين الخزائن";
+  const transferRef = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return postMovement({
+    partyType: "treasury",
+    partyId: null,
+    kind: "transfer",
+    date: args.date,
+    note: args.note,
+    sourceTable: "cash_box_transfer",
+    sourceId: transferRef,
+    splits: [
+'''
+          s = once(s, old, new, 'financial transfer grouping')
+          p.write_text(s, encoding='utf-8')
+
+          # reports: import the transfer helpers and explicit live refresh.
+          p = Path('src/routes/reports.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = once(
+              s,
+              '''  txnCollectedAmount,\n  useLive,\n  type UsdTreasuryTransaction,''',
+              '''  txnCollectedAmount,\n  refetchLiveTables,\n  useLive,\n  type UsdTreasuryTransaction,''',
+              'db import',
+          )
+          s = once(
+              s,
+              'import { postMovement } from "@/lib/financialEngine";',
+              'import { checkOutflowAllowed, postCashBoxTransfer, postMovement } from "@/lib/financialEngine";',
+              'financialEngine import',
+          )
+          s = once(
+              s,
+              '''  const [editBox, setEditBox] = useState<CashBoxRow | null>(null);\n  const [reconcileBox, setReconcileBox] = useState<CashBoxRow | null>(null);''',
+              '''  const [editBox, setEditBox] = useState<CashBoxRow | null>(null);\n  const [reconcileBox, setReconcileBox] = useState<CashBoxRow | null>(null);\n  const [transferOpen, setTransferOpen] = useState(false);''',
+              'treasury transfer state',
+          )
+          s = once(
+              s,
+              '<div className="card-header"><div className="card-title">🏦 تقرير الخزائن</div></div>',
+              '''<div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div className="card-title">🏦 تقرير الخزائن</div>
+        <button type="button" className="btn btn-gold" onClick={() => setTransferOpen(true)} disabled={active.length < 2}>
+          ⇄ تحويل بين الخزائن
+        </button>
+      </div>''',
+              'treasury header button',
+          )
+          s = once(
+              s,
+              '''        {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}\n        {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}''',
+              '''        {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}\n        {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}\n        {transferOpen && <CashBoxTransferModal boxes={active} onClose={() => setTransferOpen(false)} />}''',
+              'treasury modal mount',
+          )
+
+          marker = 'function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () => void }) {'
+          if s.count(marker) != 1:
+              raise SystemExit('reconcile marker not found exactly once')
+          modal = r'''function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose: () => void }) {
+  const supportedBoxes = useMemo(
+    () => boxes.filter((box) => box.is_active && ["EGP", "USD", "LYD"].includes(String(box.currency || "").toUpperCase())),
+    [boxes],
+  );
+  const cashDefault = supportedBoxes.find((box) => /نقد|cash/i.test(box.name));
+  const instaDefault = supportedBoxes.find((box) => /انستا|insta/i.test(box.name) && box.id !== cashDefault?.id);
+  const [fromId, setFromId] = useState(cashDefault?.id || supportedBoxes[0]?.id || "");
+  const [toId, setToId] = useState(instaDefault?.id || supportedBoxes.find((box) => box.id !== (cashDefault?.id || supportedBoxes[0]?.id))?.id || "");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const fromBox = supportedBoxes.find((box) => box.id === fromId) || null;
+  const destinationOptions = supportedBoxes.filter(
+    (box) => box.id !== fromId && (!fromBox || box.currency === fromBox.currency),
+  );
+  const toBox = destinationOptions.find((box) => box.id === toId) || null;
+  const amountNum = Number(amount);
+  const validAmount = Number.isFinite(amountNum) && amountNum > 0;
+
+  useEffect(() => {
+    if (!fromBox) return;
+    if (toBox) return;
+    setToId(destinationOptions[0]?.id || "");
+  }, [fromBox, toBox, destinationOptions]);
+
+  const swap = () => {
+    if (!fromBox || !toBox) return;
+    setFromId(toBox.id);
+    setToId(fromBox.id);
+  };
+
+  const save = async () => {
+    if (!fromBox || !toBox) { toast.error("اختر الخزينة المحول منها والخزينة المحول إليها"); return; }
+    if (fromBox.id === toBox.id) { toast.error("لا يمكن التحويل إلى نفس الخزينة"); return; }
+    if (fromBox.currency !== toBox.currency) { toast.error("التحويل المباشر يجب أن يكون بين خزائن بنفس العملة"); return; }
+    if (!validAmount) { toast.error("أدخل مبلغ تحويل صحيح أكبر من صفر"); return; }
+
+    setSaving(true);
+    try {
+      const outflowError = await checkOutflowAllowed(fromBox.id, amountNum, fromBox.name);
+      if (outflowError) { toast.error(outflowError); return; }
+
+      const method = `تحويل بين الخزائن: ${fromBox.name} ← ${toBox.name}`;
+      const result = await postCashBoxTransfer({
+        fromCashBoxId: fromBox.id,
+        toCashBoxId: toBox.id,
+        amount: amountNum,
+        currency: fromBox.currency as "EGP" | "USD" | "LYD",
+        date: new Date().toISOString().slice(0, 10),
+        method,
+      });
+      if (!result.ok) throw new Error(result.error || "فشل التحويل بين الخزائن");
+      await refetchLiveTables(["cash_boxes", "payment_splits"]);
+      toast.success(`تم تحويل ${fmtNum(amountNum)} ${CURRENCY_LABEL[fromBox.currency] || fromBox.currency} من ${fromBox.name} إلى ${toBox.name}`);
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "فشل التحويل بين الخزائن");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10001, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 560, width: "100%", margin: 0 }}>
+        <div className="card-header"><div className="card-title">⇄ تحويل بين خزائن الشركة</div></div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label>من خزينة *</label>
+            <select value={fromId} onChange={(e) => setFromId(e.target.value)}>
+              {supportedBoxes.map((box) => (
+                <option key={box.id} value={box.id}>{box.name} — {fmtNum(Number(box.balance || 0))} {box.currency}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>إلى خزينة *</label>
+            <select value={toId} onChange={(e) => setToId(e.target.value)} disabled={!fromBox || destinationOptions.length === 0}>
+              {destinationOptions.map((box) => (
+                <option key={box.id} value={box.id}>{box.name} — {fmtNum(Number(box.balance || 0))} {box.currency}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group full" style={{ display: "flex", justifyContent: "center" }}>
+            <button type="button" className="action-btn" onClick={swap} disabled={!fromBox || !toBox || saving}>⇅ عكس اتجاه التحويل</button>
+          </div>
+          <div className="form-group full">
+            <label>المبلغ *</label>
+            <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          {fromBox && toBox && (
+            <div className="form-group full">
+              <div className="card" style={{ margin: 0, padding: 10, background: "var(--surface, #f8f9fb)" }}>
+                <div><strong>الخزينة المصدر:</strong> {fromBox.name} — الرصيد الحالي {fmtNum(Number(fromBox.balance || 0))} {fromBox.currency}</div>
+                <div><strong>الخزينة المستلمة:</strong> {toBox.name} — الرصيد الحالي {fmtNum(Number(toBox.balance || 0))} {toBox.currency}</div>
+                {validAmount && <div><strong>المبلغ:</strong> {fmtNum(amountNum)} {fromBox.currency}</div>}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button type="button" className="btn btn-gold" onClick={save} disabled={saving || !fromBox || !toBox || !validAmount}>
+            {saving ? "جارٍ التحويل..." : "⇄ تنفيذ التحويل"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+'''
+          s = s.replace(marker, modal + marker, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Verify scoped diff
+        shell: bash
+        run: |
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' 'src/lib/financialEngine.ts' 'src/routes/reports.tsx' | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo "Unexpected changed files:"
+            printf '%s\n' "$changed"
+            exit 1
+          fi
+          git diff --check
+          grep -q 'postCashBoxTransfer' src/routes/reports.tsx
+          grep -q 'checkOutflowAllowed' src/routes/reports.tsx
+          grep -q 'cash_box_transfer' src/lib/financialEngine.ts
+
+      - name: Commit feature and remove temporary workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/add-cashbox-transfer.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/financialEngine.ts src/routes/reports.tsx .github/workflows/add-cashbox-transfer.yml
+          git diff --cached --check
+          git commit -m "feat(treasury): add internal cash box transfers"
+          git push origin devo
