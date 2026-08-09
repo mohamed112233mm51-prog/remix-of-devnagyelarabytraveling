@@ -1,0 +1,56 @@
+name: Apply owner financial position
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/apply-owner-financial-position.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scoped patch
+        run: python3 scripts/apply-owner-financial-position.py
+
+      - name: Verify patch whitespace
+        run: git diff --check
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+
+      - name: Verify scoped files and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(src/lib/financialEngine\.ts|src/hooks/usePerm\.tsx|src/components/Layout\.tsx|src/routes/settings\.tsx|src/routes/index\.tsx|src/routes/investors\.tsx|src/components/FinancialPositionPanel\.tsx|src/hooks/useFinancialPosition\.ts)$'
+          changed="$(git diff --name-only)"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            echo "$file" | grep -Eq "$allowed" || { echo "Unexpected changed file: $file"; exit 1; }
+          done <<< "$changed"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/financialEngine.ts src/hooks/usePerm.tsx src/components/Layout.tsx src/routes/settings.tsx src/routes/index.tsx src/routes/investors.tsx src/components/FinancialPositionPanel.tsx src/hooks/useFinancialPosition.ts
+          git rm .github/workflows/apply-owner-financial-position.yml scripts/apply-owner-financial-position.py
+          git diff --cached --check
+          git commit -m 'feat(finance): integrate owner funding and financial position'
+          git push origin devo
