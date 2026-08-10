@@ -32,16 +32,19 @@ jobs:
           ref: devo
           fetch-depth: 0
 
-      - name: Apply compatibility patch
-        run: python scripts/security_phase2_patch.py
+      - name: Apply final policy cleanup
+        run: python scripts/security_phase2_cleanup.py
 
       - name: Verify scoped diff
         run: |
           git diff --check
-          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/routes/reports.tsx supabase/migrations/20260810200500_permission_aware_business_rls.sql "
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "supabase/migrations/20260810200500_permission_aware_business_rls.sql "
           ! grep -nE 'TO authenticated (USING|WITH CHECK) \(true\)' supabase/migrations/20260810200500_permission_aware_business_rls.sql
           grep -q 'SECURITY INVOKER' supabase/migrations/20260810200500_permission_aware_business_rls.sql
           grep -q 'app_payment_split_write_allowed(source_table, source_id' supabase/migrations/20260810200500_permission_aware_business_rls.sql
+          grep -q "merchant_cash_out_to_agent" supabase/migrations/20260810200500_permission_aware_business_rls.sql
+          test "$(grep -c "CREATE POLICY transactions_perm_insert" supabase/migrations/20260810200500_permission_aware_business_rls.sql)" = "1"
+          test "$(grep -c "CREATE POLICY company_transactions_perm_update" supabase/migrations/20260810200500_permission_aware_business_rls.sql)" = "1"
 
       - name: Install PostgreSQL client
         run: |
@@ -138,7 +141,7 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d security_test -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260810200500_permission_aware_business_rls.sql
 
-      - name: Verify permission helper behavior and policy hardening
+      - name: Verify permission helpers and policy hardening
         env:
           PGPASSWORD: postgres
         run: |
@@ -189,6 +192,21 @@ jobs:
               AND prosecdef = true;
             IF n <> 0 THEN RAISE EXCEPTION 'permission helper unexpectedly SECURITY DEFINER'; END IF;
           END $$;
+
+          DO $$
+          DECLARE q text;
+          BEGIN
+            SELECT with_check INTO q FROM pg_policies
+            WHERE schemaname='public' AND tablename='transactions' AND policyname='transactions_perm_insert';
+            IF position('merchant_cash_out_to_agent' in COALESCE(q,'')) = 0 THEN
+              RAISE EXCEPTION 'agent merchant-counterpart allowance missing';
+            END IF;
+            SELECT with_check INTO q FROM pg_policies
+            WHERE schemaname='public' AND tablename='company_transactions' AND policyname='company_transactions_perm_insert';
+            IF position('submission_fine' in COALESCE(q,'')) = 0 OR position('flight_ticket' in COALESCE(q,'')) = 0 THEN
+              RAISE EXCEPTION 'generated company posting allowances missing';
+            END IF;
+          END $$;
           SQL
           psql -h 127.0.0.1 -U postgres -d security_test -v ON_ERROR_STOP=1 -f /tmp/security_assert.sql
 
@@ -200,10 +218,10 @@ jobs:
       - name: Build application
         run: bun run build
 
-      - name: Commit validated phase 2 changes
+      - name: Commit validated phase 2 cleanup
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/routes/reports.tsx supabase/migrations/20260810200500_permission_aware_business_rls.sql
-          git commit -m "fix(security): enforce permission-aware RLS"
+          git add supabase/migrations/20260810200500_permission_aware_business_rls.sql
+          git commit -m "fix(security): clean generated posting RLS policies"
           git push origin devo
