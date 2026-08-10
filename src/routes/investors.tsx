@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fmtCurrency, refetchLiveTables, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
+import { fmtCurrency, normalizeCurrency, refetchLiveTables, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
 import { formatCurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
@@ -159,7 +159,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
   const activeBoxes = useMemo(() => {
     const supported = boxes.filter((box) =>
       box.is_active !== false
-      && ["EGP", "USD", "LYD"].includes(String(box.currency || "").toUpperCase()),
+      && ["EGP", "USD", "LYD"].includes(normalizeCurrency(box.currency)),
     );
 
     // Keep all previously available active treasuries, but explicitly resolve
@@ -239,7 +239,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
         sourceId: parent.id,
         splits: [{
           method: selectedBox.name,
-          currency: String(selectedBox.currency).toUpperCase() as "EGP" | "USD" | "LYD",
+          currency: normalizeCurrency(selectedBox.currency) as "EGP" | "USD" | "LYD",
           cashBoxId: selectedBox.id,
           amount,
           direction: kind === "توريد نقدية" ? "in" : "out",
