@@ -26,7 +26,7 @@ const TXN_TYPES = ["صرف نقدية", "توريد نقدية"] as const;
 
 type OwnerCashBox = { id: string; name: string; currency: string; balance: number | string | null; is_active: boolean };
 
-type Tab = "list" | "add" | "history" | "statement" | "withdraw" | "deposit";
+type Tab = "list" | "history" | "statement" | "withdraw" | "deposit";
 
 function InvestorsPage() {
   const perm = usePerm("investors");
@@ -34,6 +34,7 @@ function InvestorsPage() {
   const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
   const { rows: paymentSplits } = useLive<FinancialPositionSplit>("payment_splits");
   const [tab, setTab] = useState<Tab>("history");
+  const [addOpen, setAddOpen] = useState(false);
 
   const capitalTotals = useMemo(
     () => buildInvestorCapitalSummary(txns, paymentSplits, { includeLegacy: true }),
@@ -55,7 +56,7 @@ function InvestorsPage() {
           <h1 className="page-h1"><Briefcase size={22} strokeWidth={2.2} /> حساب المالك / المستثمرين</h1>
         </div>
         {perm.create && (
-          <button className="page-head-cta" onClick={() => setTab("add")}>
+          <button className="page-head-cta" onClick={() => setAddOpen(true)}>
             <UserPlus size={16} strokeWidth={2.4} /> إضافة مالك / مستثمر
           </button>
         )}
@@ -105,65 +106,50 @@ function InvestorsPage() {
 
       {tab === "list" && <InvestorsListTab investors={investors} txns={txns} splits={paymentSplits} canEdit={perm.edit} />}
 
-      {tab === "add" && perm.create && (
-        <>
-          <InvestorForm />
-          <div className="card" style={{ marginTop: 16 }}>
-            <div className="card-header"><div className="card-title">🧑‍💼 قائمة المستثمرين</div></div>
-            <div className="card-body">
-              <div className="table-wrap">
-                <table className="mobile-cards">
-                  <thead><tr><th>#</th><th>اسم المستثمر</th><th>الهاتف</th><th>الواتساب</th></tr></thead>
-                  <tbody>
-                    {investors.length === 0 ? (
-                      <tr><td colSpan={4}><div className="empty"><div className="empty-icon">🧑‍💼</div><div className="empty-text">أضف مستثمر من تبويب "إضافة مستثمر جديد"</div></div></td></tr>
-                    ) : investors.map((inv, i) => (
-                      <tr key={inv.id}>
-                        <td data-label="#">{i + 1}</td>
-                        <td className="bold" data-label="اسم المستثمر">{inv.investor_name}</td>
-                        <td data-label="الهاتف">{inv.phone || "—"}</td>
-                        <td data-label="الواتساب">{inv.whatsapp || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {tab === "history" && <HistoryTab txns={txns} investorName={investorName} investors={investors} splits={paymentSplits} />}
       {tab === "statement" && <StatementTab txns={txns} investors={investors} splits={paymentSplits} canExport={perm.export} />}
       {tab === "withdraw" && perm.create && <TxnForm investors={investors} kind="صرف نقدية" methodLabel="الخزينة" title="⬆️ سحب من تمويل المالك / المستثمر" />}
       {tab === "deposit" && perm.create && <TxnForm investors={investors} kind="توريد نقدية" methodLabel="الخزينة" title="⬇️ توريد تمويل المالك / المستثمر" />}
+      {addOpen && perm.create && <InvestorForm onClose={() => setAddOpen(false)} />}
     </div>
   );
 }
 
-function InvestorForm() {
+function InvestorForm({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({ investor_name: "", phone: "", whatsapp: "" });
+  const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const save = async () => {
     if (!form.investor_name.trim()) return toast.error("اسم المستثمر مطلوب");
+    setSaving(true);
     const { error } = await supabase.from("investors").insert({
-      investor_name: form.investor_name,
-      phone: form.phone || null,
-      whatsapp: form.whatsapp || null,
+      investor_name: form.investor_name.trim(),
+      phone: form.phone.trim() || null,
+      whatsapp: form.whatsapp.trim() || null,
     });
+    setSaving(false);
     if (error) return toast.error(error.message);
     setForm({ investor_name: "", phone: "", whatsapp: "" });
+    onClose();
   };
-  return (
-    <div className="card">
-      <div className="card-header"><div className="card-title">➕ إضافة مستثمر جديد</div></div>
-      <div className="form-grid">
-        <div className="form-group"><label>اسم المستثمر</label><input value={form.investor_name} onChange={(e) => set("investor_name", e.target.value)} /></div>
-        <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
-        <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
+        <div className="card-header"><div className="card-title">➕ إضافة مالك / مستثمر جديد</div></div>
+        <div className="form-grid">
+          <div className="form-group"><label>اسم المستثمر</label><input autoFocus value={form.investor_name} onChange={(e) => set("investor_name", e.target.value)} /></div>
+          <div className="form-group"><label>الهاتف</label><input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+          <div className="form-group"><label>الواتساب</label><input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+        </div>
+        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="action-btn" onClick={onClose} disabled={saving}>إلغاء</button>
+          <button data-confirm-save="تأكيد حفظ المستثمر" type="button" className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "جارٍ الحفظ..." : "💾 حفظ المستثمر"}</button>
+        </div>
       </div>
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ المستثمر" className="btn btn-gold" onClick={save}>💾 حفظ المستثمر</button></div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
