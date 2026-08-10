@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { bootstrapAdmin } from "@/lib/admin.functions";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
 import { toast } from "sonner";
 
@@ -11,12 +9,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"login" | "forgot">("login");
-  const bootstrap = useServerFn(bootstrapAdmin);
   const branding = useBranding();
 
-  useEffect(() => {
-    bootstrap().catch(() => {});
-  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

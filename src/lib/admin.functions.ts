@@ -12,66 +12,6 @@ function admin() {
   );
 }
 
-const BOOTSTRAP_EMAIL = "mohamed112233.mm51@gmail.com";
-const BOOTSTRAP_PASSWORD = "nagy1420260000";
-export const bootstrapAdmin = createServerFn({ method: "POST" }).handler(async () => {
-  const sb = admin();
-
-  // Always ensure the bootstrap admin auth user exists and is fully repaired.
-  // Paginate listUsers — default page size (50) may miss the admin after a remix.
-  async function findBootstrapUser() {
-    for (let page = 1; page <= 20; page++) {
-      const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
-      if (error) throw new Error(error.message);
-      const found = data?.users.find((x) => x.email === BOOTSTRAP_EMAIL);
-      if (found) return found;
-      if (!data || data.users.length < 200) return null;
-    }
-    return null;
-  }
-
-  let authUser = await findBootstrapUser();
-
-  if (!authUser) {
-    const { data: created, error: createErr } = await sb.auth.admin.createUser({
-      email: BOOTSTRAP_EMAIL,
-      password: BOOTSTRAP_PASSWORD,
-      email_confirm: true,
-      user_metadata: { full_name: "Admin" },
-    });
-    if (createErr || !created?.user) {
-      // Race / duplicate: user actually exists — look it up again before failing.
-      const existing = await findBootstrapUser();
-      if (existing) {
-        authUser = existing as any;
-      } else {
-        throw new Error(createErr?.message ?? "Failed to create admin");
-      }
-    } else {
-      authUser = created.user as any;
-    }
-  }
-
-  const userId = authUser!.id;
-
-  // Repair profile: active + invite accepted, regardless of prior state.
-  await sb.from("profiles").upsert({
-    id: userId,
-    email: BOOTSTRAP_EMAIL,
-    full_name: "Admin",
-    is_active: true,
-    invite_accepted: true,
-  });
-
-  // Repair admin role.
-  await sb.from("user_roles").upsert(
-    { user_id: userId, role: "admin" },
-    { onConflict: "user_id,role" },
-  );
-
-  return { repaired: true };
-});
-
 async function ensureAdmin(_supabase: any, userId: string, subKey: string = "users_manage") {
   const sb = admin();
   const { data: profile } = await sb
