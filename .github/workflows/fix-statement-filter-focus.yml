@@ -1,0 +1,55 @@
+name: Fix statement filter focus
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/fix-statement-filter-focus.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scoped filter fix
+        run: python3 scripts/fix-statement-filter-focus.py
+
+      - name: Verify whitespace
+        run: git diff --check
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+
+      - name: Commit scoped fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/routeTree.gen.ts || true
+          unexpected="$(git diff --name-only | grep -Ev '^(src/components/AgentLedger\.tsx|src/features/companies/LegacyCompaniesRoute\.tsx)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected changed files:"
+            echo "$unexpected"
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/AgentLedger.tsx src/features/companies/LegacyCompaniesRoute.tsx
+          git rm .github/workflows/fix-statement-filter-focus.yml scripts/fix-statement-filter-focus.py
+          git diff --cached --check
+          git commit -m 'fix(statements): keep column filters open while typing'
+          git push origin devo
