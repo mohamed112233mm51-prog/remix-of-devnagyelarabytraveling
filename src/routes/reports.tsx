@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { usePerm } from "@/hooks/usePerm";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
@@ -1585,6 +1586,7 @@ type TreasuryOperationRow = {
 const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: "دولار أمريكي", LYD: "دينار ليبي" };
 
 function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined) => boolean }) {
+  const reportPerm = usePerm("reports");
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
   const { rows: treasurySplits, loading: treasurySplitsLoading } = useLive<TreasuryOperationSplit>("payment_splits");
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
@@ -1716,9 +1718,11 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
     <div className="card">
       <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div className="card-title">🏦 تقرير الخزائن</div>
-        <button type="button" className="btn btn-gold" onClick={() => setTransferOpen(true)} disabled={active.length < 2}>
-          ⇄ تحويل بين الخزائن
-        </button>
+        {reportPerm.edit && (
+          <button type="button" className="btn btn-gold" onClick={() => setTransferOpen(true)} disabled={active.length < 2}>
+            ⇄ تحويل بين الخزائن
+          </button>
+        )}
       </div>
       <div className="card-body">
         <KpiRow items={[
@@ -1750,8 +1754,10 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                   <td data-label="الرصيد الافتتاحي">{fmtNum(Number(b.opening_balance || 0))}</td>
                   <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(b.balance || 0))}</td>
                   <td data-label="إجراءات">
-                    <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>
-                    <button type="button" className="action-btn" style={{ marginInlineStart: 6 }} onClick={() => setReconcileBox(b)}>⚖️ تسوية الخزنة</button>
+                    {reportPerm.edit ? (<>
+                      <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>
+                      <button type="button" className="action-btn" style={{ marginInlineStart: 6 }} onClick={() => setReconcileBox(b)}>⚖️ تسوية الخزنة</button>
+                    </>) : "—"}
                   </td>
                 </tr>
               ))}

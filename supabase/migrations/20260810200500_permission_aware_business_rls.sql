@@ -121,6 +121,7 @@ GRANT EXECUTE ON FUNCTION public.app_financial_action_allowed(text, text) TO aut
 -- payment_splits is cross-cutting. Authorize by the parent/source section.
 CREATE OR REPLACE FUNCTION public.app_payment_split_write_allowed(
   p_source_table text,
+  p_source_id uuid,
   p_action text
 )
 RETURNS boolean
@@ -131,21 +132,52 @@ SET search_path = public
 AS $$
   SELECT CASE COALESCE(p_source_table, '')
     WHEN 'transactions' THEN
-      CASE WHEN p_action = 'create'
-        THEN public.app_permission_allowed('accounts', 'create')
-          OR public.app_permission_allowed('merchants', 'create')
-          OR public.app_permission_allowed('executions', 'edit')
-        ELSE public.app_financial_action_allowed('accounts', p_action)
-          OR public.app_financial_action_allowed('merchants', p_action)
-          OR public.app_permission_allowed('executions', 'edit')
-      END
+      EXISTS (
+        SELECT 1
+        FROM public.transactions t
+        WHERE t.id = p_source_id
+          AND CASE WHEN p_action = 'create' THEN (
+            (t.agent_id IS NOT NULL AND public.app_permission_allowed('accounts', 'create'))
+            OR (t.agent_id IS NULL AND t.merchant_id IS NOT NULL AND public.app_permission_allowed('merchants', 'create'))
+            OR (t.source_service_type = 'merchant_cash_out_to_company' AND public.app_permission_allowed('companies', 'create'))
+            OR (t.source_service_type = 'merchant_cash_out_to_agent' AND public.app_permission_allowed('accounts', 'create'))
+            OR (t.source_service_type = 'execution' AND public.app_permission_allowed('executions', 'edit'))
+            OR (t.source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions', 'edit'))
+            OR (t.source_service_type = 'execution_fine' AND public.app_permission_allowed('executions', 'edit'))
+            OR (t.source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+                AND public.app_has_any_permission(ARRAY['submissions','executions'], 'edit'))
+          ) ELSE (
+            public.app_financial_action_allowed('accounts', p_action)
+            OR (t.agent_id IS NULL AND t.merchant_id IS NOT NULL AND public.app_financial_action_allowed('merchants', p_action))
+            OR (t.source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies', p_action))
+            OR (t.source_service_type = 'execution' AND public.app_permission_allowed('executions', 'edit'))
+            OR (t.source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions', 'edit'))
+            OR (t.source_service_type = 'execution_fine' AND public.app_permission_allowed('executions', 'edit'))
+            OR (t.source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+                AND public.app_has_any_permission(ARRAY['submissions','executions'], 'edit'))
+          ) END
+      )
     WHEN 'company_transactions' THEN
-      CASE WHEN p_action = 'create'
-        THEN public.app_permission_allowed('companies', 'create')
-          OR public.app_permission_allowed('executions', 'edit')
-        ELSE public.app_financial_action_allowed('companies', p_action)
-          OR public.app_permission_allowed('executions', 'edit')
-      END
+      EXISTS (
+        SELECT 1
+        FROM public.company_transactions ct
+        WHERE ct.id = p_source_id
+          AND CASE WHEN p_action = 'create' THEN (
+            public.app_permission_allowed('companies', 'create')
+            OR (ct.source_service_type = 'execution' AND public.app_permission_allowed('executions', 'edit'))
+            OR (ct.source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions', 'edit'))
+            OR (ct.source_service_type = 'execution_fine' AND public.app_permission_allowed('executions', 'edit'))
+            OR (ct.source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+                AND public.app_has_any_permission(ARRAY['submissions','executions'], 'edit'))
+          ) ELSE (
+            public.app_financial_action_allowed('companies', p_action)
+            OR (ct.source_service_type = 'execution' AND public.app_permission_allowed('executions', 'edit'))
+            OR (ct.source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions', 'edit'))
+            OR (ct.source_service_type = 'execution_fine' AND public.app_permission_allowed('executions', 'edit'))
+            OR (ct.source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+                AND public.app_has_any_permission(ARRAY['submissions','executions'], 'edit'))
+          ) END
+      )
     WHEN 'currency_supplier_transactions' THEN
       CASE WHEN p_action = 'create'
         THEN public.app_permission_allowed('currency_suppliers', 'create')
@@ -173,7 +205,7 @@ AS $$
       END
     WHEN 'usd_treasury_transactions' THEN
       CASE WHEN p_action = 'create'
-        THEN public.app_permission_allowed('reports', 'create')
+        THEN public.app_permission_allowed('reports', 'edit') OR public.app_permission_allowed('companies', 'create')
         ELSE public.app_financial_action_allowed('reports', p_action)
       END
     WHEN 'cash_transfers' THEN
@@ -181,8 +213,6 @@ AS $$
     WHEN 'cash_box_transfer' THEN
       public.app_permission_allowed('reports', CASE WHEN p_action = 'delete' THEN 'delete' ELSE 'edit' END)
     ELSE
-      -- Legacy rows with no recognized source can only be changed by the
-      -- explicit blanket financial permission (admins still bypass it).
       CASE
         WHEN p_action = 'edit'
           THEN public.app_permission_allowed('financial_transaction_update', 'edit')
@@ -193,9 +223,9 @@ AS $$
   END;
 $$;
 
-REVOKE ALL ON FUNCTION public.app_payment_split_write_allowed(text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.app_payment_split_write_allowed(text, text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.app_payment_split_write_allowed(text, text) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.app_payment_split_write_allowed(text, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.app_payment_split_write_allowed(text, uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.app_payment_split_write_allowed(text, uuid, text) TO authenticated, service_role;
 
 -- --------------------------------------------------------------------------
 -- 2) Lock the cash-box balance trigger. A client may insert an authorized
@@ -344,7 +374,7 @@ FOR DELETE TO authenticated USING (public.app_permission_allowed('executions','d
 -- ---- Ledger / financial parent tables -------------------------------------
 CREATE POLICY transactions_perm_select ON public.transactions
 FOR SELECT TO authenticated USING (
-  public.app_has_any_permission(ARRAY['accounts','merchants','reports','dashboard','financial_position_view'], 'view')
+  public.app_has_any_permission(ARRAY['accounts','companies','merchants','submissions','executions','reports','dashboard','financial_position_view'], 'view')
 );
 CREATE POLICY transactions_perm_insert ON public.transactions
 FOR INSERT TO authenticated WITH CHECK (
@@ -358,6 +388,13 @@ FOR INSERT TO authenticated WITH CHECK (
       WHERE e.id::text = split_part(COALESCE(source_service_id,''), '::', 1)
     )
   )
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (source_service_type = 'merchant_cash_out_to_company' AND agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_permission_allowed('companies','create'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
   OR (
     source_service_type IN ('opening_debit','opening_credit')
     AND public.app_permission_allowed('accounts','edit')
@@ -368,22 +405,34 @@ FOR UPDATE TO authenticated USING (
   public.app_financial_action_allowed('accounts','edit')
   OR (agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_financial_action_allowed('merchants','edit'))
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies','edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
 ) WITH CHECK (
   public.app_financial_action_allowed('accounts','edit')
   OR (agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_financial_action_allowed('merchants','edit'))
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies','edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
 );
 CREATE POLICY transactions_perm_delete ON public.transactions
 FOR DELETE TO authenticated USING (
   public.app_financial_action_allowed('accounts','delete')
   OR (agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_financial_action_allowed('merchants','delete'))
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies','delete'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
   OR (source_service_type IN ('opening_debit','opening_credit') AND public.app_permission_allowed('accounts','edit'))
 );
 
 CREATE POLICY company_transactions_perm_select ON public.company_transactions
 FOR SELECT TO authenticated USING (
-  public.app_has_any_permission(ARRAY['companies','reports','dashboard','financial_position_view'], 'view')
+  public.app_has_any_permission(ARRAY['companies','submissions','executions','reports','dashboard','financial_position_view'], 'view')
 );
 CREATE POLICY company_transactions_perm_insert ON public.company_transactions
 FOR INSERT TO authenticated WITH CHECK (
@@ -402,6 +451,15 @@ CREATE POLICY company_transactions_perm_update ON public.company_transactions
 FOR UPDATE TO authenticated USING (
   public.app_financial_action_allowed('companies','edit')
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
 ) WITH CHECK (
   public.app_financial_action_allowed('companies','edit')
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
@@ -415,12 +473,13 @@ FOR DELETE TO authenticated USING (
 
 CREATE POLICY merchant_collections_perm_select ON public.merchant_cash_collections
 FOR SELECT TO authenticated USING (
-  public.app_has_any_permission(ARRAY['merchants','accounts','currency_suppliers','reports','dashboard','financial_position_view'], 'view')
+  public.app_has_any_permission(ARRAY['merchants','accounts','currency_suppliers','expenses','reports','dashboard','financial_position_view'], 'view')
 );
 CREATE POLICY merchant_collections_perm_insert ON public.merchant_cash_collections
 FOR INSERT TO authenticated WITH CHECK (
   public.app_permission_allowed('merchants','create')
   OR public.app_permission_allowed('currency_suppliers','create')
+  OR (expense_id IS NOT NULL AND public.app_permission_allowed('expenses','create'))
   OR (source_service_type IN ('opening_debit','opening_credit') AND public.app_permission_allowed('merchants','edit'))
 );
 CREATE POLICY merchant_collections_perm_update ON public.merchant_cash_collections
@@ -429,6 +488,7 @@ WITH CHECK (public.app_financial_action_allowed('merchants','edit'));
 CREATE POLICY merchant_collections_perm_delete ON public.merchant_cash_collections
 FOR DELETE TO authenticated USING (
   public.app_financial_action_allowed('merchants','delete')
+  OR (expense_id IS NOT NULL AND public.app_permission_allowed('expenses','delete'))
   OR (source_service_type IN ('opening_debit','opening_credit') AND public.app_permission_allowed('merchants','edit'))
 );
 
@@ -488,10 +548,13 @@ FOR DELETE TO authenticated USING (public.app_financial_action_allowed('expenses
 
 CREATE POLICY usd_treasury_perm_select ON public.usd_treasury_transactions
 FOR SELECT TO authenticated USING (
-  public.app_has_any_permission(ARRAY['reports','dashboard'], 'view')
+  public.app_has_any_permission(ARRAY['reports','companies','dashboard'], 'view')
 );
 CREATE POLICY usd_treasury_perm_insert ON public.usd_treasury_transactions
-FOR INSERT TO authenticated WITH CHECK (public.app_permission_allowed('reports','edit'));
+FOR INSERT TO authenticated WITH CHECK (
+  public.app_permission_allowed('reports','edit')
+  OR (type = 'conversion' AND public.app_permission_allowed('companies','create'))
+);
 CREATE POLICY usd_treasury_perm_update ON public.usd_treasury_transactions
 FOR UPDATE TO authenticated USING (public.app_financial_action_allowed('reports','edit'))
 WITH CHECK (public.app_financial_action_allowed('reports','edit'));
@@ -525,17 +588,17 @@ FOR SELECT TO authenticated USING (
 );
 CREATE POLICY payment_splits_perm_insert ON public.payment_splits
 FOR INSERT TO authenticated WITH CHECK (
-  public.app_payment_split_write_allowed(source_table, 'create')
+  public.app_payment_split_write_allowed(source_table, source_id, 'create')
 );
 CREATE POLICY payment_splits_perm_update ON public.payment_splits
 FOR UPDATE TO authenticated USING (
-  public.app_payment_split_write_allowed(source_table, 'edit')
+  public.app_payment_split_write_allowed(source_table, source_id, 'edit')
 ) WITH CHECK (
-  public.app_payment_split_write_allowed(source_table, 'edit')
+  public.app_payment_split_write_allowed(source_table, source_id, 'edit')
 );
 CREATE POLICY payment_splits_perm_delete ON public.payment_splits
 FOR DELETE TO authenticated USING (
-  public.app_payment_split_write_allowed(source_table, 'delete')
+  public.app_payment_split_write_allowed(source_table, source_id, 'delete')
 );
 
 -- ---- Pricing ---------------------------------------------------------------
