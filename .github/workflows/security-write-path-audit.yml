@@ -16,11 +16,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: devo
-      - name: Payment split writes
+      - name: Audit financial write paths
         run: |
-          echo '=== payment_splits references ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'payment_splits' src | head -300 || true
-          echo '=== cash_boxes direct writes ==='
-          grep -RniE --include='*.ts' --include='*.tsx' 'from\(["'"']cash_boxes["'"']\)' src | head -300 || true
-          echo '=== financial parent direct writes ==='
-          grep -RniE --include='*.ts' --include='*.tsx' 'from\(["'"'](transactions|company_transactions|merchant_cash_collections|currency_supplier_transactions|investor_transactions|expense_deductions|usd_treasury_transactions)["'"']\)' src | head -500 || true
+          echo '=== payment_splits write calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("payment_splits")' src || true
+          echo '=== cash_boxes calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("cash_boxes")' src || true
+          echo '=== transactions calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("transactions")' src || true
+          echo '=== company_transactions calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("company_transactions")' src || true
+          echo '=== merchant_cash_collections calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("merchant_cash_collections")' src || true
+          echo '=== currency_supplier_transactions calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("currency_supplier_transactions")' src || true
+          echo '=== investor_transactions calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("investor_transactions")' src || true
+          echo '=== expense_deductions calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("expense_deductions")' src || true
+          echo '=== usd_treasury_transactions calls ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'from("usd_treasury_transactions")' src || true
