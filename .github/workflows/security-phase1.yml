@@ -25,8 +25,8 @@ jobs:
         run: |
           git diff --check
           printf '%s\n' "$(git diff --name-only)"
-          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/lib/admin.functions.ts src/routes/api/public/hooks/backup.ts "
-          ! grep -R "BOOTSTRAP_PASSWORD\|bootstrapAdmin" src/lib/admin.functions.ts
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/components/Login.tsx src/lib/admin.functions.ts src/routes/api/public/hooks/backup.ts "
+          ! grep -R "BOOTSTRAP_PASSWORD\|bootstrapAdmin" src/lib/admin.functions.ts src/components/Login.tsx
           ! grep -E "SUPABASE_(PUBLISHABLE|ANON)_KEY" src/routes/api/public/hooks/backup.ts
           grep -q "BACKUP_CRON_SECRET" src/routes/api/public/hooks/backup.ts
 
@@ -42,6 +42,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/admin.functions.ts src/routes/api/public/hooks/backup.ts
+          git add src/components/Login.tsx src/lib/admin.functions.ts src/routes/api/public/hooks/backup.ts
           git commit -m "fix(security): remove admin bootstrap and secure backup webhook"
           git push origin devo
