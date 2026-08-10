@@ -388,13 +388,22 @@ FOR INSERT TO authenticated WITH CHECK (
       WHERE e.id::text = split_part(COALESCE(source_service_id,''), '::', 1)
     )
   )
+  OR (
+    source_service_type = 'merchant_cash_out_to_company'
+    AND agent_id IS NULL AND merchant_id IS NOT NULL
+    AND public.app_permission_allowed('companies','create')
+  )
+  OR (
+    source_service_type = 'merchant_cash_out_to_agent'
+    AND agent_id IS NULL AND merchant_id IS NOT NULL
+    AND public.app_permission_allowed('accounts','create')
+  )
   OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
   OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
-  OR (source_service_type = 'merchant_cash_out_to_company' AND agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_permission_allowed('companies','create'))
-  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
-  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
   OR (
     source_service_type IN ('opening_debit','opening_credit')
     AND public.app_permission_allowed('accounts','edit')
@@ -408,7 +417,10 @@ FOR UPDATE TO authenticated USING (
   OR (source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies','edit'))
   OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
   OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
 ) WITH CHECK (
   public.app_financial_action_allowed('accounts','edit')
   OR (agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_financial_action_allowed('merchants','edit'))
@@ -416,7 +428,10 @@ FOR UPDATE TO authenticated USING (
   OR (source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies','edit'))
   OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
   OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
 );
 CREATE POLICY transactions_perm_delete ON public.transactions
 FOR DELETE TO authenticated USING (
@@ -426,8 +441,14 @@ FOR DELETE TO authenticated USING (
   OR (source_service_type = 'merchant_cash_out_to_company' AND public.app_financial_action_allowed('companies','delete'))
   OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
   OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
-  OR (source_service_type IN ('opening_debit','opening_credit') AND public.app_permission_allowed('accounts','edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
+  OR (
+    source_service_type IN ('opening_debit','opening_credit')
+    AND public.app_permission_allowed('accounts','edit')
+  )
 );
 
 CREATE POLICY company_transactions_perm_select ON public.company_transactions
@@ -445,7 +466,16 @@ FOR INSERT TO authenticated WITH CHECK (
       WHERE e.id::text = split_part(COALESCE(source_service_id,''), '::', 1)
     )
   )
-  OR (source_service_type IN ('opening_debit','opening_credit') AND public.app_permission_allowed('companies','edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
+  OR (
+    source_service_type IN ('opening_debit','opening_credit')
+    AND public.app_permission_allowed('companies','edit')
+  )
 );
 CREATE POLICY company_transactions_perm_update ON public.company_transactions
 FOR UPDATE TO authenticated USING (
@@ -453,22 +483,34 @@ FOR UPDATE TO authenticated USING (
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
   OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
   OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
-  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
-  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
-  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
-  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('flight_ticket','security_approval','libyan_investment') AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
 ) WITH CHECK (
   public.app_financial_action_allowed('companies','edit')
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
 );
 CREATE POLICY company_transactions_perm_delete ON public.company_transactions
 FOR DELETE TO authenticated USING (
   public.app_financial_action_allowed('companies','delete')
   OR (source_service_type = 'execution' AND public.app_permission_allowed('executions','edit'))
-  OR (source_service_type IN ('opening_debit','opening_credit') AND public.app_permission_allowed('companies','edit'))
+  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
+  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
+  OR (
+    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
+    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
+  )
+  OR (
+    source_service_type IN ('opening_debit','opening_credit')
+    AND public.app_permission_allowed('companies','edit')
+  )
 );
 
 CREATE POLICY merchant_collections_perm_select ON public.merchant_cash_collections
