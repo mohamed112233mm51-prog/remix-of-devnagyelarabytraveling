@@ -18,6 +18,25 @@ assert 'async function ensureAdmin' in admin
 assert admin != admin_before
 admin_path.write_text(admin, encoding='utf-8')
 
+# Remove the automatic unauthenticated bootstrap call from the login screen.
+login_path = Path('src/components/Login.tsx')
+login = login_path.read_text(encoding='utf-8')
+login_before = login
+login = login.replace('import { useEffect, useState } from "react";\n', 'import { useState } from "react";\n', 1)
+login = login.replace('import { useServerFn } from "@tanstack/react-start";\n', '', 1)
+login = login.replace('import { bootstrapAdmin } from "@/lib/admin.functions";\n', '', 1)
+login = login.replace('  const bootstrap = useServerFn(bootstrapAdmin);\n', '', 1)
+login = login.replace(
+'''\n  useEffect(() => {\n    bootstrap().catch(() => {});\n  }, []);\n''',
+'\n',
+1,
+)
+for forbidden in ['bootstrapAdmin', 'useServerFn', 'bootstrap()', 'useEffect(']:
+    assert forbidden not in login, f'{forbidden} still present in Login.tsx'
+assert 'const { signIn, signInWithGoogle, blocked, signOut } = useAuth();' in login
+assert login != login_before
+login_path.write_text(login, encoding='utf-8')
+
 backup_path = Path('src/routes/api/public/hooks/backup.ts')
 backup = '''import { createFileRoute } from "@tanstack/react-router";
 
@@ -96,4 +115,3 @@ written = backup_path.read_text(encoding='utf-8')
 assert 'BACKUP_CRON_SECRET' in written
 assert 'SUPABASE_PUBLISHABLE_KEY' not in written
 assert 'SUPABASE_ANON_KEY' not in written
-assert 'Authorization' not in written or 'authorization' in written.lower()
