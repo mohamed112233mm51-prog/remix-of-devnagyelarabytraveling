@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 path = Path('supabase/migrations/20260810200500_permission_aware_business_rls.sql')
 text = path.read_text(encoding='utf-8')
@@ -151,12 +150,14 @@ FOR DELETE TO authenticated USING (
 
 '''
 
-text = text[:start] + clean_block + text[end:]
+# Assertions are scoped to the canonical replacement block, not to helper
+# functions elsewhere in the migration that legitimately mention the same source types.
+assert clean_block.count("source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit')") == 8
+assert clean_block.count("source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit')") == 8
+assert clean_block.count("source_service_type = 'merchant_cash_out_to_agent'") == 1
+assert clean_block.count('CREATE POLICY company_transactions_perm_update') == 1
+assert clean_block.count('CREATE POLICY transactions_perm_insert') == 1
 
+text = text[:start] + clean_block + text[end:]
 assert text != original
-assert text.count("source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit')") == 6
-assert text.count("source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit')") == 6
-assert "source_service_type = 'merchant_cash_out_to_agent'" in text
-assert text.count('CREATE POLICY company_transactions_perm_update') == 1
-assert text.count('CREATE POLICY transactions_perm_insert') == 1
 path.write_text(text, encoding='utf-8')
