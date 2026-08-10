@@ -419,26 +419,42 @@ function AuditLogPage() {
     if (!allowed) return;
     setLoading(true);
     try {
-      let query = supabase
-        .from("financial_audit_log")
-        .select("*")
-        .order("performed_at", { ascending: false })
-        .limit(2000);
-      if (from) query = query.gte("performed_at", `${from}T00:00:00`);
-      if (to) query = query.lte("performed_at", `${to}T23:59:59`);
-      if (action) query = query.eq("action", action);
-      if (tableName) query = query.eq("table_name", tableName);
-      if (entityType) query = query.eq("entity_type", entityType);
-      if (userId) query = query.eq("performed_by", userId);
-      const { data, error } = await query;
-      if (error) throw error;
-      setRows((data || []) as any);
+      const PAGE_SIZE = 1000;
+      const allRows: AuditRow[] = [];
+      let offset = 0;
+
+      // Supabase/PostgREST can cap a single response at the project's API row
+      // limit (commonly 1000), even when a larger .limit() is requested. Page
+      // explicitly until the final partial page so the UI count reflects every
+      // matching audit row instead of stopping at the first API page.
+      while (true) {
+        let query = supabase
+          .from("financial_audit_log")
+          .select("*")
+          .order("performed_at", { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (from) query = query.gte("performed_at", `${from}T00:00:00`);
+        if (to) query = query.lte("performed_at", `${to}T23:59:59`);
+        if (action) query = query.eq("action", action);
+        if (tableName) query = query.eq("table_name", tableName);
+        if (entityType) query = query.eq("entity_type", entityType);
+        if (userId) query = query.eq("performed_by", userId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        const page = (data || []) as AuditRow[];
+        allRows.push(...page);
+        if (page.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+
+      setRows(allRows);
 
       // Collect every user id that might appear in the UI: the audit
       // performer, plus any *_by field in before/after snapshots
       // (cancelled_by, restored_by, created_by, updated_by, ...).
       const userIdSet = new Set<string>();
-      (data || []).forEach((r: any) => {
+      allRows.forEach((r: any) => {
         if (r.performed_by) userIdSet.add(r.performed_by);
         const scan = (obj: any) => {
           if (!obj || typeof obj !== "object") return;

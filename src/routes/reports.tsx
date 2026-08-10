@@ -301,7 +301,7 @@ function ReportsPage() {
       {tab === "companies" && <CompaniesReport inRange={inRange} data={data} />}
       {tab === "merchants" && <MerchantsReport inRange={inRange} data={data} />}
       {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
-      {tab === "treasuries" && <TreasuriesReport />}
+      {tab === "treasuries" && <TreasuriesReport inRange={inRange} />}
       {tab === "currency_suppliers" && <CurrencySuppliersReport inRange={inRange} />}
       <style>{chartsCss}</style>
     </div>
@@ -1556,15 +1556,95 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- TREASURIES (cash boxes) ----------
 type CashBoxRow = { id: string; name: string; currency: string; balance: number; is_active: boolean; opening_balance?: number; opening_date?: string | null; opening_note?: string | null };
+type TreasuryOperationSplit = {
+  id: string;
+  cash_box_id: string | null;
+  amount: number | string | null;
+  currency: string | null;
+  direction: string | null;
+  method: string | null;
+  source_table: string | null;
+  source_id: string | null;
+  created_at: string;
+  cancelled_at?: string | null;
+};
+type TreasuryOperationRow = {
+  id: string;
+  performedAt: string;
+  kind: "transfer" | "settlement_in" | "settlement_out";
+  type: string;
+  from: string;
+  to: string;
+  amount: number;
+  currency: string;
+  details: string;
+};
 
 const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: "دولار أمريكي", LYD: "دينار ليبي" };
 
-function TreasuriesReport() {
+function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined) => boolean }) {
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
+  const { rows: treasurySplits, loading: treasurySplitsLoading } = useLive<TreasuryOperationSplit>("payment_splits");
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => activeCashBoxes(boxes), [boxes]);
+  const boxNameById = useMemo(() => new Map(boxes.map((box) => [box.id, box.name])), [boxes]);
+  const treasuryOperations = useMemo(() => {
+    const operations: TreasuryOperationRow[] = [];
+    const usable = treasurySplits.filter((split) => !split.cancelled_at);
+
+    // Transfers are stored as two payment_splits rows (out + in) with the same source_id.
+    const transferGroups = new Map<string, TreasuryOperationSplit[]>();
+    for (const split of usable) {
+      if (split.source_table !== "cash_box_transfer") continue;
+      const key = split.source_id || `legacy:${split.id}`;
+      const group = transferGroups.get(key) || [];
+      group.push(split);
+      transferGroups.set(key, group);
+    }
+    for (const [key, group] of transferGroups) {
+      const out = group.find((split) => split.direction === "out") || null;
+      const incoming = group.find((split) => split.direction === "in") || null;
+      const sample = out || incoming || group[0];
+      if (!sample) continue;
+      const dateKey = String(sample.created_at || "").slice(0, 10);
+      if (!inRange(dateKey)) continue;
+      operations.push({
+        id: `transfer:${key}`,
+        performedAt: sample.created_at,
+        kind: "transfer",
+        type: "تحويل بين الخزائن",
+        from: out?.cash_box_id ? (boxNameById.get(out.cash_box_id) || "خزينة غير معروفة") : "—",
+        to: incoming?.cash_box_id ? (boxNameById.get(incoming.cash_box_id) || "خزينة غير معروفة") : "—",
+        amount: Number(out?.amount ?? incoming?.amount ?? 0),
+        currency: String(out?.currency || incoming?.currency || sample.currency || "EGP"),
+        details: String(out?.method || incoming?.method || "تحويل بين الخزائن"),
+      });
+    }
+
+    // Treasury settlements use the treasury source table and a settlement method.
+    for (const split of usable) {
+      if (split.source_table !== "cash_transfers" || !String(split.method || "").startsWith("تسوية")) continue;
+      const dateKey = String(split.created_at || "").slice(0, 10);
+      if (!inRange(dateKey)) continue;
+      const boxName = split.cash_box_id ? (boxNameById.get(split.cash_box_id) || "خزينة غير معروفة") : "—";
+      const isIn = split.direction === "in";
+      operations.push({
+        id: `settlement:${split.id}`,
+        performedAt: split.created_at,
+        kind: isIn ? "settlement_in" : "settlement_out",
+        type: isIn ? "تسوية زيادة خزنة" : "تسوية عجز خزنة",
+        from: isIn ? "تسوية الخزنة" : boxName,
+        to: isIn ? boxName : "تسوية الخزنة",
+        amount: Math.abs(Number(split.amount || 0)),
+        currency: String(split.currency || "EGP"),
+        details: String(split.method || (isIn ? "تسوية زيادة خزنة" : "تسوية عجز خزنة")),
+      });
+    }
+
+    return operations.sort((a, b) => String(b.performedAt).localeCompare(String(a.performedAt)));
+  }, [treasurySplits, boxNameById, inRange]);
   // كل حسابات الخزائن وأسعار الصرف من المحرك الموحد في src/lib/financialSummary.ts.
   const summary = useMemo(
     () => computeTreasurySummary(active, (cTxns || []) as any),
@@ -1650,6 +1730,49 @@ function TreasuriesReport() {
             </tbody>
           </table>
         </div>
+
+        <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
+          <div className="card-header">
+            <div className="card-title">📜 سجل تسويات وتحويلات الخزائن — {treasuryOperations.length} عملية</div>
+          </div>
+          <div className="card-body">
+            <div className="table-wrap enterprise-table">
+              <table className="mobile-cards">
+                <thead>
+                  <tr>
+                    <th>التاريخ والوقت</th>
+                    <th>نوع الحركة</th>
+                    <th>من</th>
+                    <th>إلى</th>
+                    <th>المبلغ</th>
+                    <th>العملة</th>
+                    <th>التفاصيل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {treasurySplitsLoading ? (
+                    <EmptyOrLoading loading={true} label="" colSpan={7} />
+                  ) : treasuryOperations.length === 0 ? (
+                    <EmptyOrLoading loading={false} label="لا توجد تسويات أو تحويلات خزائن في الفترة المحددة" colSpan={7} />
+                  ) : treasuryOperations.map((op) => (
+                    <tr key={op.id}>
+                      <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{new Date(op.performedAt).toLocaleString("ar-EG")}</td>
+                      <td data-label="نوع الحركة">
+                        <span className={`badge pill-badge ${op.kind === "transfer" ? "badge-blue" : op.kind === "settlement_in" ? "badge-green" : "badge-red"}`}>{op.type}</span>
+                      </td>
+                      <td data-label="من">{op.from}</td>
+                      <td data-label="إلى">{op.to}</td>
+                      <td data-label="المبلغ" style={{ fontWeight: 700 }}>{fmtNum(op.amount)}</td>
+                      <td data-label="العملة">{CURRENCY_LABEL[op.currency] || op.currency}</td>
+                      <td data-label="التفاصيل">{op.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}
         {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}
         {transferOpen && <CashBoxTransferModal boxes={active} onClose={() => setTransferOpen(false)} />}
