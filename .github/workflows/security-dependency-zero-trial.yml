@@ -1,0 +1,91 @@
+name: Security dependency zero trial
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/security-dependency-zero-trial.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Prepare secure dependency candidate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('package.json'); d=json.loads(p.read_text())
+          d['dependencies']['xlsx']='https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz'
+          d['dependencies']['@cloudflare/vite-plugin']='^1.51.2'
+          d['dependencies']['@supabase/supabase-js']='^2.112.2'
+          d['dependencies']['nitro']='3.0.260610-beta'
+          d['devDependencies']['@lovable.dev/vite-tanstack-config']='2.10.0'
+          d['devDependencies']['vite']='^7.3.6'
+          d.setdefault('overrides', {})['uuid']='11.1.1'
+          p.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          PY
+          rm -rf node_modules bun.lock
+          bun install
+          bun pm why uuid
+
+      - name: Require zero advisories
+        run: |
+          set +e
+          bun audit --json > /tmp/audit.json 2>/tmp/audit.err
+          audit_exit=$?
+          set -e
+          cat /tmp/audit.err || true
+          node - <<'JS'
+          const fs=require('fs'); let d={};
+          try{d=JSON.parse(fs.readFileSync('/tmp/audit.json','utf8'))}catch(e){console.error(e);process.exit(2)}
+          let total=0;
+          for(const [pkg,items] of Object.entries(d||{})){ total+=items.length; console.log(`${pkg}: ${items.length}`); }
+          console.log(`SECURITY_AUDIT_TOTAL=${total}`);
+          if(total!==0) process.exit(1);
+          JS
+          if [ "$audit_exit" -ne 0 ]; then exit "$audit_exit"; fi
+
+      - name: ExcelJS compatibility smoke
+        run: |
+          bun --eval '
+            import ExcelJS from "exceljs";
+            const wb=new ExcelJS.Workbook();
+            const ws=wb.addWorksheet("Test");
+            ws.addRow(["name","amount"]); ws.addRow(["Ahmed",125]);
+            const buf=await wb.xlsx.writeBuffer();
+            if(!buf || buf.byteLength<100) throw new Error("ExcelJS write failed");
+            const wb2=new ExcelJS.Workbook(); await wb2.xlsx.load(buf);
+            if(wb2.worksheets[0].getCell("A2").text!=="Ahmed") throw new Error("ExcelJS read failed");
+            console.log("ExcelJS read/write OK", buf.byteLength);
+          '
+
+      - name: SheetJS compatibility smoke
+        run: |
+          bun --eval '
+            import * as XLSX from "xlsx";
+            const ws=XLSX.utils.aoa_to_sheet([["name","amount"],["Ahmed",125]]);
+            const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Data");
+            const out=XLSX.write(wb,{type:"array",bookType:"xlsx"});
+            const rb=XLSX.read(out,{type:"array"});
+            const rows=XLSX.utils.sheet_to_json(rb.Sheets[rb.SheetNames[0]],{defval:"",raw:false});
+            if(XLSX.version!=="0.20.3"||rows.length!==1||rows[0].name!=="Ahmed") throw new Error("SheetJS smoke failed");
+            console.log("SheetJS",XLSX.version,"OK");
+          '
+
+      - name: Build application
+        run: bun run build
+
+      - name: Verify candidate scope
+        run: |
+          git diff --check
+          git diff --stat
+          git diff --name-only
