@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Building2, HandCoins, Landmark, Scale, Users, WalletCards } from "lucide-react";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { useFinancialPosition } from "@/hooks/useFinancialPosition";
-import { usePerm } from "@/hooks/usePerm";
+import { FINANCIAL_POSITION_PERMISSION_KEY, usePerm } from "@/hooks/usePerm";
 
 function DashboardCard({
   label,
@@ -48,7 +48,8 @@ function FullCard({
 }
 
 export function FinancialPositionPanel({ variant = "dashboard" }: { variant?: "dashboard" | "full" }) {
-  const perm = usePerm("investors");
+  const permissionKey = variant === "dashboard" ? FINANCIAL_POSITION_PERMISSION_KEY : "investors";
+  const perm = usePerm(permissionKey);
   if (!perm.view) return null;
   return <FinancialPositionPanelInner variant={variant} />;
 }
@@ -59,7 +60,7 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
   if (variant === "dashboard") {
     return (
       <>
-        <div className="erp-section-title">المركز المالي الحالي</div>
+        <div id="financial-position" className="erp-section-title">المركز المالي الحالي</div>
         <div className="erp-hero-grid">
           <DashboardCard
             label="الخزائن + أموال الشركة لدى تجار الكاش"

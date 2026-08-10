@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
-import { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, isProfitPermissionKey, normalizePermissionBranch } from "@/lib/permissionKeys";
+import { FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, isDashboardViewPermissionKey, normalizePermissionBranch } from "@/lib/permissionKeys";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { normalizeDropdownValue, refetchLiveTables, resetLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
@@ -57,6 +57,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: "audit_log_view",     label: "سجل تدقيق الحركات المالية", route: "/audit-log" },
   { key: NET_PROFIT_PERMISSION_KEY, label: "صافي الأرباح",         route: "/#net-profit" },
   { key: PROFIT_SUMMARY_PERMISSION_KEY, label: "ملخص الأرباح",     route: "/#profit-summary" },
+  { key: FINANCIAL_POSITION_PERMISSION_KEY, label: "المركز المالي الحالي — الداشبورد", route: "/#financial-position" },
 ];
 
 const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: string }[] = [
@@ -72,11 +73,11 @@ function normalizePerm(v: any): Record<string, boolean> {
 }
 
 function actionsForPermission(key: string) {
-  return isProfitPermissionKey(key) ? ACTIONS.filter((a) => a.key === "view") : ACTIONS;
+  return isDashboardViewPermissionKey(key) ? ACTIONS.filter((a) => a.key === "view") : ACTIONS;
 }
 
 function permissionEnabledForUi(permissions: Record<string, any> | undefined, key: string) {
-  if (isProfitPermissionKey(key)) return permissions?.[key] === true;
+  if (isDashboardViewPermissionKey(key)) return permissions?.[key] === true;
   const cur = normalizePerm(permissions?.[key]);
   return actionsForPermission(key).every((a) => cur[a.key]);
 }
@@ -435,7 +436,7 @@ function InviteUserTab() {
   const [busy, setBusy] = useState(false);
 
   function toggleAction(section: string, action: string, val: boolean) {
-    if (isProfitPermissionKey(section)) {
+    if (isDashboardViewPermissionKey(section)) {
       setForm({ ...form, permissions: { ...form.permissions, [section]: val as any } });
       return;
     }
@@ -445,7 +446,7 @@ function InviteUserTab() {
     setForm({ ...form, permissions: { ...form.permissions, [section]: cur } });
   }
   function toggleAll(section: string, val: boolean) {
-    if (isProfitPermissionKey(section)) {
+    if (isDashboardViewPermissionKey(section)) {
       setForm({ ...form, permissions: { ...form.permissions, [section]: val as any } });
       return;
     }
@@ -557,7 +558,7 @@ function InviteUserTab() {
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                       {actionList.map((a) => (
                         <label key={a.key} style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12, cursor: "pointer", color: "#334155" }}>
-                          <input type="checkbox" checked={isProfitPermissionKey(p.key) ? (form.permissions as Record<string, any>)[p.key] === true : !!cur[a.key]} onChange={(e) => toggleAction(p.key, a.key, e.target.checked)} />
+                          <input type="checkbox" checked={isDashboardViewPermissionKey(p.key) ? (form.permissions as Record<string, any>)[p.key] === true : !!cur[a.key]} onChange={(e) => toggleAction(p.key, a.key, e.target.checked)} />
                           {a.label}
                         </label>
                       ))}
@@ -884,7 +885,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
       : { background: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA" };
 
   const grantedCount = PERMISSION_KEYS.reduce((sum, p) => {
-    if (isProfitPermissionKey(p.key)) return sum + (draftPermissions?.[p.key] === true ? 1 : 0);
+    if (isDashboardViewPermissionKey(p.key)) return sum + (draftPermissions?.[p.key] === true ? 1 : 0);
     const cur = normalizePerm(draftPermissions?.[p.key]);
     return sum + ACTIONS.reduce((s, a) => s + (cur[a.key] ? 1 : 0), 0);
   }, 0);
@@ -1044,7 +1045,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
               const actionList = actionsForPermission(p.key);
               const cur = supa
                 ? { view: true, create: true, edit: true, delete: true, export: true }
-                : isProfitPermissionKey(p.key)
+                : isDashboardViewPermissionKey(p.key)
                   ? { view: draftPermissions?.[p.key] === true, create: false, edit: false, delete: false, export: false }
                   : normalizePerm(draftPermissions?.[p.key]);
               const allOn = actionList.every((a) => cur[a.key]);
@@ -1064,7 +1065,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                         disabled={supa}
                         onChange={(e) => {
                           const v = e.target.checked;
-                          if (isProfitPermissionKey(p.key)) {
+                          if (isDashboardViewPermissionKey(p.key)) {
                             commit(p.key, v);
                             return;
                           }
@@ -1082,7 +1083,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                           checked={!!cur[a.key]}
                           disabled={supa}
                           onChange={(e) => {
-                            if (isProfitPermissionKey(p.key)) {
+                            if (isDashboardViewPermissionKey(p.key)) {
                               commit(p.key, e.target.checked);
                               return;
                             }

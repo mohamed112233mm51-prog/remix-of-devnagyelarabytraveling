@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
-import { hasPermission, hasProfitViewPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
+import { FINANCIAL_POSITION_PERMISSION_KEY, hasDashboardViewPermission, hasPermission, isDashboardViewPermissionKey, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
-export { NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+export { FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 export type PermAction = "view" | "create" | "edit" | "delete" | "export";
 
@@ -26,6 +26,7 @@ export const SECTION_KEYS = [
   "audit_log_view",
   NET_PROFIT_PERMISSION_KEY,
   PROFIT_SUMMARY_PERMISSION_KEY,
+  FINANCIAL_POSITION_PERMISSION_KEY,
 ] as const;
 
 /**
@@ -124,8 +125,8 @@ export function checkPerm(
   action: PermAction = "view",
 ): boolean {
   if (!section) return true;
-  if ((section === NET_PROFIT_PERMISSION_KEY || section === PROFIT_SUMMARY_PERMISSION_KEY) && action === "view") {
-    return hasProfitViewPermission(normalizePermissionsForLoad(perms ?? {}), isAdmin, section);
+  if (isDashboardViewPermissionKey(section) && action === "view") {
+    return hasDashboardViewPermission(normalizePermissionsForLoad(perms ?? {}), isAdmin, section);
   }
   if (isAdmin) return true;
   const v = perms?.[section];
@@ -153,8 +154,8 @@ export function checkOwnerOrExplicitPerm(
   section: string | null | undefined,
   action: PermAction = "view",
 ): boolean {
-  if ((section === NET_PROFIT_PERMISSION_KEY || section === PROFIT_SUMMARY_PERMISSION_KEY) && action === "view") {
-    return hasProfitViewPermission(perms, isSuperAdmin, section);
+  if (isDashboardViewPermissionKey(section) && action === "view") {
+    return hasDashboardViewPermission(normalizePermissionsForLoad(perms ?? {}), isSuperAdmin, section);
   }
   return !!isSuperAdmin || checkPerm(perms, false, section, action);
 }
