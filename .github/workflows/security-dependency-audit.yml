@@ -1,0 +1,36 @@
+name: Security dependency audit
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/security-dependency-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+      - uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Bun security audit
+        run: |
+          set +e
+          bun audit --json > /tmp/audit.json 2>/tmp/audit.err
+          code=$?
+          echo "bun audit exit=$code"
+          cat /tmp/audit.err || true
+          cat /tmp/audit.json || true
+          exit 0
+      - name: Direct dependency versions
+        run: |
+          node - <<'JS'
+          const p=require('./package.json');
+          for (const [k,v] of Object.entries(p.dependencies||{})) console.log(`${k}\t${v}`)
+          JS
