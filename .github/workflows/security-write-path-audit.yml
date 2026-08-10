@@ -16,23 +16,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: devo
-      - name: Audit financial write paths
+      - name: Audit SECURITY DEFINER declarations and grants
         run: |
-          echo '=== payment_splits write calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("payment_splits")' src || true
-          echo '=== cash_boxes calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("cash_boxes")' src || true
-          echo '=== transactions calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("transactions")' src || true
-          echo '=== company_transactions calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("company_transactions")' src || true
-          echo '=== merchant_cash_collections calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("merchant_cash_collections")' src || true
-          echo '=== currency_supplier_transactions calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("currency_supplier_transactions")' src || true
-          echo '=== investor_transactions calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("investor_transactions")' src || true
-          echo '=== expense_deductions calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("expense_deductions")' src || true
-          echo '=== usd_treasury_transactions calls ==='
-          grep -Rni --include='*.ts' --include='*.tsx' 'from("usd_treasury_transactions")' src || true
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          files = sorted(Path('supabase/migrations').glob('*.sql'))
+          print('=== SECURITY DEFINER declarations ===')
+          for p in files:
+              text = p.read_text(encoding='utf-8', errors='ignore')
+              for m in re.finditer(r'CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([^\n]+).*?SECURITY\s+DEFINER', text, re.I|re.S):
+                  sig = ' '.join(m.group(1).split())
+                  start = max(0, m.start()-300)
+                  end = min(len(text), m.end()+600)
+                  tail = text[m.end():min(len(text), m.end()+2500)]
+                  grants = re.findall(r'(?im)^\s*(REVOKE|GRANT)\b[^;]*;', tail)
+                  print(f'{p.name}: {sig}')
+                  # Print grant/revoke statements near the declaration when present.
+                  for gm in re.finditer(r'(?im)^\s*(?:REVOKE|GRANT)\b[^;]*;', tail):
+                      stmt = ' '.join(gm.group(0).split())
+                      print('  ', stmt[:500])
+          print('=== all function EXECUTE grants/revokes mentioning authenticated/anon/public ===')
+          for p in files:
+              text = p.read_text(encoding='utf-8', errors='ignore')
+              for line in text.splitlines():
+                  up = line.upper()
+                  if ('FUNCTION' in up and ('GRANT' in up or 'REVOKE' in up) and any(x in up for x in ['AUTHENTICATED','ANON','PUBLIC'])):
+                      print(f'{p.name}: {line.strip()}')
+          PY
