@@ -1,0 +1,26 @@
+name: Security write path audit
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/security-write-path-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+      - name: Payment split writes
+        run: |
+          echo '=== payment_splits references ==='
+          grep -Rni --include='*.ts' --include='*.tsx' 'payment_splits' src | head -300 || true
+          echo '=== cash_boxes direct writes ==='
+          grep -RniE --include='*.ts' --include='*.tsx' 'from\(["'"']cash_boxes["'"']\)' src | head -300 || true
+          echo '=== financial parent direct writes ==='
+          grep -RniE --include='*.ts' --include='*.tsx' 'from\(["'"'](transactions|company_transactions|merchant_cash_collections|currency_supplier_transactions|investor_transactions|expense_deductions|usd_treasury_transactions)["'"']\)' src | head -500 || true
