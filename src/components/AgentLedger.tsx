@@ -264,11 +264,12 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   if (agentsLoading && showAgentProfile) return null;
 
-  const Th = ({ children, filterKey, options }: { children: React.ReactNode; filterKey?: string; options?: string[] }) => (
+  // Render helper (not a nested React component): keeps ColumnFilter mounted while live filtering re-renders the statement.
+  const renderFilterTh = (children: React.ReactNode, filterKey: string, options?: string[]) => (
     <th>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
         <span>{children}</span>
-        {filterKey && <CF.ColumnFilter label={String(children)} state={safeFilters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />}
+        <CF.ColumnFilter label={String(children)} state={safeFilters[filterKey]} onChange={(s) => setF(filterKey, s)} options={options} />
       </span>
     </th>
   );
@@ -325,19 +326,19 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
                 <thead>
                   <tr>
                     {isVisible("n") && <th>#</th>}
-                    {isVisible("date") && <Th filterKey="date">التاريخ</Th>}
-                    {isVisible("description") && <Th filterKey="description">البيان</Th>}
-                    {isVisible("service") && <Th filterKey="service" options={serviceOptions}>نوع الخدمة</Th>}
-                    {isVisible("destination") && <Th filterKey="destination" options={destOptions}>وجهة السفر</Th>}
-                    {isVisible("count") && <Th filterKey="count">العدد</Th>}
-                    {isVisible("price") && <Th filterKey="price">السعر</Th>}
-                    {isVisible("serviceValue") && <Th filterKey="serviceValue">قيمة الرحلة</Th>}
-                    {isVisible("debit") && <Th filterKey="debit">مدين</Th>}
-                    {isVisible("credit") && <Th filterKey="credit">دائن</Th>}
-                    {isVisible("balance") && <Th filterKey="balance">الرصيد الحالي</Th>}
-                    {isVisible("method") && <Th filterKey="method" options={methodOptions}>وسيلة الدفع</Th>}
-                    {isVisible("note") && <Th filterKey="note">ملاحظات</Th>}
-                    {isVisible("departureDate") && <Th filterKey="departureDate">تاريخ المغادرة</Th>}
+                    {isVisible("date") && renderFilterTh("التاريخ", "date")}
+                    {isVisible("description") && renderFilterTh("البيان", "description")}
+                    {isVisible("service") && renderFilterTh("نوع الخدمة", "service", serviceOptions)}
+                    {isVisible("destination") && renderFilterTh("وجهة السفر", "destination", destOptions)}
+                    {isVisible("count") && renderFilterTh("العدد", "count")}
+                    {isVisible("price") && renderFilterTh("السعر", "price")}
+                    {isVisible("serviceValue") && renderFilterTh("قيمة الرحلة", "serviceValue")}
+                    {isVisible("debit") && renderFilterTh("مدين", "debit")}
+                    {isVisible("credit") && renderFilterTh("دائن", "credit")}
+                    {isVisible("balance") && renderFilterTh("الرصيد الحالي", "balance")}
+                    {isVisible("method") && renderFilterTh("وسيلة الدفع", "method", methodOptions)}
+                    {isVisible("note") && renderFilterTh("ملاحظات", "note")}
+                    {isVisible("departureDate") && renderFilterTh("تاريخ المغادرة", "departureDate")}
                     {isVisible("actions") && <th>إجراءات</th>}
                   </tr>
                 </thead>
