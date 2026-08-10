@@ -1580,8 +1580,6 @@ type TreasuryOperationRow = {
   amount: number;
   currency: string;
   details: string;
-  performedById: string | null;
-  performedByLabel: string;
 };
 
 const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: "دولار أمريكي", LYD: "دينار ليبي" };
@@ -1589,101 +1587,16 @@ const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: 
 function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined) => boolean }) {
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
   const { rows: treasurySplits, loading: treasurySplitsLoading } = useLive<TreasuryOperationSplit>("payment_splits");
-  const [treasuryActorBySplit, setTreasuryActorBySplit] = useState<Record<string, string | null>>({});
-  const [treasuryUserNameById, setTreasuryUserNameById] = useState<Record<string, string>>({});
-  const [treasuryActorsLoading, setTreasuryActorsLoading] = useState(false);
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => activeCashBoxes(boxes), [boxes]);
   const boxNameById = useMemo(() => new Map(boxes.map((box) => [box.id, box.name])), [boxes]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const relevantSplitIds = treasurySplits
-      .filter((split) =>
-        !split.cancelled_at
-        && (
-          split.source_table === "cash_box_transfer"
-          || (split.source_table === "cash_transfers" && String(split.method || "").startsWith("تسوية"))
-        ),
-      )
-      .map((split) => split.id);
-
-    if (relevantSplitIds.length === 0) {
-      setTreasuryActorBySplit({});
-      setTreasuryUserNameById({});
-      setTreasuryActorsLoading(false);
-      return () => { cancelled = true; };
-    }
-
-    const loadActors = async () => {
-      setTreasuryActorsLoading(true);
-      try {
-        const auditRows: Array<{ record_id: string; performed_by: string | null; performed_at: string }> = [];
-        const chunkSize = 200;
-        for (let i = 0; i < relevantSplitIds.length; i += chunkSize) {
-          const chunk = relevantSplitIds.slice(i, i + chunkSize);
-          const { data, error } = await supabase
-            .from("financial_audit_log")
-            .select("record_id,performed_by,performed_at")
-            .eq("table_name", "payment_splits")
-            .eq("action", "create")
-            .in("record_id", chunk)
-            .order("performed_at", { ascending: false });
-          if (error) throw error;
-          auditRows.push(...((data || []) as typeof auditRows));
-        }
-
-        const actorBySplit: Record<string, string | null> = {};
-        for (const row of auditRows) {
-          if (!(row.record_id in actorBySplit)) actorBySplit[row.record_id] = row.performed_by || null;
-        }
-
-        const userIds = Array.from(new Set(Object.values(actorBySplit).filter((id): id is string => Boolean(id))));
-        const userNames: Record<string, string> = {};
-        for (let i = 0; i < userIds.length; i += chunkSize) {
-          const chunk = userIds.slice(i, i + chunkSize);
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("id,full_name,email")
-            .in("id", chunk);
-          if (error) throw error;
-          for (const profile of data || []) {
-            userNames[profile.id] = profile.full_name || profile.email || "مستخدم غير معروف";
-          }
-        }
-
-        if (!cancelled) {
-          setTreasuryActorBySplit(actorBySplit);
-          setTreasuryUserNameById(userNames);
-        }
-      } catch (error) {
-        console.warn("[Treasury history] could not resolve operation users", error);
-        if (!cancelled) {
-          setTreasuryActorBySplit({});
-          setTreasuryUserNameById({});
-        }
-      } finally {
-        if (!cancelled) setTreasuryActorsLoading(false);
-      }
-    };
-
-    void loadActors();
-    return () => { cancelled = true; };
-  }, [treasurySplits]);
 
   const treasuryOperations = useMemo(() => {
     const operations: TreasuryOperationRow[] = [];
     const usable = treasurySplits.filter((split) => !split.cancelled_at);
-    const actorFor = (splitIds: string[]) => {
-      const performedById = splitIds.map((id) => treasuryActorBySplit[id]).find((id): id is string => Boolean(id)) || null;
-      return {
-        performedById,
-        performedByLabel: performedById ? (treasuryUserNameById[performedById] || "مستخدم غير معروف") : "غير معروف",
-      };
-    };
-
     // Transfers are stored as two payment_splits rows (out + in) with the same source_id.
     const transferGroups = new Map<string, TreasuryOperationSplit[]>();
     for (const split of usable) {
@@ -1700,7 +1613,6 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
       if (!sample) continue;
       const dateKey = String(sample.created_at || "").slice(0, 10);
       if (!inRange(dateKey)) continue;
-      const actor = actorFor(group.map((split) => split.id));
       operations.push({
         id: `transfer:${key}`,
         performedAt: sample.created_at,
@@ -1713,7 +1625,6 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
         amount: Number(out?.amount ?? incoming?.amount ?? 0),
         currency: String(out?.currency || incoming?.currency || sample.currency || "EGP"),
         details: String(out?.method || incoming?.method || "تحويل بين الخزائن"),
-        ...actor,
       });
     }
 
@@ -1724,7 +1635,6 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
       if (!inRange(dateKey)) continue;
       const boxName = split.cash_box_id ? (boxNameById.get(split.cash_box_id) || "خزينة غير معروفة") : "—";
       const isIn = split.direction === "in";
-      const actor = actorFor([split.id]);
       operations.push({
         id: `settlement:${split.id}`,
         performedAt: split.created_at,
@@ -1737,12 +1647,11 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
         amount: Math.abs(Number(split.amount || 0)),
         currency: String(split.currency || "EGP"),
         details: String(split.method || (isIn ? "تسوية زيادة خزنة" : "تسوية عجز خزنة")),
-        ...actor,
       });
     }
 
     return operations.sort((a, b) => String(b.performedAt).localeCompare(String(a.performedAt)));
-  }, [treasurySplits, boxNameById, inRange, treasuryActorBySplit, treasuryUserNameById]);
+  }, [treasurySplits, boxNameById, inRange]);
   // كل حسابات الخزائن وأسعار الصرف من المحرك الموحد في src/lib/financialSummary.ts.
   const summary = useMemo(
     () => computeTreasurySummary(active, (cTxns || []) as any),
@@ -1780,34 +1689,22 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
 
   const [historyType, setHistoryType] = useState("");
   const [historyBox, setHistoryBox] = useState("");
-  const [historyUser, setHistoryUser] = useState("");
   const [historySearch, setHistorySearch] = useState("");
-  const historyUserOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    for (const op of treasuryOperations) {
-      if (op.performedById) options.set(op.performedById, op.performedByLabel);
-    }
-    return Array.from(options.entries()).sort((a, b) => a[1].localeCompare(b[1], "ar"));
-  }, [treasuryOperations]);
-  const hasUnknownHistoryUser = useMemo(() => treasuryOperations.some((op) => !op.performedById), [treasuryOperations]);
   const filteredTreasuryOperations = useMemo(() => {
     const search = historySearch.trim().toLowerCase();
     return treasuryOperations.filter((op) => {
       if (historyType && op.kind !== historyType) return false;
       if (historyBox && op.fromBoxId !== historyBox && op.toBoxId !== historyBox) return false;
-      if (historyUser === "__unknown__" && op.performedById) return false;
-      if (historyUser && historyUser !== "__unknown__" && op.performedById !== historyUser) return false;
       if (search) {
-        const haystack = [op.type, op.from, op.to, op.details, op.performedByLabel, op.currency, String(op.amount)].join(" ").toLowerCase();
+        const haystack = [op.type, op.from, op.to, op.details, op.currency, String(op.amount)].join(" ").toLowerCase();
         if (!haystack.includes(search)) return false;
       }
       return true;
     });
-  }, [treasuryOperations, historyType, historyBox, historyUser, historySearch]);
+  }, [treasuryOperations, historyType, historyBox, historySearch]);
   const clearTreasuryHistoryFilters = () => {
     setHistoryType("");
     setHistoryBox("");
-    setHistoryUser("");
     setHistorySearch("");
   };
 
@@ -1878,11 +1775,6 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                 <option value="">كل الخزائن</option>
                 {boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}
               </select>
-              <select className="filter-select" value={historyUser} onChange={(e) => setHistoryUser(e.target.value)} aria-label="فلتر المستخدم">
-                <option value="">كل المستخدمين</option>
-                {historyUserOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                {hasUnknownHistoryUser && <option value="__unknown__">غير معروف</option>}
-              </select>
               <input
                 className="search-input"
                 value={historySearch}
@@ -1890,7 +1782,7 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                 placeholder="بحث في السجل..."
                 style={{ minWidth: 220, flex: "1 1 220px" }}
               />
-              <button type="button" className="action-btn" onClick={clearTreasuryHistoryFilters} disabled={!historyType && !historyBox && !historyUser && !historySearch}>
+              <button type="button" className="action-btn" onClick={clearTreasuryHistoryFilters} disabled={!historyType && !historyBox && !historySearch}>
                 مسح الفلاتر
               </button>
             </div>
@@ -1899,7 +1791,6 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                 <thead>
                   <tr>
                     <th>التاريخ والوقت</th>
-                    <th>المستخدم</th>
                     <th>نوع الحركة</th>
                     <th>من</th>
                     <th>إلى</th>
@@ -1909,14 +1800,13 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                   </tr>
                 </thead>
                 <tbody>
-                  {treasurySplitsLoading || treasuryActorsLoading ? (
-                    <EmptyOrLoading loading={true} label="" colSpan={8} />
+                  {treasurySplitsLoading ? (
+                    <EmptyOrLoading loading={true} label="" colSpan={7} />
                   ) : filteredTreasuryOperations.length === 0 ? (
-                    <EmptyOrLoading loading={false} label="لا توجد تسويات أو تحويلات خزائن مطابقة للفلاتر" colSpan={8} />
+                    <EmptyOrLoading loading={false} label="لا توجد تسويات أو تحويلات خزائن مطابقة للفلاتر" colSpan={7} />
                   ) : filteredTreasuryOperations.map((op) => (
                     <tr key={op.id}>
                       <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{new Date(op.performedAt).toLocaleString("ar-EG")}</td>
-                      <td data-label="المستخدم" className="bold">{op.performedByLabel}</td>
                       <td data-label="نوع الحركة">
                         <span className={`badge pill-badge ${op.kind === "transfer" ? "badge-blue" : op.kind === "settlement_in" ? "badge-green" : "badge-red"}`}>{op.type}</span>
                       </td>
