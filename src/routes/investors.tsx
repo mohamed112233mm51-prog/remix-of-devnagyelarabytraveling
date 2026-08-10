@@ -9,6 +9,7 @@ import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
 import { buildInvestorCapitalSummary, investorTransactionCurrency, type FinancialPositionSplit } from "@/hooks/useFinancialPosition";
 import { checkOutflowAllowed, postMovement } from "@/lib/financialEngine";
+import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { usePerm } from "@/hooks/usePerm";
 import { ExportButton } from "@/components/ExportButton";
 import { buildArabicFileName } from "@/lib/exportStatement";
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/investors")({
 
 const TXN_TYPES = ["صرف نقدية", "توريد نقدية"] as const;
 
-type OwnerCashBox = { id: string; name: string; currency: string; balance: number | string | null; is_active: boolean };
+type OwnerCashBox = { id: string; name: string; currency: string; balance: number | string | null; is_active?: boolean | null; method_key?: string | null };
 
 type Tab = "list" | "history" | "statement" | "withdraw" | "deposit";
 
@@ -155,10 +156,31 @@ function InvestorForm({ onClose }: { onClose: () => void }) {
 
 function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[]; kind: typeof TXN_TYPES[number]; methodLabel: string; title: string }) {
   const { rows: boxes } = useLive<OwnerCashBox>("cash_boxes");
-  const activeBoxes = useMemo(
-    () => boxes.filter((box) => box.is_active !== false && ["EGP", "USD", "LYD"].includes(String(box.currency || "").toUpperCase())),
-    [boxes],
-  );
+  const activeBoxes = useMemo(() => {
+    const supported = boxes.filter((box) =>
+      box.is_active !== false
+      && ["EGP", "USD", "LYD"].includes(String(box.currency || "").toUpperCase()),
+    );
+
+    // Keep all previously available active treasuries, but explicitly resolve
+    // the two EGP company treasuries through the same stable mapping used by
+    // the rest of the financial system. This guarantees both company cash and
+    // company InstaPay are offered for owner funding when those boxes exist.
+    const companyCash = resolveCompanyCashBoxForSplit(boxes, "EGP", "company_cash")
+      || boxes.find((box) => box.is_active !== false && box.method_key === "company_cash")
+      || null;
+    const companyInstapay = resolveCompanyCashBoxForSplit(boxes, "EGP", "company_instapay")
+      || boxes.find((box) => box.is_active !== false && box.method_key === "company_instapay")
+      || null;
+
+    const ordered = [companyCash, companyInstapay, ...supported];
+    const seen = new Set<string>();
+    return ordered.filter((box): box is OwnerCashBox => {
+      if (!box || box.is_active === false || seen.has(box.id)) return false;
+      seen.add(box.id);
+      return true;
+    });
+  }, [boxes]);
   const [form, setForm] = useState({
     investor_id: "",
     date: new Date().toISOString().slice(0, 10),
