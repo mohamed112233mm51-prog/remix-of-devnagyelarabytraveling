@@ -1,0 +1,59 @@
+name: Security dependency hardening trial
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/security-dependency-trial.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+      - uses: oven-sh/setup-bun@v2
+      - name: Install current lock
+        run: bun install --frozen-lockfile
+      - name: Apply candidate security dependency changes locally
+        run: |
+          bun remove xlsx
+          bun add @cloudflare/vite-plugin@^1.51.2 @supabase/supabase-js@^2.112.2
+          bun add -d vite@^8.2.1 @vitejs/plugin-react@^6.0.5
+          # Refresh vulnerable transitive packages within their parents' declared ranges.
+          for pkg in brace-expansion js-yaml nanoid postcss dompurify tmp @babel/core; do
+            bun update "$pkg" || true
+          done
+          echo '=== package.json diff ==='
+          git diff -- package.json
+          echo '=== resolved versions ==='
+          for pkg in xlsx undici sharp ws postcss nanoid js-yaml brace-expansion dompurify esbuild tmp uuid @babel/core vite; do
+            echo "----- $pkg -----"
+            bun pm why "$pkg" || true
+          done
+      - name: Audit candidate
+        run: |
+          set +e
+          bun audit --json > /tmp/audit.json 2>/tmp/audit.err
+          code=$?
+          echo "bun audit exit=$code"
+          cat /tmp/audit.err || true
+          cat /tmp/audit.json || true
+          exit 0
+      - name: ExcelJS smoke test
+        run: |
+          node --input-type=module <<'JS'
+          import ExcelJS from 'exceljs';
+          const wb = new ExcelJS.Workbook();
+          const ws = wb.addWorksheet('test');
+          ws.addRow(['ok', 123]);
+          const out = await wb.xlsx.writeBuffer();
+          if (!out || out.byteLength < 100) throw new Error('ExcelJS smoke test failed');
+          console.log('ExcelJS buffer bytes', out.byteLength);
+          JS
+      - name: Build candidate
+        run: bun run build
