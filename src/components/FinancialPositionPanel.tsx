@@ -9,13 +9,11 @@ function DashboardCard({
   map,
   icon,
   tone,
-  sub,
 }: {
   label: string;
   map: import("@/lib/financialSummary").CurrencyMap;
   icon: ReactNode;
   tone: "primary" | "navy" | "success" | "warning";
-  sub?: string;
 }) {
   return (
     <div className={`erp-hero erp-hero-${tone}`}>
@@ -26,7 +24,6 @@ function DashboardCard({
       <div className="erp-hero-value" style={{ fontSize: 20, lineHeight: 1.35 }}>
         <CurrencyLines map={map} />
       </div>
-      {sub ? <div className="erp-hero-foot"><span className="erp-hero-sub">{sub}</span></div> : null}
     </div>
   );
 }
@@ -69,42 +66,36 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
             map={position.treasury}
             icon={<Landmark size={18} />}
             tone="primary"
-            sub="الخزائن الفعلية + أرصدة تجار الكاش الموجبة"
           />
           <DashboardCard
             label="مستحق للشركة عند الغير"
             map={position.receivables}
             icon={<HandCoins size={18} />}
             tone="success"
-            sub="حسب صافي رصيد كل جهة منفردة"
           />
           <DashboardCard
             label="مستحق على الشركة للغير"
             map={position.payables}
             icon={<Building2 size={18} />}
             tone="warning"
-            sub="حسب صافي رصيد كل جهة منفردة"
           />
           <DashboardCard
             label="صافي المركز المالي"
             map={position.netPosition}
             icon={<Scale size={18} />}
             tone="navy"
-            sub="الخزائن + الحقوق − الالتزامات"
           />
           <DashboardCard
             label="تمويل المالك الحالي"
             map={position.ownerCapital}
             icon={<Users size={18} />}
             tone="primary"
-            sub="توريدات المالك − سحوباته المربوطة بالخزائن"
           />
           <DashboardCard
             label="صافي أموال النشاط بعد استبعاد تمويل المالك"
             map={position.operatingFundsExOwner}
             icon={<WalletCards size={18} />}
             tone="success"
-            sub="مؤشر مركز مالي وليس بديلاً عن صافي الأرباح"
           />
         </div>
       </>
