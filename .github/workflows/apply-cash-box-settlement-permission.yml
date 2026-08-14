@@ -1,4 +1,4 @@
-name: Apply cash box settlement permission patch
+name: Apply cash box settlement permission patch v3
 
 on:
   push:
