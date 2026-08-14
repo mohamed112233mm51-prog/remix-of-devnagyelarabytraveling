@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
-import { FINANCIAL_POSITION_PERMISSION_KEY, hasDashboardViewPermission, hasPermission, isDashboardViewPermissionKey, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
+import { CASH_BOX_SETTLEMENT_PERMISSION_KEY, FINANCIAL_POSITION_PERMISSION_KEY, hasDashboardViewPermission, hasPermission, isDashboardViewPermissionKey, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
-export { FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
+export { CASH_BOX_SETTLEMENT_PERMISSION_KEY, FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 
 export type PermAction = "view" | "create" | "edit" | "delete" | "export";
 
@@ -18,6 +18,7 @@ export const SECTION_KEYS = [
   "investors",
   "expenses",
   "reports",
+  CASH_BOX_SETTLEMENT_PERMISSION_KEY,
   "data_import",
   "service_pricing_manage",
   "service_price_search",
@@ -153,7 +154,7 @@ export function checkOwnerOrExplicitPerm(
   isSuperAdmin: boolean,
   section: string | null | undefined,
   action: PermAction = "view",
-): boolean {
+) {
   if (isDashboardViewPermissionKey(section) && action === "view") {
     return hasDashboardViewPermission(normalizePermissionsForLoad(perms ?? {}), isSuperAdmin, section);
   }
