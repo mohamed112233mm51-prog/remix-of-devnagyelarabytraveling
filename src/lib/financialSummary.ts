@@ -1841,6 +1841,8 @@ export type MerchantMovementItem = {
   commission: number;
   net: number;
   delta: number;
+  date?: string | null;
+  createdAt?: string | null;
 };
 
 export type MerchantMovementTotals = {
