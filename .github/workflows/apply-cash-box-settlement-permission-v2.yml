@@ -1,0 +1,57 @@
+name: Apply cash box settlement permission patch v2
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/apply-cash-box-settlement-permission-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scoped permission patch
+        run: python3 scripts/_patch_cash_box_settlement_permission.py
+
+      - name: Verify scoped diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -q 'CASH_BOX_SETTLEMENT_PERMISSION_KEY' src/lib/permissionKeys.ts
+          grep -q 'cash_box_settlement' src/lib/permissionKeys.ts
+          grep -q 'label: "تسوية الخزائن"' src/routes/settings.tsx
+          grep -q 'const settlementPerm = usePerm(CASH_BOX_SETTLEMENT_PERMISSION_KEY)' src/routes/reports.tsx
+          grep -q 'ليس لديك صلاحية تسوية الخزائن' src/routes/reports.tsx
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+
+      - name: Commit scoped feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/routeTree.gen.ts || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/permissionKeys.ts src/hooks/usePerm.tsx src/routes/settings.tsx src/routes/reports.tsx
+          git rm scripts/_patch_cash_box_settlement_permission.py .github/workflows/apply-cash-box-settlement-permission.yml
+          git diff --cached --check
+          git commit -m 'feat(permissions): separate cash box settlement access'
+          git push origin devo
