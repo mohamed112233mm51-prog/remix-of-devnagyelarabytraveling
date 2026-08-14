@@ -402,6 +402,7 @@ export type Database = {
           cancel_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
+          commission_amount: number
           created_at: string
           created_by: string | null
           description: string | null
@@ -425,6 +426,7 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          commission_amount?: number
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -448,6 +450,7 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          commission_amount?: number
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1468,6 +1471,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      app_financial_action_allowed: {
+        Args: { p_action: string; p_owner_section: string }
+        Returns: boolean
+      }
+      app_has_any_permission: {
+        Args: { p_action?: string; p_sections: string[] }
+        Returns: boolean
+      }
+      app_payment_split_write_allowed: {
+        Args: { p_action: string; p_source_id: string; p_source_table: string }
+        Returns: boolean
+      }
+      app_permission_allowed: {
+        Args: { p_action?: string; p_section: string }
+        Returns: boolean
+      }
       can_view_audit_log: { Args: { _uid: string }; Returns: boolean }
       has_role: {
         Args: {
