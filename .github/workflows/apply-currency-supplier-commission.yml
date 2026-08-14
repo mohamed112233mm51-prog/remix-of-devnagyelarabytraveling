@@ -1,0 +1,56 @@
+name: Apply currency supplier commission patch
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - 'scripts/_patch_currency_supplier_commission.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scoped patch
+        run: python3 scripts/_patch_currency_supplier_commission.py
+
+      - name: Verify scoped diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -q 'const \[commission, setCommission\]' src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx
+          grep -q 'العمولة \*' src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx
+          grep -q 'totalEgp' src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx
+          grep -q 'sold_amount: isBuy ? totalEgp : a' src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+
+      - name: Commit scoped feature and remove patch helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/routeTree.gen.ts || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx
+          git rm scripts/_patch_currency_supplier_commission.py .github/workflows/apply-currency-supplier-commission.yml
+          git diff --cached --check
+          git commit -m 'feat(currency-suppliers): add purchase commission to supplier total'
+          git push origin devo
