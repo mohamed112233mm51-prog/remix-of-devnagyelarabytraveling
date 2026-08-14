@@ -630,6 +630,7 @@ function TxModal({
   const [foreignAmount, setForeignAmount] = useState<string>("");
   const [rate, setRate] = useState<string>("");
   const [egpAmount, setEgpAmount] = useState<string>("");
+  const [commission, setCommission] = useState<string>("0");
   const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState<string>("");
 
@@ -675,15 +676,21 @@ function TxModal({
     [splits],
   );
   const egpNum = Number(egpAmount) || 0;
-  const splitsDiff = +(egpNum - splitsTotal).toFixed(2);
+  const commissionNum = kind === "شراء عملة" ? (Number(commission) || 0) : 0;
+  const totalEgpNum = +(egpNum + commissionNum).toFixed(2);
+  const splitsDiff = +(totalEgpNum - splitsTotal).toFixed(2);
 
   const save = async () => {
     const a = Number(foreignAmount);
     const r = Number(rate);
     const e = Number(egpAmount);
+    const commissionValue = isBuy ? (Number(commission) || 0) : 0;
+    const totalEgp = +(e + commissionValue).toFixed(2);
     if (!txDate) return toast.error("التاريخ مطلوب");
     if (!foreignCurrency) return toast.error("اختر العملة");
     if (!(a > 0) || !(r > 0) || !(e > 0)) return toast.error("أدخل قيمتين على الأقل لحساب الثالثة");
+    if (isBuy && commissionValue < 0) return toast.error("العمولة لا يمكن أن تكون سالبة");
+    if (!(totalEgp > 0)) return toast.error("إجمالي قيمة العملية يجب أن يكون أكبر من صفر");
     // For "شراء عملة": payment is OPTIONAL. Allow zero payment (full credit to supplier),
     // partial payment, or full payment. Only validate split-row shape when the user
     // actually entered payment amounts. For "بيع عملة": receipts remain required
@@ -737,7 +744,7 @@ function TxModal({
       bought_amount: isBuy ? a : e,
       sold_currency: isBuy ? EGP_CODE : foreignCurrency,
 
-      sold_amount: isBuy ? e : a,
+      sold_amount: isBuy ? totalEgp : a,
       exchange_rate: r,
       description: description.trim() || null,
       payment_splits: splitsJson,
@@ -814,6 +821,12 @@ function TxModal({
             <input type="number" step="0.01" value={egpAmount}
               onChange={(e) => { setEgpAmount(e.target.value); setLastEdited("egp"); }} />
           </div>
+          {isBuy && (
+            <div className="form-group"><label>العمولة *</label>
+              <input type="number" min="0" step="0.01" value={commission}
+                onChange={(e) => setCommission(e.target.value)} placeholder="0.00" />
+            </div>
+          )}
           <div className="form-group" style={{ gridColumn: "1 / -1" }}><label>البيان</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
@@ -827,7 +840,13 @@ function TxModal({
         />
 
         <div style={{ padding: "4px 12px 8px", fontSize: 13 }}>
-          إجمالي وسائل الدفع: <b>{fmtNum(splitsTotal)}</b>
+          إجمالي حساب المورد: <b>{fmtNum(totalEgpNum)}</b>
+          {isBuy && commissionNum > 0 && (
+            <span style={{ color: "var(--gold, #b8860b)", marginInlineStart: 8 }}>
+              شامل العمولة: {fmtNum(commissionNum)}
+            </span>
+          )}
+          <span style={{ marginInlineStart: 8 }}>إجمالي وسائل الدفع: <b>{fmtNum(splitsTotal)}</b></span>
           {splitsDiff > 0.5 && (
             <span style={{ color: "var(--gold, #b8860b)", marginInlineStart: 8 }}>
               الباقي المستحق للمورد: {fmtNum(splitsDiff)}
