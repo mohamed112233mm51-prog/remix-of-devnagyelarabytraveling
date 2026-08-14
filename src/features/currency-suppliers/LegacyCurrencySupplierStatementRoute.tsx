@@ -736,7 +736,6 @@ function TxModal({
       amount: Number(row.amount) || 0,
     }));
 
-    const isBuy = kind === "شراء عملة";
     const payload: any = {
       supplier_id: supplierId,
       tx_date: txDate,
@@ -746,6 +745,7 @@ function TxModal({
       sold_currency: isBuy ? EGP_CODE : foreignCurrency,
 
       sold_amount: isBuy ? totalEgp : a,
+      commission_amount: commissionValue,
       exchange_rate: r,
       description: description.trim() || null,
       payment_splits: splitsJson,
