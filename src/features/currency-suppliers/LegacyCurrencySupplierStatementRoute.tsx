@@ -703,7 +703,7 @@ function TxModal({
     }
     // Partial payment allowed. Only block if paying MORE than the exchange value.
     if (splitsDiff < -0.5) {
-      return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) يتجاوز قيمة الصفقة بالجنيه (${fmtNum(egpNum)})`);
+      return toast.error(`إجمالي وسائل الدفع (${fmtNum(splitsTotal)}) يتجاوز قيمة الصفقة بالجنيه (${fmtNum(totalEgp)})`);
     }
     const validForCheck = filterValidSplits(splits);
     if (kind === "شراء عملة") {
