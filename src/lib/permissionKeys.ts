@@ -1,6 +1,7 @@
 export const NET_PROFIT_PERMISSION_KEY = "net_profit_view" as const;
 export const PROFIT_SUMMARY_PERMISSION_KEY = "profit_summary_view" as const;
 export const FINANCIAL_POSITION_PERMISSION_KEY = "financial_position_view" as const;
+export const CASH_BOX_SETTLEMENT_PERMISSION_KEY = "cash_box_settlement" as const;
 
 const LEGACY_NET_PROFIT_PERMISSION_KEY = "net_profit";
 const LEGACY_PROFIT_SUMMARY_PERMISSION_KEY = "profit_summary";
