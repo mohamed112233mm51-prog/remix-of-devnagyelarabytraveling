@@ -684,6 +684,7 @@ function TxModal({
     const a = Number(foreignAmount);
     const r = Number(rate);
     const e = Number(egpAmount);
+    const isBuy = kind === "شراء عملة";
     const commissionValue = isBuy ? (Number(commission) || 0) : 0;
     const totalEgp = +(e + commissionValue).toFixed(2);
     if (!txDate) return toast.error("التاريخ مطلوب");
