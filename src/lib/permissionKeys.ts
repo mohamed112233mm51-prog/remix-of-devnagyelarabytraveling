@@ -14,6 +14,7 @@ export const PROFIT_PERMISSION_KEYS = [
 export const DASHBOARD_VIEW_PERMISSION_KEYS = [
   ...PROFIT_PERMISSION_KEYS,
   FINANCIAL_POSITION_PERMISSION_KEY,
+  CASH_BOX_SETTLEMENT_PERMISSION_KEY,
 ] as const;
 
 export type DashboardViewPermissionKey = typeof DASHBOARD_VIEW_PERMISSION_KEYS[number];
@@ -46,7 +47,8 @@ export function isProfitPermissionKey(key: string | null | undefined): key is ty
 export function isDashboardViewPermissionKey(key: string | null | undefined): key is DashboardViewPermissionKey {
   return key === NET_PROFIT_PERMISSION_KEY
     || key === PROFIT_SUMMARY_PERMISSION_KEY
-    || key === FINANCIAL_POSITION_PERMISSION_KEY;
+    || key === FINANCIAL_POSITION_PERMISSION_KEY
+    || key === CASH_BOX_SETTLEMENT_PERMISSION_KEY;
 }
 
 export function hasPermission(

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { usePerm } from "@/hooks/usePerm";
+import { CASH_BOX_SETTLEMENT_PERMISSION_KEY, usePerm } from "@/hooks/usePerm";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
@@ -1587,6 +1587,7 @@ const CURRENCY_LABEL: Record<string, string> = { EGP: "جنيه مصري", USD: 
 
 function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined) => boolean }) {
   const reportPerm = usePerm("reports");
+  const settlementPerm = usePerm(CASH_BOX_SETTLEMENT_PERMISSION_KEY);
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
   const { rows: treasurySplits, loading: treasurySplitsLoading } = useLive<TreasuryOperationSplit>("payment_splits");
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
@@ -1754,9 +1755,9 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                   <td data-label="الرصيد الافتتاحي">{fmtNum(Number(b.opening_balance || 0))}</td>
                   <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(b.balance || 0))}</td>
                   <td data-label="إجراءات">
-                    {reportPerm.edit ? (<>
-                      <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>
-                      <button type="button" className="action-btn" style={{ marginInlineStart: 6 }} onClick={() => setReconcileBox(b)}>⚖️ تسوية الخزنة</button>
+                    {reportPerm.edit || settlementPerm.view ? (<>
+                      {reportPerm.edit && <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>}
+                      {settlementPerm.view && <button type="button" className="action-btn" style={{ marginInlineStart: 6 }} onClick={() => setReconcileBox(b)}>⚖️ تسوية الخزنة</button>}
                     </>) : "—"}
                   </td>
                 </tr>
@@ -1997,6 +1998,7 @@ function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose
 }
 
 function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () => void }) {
+  const settlementPerm = usePerm(CASH_BOX_SETTLEMENT_PERMISSION_KEY);
   const currentBalance = Number(box.balance || 0);
   const currencyLabel = CURRENCY_LABEL[box.currency] || box.currency;
   const [physical, setPhysical] = useState<string>("");
@@ -2010,6 +2012,7 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
   const diffLabel = diff > 0 ? "تسوية زيادة خزنة" : diff < 0 ? "تسوية عجز خزنة" : "لا يوجد فرق";
 
   const save = async () => {
+    if (!settlementPerm.view) { toast.error("ليس لديك صلاحية تسوية الخزائن"); return; }
     if (!hasPhysical) { toast.error("أدخل الرصيد الفعلي بعد الجرد"); return; }
     if (!reason.trim()) { toast.error("سبب التسوية إجباري"); return; }
     if (diff === 0) { toast.error("لا يوجد فرق لتسويته"); return; }

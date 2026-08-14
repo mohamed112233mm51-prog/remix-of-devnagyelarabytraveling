@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
-import { FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, isDashboardViewPermissionKey, normalizePermissionBranch } from "@/lib/permissionKeys";
+import { CASH_BOX_SETTLEMENT_PERMISSION_KEY, FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, isDashboardViewPermissionKey, normalizePermissionBranch } from "@/lib/permissionKeys";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { normalizeDropdownValue, refetchLiveTables, resetLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
@@ -58,6 +58,7 @@ const PERMISSION_KEYS: { key: string; label: string; route: string }[] = [
   { key: NET_PROFIT_PERMISSION_KEY, label: "صافي الأرباح",         route: "/#net-profit" },
   { key: PROFIT_SUMMARY_PERMISSION_KEY, label: "ملخص الأرباح",     route: "/#profit-summary" },
   { key: FINANCIAL_POSITION_PERMISSION_KEY, label: "المركز المالي الحالي — الداشبورد", route: "/#financial-position" },
+  { key: CASH_BOX_SETTLEMENT_PERMISSION_KEY, label: "تسوية الخزائن", route: "/reports#treasuries" },
 ];
 
 const ACTIONS: { key: "view" | "create" | "edit" | "delete" | "export"; label: string }[] = [
