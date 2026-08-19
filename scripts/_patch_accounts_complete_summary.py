@@ -17,3 +17,4 @@ s = s.replace(old2, new2, 1)
 
 path.write_text(s, encoding="utf-8")
 print("patched", path)
+# workflow trigger
