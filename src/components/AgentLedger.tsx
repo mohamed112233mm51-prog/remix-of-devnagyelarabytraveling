@@ -63,15 +63,14 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const router = useRouter();
   const { rows: liveAgents, loading: agentsLoading } = useLive<Agent>("agents");
   const flights: any[] = [];
-  const { rows: liveTxns } = useLive<Transaction>("transactions");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
   const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
   const { rows: liveExecutions } = useLive<Execution>("executions");
   const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const agents = Array.isArray(liveAgents) ? liveAgents : [];
-  const txns = Array.isArray(liveTxns) ? liveTxns : [];
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
+  const [agentTxns, setAgentTxns] = useState<Transaction[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
@@ -107,6 +106,62 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   useEffect(() => { if (lockedAgentId) setSelectedAgentId(lockedAgentId); }, [lockedAgentId]);
   useEffect(() => { if (!lockedAgentId) setSelectedAgentId(initialAgentId || ""); }, [initialAgentId, lockedAgentId]);
 
+  const AGENT_TX_PAGE_SIZE = 1000;
+  useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const loadAllAgentTransactions = async () => {
+      if (!selectedAgentId) {
+        if (!cancelled) setAgentTxns([]);
+        return;
+      }
+
+      const allRows: Transaction[] = [];
+      let from = 0;
+
+      while (!cancelled) {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("agent_id", selectedAgentId)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + AGENT_TX_PAGE_SIZE - 1);
+
+        if (error) {
+          toast.error(error.message || "تعذر تحميل كشف حساب الوكيل");
+          return;
+        }
+
+        const page = Array.isArray(data) ? (data as Transaction[]) : [];
+        allRows.push(...page);
+        if (page.length < AGENT_TX_PAGE_SIZE) break;
+        from += AGENT_TX_PAGE_SIZE;
+      }
+
+      if (!cancelled) setAgentTxns(allRows);
+    };
+
+    loadAllAgentTransactions();
+
+    if (selectedAgentId) {
+      channel = supabase
+        .channel(`agent-ledger-transactions-${selectedAgentId}-${Math.random().toString(36).slice(2)}`)
+        .on(
+          "postgres_changes" as any,
+          { event: "*", schema: "public", table: "transactions", filter: `agent_id=eq.${selectedAgentId}` },
+          () => loadAllAgentTransactions(),
+        )
+        .subscribe();
+    }
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [selectedAgentId]);
+
   const agent = agents.find((a) => a.id === selectedAgentId);
   const merchantName = (mid: string | null) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
 
@@ -128,7 +183,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   const myFlights = useMemo(() => flights.filter((f) => f.agent_id === selectedAgentId), [flights, selectedAgentId]);
 
-  const myTxnsAll = useMemo(() => txns.filter((t) => t.agent_id === selectedAgentId), [txns, selectedAgentId]);
+  const myTxnsAll = agentTxns;
   const splitCurrencyByTxnId = useMemo(
     () => resolveSplitCurrencyByRef(liveSplits, "transactions"),
     [liveSplits],
