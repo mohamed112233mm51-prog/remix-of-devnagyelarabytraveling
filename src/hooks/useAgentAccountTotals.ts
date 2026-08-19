@@ -14,7 +14,8 @@
 // لا تحويل عملات، لا خلط، ولا اعتماد على executions لحساب الرصيد.
 
 import { useMemo } from "react";
-import { CurrencyMap, useAgentsSummary } from "@/lib/financialSummary";
+import { CurrencyMap } from "@/lib/financialSummary";
+import { useCompleteAgentsSummary } from "@/hooks/useCompleteAgentsSummary";
 
 export type AgentAccountTotals = {
   agentCount: number;
@@ -24,7 +25,7 @@ export type AgentAccountTotals = {
 };
 
 export function useAgentAccountTotals(): AgentAccountTotals {
-  const summaries = useAgentsSummary();
+  const summaries = useCompleteAgentsSummary();
 
   return useMemo(() => {
     const services = new CurrencyMap();
