@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { badgeFor, fmtDL, fmtCurrency, useLive, useDropdownOptions, GOVERNORATES, applyOptimistic, type Agent, type Merchant, type Transaction } from "@/lib/db";
-import { CurrencyMap, formatCurrencyMap, useAgentsSummary } from "@/lib/financialSummary";
+import { CurrencyMap, formatCurrencyMap } from "@/lib/financialSummary";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
+import { useCompleteAgentsSummary } from "@/hooks/useCompleteAgentsSummary";
 
 
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
@@ -53,7 +54,7 @@ function AccountsPage() {
   // مصدر الحقيقة المحاسبي الوحيد هو نفس دفتر كشف حساب الوكيل.
   // المدين/الدائن/الرصيد هنا مبنية من buildAgentLedgerRows عبر useAgentsSummary،
   // لذلك تشمل الحركات القديمة والأرصدة الافتتاحية وتستبعد الملغي بنفس قواعد الكشف.
-  const agentSummaries = useAgentsSummary();
+  const agentSummaries = useCompleteAgentsSummary();
   const { services: totalTrips, payments: totalPaid, due: totalDue } = useAgentAccountTotals();
   const stats = useMemo(() => {
     const map = new Map<string, { trips: CurrencyMap; paid: CurrencyMap; due: CurrencyMap }>();
