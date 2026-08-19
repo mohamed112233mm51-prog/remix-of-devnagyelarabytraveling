@@ -1,0 +1,61 @@
+name: Apply agent ledger pagination fix
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - 'scripts/_patch_agent_ledger_pagination.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply scoped patch
+        run: python3 scripts/_patch_agent_ledger_pagination.py
+
+      - name: Verify scoped diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -q 'AGENT_TX_PAGE_SIZE = 1000' src/components/AgentLedger.tsx
+          grep -q 'eq("agent_id", selectedAgentId)' src/components/AgentLedger.tsx
+          grep -q '.range(from, from + AGENT_TX_PAGE_SIZE - 1)' src/components/AgentLedger.tsx
+          grep -q 'agent-ledger-transactions-' src/components/AgentLedger.tsx
+          if grep -q 'useLive<Transaction>("transactions")' src/components/AgentLedger.tsx; then
+            echo 'AgentLedger still depends on global transactions useLive' >&2
+            exit 1
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+
+      - name: Commit scoped fix and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/routeTree.gen.ts || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/AgentLedger.tsx
+          git rm scripts/_patch_agent_ledger_pagination.py .github/workflows/apply-agent-ledger-pagination.yml
+          git diff --cached --check
+          git commit -m 'fix(agent-ledger): load complete agent transaction history'
+          git push origin devo
