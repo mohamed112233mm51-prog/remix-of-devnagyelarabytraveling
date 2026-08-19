@@ -25,3 +25,4 @@ for old, new in replacements:
 
 path.write_text(s, encoding="utf-8")
 print("patched", path)
+# trigger workflow
