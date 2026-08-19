@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cairoToday } from "@/lib/approvalFines";
-import { useLive, type Transaction } from "@/lib/db";
+import { supabase } from "@/integrations/supabase/client";
+import { type Transaction } from "@/lib/db";
 import { buildAgentLedgerRows, CurrencyMap } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
+import { toast } from "sonner";
 
 type PaymentSplitCurrencyRow = {
   id: string;
@@ -11,6 +13,7 @@ type PaymentSplitCurrencyRow = {
   transaction_id?: string | null;
   currency: string | null;
   cancelled_at?: string | null;
+  created_at?: string | null;
 };
 
 export type AgentPeriodTotals = {
@@ -18,6 +21,29 @@ export type AgentPeriodTotals = {
   credit: CurrencyMap;
   movement: CurrencyMap;
 };
+
+const PAGE_SIZE = 1000;
+
+async function loadAllRows<T>(table: "transactions" | "payment_splits"): Promise<T[]> {
+  const rows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const page = Array.isArray(data) ? (data as T[]) : [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return rows;
+}
 
 /**
  * نفس ربط العملة المستخدم في كشف الحساب، مع استبعاد سطور الدفع الملغاة.
@@ -49,15 +75,54 @@ function resolveActiveSplitCurrencyByRef(
 
 /**
  * إجماليات عرض فقط من دفتر transactions نفسه.
+ * يتم تحميل كل التاريخ على صفحات بدل الاعتماد على useLive العام المحدود بعدد الصفوف.
  * - تدخل كل حركة مرتبطة بوكيل، حتى لو تم حذف بطاقة الوكيل لاحقاً.
  * - الحركات الملغاة تُستبعد داخل buildAgentLedgerRows.
  * - تاريخ الفترة = date ثم created_at كـ fallback، مثل الداشبورد.
  * - العملات لا تُخلط.
  */
 export function useAgentPeriodTotals(period: SummaryPeriod): AgentPeriodTotals {
-  const { rows: transactions } = useLive<Transaction>("transactions");
-  const { rows: paymentSplits } = useLive<PaymentSplitCurrencyRow>("payment_splits");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [paymentSplits, setPaymentSplits] = useState<PaymentSplitCurrencyRow[]>([]);
   const todayISO = cairoToday();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const reload = async () => {
+      try {
+        const [allTransactions, allPaymentSplits] = await Promise.all([
+          loadAllRows<Transaction>("transactions"),
+          loadAllRows<PaymentSplitCurrencyRow>("payment_splits"),
+        ]);
+
+        if (!cancelled) {
+          setTransactions(allTransactions);
+          setPaymentSplits(allPaymentSplits);
+        }
+      } catch (error: any) {
+        if (!cancelled) toast.error(error?.message || "تعذر تحميل إجماليات الوكلاء كاملة");
+      }
+    };
+
+    reload();
+
+    const txChannel = supabase
+      .channel(`agent-period-totals-tx-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "transactions" }, reload)
+      .subscribe();
+
+    const splitChannel = supabase
+      .channel(`agent-period-totals-splits-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "payment_splits" }, reload)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(txChannel);
+      supabase.removeChannel(splitChannel);
+    };
+  }, []);
 
   return useMemo(() => {
     const splitCurrencyByTxnId = resolveActiveSplitCurrencyByRef(paymentSplits, "transactions");
