@@ -24,6 +24,7 @@
  */
 
 import { useMemo } from "react";
+import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { computeExecutionSalesEGP, type ExecutionRow } from "./executionProfit";
 import {
   computeAgentCollections,
@@ -328,11 +329,13 @@ function isMerchantSplit(s: SplitRow): boolean {
 }
 
 export function useMerchantSummary(merchantId: string | null | undefined): EntitySummary {
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
+  const {
+    transactions: txns,
+    companyTransactions: companyTxns,
+    collections,
+    conversions: usdRows,
+    paymentSplits: splits,
+  } = useCompleteMerchantFinancialData();
   return useMemo(() => {
     if (!merchantId) return empty();
     const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
@@ -342,11 +345,13 @@ export function useMerchantSummary(merchantId: string | null | undefined): Entit
 
 export function useMerchantsSummary(): Map<string, EntitySummary> {
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
+  const {
+    transactions: txns,
+    companyTransactions: companyTxns,
+    collections,
+    conversions: usdRows,
+    paymentSplits: splits,
+  } = useCompleteMerchantFinancialData();
   return useMemo(() => {
     const out = new Map<string, EntitySummary>();
     const input = buildMerchantMovementInputs(txns, companyTxns, collections, usdRows, splits);
@@ -600,11 +605,13 @@ export function computeMerchantAggregates(input: {
 
 /** Hook حي لتجميعات كل التجار (لكل تاجر: CurrencyMap لكل حقل). */
 export function useMerchantAggregates(): Map<string, MerchantAggregate> {
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: splits } = useLive<CollectionSplitRow>("payment_splits");
+  const {
+    transactions: txns,
+    companyTransactions: companyTxns,
+    collections,
+    conversions: usdRows,
+    paymentSplits: splits,
+  } = useCompleteMerchantFinancialData();
   return useMemo(
     () => computeMerchantAggregates({ txns, companyTxns, collections, usdRows, splits }),
     [txns, companyTxns, collections, usdRows, splits],

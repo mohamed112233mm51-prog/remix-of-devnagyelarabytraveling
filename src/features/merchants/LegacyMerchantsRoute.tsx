@@ -33,6 +33,7 @@ import {
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
@@ -64,13 +65,15 @@ export const Route = createFileRoute("/merchants")({
 function MerchantsPage() {
   const perm = usePerm("merchants");
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
+  const {
+    transactions: txns,
+    companyTransactions: cTxns,
+    collections,
+    conversions: usdRows,
+    paymentSplits,
+  } = useCompleteMerchantFinancialData();
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: paymentSplits } = useLive<{ id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null }>("payment_splits");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "cashout" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
   // Unified financial engine — نفس النتائج السابقة، مصدر واحد للحساب.

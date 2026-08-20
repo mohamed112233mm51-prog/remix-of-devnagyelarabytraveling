@@ -1,8 +1,8 @@
 import { useMemo } from "react";
+import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { cairoToday } from "@/lib/approvalFines";
 import {
   merchantCompanyOutflowAmount,
-  useLive,
   type CompanyTransaction,
   type MerchantCashCollection,
   type Transaction,
@@ -30,11 +30,13 @@ type CollectionSplitRow = {
  * وتستخدم date ثم createdAt كـ fallback للسجلات القديمة.
  */
 export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovementTotals {
-  const { rows: transactions } = useLive<Transaction>("transactions");
-  const { rows: companyTransactions } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: conversions } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: paymentSplits } = useLive<CollectionSplitRow>("payment_splits");
+  const {
+    transactions,
+    companyTransactions,
+    collections,
+    conversions,
+    paymentSplits,
+  } = useCompleteMerchantFinancialData();
   const todayISO = cairoToday();
 
   return useMemo(() => {
