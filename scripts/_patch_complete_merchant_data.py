@@ -1,4 +1,5 @@
 # PR trigger for applying the merchant complete-data fix.
+# Retrigger after CI dependency-install correction.
 from pathlib import Path
 
 
