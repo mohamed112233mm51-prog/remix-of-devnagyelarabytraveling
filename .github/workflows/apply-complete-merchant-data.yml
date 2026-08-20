@@ -1,12 +1,15 @@
 name: Apply complete merchant data fix
 
-# Trigger commit after workflow creation.
 on:
   push:
     branches: [devo]
     paths:
       - scripts/_patch_complete_merchant_data.py
       - .github/workflows/apply-complete-merchant-data.yml
+  pull_request:
+    branches: [devo]
+    paths:
+      - scripts/_patch_complete_merchant_data.py
 
 permissions:
   contents: write
