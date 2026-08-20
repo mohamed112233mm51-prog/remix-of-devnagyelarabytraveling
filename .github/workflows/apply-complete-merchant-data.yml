@@ -1,5 +1,6 @@
 name: Apply complete merchant data fix
 
+# Trigger commit after workflow creation.
 on:
   push:
     branches: [devo]
