@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type {
   CompanyTransaction,
@@ -47,6 +47,9 @@ export function useCompleteMerchantFinancialData() {
   const [paymentSplits, setPaymentSplits] = useState<MerchantPaymentSplitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const channelNameRef = useRef(
+    `complete-merchant-financial-data-${Math.random().toString(36).slice(2)}`,
+  );
 
   const reload = useCallback(async () => {
     try {
@@ -74,8 +77,13 @@ export function useCompleteMerchantFinancialData() {
   useEffect(() => {
     void reload();
 
+    // This hook is used by several merchant widgets on the same page.
+    // Supabase channels are keyed by name; reusing one name means the second
+    // hook instance can receive an already-subscribed channel and `.on()` then
+    // throws: "cannot add postgres_changes callbacks ... after subscribe".
+    // Give each mounted hook instance its own stable channel name.
     const channel = supabase
-      .channel("complete-merchant-financial-data")
+      .channel(channelNameRef.current)
       .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => void reload())
       .on("postgres_changes", { event: "*", schema: "public", table: "company_transactions" }, () => void reload())
       .on("postgres_changes", { event: "*", schema: "public", table: "merchant_cash_collections" }, () => void reload())
