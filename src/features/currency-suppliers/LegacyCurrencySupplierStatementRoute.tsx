@@ -31,6 +31,7 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 import {
+import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
   summarizeCurrencySupplierStatement,
   summarizeCurrencySupplierNetByCurrency,
   attachRunningBalances,
@@ -710,6 +711,9 @@ function TxModal({
       // EGP leaves the company / merchants → guard balances only if there are payments.
       if (validForCheck.length > 0) {
         const balanceErr = validateSplitOutflows(validForCheck, balances, merchants);
+    const merchantDbErr = await assertMerchantOutflowsAllowed(validForCheck);
+    if (merchantDbErr) return toast.error(merchantDbErr);
+
         if (balanceErr) return toast.error(balanceErr);
       }
     } else {
@@ -929,6 +933,9 @@ function CashMovementModal({
     if (isOut) {
       // Merchant legs use the shared guard (per-merchant per-currency balances).
       const merchantErr = validateSplitOutflows(validSplits, balances, merchants);
+    const merchantDbErr = await assertMerchantOutflowsAllowed(validSplits);
+    if (merchantDbErr) return toast.error(merchantDbErr);
+
       if (merchantErr) return toast.error(merchantErr);
       // Company legs: check the resolved cash box balance for THIS currency.
       for (const r of validSplits) {
