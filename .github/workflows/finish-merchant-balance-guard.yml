@@ -1,0 +1,60 @@
+name: Finish merchant balance guard
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - '.github/workflows/finish-merchant-balance-guard.yml'
+      - 'scripts/_finish_merchant_balance_guard.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - name: Apply completion patch
+        run: python3 scripts/_finish_merchant_balance_guard.py
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: bun run build
+
+      - name: Verify guard wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -q 'useCompleteMerchantFinancialData' src/lib/balanceGuard.ts
+          grep -q 'assertMerchantOutflowsAllowed' src/components/CashMovementForms.tsx
+          grep -q 'assertMerchantOutflowsAllowed' src/features/companies/LegacyCompaniesRoute.tsx
+          grep -q 'assertMerchantOutflowsAllowed' src/features/expenses/LegacyExpensesRoute.tsx
+          grep -q 'assertMerchantOutflowsAllowed' src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx
+          ! grep -q 'assertMerchantOutflowsAllowed' src/components/AgentPaymentForm.tsx
+          grep -q 'assert_merchant_balance' src/lib/merchantBalanceGuard.ts
+
+      - name: Commit final code and remove temporary tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/routeTree.gen.ts || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/AgentPaymentForm.tsx src/components/CashMovementForms.tsx src/features/companies/LegacyCompaniesRoute.tsx src/features/expenses/LegacyExpensesRoute.tsx src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx src/lib/balanceGuard.ts src/lib/merchantBalanceGuard.ts src/hooks/useCompleteMerchantFinancialData.ts src/integrations/supabase/types.ts supabase/migrations/20260821085437_76149267-4385-4064-bce1-087b7ec6a5af.sql supabase/migrations/20260821085539_4d1c1d1f-668a-4b11-989b-a385c348af4c.sql
+          git rm scripts/_finish_merchant_balance_guard.py .github/workflows/finish-merchant-balance-guard.yml
+          git diff --cached --check
+          git commit -m 'fix(merchant): enforce complete balance guard on outflows'
+          git push origin devo
