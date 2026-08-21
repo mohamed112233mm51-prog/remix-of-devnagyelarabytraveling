@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtCurrency, normalizeCurrency, refetchLiveTables, useLive, type Investor, type InvestorTransaction } from "@/lib/db";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { formatCurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
@@ -32,8 +33,8 @@ type Tab = "list" | "history" | "statement" | "withdraw" | "deposit";
 function InvestorsPage() {
   const perm = usePerm("investors");
   const { rows: investors } = useLive<Investor>("investors");
-  const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
-  const { rows: paymentSplits } = useLive<FinancialPositionSplit>("payment_splits");
+  const { rows: txns } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
+  const { rows: paymentSplits } = useCompleteFinancialTable<FinancialPositionSplit>("payment_splits");
   const [tab, setTab] = useState<Tab>("history");
   const [addOpen, setAddOpen] = useState(false);
 

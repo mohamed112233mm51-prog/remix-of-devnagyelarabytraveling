@@ -17,6 +17,7 @@ import {
   summarizeCompany,
   type CurrencySupplierTx,
 } from "@/lib/financialSummary";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 
 type CashBoxRow = {
   id: string;
@@ -203,13 +204,13 @@ function subtractMaps(a: CurrencyMap, b: CurrencyMap): CurrencyMap {
 
 export function useFinancialPosition(): FinancialPosition {
   const { rows: cashBoxes } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: transactions } = useLive<Transaction>("transactions");
-  const { rows: companyTransactions } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: merchantCollections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: usdTreasuryRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: supplierTransactions } = useLive<any>("currency_supplier_transactions");
-  const { rows: investorTransactions } = useLive<InvestorTransaction>("investor_transactions");
-  const { rows: paymentSplits } = useLive<FinancialPositionSplit>("payment_splits");
+  const { rows: transactions } = useCompleteFinancialTable<Transaction>("transactions");
+  const { rows: companyTransactions } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
+  const { rows: merchantCollections } = useCompleteFinancialTable<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: usdTreasuryRows } = useCompleteFinancialTable<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: supplierTransactions } = useCompleteFinancialTable<any>("currency_supplier_transactions");
+  const { rows: investorTransactions } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
+  const { rows: paymentSplits } = useCompleteFinancialTable<FinancialPositionSplit>("payment_splits");
 
   return useMemo(() => {
     const sections: FinancialPositionSection[] = [
