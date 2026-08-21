@@ -25,6 +25,7 @@ import {
   type Merchant,
 } from "@/lib/db";
 import type { PaymentSplitRow } from "@/components/PaymentSplits";
+import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 
 type CashBoxRow = {
   id: string;
@@ -225,8 +226,8 @@ export function useSourceBalances(): SourceBalances {
     };
     const merchantCompanyOutSourceIds = new Set(
       agentTxns
-        .filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
-        .map((t) => (t as any).source_service_id)
+        .filter((t: Transaction) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
+        .map((t: Transaction) => (t as any).source_service_id)
         .filter(Boolean),
     );
     for (const t of agentTxns) {
