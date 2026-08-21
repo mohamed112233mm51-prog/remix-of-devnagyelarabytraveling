@@ -6,6 +6,7 @@ import {
   summarizeCurrencySupplierStatement,
 } from "@/lib/financialSummary";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllCurrencySupplierTransactions } from "@/lib/currencySupplierData";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 import type { CurrencyTotal } from "@/components/CurrencyTotalsCards";
 
@@ -41,19 +42,16 @@ export function useCurrencySupplierPeriodTotals(
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    supabase
-      .from("currency_supplier_transactions" as any)
-      .select("*")
-      .eq("supplier_id", supplierId)
-      .order("tx_date", { ascending: true })
-      .then(({ data, error }) => {
+    fetchAllCurrencySupplierTransactions<SupplierTransaction>(supplierId)
+      .then((data) => {
         if (cancelled) return;
-        if (error) {
-          console.error("[currency-supplier-period] load failed", error);
-          setRows([]);
-        } else {
-          setRows(((data as any) || []) as SupplierTransaction[]);
-        }
+        setRows(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("[currency-supplier-period] load failed", error);
+        setRows([]);
         setLoading(false);
       });
     return () => { cancelled = true; };

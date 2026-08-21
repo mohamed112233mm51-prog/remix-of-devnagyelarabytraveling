@@ -832,10 +832,17 @@ export function summarizeCurrencySupplierNetByCurrency(
 ): Array<{ currency: string; net: number }> {
   const map = new Map<string, number>();
   for (const t of buildCurrencySupplierLedgerRows(rows)) {
-    map.set(t.bought_currency, (map.get(t.bought_currency) || 0) + Number(t.bought_amount || 0));
-    map.set(t.sold_currency, (map.get(t.sold_currency) || 0) - Number(t.sold_amount || 0));
+    const { currency, delta } = currencySupplierDelta(t);
+    map.set(currency, (map.get(currency) || 0) + delta);
   }
-  return Array.from(map.entries()).map(([currency, net]) => ({ currency, net }));
+  const orderIndex = (currency: string) => {
+    const index = CURRENCY_ORDER.indexOf(currency);
+    return index >= 0 ? index : CURRENCY_ORDER.length;
+  };
+  return Array.from(map.entries())
+    .map(([currency, net]) => ({ currency, net }))
+    .filter(({ net }) => Math.abs(net) > 0.0001)
+    .sort((a, b) => orderIndex(a.currency) - orderIndex(b.currency) || a.currency.localeCompare(b.currency));
 }
 
 /**

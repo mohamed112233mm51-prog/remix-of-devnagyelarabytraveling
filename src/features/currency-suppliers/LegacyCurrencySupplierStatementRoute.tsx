@@ -31,6 +31,7 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { CurrencyTotalsCards, type CurrencyTotal } from "@/components/CurrencyTotalsCards";
 import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
+import { fetchAllCurrencySupplierTransactions } from "@/lib/currencySupplierData";
 import {
   summarizeCurrencySupplierStatement,
   summarizeCurrencySupplierNetByCurrency,
@@ -128,16 +129,15 @@ function CurrencySupplierStatementPage() {
     let cancel = false;
     (async () => {
       setLoading(true);
-      const [{ data: sup }, { data: tx, error: txErr }, { data: bx }, { data: mer }] = await Promise.all([
+      const [{ data: sup }, tx, { data: bx }, { data: mer }] = await Promise.all([
         supabase.from("currency_suppliers" as any).select("*").eq("id", supplierId).maybeSingle(),
-        supabase.from("currency_supplier_transactions" as any).select("*").eq("supplier_id", supplierId).order("tx_date", { ascending: true }),
+        fetchAllCurrencySupplierTransactions<Tx>(supplierId),
         supabase.from("cash_boxes" as any).select("*"),
         supabase.from("merchants").select("*").eq("status", "نشط").order("merchant_name"),
       ]);
       if (cancel) return;
-      if (txErr) toast.error(txErr.message);
       setSupplier((sup as any) || null);
-      setTxns(((tx as any) || []) as Tx[]);
+      setTxns(tx);
       setBoxes(((bx as any) || []) as CashBox[]);
       setMerchants(((mer as any) || []) as Merchant[]);
       setLoading(false);
