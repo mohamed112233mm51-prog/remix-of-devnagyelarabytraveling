@@ -12,8 +12,8 @@ import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
-import {
 import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
+import {
   PaymentSplits,
   newPaymentSplitRow,
   validatePaymentSplits,

@@ -56,11 +56,11 @@ export async function checkMerchantBalance(
   amount: number,
 ): Promise<string | null> {
   if (!merchantId || !(Number(amount) > 0)) return null;
-  const { data, error } = await supabase.rpc("assert_merchant_balance" as never, {
+  const { data, error } = await supabase.rpc("assert_merchant_balance", {
     p_merchant_id: merchantId,
     p_currency: normalizeCurrency(String(currency || "EGP")),
     p_amount: Number(amount),
-  } as never);
+  });
 
   if (error) {
     return `تعذر التحقق من رصيد تاجر الكاش من قاعدة البيانات: ${error.message}`;

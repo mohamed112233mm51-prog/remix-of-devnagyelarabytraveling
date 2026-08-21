@@ -10,7 +10,6 @@ import { activeOptions } from "@/lib/activeFilter";
 import { postMovement } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
-import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
@@ -139,9 +138,6 @@ export function AgentPaymentForm({
     if (validSplits.some((r) => r.currency !== selectedCurrency)) {
       return toast.error("لا يمكن حفظ دفعة واحدة بأكثر من عملة؛ أضف دفعة منفصلة لكل عملة");
     }
-    const merchantDbErr = await assertMerchantOutflowsAllowed(validSplits);
-    if (merchantDbErr) return toast.error(merchantDbErr);
-
 
     // Aggregate amounts onto the transaction record (used by ledger)
     let instapay = 0, cash = 0, merchantWalletGross = 0, merchantWalletNet = 0, merchantPhysical = 0;
