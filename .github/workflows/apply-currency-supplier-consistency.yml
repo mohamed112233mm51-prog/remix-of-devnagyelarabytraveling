@@ -1,0 +1,41 @@
+name: Apply currency supplier consistency fix
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_patch_currency_supplier_consistency.py
+      - src/lib/currencySupplierData.ts
+      - .github/workflows/apply-currency-supplier-consistency.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply patch
+        run: python3 scripts/_patch_currency_supplier_consistency.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/currencySupplierData.ts src/lib/financialSummary.ts src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx src/hooks/useCurrencySupplierPeriodTotals.ts
+          if git diff --cached --quiet; then
+            echo "No application changes to commit"
+          else
+            git commit -m "fix currency suppliers: unify ledger aggregation"
+            git push origin devo
+          fi
