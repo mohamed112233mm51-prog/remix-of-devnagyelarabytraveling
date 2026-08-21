@@ -28,6 +28,7 @@ import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 import { useExpensesTotals } from "@/lib/financialSummary";
+import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
 
 export const Route = createFileRoute("/expenses")({
   component: ExpensesPage,
@@ -176,6 +177,9 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       return toast.error(`إجمالي وسائل الدفع (${fmtDL(splitsTotal)}) لا يساوي إجمالي المصروف (${fmtDL(totalAmount)})`);
     }
     const balanceErr = validateSplitOutflows(valid, balances, merchants);
+    const merchantDbErr = await assertMerchantOutflowsAllowed(valid);
+    if (merchantDbErr) return toast.error(merchantDbErr);
+
     if (balanceErr) return toast.error(balanceErr);
 
 

@@ -12,7 +12,7 @@ export type MerchantPaymentSplitRow = {
   source_table: string | null;
   source_id: string | null;
   currency: string | null;
-  cancelled_at?: string | null;
+  cancelled_at: string | null;
   [key: string]: unknown;
 };
 

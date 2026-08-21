@@ -1479,6 +1479,7 @@ export type Database = {
         Args: { p_action?: string; p_sections: string[] }
         Returns: boolean
       }
+      app_normalize_currency: { Args: { p_currency: string }; Returns: string }
       app_payment_split_write_allowed: {
         Args: { p_action: string; p_source_id: string; p_source_table: string }
         Returns: boolean
@@ -1487,6 +1488,10 @@ export type Database = {
         Args: { p_action?: string; p_section: string }
         Returns: boolean
       }
+      assert_merchant_balance: {
+        Args: { p_amount: number; p_currency: string; p_merchant_id: string }
+        Returns: Json
+      }
       can_view_audit_log: { Args: { _uid: string }; Returns: boolean }
       has_role: {
         Args: {
@@ -1494,6 +1499,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      merchant_available_balance: {
+        Args: { p_currency: string; p_merchant_id: string }
+        Returns: number
       }
       reset_production_business_data: {
         Args: { p_confirm: string; p_user_id: string }

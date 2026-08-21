@@ -25,6 +25,7 @@ import {
   type Merchant,
 } from "@/lib/db";
 import type { PaymentSplitRow } from "@/components/PaymentSplits";
+import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 
 type CashBoxRow = {
   id: string;
@@ -157,13 +158,19 @@ function debugCashBoxBalance(info: CashBoxBalanceInfo, ready: boolean = true) {
 export function useSourceBalances(): SourceBalances {
   const { rows: cashBoxes, loading: cashBoxesLoading } = useLive<CashBoxRow>("cash_boxes");
   const { rows: paymentSplits, loading: paymentSplitsLoading } = useLive<PaymentSplitBalanceRow>("payment_splits");
-  const { rows: agentTxns } = useLive<Transaction>("transactions");
-  const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
+  // Merchant balances MUST be computed from the full history — `useLive` caps at
+  // 1000 rows, which silently truncated old merchant movements and produced
+  // false "رصيد غير كافٍ" blocks. This hook paginates through every row.
+  const {
+    transactions: agentTxns,
+    companyTransactions: cTxns,
+    collections,
+    conversions: usdRows,
+  } = useCompleteMerchantFinancialData();
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   // Kept for consumers that expect the hook to also react to these deps.
   void deductions;
+
 
   return useMemo(() => {
     const balancesReady = !cashBoxesLoading && !paymentSplitsLoading;
@@ -219,8 +226,8 @@ export function useSourceBalances(): SourceBalances {
     };
     const merchantCompanyOutSourceIds = new Set(
       agentTxns
-        .filter((t) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
-        .map((t) => (t as any).source_service_id)
+        .filter((t: Transaction) => t.merchant_id && t.source_service_type === "merchant_cash_out_to_company")
+        .map((t: Transaction) => (t as any).source_service_id)
         .filter(Boolean),
     );
     for (const t of agentTxns) {

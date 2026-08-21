@@ -13,6 +13,7 @@ import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import {
+import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
   PaymentSplits,
   newPaymentSplitRow,
   validatePaymentSplits,
@@ -101,6 +102,9 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
     const valid = filterValidSplits(splits);
     const currencyErr = validateSingleCurrency(valid);
     if (currencyErr) return toast.error(currencyErr);
+
+    const merchantDbErr = await assertMerchantOutflowsAllowed(valid);
+    if (merchantDbErr) return toast.error(merchantDbErr);
 
     setSaving(true);
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
@@ -197,6 +201,9 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const currencyErr = validateSingleCurrency(valid);
     if (currencyErr) return toast.error(currencyErr);
 
+    const merchantDbErr = await assertMerchantOutflowsAllowed(valid);
+    if (merchantDbErr) return toast.error(merchantDbErr);
+
     setSaving(true);
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
     const res = await postMovement({
@@ -277,6 +284,9 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
     const selectedCurrency = singleCurrencyOrError(valid);
     const currencyErr = validateSingleCurrency(valid);
     if (currencyErr) return toast.error(currencyErr);
+
+    const merchantDbErr = await assertMerchantOutflowsAllowed(valid);
+    if (merchantDbErr) return toast.error(merchantDbErr);
 
     // Aggregate for company_transactions metadata row (kept for ledger display).
     let instapay = 0, cash = 0, merchantWallet = 0, merchantPhysical = 0;

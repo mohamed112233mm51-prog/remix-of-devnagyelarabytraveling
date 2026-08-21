@@ -72,6 +72,7 @@ const COMPANY_STATEMENT_COLUMNS: ColumnDef[] = [
 import { activeOptions } from "@/lib/activeFilter";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
+import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
 
 export const Route = createFileRoute("/companies")({
   component: () => <AppErrorBoundary><CompaniesPage /></AppErrorBoundary>,
@@ -807,6 +808,9 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
     }
     const balanceErr = validateSplitOutflows(validSplits, balances, merchants);
+    const merchantDbErr = await assertMerchantOutflowsAllowed(validSplits);
+    if (merchantDbErr) return toast.error(merchantDbErr);
+
     if (balanceErr) return toast.error(balanceErr);
 
 
