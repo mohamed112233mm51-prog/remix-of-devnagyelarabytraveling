@@ -22,8 +22,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Apply patch
-        run: python3 scripts/_patch_currency_supplier_consistency.py
+      - name: Apply patch if needed
+        shell: bash
+        run: |
+          if grep -q 'const { currency, delta } = currencySupplierDelta(t);' src/lib/financialSummary.ts \
+            && grep -q 'fetchAllCurrencySupplierTransactions<Tx>(supplierId)' src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx \
+            && grep -q 'fetchAllCurrencySupplierTransactions<SupplierTransaction>(supplierId)' src/hooks/useCurrencySupplierPeriodTotals.ts; then
+            echo "Currency supplier consistency fix already applied"
+          else
+            python3 scripts/_patch_currency_supplier_consistency.py
+          fi
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build
