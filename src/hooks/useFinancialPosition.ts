@@ -3,20 +3,18 @@ import {
   useLive,
   type CompanyTransaction,
   type InvestorTransaction,
-  type MerchantCashCollection,
-  type Transaction,
-  type UsdTreasuryTransaction,
 } from "@/lib/db";
 import {
   CurrencyMap,
   buildCurrencySupplierLedgerRows,
   currencySupplierDelta,
+  resolveSplitCurrencyByRef,
   summarizeCompany,
+  useMerchantAggregates,
   type CurrencySupplierTx,
 } from "@/lib/financialSummary";
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useCompleteAgentsSummary } from "@/hooks/useCompleteAgentsSummary";
-import { useMerchantAggregates } from "@/lib/financialSummary";
 
 type CashBoxRow = {
   id: string;
@@ -225,12 +223,8 @@ export function useFinancialPosition(): FinancialPosition {
       mergeSignedBalances(agentsSection, summary.balance, 1);
     }
 
-    // الشركات الصادرة: موجب كشف الشركة = متبقي لهذه الشركة الصادرة (التزام علينا)، لذلك نعكس الإشارة.
-    const companyCurrencyMap = new Map<string, string>();
-    for (const split of paymentSplits) {
-      if (split.cancelled_at || split.source_table !== "company_transactions" || !split.source_id || !split.currency) continue;
-      companyCurrencyMap.set(split.source_id, String(split.currency).toUpperCase());
-    }
+    // الشركات الصادرة: نفس المنطق السابق بدون أي تغيير.
+    const companyCurrencyMap = resolveSplitCurrencyByRef(paymentSplits as any, "company_transactions");
     const companyGroups = groupById(companyTransactions, (row) => (row as any).company_id);
     for (const rows of companyGroups.values()) {
       mergeSignedBalances(companiesSection, summarizeCompany(rows, companyCurrencyMap).balance, -1);
@@ -242,7 +236,7 @@ export function useFinancialPosition(): FinancialPosition {
       mergeSignedBalances(merchantsSection, aggregate.balance, 1);
     }
 
-    // مورّد العملة: نكوّن صافي كل مورد/عملة أولاً ثم نحدد هل هو أصل أم التزام.
+    // مورّد العملة: نفس المنطق السابق بدون أي تغيير.
     const supplierBalances = new Map<string, CurrencyMap>();
     for (const row of buildCurrencySupplierLedgerRows(supplierTransactions as CurrencySupplierTx[])) {
       const supplierId = String((row as any).supplier_id || "").trim();
