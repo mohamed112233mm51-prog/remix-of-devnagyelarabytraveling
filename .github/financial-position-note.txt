@@ -1,0 +1,1 @@
+Financial position source-of-truth alignment verification marker.
