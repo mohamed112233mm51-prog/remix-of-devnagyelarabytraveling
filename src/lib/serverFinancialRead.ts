@@ -9,12 +9,23 @@ export type ServerFinancialPartyType =
   | "currency_supplier"
   | "expense";
 
+export type CanonicalV2PartyType = "agent" | "company";
+
 export type ServerEntityBalanceRow = {
   currency: string;
   debit: number;
   credit: number;
   balance: number;
   split_count: number;
+};
+
+export type CanonicalServerBalanceRow = {
+  currency: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  row_count: number;
+  engine: string;
 };
 
 export type ServerEntityLedgerRow = {
@@ -64,11 +75,8 @@ const rpc = (name: string, args: Record<string, unknown> = {}) =>
   (supabase as any).rpc(name, args);
 
 /**
- * Parallel server-side read model.
- * IMPORTANT: this v1 balance is payment_splits-based and MUST NOT replace a
- * legacy financial view until BOTH conditions are true:
- *  1) historical coverage is complete for the entity; and
- *  2) reconciliation matches the current production-equivalent calculation.
+ * v1 split-only read model. Kept for diagnostics only.
+ * It MUST NOT replace historical screens unless coverage is complete.
  */
 export async function fetchServerEntityBalances(
   partyType: ServerFinancialPartyType,
@@ -85,6 +93,31 @@ export async function fetchServerEntityBalances(
     credit: Number(row.credit || 0),
     balance: Number(row.balance || 0),
     split_count: Number(row.split_count || 0),
+  }));
+}
+
+/**
+ * Canonical v2 reader. Unlike v1, this calculates from the original historical
+ * parent tables using the same formulas as financialSummary.ts, so rows without
+ * payment_splits are not discarded. v2 is currently implemented for agents and
+ * companies only; unsupported party types fail closed in PostgreSQL.
+ */
+export async function fetchCanonicalEntityBalancesV2(
+  partyType: CanonicalV2PartyType,
+  partyId: string,
+): Promise<CanonicalServerBalanceRow[]> {
+  const { data, error } = await rpc("financial_entity_balance_v2", {
+    p_party_type: partyType,
+    p_party_id: partyId,
+  });
+  if (error) throw new Error(error.message || "تعذر تحميل الرصيد من المحرك المالي canonical v2");
+  return (Array.isArray(data) ? data : []).map((row: any) => ({
+    currency: normalizeCurrency(row.currency),
+    debit: Number(row.debit || 0),
+    credit: Number(row.credit || 0),
+    balance: Number(row.balance || 0),
+    row_count: Number(row.row_count || 0),
+    engine: String(row.engine || "canonical_v2"),
   }));
 }
 
@@ -162,9 +195,8 @@ export async function fetchSystemFinancialCoverage(): Promise<FinancialSystemCov
 }
 
 /**
- * Hard cutover gate. It intentionally fails closed: if a single historical
- * parent row is not represented in the new read model, callers must keep using
- * the legacy production-equivalent calculation.
+ * Hard gate for v1 split-only cutover. v2 canonical readers do not require full
+ * split coverage because they intentionally include historical parent rows.
  */
 export async function assertEntitySafeForServerCutover(
   partyType: ServerFinancialPartyType,
@@ -173,19 +205,15 @@ export async function assertEntitySafeForServerCutover(
   const coverage = await fetchEntityFinancialCoverage(partyType, partyId);
   if (!coverage.coverage_complete || coverage.unlinked_parent_count > 0) {
     throw new Error(
-      `FINANCIAL_CUTOVER_BLOCKED: ${coverage.unlinked_parent_count} historical row(s) are not represented in the new server read model`,
+      `FINANCIAL_CUTOVER_BLOCKED: ${coverage.unlinked_parent_count} historical row(s) are not represented in the split-only read model`,
     );
   }
   return coverage;
 }
 
-/**
- * Pure reconciliation helper used during migration. It never writes data.
- * legacyByCurrency must come from the existing production-equivalent logic.
- */
 export function compareServerBalances(
   legacyByCurrency: ReadonlyMap<string, number>,
-  serverRows: readonly ServerEntityBalanceRow[],
+  serverRows: readonly { currency: string; balance: number }[],
   tolerance = 0.01,
 ): BalanceComparison[] {
   const serverByCurrency = new Map<string, number>();
