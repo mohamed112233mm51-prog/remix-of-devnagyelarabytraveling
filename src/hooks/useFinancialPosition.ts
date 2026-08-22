@@ -10,14 +10,13 @@ import {
 import {
   CurrencyMap,
   buildCurrencySupplierLedgerRows,
-  computeMerchantAggregates,
   currencySupplierDelta,
-  resolveSplitCurrencyByRef,
-  summarizeAgent,
   summarizeCompany,
   type CurrencySupplierTx,
 } from "@/lib/financialSummary";
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
+import { useCompleteAgentsSummary } from "@/hooks/useCompleteAgentsSummary";
+import { useMerchantAggregates } from "@/lib/financialSummary";
 
 type CashBoxRow = {
   id: string;
@@ -204,10 +203,9 @@ function subtractMaps(a: CurrencyMap, b: CurrencyMap): CurrencyMap {
 
 export function useFinancialPosition(): FinancialPosition {
   const { rows: cashBoxes } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: transactions } = useCompleteFinancialTable<Transaction>("transactions");
+  const agentSummaries = useCompleteAgentsSummary();
+  const merchantAggregates = useMerchantAggregates();
   const { rows: companyTransactions } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
-  const { rows: merchantCollections } = useCompleteFinancialTable<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: usdTreasuryRows } = useCompleteFinancialTable<UsdTreasuryTransaction>("usd_treasury_transactions");
   const { rows: supplierTransactions } = useCompleteFinancialTable<any>("currency_supplier_transactions");
   const { rows: investorTransactions } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
   const { rows: paymentSplits } = useCompleteFinancialTable<FinancialPositionSplit>("payment_splits");
@@ -221,39 +219,30 @@ export function useFinancialPosition(): FinancialPosition {
     ];
     const [agentsSection, companiesSection, merchantsSection, suppliersSection] = sections;
 
-    // مهم: نحدد المدين/الدائن لكل جهة منفردة أولاً، ثم نجمع الأقسام.
-    // لا نعمل Netting بين وكيل مدين ووكيل آخر دائن قبل تصنيفهما.
-
-    // الوكلاء: موجب كشف الوكيل = حق للشركة عند هذا الوكيل.
-    const agentCurrencyMap = resolveSplitCurrencyByRef(paymentSplits as any, "transactions");
-    const agentGroups = groupById(transactions, (row) => row.agent_id);
-    for (const rows of agentGroups.values()) {
-      mergeSignedBalances(agentsSection, summarizeAgent(rows, agentCurrencyMap).balance, 1);
+    // نفس Source of Truth المستخدم في صفحة حسابات الوكلاء والداشبورد.
+    // نصنّف كل وكيل منفرداً إلى مستحق للشركة/عليها، لكن لا نعيد بناء رصيده هنا.
+    for (const summary of agentSummaries.values()) {
+      mergeSignedBalances(agentsSection, summary.balance, 1);
     }
 
     // الشركات الصادرة: موجب كشف الشركة = متبقي لهذه الشركة الصادرة (التزام علينا)، لذلك نعكس الإشارة.
-    const companyCurrencyMap = resolveSplitCurrencyByRef(paymentSplits as any, "company_transactions");
+    const companyCurrencyMap = new Map<string, string>();
+    for (const split of paymentSplits) {
+      if (split.cancelled_at || split.source_table !== "company_transactions" || !split.source_id || !split.currency) continue;
+      companyCurrencyMap.set(split.source_id, String(split.currency).toUpperCase());
+    }
     const companyGroups = groupById(companyTransactions, (row) => (row as any).company_id);
     for (const rows of companyGroups.values()) {
       mergeSignedBalances(companiesSection, summarizeCompany(rows, companyCurrencyMap).balance, -1);
     }
 
-    // تجار الكاش: computeMerchantAggregates يعيد صافي كل تاجر منفرداً.
-    // موجب كشف التاجر = أموال للشركة موجودة لدى هذا التاجر (أصل شبيه بالخزينة).
-    // سالب كشف التاجر = التزام على الشركة لصالح هذا التاجر.
-    const merchantAggregates = computeMerchantAggregates({
-      txns: transactions,
-      companyTxns: companyTransactions,
-      collections: merchantCollections,
-      usdRows: usdTreasuryRows,
-      splits: paymentSplits as any,
-    });
+    // نفس Source of Truth المستخدم في صفحة تاجر الكاش والداشبورد.
+    // لا نعيد بناء الحركات هنا؛ نستهلك رصيد كل تاجر كما هو من useMerchantAggregates().
     for (const aggregate of merchantAggregates.values()) {
       mergeSignedBalances(merchantsSection, aggregate.balance, 1);
     }
 
     // مورّد العملة: نكوّن صافي كل مورد/عملة أولاً ثم نحدد هل هو أصل أم التزام.
-    // currencySupplierDelta موجب = المورد مدين للنظام، سالب = النظام مدين للمورد.
     const supplierBalances = new Map<string, CurrencyMap>();
     for (const row of buildCurrencySupplierLedgerRows(supplierTransactions as CurrencySupplierTx[])) {
       const supplierId = String((row as any).supplier_id || "").trim();
@@ -323,10 +312,9 @@ export function useFinancialPosition(): FinancialPosition {
     };
   }, [
     cashBoxes,
-    transactions,
+    agentSummaries,
+    merchantAggregates,
     companyTransactions,
-    merchantCollections,
-    usdTreasuryRows,
     supplierTransactions,
     investorTransactions,
     paymentSplits,
