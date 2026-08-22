@@ -62,6 +62,7 @@ export type FinancialPosition = {
   operatingFundsExOwner: CurrencyMap;
   sections: FinancialPositionSection[];
   legacyInvestorTransactionCount: number;
+  investorDataLoading: boolean;
 };
 
 function splitRowsByInvestorTransaction(
@@ -205,8 +206,15 @@ export function useFinancialPosition(): FinancialPosition {
   const merchantAggregates = useMerchantAggregates();
   const { rows: companyTransactions } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
   const { rows: supplierTransactions } = useCompleteFinancialTable<any>("currency_supplier_transactions");
-  const { rows: investorTransactions } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
-  const { rows: paymentSplits } = useCompleteFinancialTable<FinancialPositionSplit>("payment_splits");
+  const {
+    rows: investorTransactions,
+    loading: investorTransactionsLoading,
+  } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
+  const {
+    rows: paymentSplits,
+    loading: paymentSplitsLoading,
+  } = useCompleteFinancialTable<FinancialPositionSplit>("payment_splits");
+  const investorDataLoading = investorTransactionsLoading || paymentSplitsLoading;
 
   return useMemo(() => {
     const sections: FinancialPositionSection[] = [
@@ -302,7 +310,8 @@ export function useFinancialPosition(): FinancialPosition {
       ownerCapital,
       operatingFundsExOwner,
       sections,
-      legacyInvestorTransactionCount: ownerSummary.legacyTransactionCount,
+      legacyInvestorTransactionCount: investorDataLoading ? 0 : ownerSummary.legacyTransactionCount,
+      investorDataLoading,
     };
   }, [
     cashBoxes,
@@ -312,5 +321,6 @@ export function useFinancialPosition(): FinancialPosition {
     supplierTransactions,
     investorTransactions,
     paymentSplits,
+    investorDataLoading,
   ]);
 }
