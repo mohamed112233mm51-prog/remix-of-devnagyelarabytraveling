@@ -9,7 +9,11 @@ export type ServerFinancialPartyType =
   | "currency_supplier"
   | "expense";
 
-export type CanonicalV2PartyType = "agent" | "company";
+export type CanonicalV2PartyType =
+  | "agent"
+  | "company"
+  | "investor"
+  | "currency_supplier";
 
 export type ServerEntityBalanceRow = {
   currency: string;
@@ -97,10 +101,9 @@ export async function fetchServerEntityBalances(
 }
 
 /**
- * Canonical v2 reader. Unlike v1, this calculates from the original historical
- * parent tables using the same formulas as financialSummary.ts, so rows without
- * payment_splits are not discarded. v2 is currently implemented for agents and
- * companies only; unsupported party types fail closed in PostgreSQL.
+ * Canonical v2 reader. It calculates from original historical parent tables
+ * using the same accounting rules as the current UI, so old rows without
+ * payment_splits are preserved. Unsupported party types fail closed.
  */
 export async function fetchCanonicalEntityBalancesV2(
   partyType: CanonicalV2PartyType,
@@ -156,7 +159,6 @@ export async function fetchServerEntityLedgerPage(args: {
   }));
 }
 
-/** Read-only historical-coverage diagnostic for one entity. */
 export async function fetchEntityFinancialCoverage(
   partyType: ServerFinancialPartyType,
   partyId: string,
@@ -180,7 +182,6 @@ export async function fetchEntityFinancialCoverage(
   };
 }
 
-/** System-wide diagnostic. Used only during migration/reconciliation. */
 export async function fetchSystemFinancialCoverage(): Promise<FinancialSystemCoverage[]> {
   const { data, error } = await rpc("financial_system_coverage_v1");
   if (error) throw new Error(error.message || "تعذر فحص اكتمال التاريخ المالي للنظام");
@@ -195,8 +196,8 @@ export async function fetchSystemFinancialCoverage(): Promise<FinancialSystemCov
 }
 
 /**
- * Hard gate for v1 split-only cutover. v2 canonical readers do not require full
- * split coverage because they intentionally include historical parent rows.
+ * Hard gate for v1 split-only cutover. Canonical v2 does not require complete
+ * split coverage because it intentionally includes historical parent rows.
  */
 export async function assertEntitySafeForServerCutover(
   partyType: ServerFinancialPartyType,
