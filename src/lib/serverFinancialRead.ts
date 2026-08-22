@@ -40,13 +40,35 @@ export type BalanceComparison = {
   matches: boolean;
 };
 
-const rpc = (name: string, args: Record<string, unknown>) =>
+export type FinancialEntityCoverage = {
+  party_type: ServerFinancialPartyType;
+  party_id: string;
+  parent_table: string;
+  parent_count: number;
+  linked_parent_count: number;
+  unlinked_parent_count: number;
+  active_split_count: number;
+  coverage_complete: boolean;
+};
+
+export type FinancialSystemCoverage = {
+  party_type: Exclude<ServerFinancialPartyType, "expense">;
+  entity_count: number;
+  parent_count: number;
+  linked_parent_count: number;
+  unlinked_parent_count: number;
+  coverage_complete: boolean;
+};
+
+const rpc = (name: string, args: Record<string, unknown> = {}) =>
   (supabase as any).rpc(name, args);
 
 /**
- * Parallel server-side read model. Do not replace an existing financial UI
- * with this result until its output has been reconciled with the legacy ledger
- * for the same entity and currency.
+ * Parallel server-side read model.
+ * IMPORTANT: this v1 balance is payment_splits-based and MUST NOT replace a
+ * legacy financial view until BOTH conditions are true:
+ *  1) historical coverage is complete for the entity; and
+ *  2) reconciliation matches the current production-equivalent calculation.
  */
 export async function fetchServerEntityBalances(
   partyType: ServerFinancialPartyType,
@@ -101,6 +123,62 @@ export async function fetchServerEntityLedgerPage(args: {
   }));
 }
 
+/** Read-only historical-coverage diagnostic for one entity. */
+export async function fetchEntityFinancialCoverage(
+  partyType: ServerFinancialPartyType,
+  partyId: string,
+): Promise<FinancialEntityCoverage> {
+  const { data, error } = await rpc("financial_entity_coverage_v1", {
+    p_party_type: partyType,
+    p_party_id: partyId,
+  });
+  if (error) throw new Error(error.message || "تعذر فحص اكتمال التاريخ المالي");
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error("لم يتم إرجاع نتيجة فحص اكتمال التاريخ المالي");
+  return {
+    party_type: partyType,
+    party_id: String(row.party_id || partyId),
+    parent_table: String(row.parent_table || ""),
+    parent_count: Number(row.parent_count || 0),
+    linked_parent_count: Number(row.linked_parent_count || 0),
+    unlinked_parent_count: Number(row.unlinked_parent_count || 0),
+    active_split_count: Number(row.active_split_count || 0),
+    coverage_complete: Boolean(row.coverage_complete),
+  };
+}
+
+/** System-wide diagnostic. Used only during migration/reconciliation. */
+export async function fetchSystemFinancialCoverage(): Promise<FinancialSystemCoverage[]> {
+  const { data, error } = await rpc("financial_system_coverage_v1");
+  if (error) throw new Error(error.message || "تعذر فحص اكتمال التاريخ المالي للنظام");
+  return (Array.isArray(data) ? data : []).map((row: any) => ({
+    party_type: String(row.party_type) as FinancialSystemCoverage["party_type"],
+    entity_count: Number(row.entity_count || 0),
+    parent_count: Number(row.parent_count || 0),
+    linked_parent_count: Number(row.linked_parent_count || 0),
+    unlinked_parent_count: Number(row.unlinked_parent_count || 0),
+    coverage_complete: Boolean(row.coverage_complete),
+  }));
+}
+
+/**
+ * Hard cutover gate. It intentionally fails closed: if a single historical
+ * parent row is not represented in the new read model, callers must keep using
+ * the legacy production-equivalent calculation.
+ */
+export async function assertEntitySafeForServerCutover(
+  partyType: ServerFinancialPartyType,
+  partyId: string,
+): Promise<FinancialEntityCoverage> {
+  const coverage = await fetchEntityFinancialCoverage(partyType, partyId);
+  if (!coverage.coverage_complete || coverage.unlinked_parent_count > 0) {
+    throw new Error(
+      `FINANCIAL_CUTOVER_BLOCKED: ${coverage.unlinked_parent_count} historical row(s) are not represented in the new server read model`,
+    );
+  }
+  return coverage;
+}
+
 /**
  * Pure reconciliation helper used during migration. It never writes data.
  * legacyByCurrency must come from the existing production-equivalent logic.
@@ -116,14 +194,20 @@ export function compareServerBalances(
     serverByCurrency.set(currency, (serverByCurrency.get(currency) || 0) + Number(row.balance || 0));
   }
 
+  const normalizedLegacy = new Map<string, number>();
+  for (const [key, value] of legacyByCurrency) {
+    const currency = normalizeCurrency(key);
+    normalizedLegacy.set(currency, (normalizedLegacy.get(currency) || 0) + Number(value || 0));
+  }
+
   const currencies = new Set<string>();
-  for (const key of legacyByCurrency.keys()) currencies.add(normalizeCurrency(key));
-  for (const key of serverByCurrency.keys()) currencies.add(normalizeCurrency(key));
+  for (const key of normalizedLegacy.keys()) currencies.add(key);
+  for (const key of serverByCurrency.keys()) currencies.add(key);
 
   return Array.from(currencies)
     .sort()
     .map((currency) => {
-      const legacy = Number(legacyByCurrency.get(currency) || 0);
+      const legacy = Number(normalizedLegacy.get(currency) || 0);
       const server = Number(serverByCurrency.get(currency) || 0);
       const difference = server - legacy;
       return {
