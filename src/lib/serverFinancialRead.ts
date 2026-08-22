@@ -12,6 +12,7 @@ export type ServerFinancialPartyType =
 export type CanonicalV2PartyType =
   | "agent"
   | "company"
+  | "merchant"
   | "investor"
   | "currency_supplier";
 
