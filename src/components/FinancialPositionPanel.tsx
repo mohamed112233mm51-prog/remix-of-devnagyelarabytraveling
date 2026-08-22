@@ -143,7 +143,7 @@ function FinancialPositionPanelInner({ variant }: { variant: "dashboard" | "full
           </table>
         </div>
 
-        {position.legacyInvestorTransactionCount > 0 && (
+        {!position.investorDataLoading && position.legacyInvestorTransactionCount > 0 && (
           <div style={{ marginTop: 8, padding: "9px 11px", borderRadius: 9, background: "#FFF7ED", color: "#9A3412", fontSize: 12, lineHeight: 1.7 }}>
             يوجد {position.legacyInvestorTransactionCount} حركة مستثمر قديمة غير مربوطة بخزينة فعلية. ظلت محفوظة في كشف المستثمر، لكنها لا تُستخدم لاستبعاد تمويل المالك من المركز المالي حتى لا يتم افتراض أو تحريك أرصدة قديمة بأثر رجعي.
           </div>
