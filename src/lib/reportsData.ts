@@ -16,6 +16,7 @@ import {
   type Transaction,
   type UsdTreasuryTransaction,
 } from "./db";
+import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 
 export type PaymentSplitLite = {
   id: string;
@@ -54,24 +55,19 @@ export type ReportsData = {
 
 export function useReportsData(): ReportsData {
   const a = useLive<Agent>("agents");
-  const t = useLive<Transaction>("transactions");
   const c = useLive<IssuingCompany>("issuing_companies");
-  const ct = useLive<CompanyTransaction>("company_transactions");
   const m = useLive<Merchant>("merchants");
-  const mc = useLive<MerchantCashCollection>("merchant_cash_collections");
   const inv = useLive<Investor>("investors");
   const it = useLive<InvestorTransaction>("investor_transactions");
   const e = useLive<Expense>("expenses");
   const ed = useLive<ExpenseDeduction>("expense_deductions");
-  const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const sub = useLive<Submission>("submissions");
   const ex = useLive<Execution>("executions");
-  const ps = useLive<PaymentSplitLite>("payment_splits");
+  const merchantFinancial = useCompleteMerchantFinancialData();
 
   const loading =
-    a.loading || t.loading || c.loading || ct.loading ||
-    m.loading || mc.loading || inv.loading || it.loading ||
-    e.loading || ed.loading || u.loading || sub.loading || ex.loading || ps.loading;
+    a.loading || c.loading || m.loading || inv.loading || it.loading ||
+    e.loading || ed.loading || sub.loading || ex.loading || merchantFinancial.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);
@@ -85,17 +81,17 @@ export function useReportsData(): ReportsData {
     executions: ex.rows,
     approvals: sub.rows,
     submissions: sub.rows,
-    transactions: t.rows,
+    transactions: merchantFinancial.transactions,
     companies: c.rows,
-    companyTransactions: ct.rows,
+    companyTransactions: merchantFinancial.companyTransactions,
     merchants: m.rows,
-    merchantCollections: mc.rows,
+    merchantCollections: merchantFinancial.collections,
     investors: inv.rows,
     investorTransactions: it.rows,
     expenses: e.rows,
     expenseDeductions: ed.rows,
-    usdTreasury: u.rows,
-    paymentSplits: ps.rows,
+    usdTreasury: merchantFinancial.conversions,
+    paymentSplits: merchantFinancial.paymentSplits as PaymentSplitLite[],
     agentName: (id) => (id ? agentMap.get(id) || "—" : "—"),
     companyName: (id) => (id ? companyMap.get(id) || "—" : "—"),
     merchantName: (id) => (id ? merchantMap.get(id) || "—" : "—"),
