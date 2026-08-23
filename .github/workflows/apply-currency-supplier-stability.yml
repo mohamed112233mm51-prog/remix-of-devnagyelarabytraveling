@@ -1,10 +1,10 @@
 name: Apply currency supplier stability patch
 on:
-  push:
-    branches: [currency-supplier-accounting-stability]
+  pull_request:
+    branches: [devo]
     paths:
       - 'scripts/_patch_currency_supplier_stability.py'
-  workflow_dispatch:
+      - '.github/workflows/apply-currency-supplier-stability.yml'
 permissions:
   contents: write
 jobs:
@@ -13,7 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: currency-supplier-accounting-stability
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -26,17 +27,17 @@ jobs:
         run: npm run build
       - name: Typecheck
         run: npx tsc --noEmit
-      - name: Commit production changes
+      - name: Commit verified production changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/routes/index.tsx src/routes/reports.tsx src/lib/dashboardCollections.ts
           git commit -m "fix currency suppliers: unify complete accounting reads" || true
-          git push
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
       - name: Write result
         run: |
           mkdir -p .github/build-results
           printf 'install=success\nbuild=success\ntypecheck=success\njob=success\n' > .github/build-results/currency-supplier-stability.txt
           git add .github/build-results/currency-supplier-stability.txt
           git commit -m "chore: record supplier stability verification" || true
-          git push
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
