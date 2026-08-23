@@ -16,6 +16,7 @@ import {
   type Transaction,
   type UsdTreasuryTransaction,
 } from "./db";
+import { useCompleteAgentFinancialData } from "@/hooks/useCompleteAgentFinancialData";
 
 export type PaymentSplitLite = {
   id: string;
@@ -54,7 +55,10 @@ export type ReportsData = {
 
 export function useReportsData(): ReportsData {
   const a = useLive<Agent>("agents");
-  const t = useLive<Transaction>("transactions");
+  // Canonical complete source for agent accounting. Reports must not use the
+  // row-limited useLive() snapshot for transactions/payment_splits because
+  // their financial agent totals must match the account ledger exactly.
+  const agentFinancial = useCompleteAgentFinancialData();
   const c = useLive<IssuingCompany>("issuing_companies");
   const ct = useLive<CompanyTransaction>("company_transactions");
   const m = useLive<Merchant>("merchants");
@@ -66,12 +70,11 @@ export function useReportsData(): ReportsData {
   const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const sub = useLive<Submission>("submissions");
   const ex = useLive<Execution>("executions");
-  const ps = useLive<PaymentSplitLite>("payment_splits");
 
   const loading =
-    a.loading || t.loading || c.loading || ct.loading ||
+    a.loading || agentFinancial.loading || c.loading || ct.loading ||
     m.loading || mc.loading || inv.loading || it.loading ||
-    e.loading || ed.loading || u.loading || sub.loading || ex.loading || ps.loading;
+    e.loading || ed.loading || u.loading || sub.loading || ex.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);
@@ -85,7 +88,7 @@ export function useReportsData(): ReportsData {
     executions: ex.rows,
     approvals: sub.rows,
     submissions: sub.rows,
-    transactions: t.rows,
+    transactions: agentFinancial.transactions,
     companies: c.rows,
     companyTransactions: ct.rows,
     merchants: m.rows,
@@ -95,7 +98,7 @@ export function useReportsData(): ReportsData {
     expenses: e.rows,
     expenseDeductions: ed.rows,
     usdTreasury: u.rows,
-    paymentSplits: ps.rows,
+    paymentSplits: agentFinancial.paymentSplits as PaymentSplitLite[],
     agentName: (id) => (id ? agentMap.get(id) || "—" : "—"),
     companyName: (id) => (id ? companyMap.get(id) || "—" : "—"),
     merchantName: (id) => (id ? merchantMap.get(id) || "—" : "—"),
