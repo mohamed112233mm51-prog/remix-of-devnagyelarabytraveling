@@ -40,6 +40,7 @@ import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
 import { usePerm } from "@/hooks/usePerm";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { computeServiceExecutionDistribution } from "@/lib/serviceDistribution";
 import {
   Users,
@@ -177,7 +178,7 @@ function Dashboard() {
 
   const { rows: expenses } = useLive<Expense>("expenses");
   const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: currencyTxns } = useLive<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any }>("currency_supplier_transactions");
+  const { rows: currencyTxns } = useCompleteFinancialTable<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any; opening_currency?: string | null; cancelled_at?: string | null }>("currency_supplier_transactions");
   const { rows: currencySuppliers } = useLive<{ id: string; status: string | null }>("currency_suppliers");
 
   const currencySupplierActiveIds = useMemo(

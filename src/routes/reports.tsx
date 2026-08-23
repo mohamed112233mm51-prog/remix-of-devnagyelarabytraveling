@@ -23,6 +23,7 @@ import { computeAgentReport } from "@/lib/sectionAccounting/agentsReport";
 import { computeCompanyReport } from "@/lib/sectionAccounting/companiesReport";
 import { logReconciliation } from "@/lib/sectionAccounting/reconciliation";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useEffect } from "react";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
@@ -2109,7 +2110,7 @@ type CurrencySupplierTx = {
 type CurrencySupplier = { id: string; name: string };
 
 function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
-  const { rows: txns, loading } = useLive<CurrencySupplierTx>("currency_supplier_transactions" as any);
+  const { rows: txns, loading } = useCompleteFinancialTable<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: suppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const nameOf = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
