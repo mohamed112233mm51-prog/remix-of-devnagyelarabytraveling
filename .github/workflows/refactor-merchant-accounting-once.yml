@@ -1,0 +1,107 @@
+name: Apply focused merchant accounting refactor
+
+on:
+  push:
+    branches: [merchant-accounting-stability]
+    paths:
+      - '.github/workflows/refactor-merchant-accounting-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply focused replacements
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          fs = Path('src/lib/financialSummary.ts')
+          text = fs.read_text()
+
+          old = 'function buildMerchantMovementInputs(\n'
+          new = 'export function buildMerchantMovementInputs(\n'
+          if old not in text:
+              raise SystemExit('buildMerchantMovementInputs marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''function accumulateMerchantAgg(target: MerchantAggregate, src: MerchantAggregate): void {
+            target.incoming.merge(src.incoming);
+            target.outgoing.merge(src.outgoing);
+            target.collected.merge(src.collected);
+            target.paidOut.merge(src.paidOut);
+            target.converted.merge(src.converted);
+            target.balance.merge(src.balance);
+          }
+          '''
+          new = old + '''
+          export function summarizeMerchantAggregates(map: Map<string, MerchantAggregate>): MerchantAggregate {
+            const total = emptyMerchantAgg();
+            for (const value of map.values()) accumulateMerchantAgg(total, value);
+            return total;
+          }
+          '''
+          if old not in text:
+              raise SystemExit('accumulateMerchantAgg block not found')
+          text = text.replace(old, new, 1)
+
+          old = '''export function useMerchantTotals(): MerchantAggregate {
+            const per = useMerchantAggregates();
+            return useMemo(() => {
+              const t = emptyMerchantAgg();
+              for (const v of per.values()) accumulateMerchantAgg(t, v);
+              return t;
+            }, [per]);
+          }
+          '''
+          new = '''export function useMerchantTotals(): MerchantAggregate {
+            const per = useMerchantAggregates();
+            return useMemo(() => summarizeMerchantAggregates(per), [per]);
+          }
+          '''
+          if old not in text:
+              raise SystemExit('useMerchantTotals block not found')
+          text = text.replace(old, new, 1)
+          fs.write_text(text)
+
+          route = Path('src/features/merchants/LegacyMerchantsRoute.tsx')
+          text = route.read_text()
+          old = 'import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap, buildMerchantMovements } from "@/lib/financialSummary";'
+          new = 'import { computeMerchantAggregates, summarizeMerchantAggregates, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap, buildMerchantMovements } from "@/lib/financialSummary";'
+          if old not in text:
+              raise SystemExit('merchant route import marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''  // Unified financial engine — نفس النتائج السابقة، مصدر واحد للحساب.
+            const merchantTotals = useMerchantAggregates();
+            const kpi = useMerchantTotals();
+          '''
+          new = '''  // Build merchant accounting once from the complete data already loaded by this page.
+            const merchantTotals = useMemo(
+              () => computeMerchantAggregates({
+                txns,
+                companyTxns: cTxns,
+                collections,
+                usdRows,
+                splits: paymentSplits as any,
+              }),
+              [txns, cTxns, collections, usdRows, paymentSplits],
+            );
+            const kpi = useMemo(() => summarizeMerchantAggregates(merchantTotals), [merchantTotals]);
+          '''
+          if old not in text:
+              raise SystemExit('merchant totals marker not found')
+          text = text.replace(old, new, 1)
+          route.write_text(text)
+          PY
+      - name: Commit refactor and remove one-shot workflow
+        run: |
+          rm .github/workflows/refactor-merchant-accounting-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/financialSummary.ts src/features/merchants/LegacyMerchantsRoute.tsx .github/workflows/refactor-merchant-accounting-once.yml
+          git commit -m 'refactor merchants: compute page totals from one data load'
+          git push origin HEAD:merchant-accounting-stability
