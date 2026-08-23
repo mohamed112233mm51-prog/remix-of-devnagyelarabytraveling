@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
-import { buildAgentLedgerRows, CurrencyMap, resolveSplitCurrencyByRef } from "@/lib/financialSummary";
+import { CurrencyMap } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 import { useCompleteAgentFinancialData } from "@/hooks/useCompleteAgentFinancialData";
 
@@ -11,20 +11,14 @@ export type AgentPeriodTotals = {
 };
 
 /**
- * إجماليات الوكلاء للفترة من نفس مصدر البيانات الكامل ونفس Ledger المستخدم
- * في كشف الحساب والإجماليات العامة. لا يوجد Loader مستقل أو حد صفوف مختلف.
+ * إجماليات فترة الوكلاء من نفس Agent Ledger النهائي المستخدم في الملخصات.
+ * لا إعادة تفسير لـ transactions ولا بناء مستقل لخريطة العملات هنا.
  */
 export function useAgentPeriodTotals(period: SummaryPeriod): AgentPeriodTotals {
-  const { transactions, paymentSplits } = useCompleteAgentFinancialData();
+  const { ledgerRows } = useCompleteAgentFinancialData();
   const todayISO = cairoToday();
 
   return useMemo(() => {
-    const splitCurrencyByTxnId = resolveSplitCurrencyByRef(paymentSplits as any, "transactions");
-    const ledgerRows = buildAgentLedgerRows(
-      transactions.filter((transaction) => Boolean(transaction?.agent_id)),
-      splitCurrencyByTxnId,
-    );
-
     const debit = new CurrencyMap();
     const credit = new CurrencyMap();
     const movement = new CurrencyMap();
@@ -38,5 +32,5 @@ export function useAgentPeriodTotals(period: SummaryPeriod): AgentPeriodTotals {
     }
 
     return { debit, credit, movement };
-  }, [transactions, paymentSplits, period, todayISO]);
+  }, [ledgerRows, period, todayISO]);
 }
