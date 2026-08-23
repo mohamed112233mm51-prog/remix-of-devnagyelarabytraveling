@@ -1,24 +1,41 @@
 import { useMemo } from "react";
-import { useLive, type Agent, type Transaction } from "@/lib/db";
-import { resolveSplitCurrencyByRef, summarizeAgent, type EntitySummary } from "@/lib/financialSummary";
+import { useLive, type Agent } from "@/lib/db";
+import { CurrencyMap, type EntitySummary } from "@/lib/financialSummary";
 import { useCompleteAgentFinancialData } from "@/hooks/useCompleteAgentFinancialData";
+
+function emptySummary(): EntitySummary {
+  return {
+    totalDebit: new CurrencyMap(),
+    totalCredit: new CurrencyMap(),
+    balance: new CurrencyMap(),
+    count: 0,
+  };
+}
 
 export function useCompleteAgentsSummary(): Map<string, EntitySummary> {
   const { rows: agents } = useLive<Agent>("agents");
-  const { transactions: txns, paymentSplits: splits } = useCompleteAgentFinancialData();
+  const { ledgerRows } = useCompleteAgentFinancialData();
 
   return useMemo(() => {
-    const grouped = new Map<string, Transaction[]>();
-    for (const a of agents) grouped.set(a.id, []);
-    for (const t of txns) {
-      if (!t.agent_id) continue;
-      const list = grouped.get(t.agent_id);
-      if (list) list.push(t);
+    const out = new Map<string, EntitySummary>();
+    for (const agent of agents) out.set(agent.id, emptySummary());
+
+    for (const row of ledgerRows) {
+      const agentId = String((row.raw as any)?.agent_id || "").trim();
+      if (!agentId) continue;
+
+      let summary = out.get(agentId);
+      if (!summary) {
+        summary = emptySummary();
+        out.set(agentId, summary);
+      }
+
+      summary.count += 1;
+      summary.totalDebit.add(row.currency, row.debit);
+      summary.totalCredit.add(row.currency, row.credit);
+      summary.balance.add(row.currency, row.debit - row.credit);
     }
 
-    const curMap = resolveSplitCurrencyByRef(splits as any, "transactions");
-    const out = new Map<string, EntitySummary>();
-    for (const [id, list] of grouped) out.set(id, summarizeAgent(list, curMap));
     return out;
-  }, [agents, txns, splits]);
+  }, [agents, ledgerRows]);
 }
