@@ -1,7 +1,0 @@
-commit=8375efd8638d8354ee4d9b59db06563bacd43b9e
-checkout=success
-setup_bun=success
-install=success
-build=success
-typecheck=success
-job=success
