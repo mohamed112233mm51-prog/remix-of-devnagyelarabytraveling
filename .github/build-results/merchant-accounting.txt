@@ -1,5 +1,0 @@
-commit=48789bc1bd62439bab1d0c58a46deae49027dc63
-install=success
-build=success
-typecheck=success
-job=success
