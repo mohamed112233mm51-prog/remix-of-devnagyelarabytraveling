@@ -13,6 +13,9 @@ on:
       - 'src/lib/reportsData.ts'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,11 +26,31 @@ jobs:
           node-version: 20
           cache: npm
       - name: Install dependencies
+        id: install
         run: npm ci
       - name: Build application
+        id: build
         env:
           VITE_SUPABASE_URL: http://127.0.0.1:54321
           VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
         run: npm run build
       - name: TypeScript check
+        id: typecheck
         run: npx tsc --noEmit
+      - name: Record verification result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .github/build-results
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "install=${{ steps.install.outcome }}"
+            echo "build=${{ steps.build.outcome }}"
+            echo "typecheck=${{ steps.typecheck.outcome }}"
+            echo "job=${{ job.status }}"
+          } > .github/build-results/agents-accounting-stability.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/build-results/agents-accounting-stability.txt
+          git commit -m 'ci: record agents accounting build result' || true
+          git push origin HEAD:agents-accounting-stability
