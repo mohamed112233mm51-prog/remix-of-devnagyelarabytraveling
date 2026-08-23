@@ -1,0 +1,4 @@
+install=success
+build=success
+typecheck=success
+job=success
