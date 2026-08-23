@@ -1,0 +1,33 @@
+name: Verify agents accounting stability
+
+on:
+  push:
+    branches: [agents-accounting-stability]
+    paths:
+      - '.github/workflows/verify-agents-accounting-stability.yml'
+      - 'src/components/AgentLedger.tsx'
+      - 'src/hooks/useAgentAccountTotals.ts'
+      - 'src/hooks/useAgentPeriodTotals.ts'
+      - 'src/hooks/useCompleteAgentFinancialData.ts'
+      - 'src/hooks/useCompleteAgentsSummary.ts'
+      - 'src/lib/reportsData.ts'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+        run: npm run build
+      - name: TypeScript check
+        run: npx tsc --noEmit
