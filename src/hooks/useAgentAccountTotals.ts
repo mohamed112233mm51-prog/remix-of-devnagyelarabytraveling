@@ -7,13 +7,14 @@
 //   - المدين     = نفس صفوف كشف حساب الوكيل (`buildAgentLedgerRows`).
 //   - الدائن     = نفس صفوف كشف حساب الوكيل (`buildAgentLedgerRows`).
 //   - المستحق    = المدين − الدائن لكل عملة على حدة.
-//   - عدد الوكلاء = جميع الوكلاء الموجودين في جدول agents.
+//   - عدد الوكلاء = بطاقات الوكلاء الموجودة حالياً فقط.
 //
-// بهذا الشكل، أي حركة قديمة أو رصيد افتتاحي أو حركة تنفيذ موجودة في دفتر
-// transactions تظهر في القائمة والداشبورد والتقرير كما تظهر في كشف الحساب.
-// لا تحويل عملات، لا خلط، ولا اعتماد على executions لحساب الرصيد.
+// مهم: الإجماليات المالية لا تعتمد على بقاء بطاقة الوكيل. إذا حُذفت البطاقة
+// وظلت حركات مالية تاريخية في transactions، تظل هذه الحركات داخلة في
+// المدين/الدائن/الرصيد حتى لا يختفي التزام مالي بمجرد حذف كيان تشغيلي.
 
 import { useMemo } from "react";
+import { useLive, type Agent } from "@/lib/db";
 import { CurrencyMap } from "@/lib/financialSummary";
 import { useCompleteAgentsSummary } from "@/hooks/useCompleteAgentsSummary";
 
@@ -26,6 +27,7 @@ export type AgentAccountTotals = {
 
 export function useAgentAccountTotals(): AgentAccountTotals {
   const summaries = useCompleteAgentsSummary();
+  const { rows: agents } = useLive<Agent>("agents");
 
   return useMemo(() => {
     const services = new CurrencyMap();
@@ -39,10 +41,10 @@ export function useAgentAccountTotals(): AgentAccountTotals {
     }
 
     return {
-      agentCount: summaries.size,
+      agentCount: agents.length,
       services,
       payments,
       due,
     };
-  }, [summaries]);
+  }, [summaries, agents.length]);
 }
