@@ -1,11 +1,8 @@
 name: Temporary dashboard complete-loader patch
 
 on:
-  push:
+  pull_request:
     branches: [accounting-scalability-integration]
-    paths:
-      - scripts/_tmp_patch_dashboard_complete_loaders.py
-      - .github/workflows/_tmp_apply_dashboard_complete_loaders.yml
 
 permissions:
   contents: write
@@ -16,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: accounting-scalability-integration
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -29,7 +26,7 @@ jobs:
         run: npm run build
       - name: TypeScript check
         run: npx tsc --noEmit
-      - name: Commit production change
+      - name: Commit production change to PR branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -38,5 +35,5 @@ jobs:
             echo "No production changes to commit"
           else
             git commit -m "fix dashboard: load complete large-table history"
-            git push origin accounting-scalability-integration
+            git push origin HEAD:${{ github.head_ref }}
           fi
