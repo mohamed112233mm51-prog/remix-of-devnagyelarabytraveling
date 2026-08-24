@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - tmp-final-accounting-audit
+  pull_request:
+    branches:
+      - accounting-scalability-integration
 
 jobs:
   audit:
