@@ -1,0 +1,64 @@
+name: Temporary permissions hardening CI
+
+on:
+  push:
+    branches:
+      - tmp-permissions-hardening-ci
+  pull_request:
+    branches:
+      - permissions-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-permissions-hardening-ci
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Apply permissions hardening patch
+        run: python3 scripts/_tmp_patch_permissions_hardening.py
+
+      - name: Verify authorization invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'ensureAdmin(' src/lib/admin.functions.ts
+          ! grep -q 'permissions: merged' src/routes/settings.tsx
+          ! grep -q 'is_super_admin: nextVal.*updFn' src/routes/settings.tsx
+          grep -q 'ensureSettingsPermission(context.userId, "roles_manage")' src/lib/admin.functions.ts
+          grep -q 'ensureSuperAdmin(context.userId)' src/lib/admin.functions.ts
+          grep -q 'updateUserPermissionSection' src/routes/settings.tsx
+          grep -q 'setUserSuperAdmin' src/routes/settings.tsx
+          echo 'Authorization invariants verified.'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Commit production changes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/admin.functions.ts src/routes/settings.tsx
+          if git diff --cached --quiet; then
+            echo 'No production changes to commit'
+          else
+            git commit -m 'harden permissions authorization and partial saves'
+            git push origin HEAD:tmp-permissions-hardening-ci
+          fi
