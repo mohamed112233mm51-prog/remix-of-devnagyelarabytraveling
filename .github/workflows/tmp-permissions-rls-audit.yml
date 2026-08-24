@@ -1,0 +1,31 @@
+name: Temporary permissions RLS audit
+
+on:
+  push:
+    branches:
+      - tmp-permissions-hardening-ci
+  pull_request:
+    branches:
+      - permissions-hardening
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-permissions-hardening-ci
+          fetch-depth: 0
+
+      - name: Audit financial RLS and permission SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== RLS ENABLEMENT ==='
+          grep -RInEi 'enable row level security|force row level security' supabase/migrations || true
+          echo '=== POLICY DEFINITIONS ==='
+          grep -RInEi 'create policy|drop policy|alter policy' supabase/migrations || true
+          echo '=== FINANCIAL TABLE POLICY REFERENCES ==='
+          grep -RInEi 'transactions|company_transactions|merchant_cash_collections|currency_supplier_transactions|investor_transactions|expense_deductions|usd_treasury_transactions|payment_splits|cash_boxes|profiles|user_roles' supabase/migrations | grep -Ei 'policy|row level|using|with check|grant|revoke|security definer' || true
+          echo '=== PERMISSION HELPERS / CLAIM CHECKS ==='
+          grep -RInEi 'permissions|has_role|is_admin|is_super_admin|auth.uid|user_roles' supabase/migrations | grep -Ei 'function|policy|using|with check|security definer|trigger' || true
