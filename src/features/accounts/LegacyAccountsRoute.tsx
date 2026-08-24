@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { useEffect, useMemo, useState } from "react";
@@ -41,7 +42,7 @@ function AccountsPage() {
   const { permissions, isAdmin } = useAuth();
   const canSearchPricing = checkPerm(permissions, isAdmin, "service_price_search", "view");
   const { rows: agents } = useLive<Agent>("agents");
-  const { rows: txns } = useLive<Transaction>("transactions");
+  const { rows: txns } = useCompleteFinancialTable<Transaction>("transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const [tab, setTab] = useState<Tab>("list");
   const [search, setSearch] = useState("");

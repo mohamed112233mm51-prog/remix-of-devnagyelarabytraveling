@@ -1590,8 +1590,8 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
   const reportPerm = usePerm("reports");
   const settlementPerm = usePerm(CASH_BOX_SETTLEMENT_PERMISSION_KEY);
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: treasurySplits, loading: treasurySplitsLoading } = useLive<TreasuryOperationSplit>("payment_splits");
-  const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
+  const { rows: treasurySplits, loading: treasurySplitsLoading } = useCompleteFinancialTable<TreasuryOperationSplit>("payment_splits");
+  const { rows: cTxns } = useCompleteFinancialTable<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => activeCashBoxes(boxes), [boxes]);

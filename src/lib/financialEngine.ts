@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 /**
  * ========================================================================
  * FINANCIAL ENGINE — المحرك المالي الموحد
@@ -491,12 +492,12 @@ export function useEntityBalance(
   partyId: string | null | undefined,
   currency: string = "EGP",
 ): number {
-  const { rows: splits } = useLive<RawSplit & { source_table: string | null; source_id: string | null }>(
+  const { rows: splits } = useCompleteFinancialTable<RawSplit & { source_table: string | null; source_id: string | null }>(
     "payment_splits",
   );
   const parentTable = PARTY_TO_SOURCE_TABLE[partyType];
   const idCol = PARTY_ID_COLUMN[partyType];
-  const { rows: parents } = useLive<any>(parentTable as any);
+  const { rows: parents } = useCompleteFinancialTable<any>(parentTable as any);
 
   return useMemo(() => {
     if (!partyId) return 0;
@@ -520,10 +521,10 @@ export function useEntityLedger(
   partyType: PartyType,
   partyId: string | null | undefined,
 ): LedgerEntry[] {
-  const { rows: splits } = useLive<RawSplit>("payment_splits");
+  const { rows: splits } = useCompleteFinancialTable<RawSplit>("payment_splits");
   const parentTable = PARTY_TO_SOURCE_TABLE[partyType];
   const idCol = PARTY_ID_COLUMN[partyType];
-  const { rows: parents } = useLive<any>(parentTable as any);
+  const { rows: parents } = useCompleteFinancialTable<any>(parentTable as any);
 
   return useMemo(() => {
     if (!partyId) return [];

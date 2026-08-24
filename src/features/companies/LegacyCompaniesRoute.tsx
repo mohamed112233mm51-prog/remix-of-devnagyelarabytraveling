@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
@@ -83,7 +84,7 @@ export const Route = createFileRoute("/companies")({
 function CompaniesPage() {
   const perm = usePerm("companies");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const { rows: txns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: txns } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
   const flights: any[] = [];
   const approvals: any[] = [];
@@ -305,8 +306,8 @@ function CompanyStatementTab({ companies, txns, initialCompanyId, canExport }: {
   const safeTxns = Array.isArray(txns) ? txns : [];
   const [companyId, setCompanyId] = useState(initialCompanyId || "");
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
-  const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
-  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const { rows: liveSplits } = useCompleteFinancialTable<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
+  const { rows: liveExecutions } = useCompleteFinancialTable<Execution>("executions");
   const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const merchantName = (mid: string | null | undefined) => mid ? (merchants.find((m) => m.id === mid)?.merchant_name || "") : "";
@@ -998,11 +999,11 @@ function UsdConvertModal({ onClose }: { onClose: () => void }) {
   const rate = Number(form.exchange_rate || 0);
   const usd = rate > 0 ? egp / rate : 0;
 
-  const { rows: agentTxns } = useLive<import("@/lib/db").Transaction>("transactions");
-  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: agentTxns } = useCompleteFinancialTable<import("@/lib/db").Transaction>("transactions");
+  const { rows: companyTxns } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: collections } = useLive<import("@/lib/db").MerchantCashCollection>("merchant_cash_collections");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: collections } = useCompleteFinancialTable<import("@/lib/db").MerchantCashCollection>("merchant_cash_collections");
+  const { rows: usdRows } = useCompleteFinancialTable<UsdTreasuryTransaction>("usd_treasury_transactions");
 
   const needsMerchant = form.source_type === "merchant_wallet" || form.source_type === "merchant_physical";
   const activeMerchants = merchants.filter((m) => (m.status || "نشط") === "نشط");
