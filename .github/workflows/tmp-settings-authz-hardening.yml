@@ -1,0 +1,55 @@
+name: Temporary settings authorization CI
+
+on:
+  push:
+    branches:
+      - tmp-permissions-hardening-ci
+  pull_request:
+    branches:
+      - permissions-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-permissions-hardening-ci
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - name: Apply settings authorization patch
+        run: python3 scripts/_tmp_patch_settings_authz_rls.py
+      - name: Verify permission alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'settings.backups_manage' src/lib/backups.functions.ts
+          grep -q 'settings.system_tools' src/lib/demo-data.functions.ts
+          grep -q 'Only trusted server functions can change is_super_admin' supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          grep -q "app_settings_permission_allowed('company_manage')" supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          ! grep -q "IF public.has_role(auth.uid(), 'admin'" supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          echo 'Settings authorization alignment verified.'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Production build
+        run: npm run build
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Commit production changes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/backups.functions.ts src/lib/demo-data.functions.ts supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          if git diff --cached --quiet; then
+            echo 'No production changes to commit'
+          else
+            git commit -m 'align settings server authorization and RLS'
+            git push origin HEAD:tmp-permissions-hardening-ci
+          fi
