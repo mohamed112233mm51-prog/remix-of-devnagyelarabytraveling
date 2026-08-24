@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -49,7 +50,7 @@ const SERVICE_KINDS = ["موافقة أمنية", "تذكرة طيران", "اس
 
 function ExecutionsPage() {
   const perm = usePerm("executions");
-  const { rows: executions } = useLive<Execution>("executions");
+  const { rows: executions } = useCompleteFinancialTable<Execution>("executions");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const { rows: merchants } = useLive<Merchant>("merchants");

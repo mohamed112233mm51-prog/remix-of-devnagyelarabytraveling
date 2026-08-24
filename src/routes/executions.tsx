@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
@@ -121,7 +122,7 @@ function ExecutionsRouteWithPeriod() {
 }
 
 function ExecutionSummaryCards({ onTodayClick }: { onTodayClick: () => void }) {
-  const { rows: executions } = useLive<Execution>("executions");
+  const { rows: executions } = useCompleteFinancialTable<Execution>("executions");
   const [summaryPeriod, setSummaryPeriod] = useState<SummaryPeriod>("month");
   const todayISO = cairoToday();
 

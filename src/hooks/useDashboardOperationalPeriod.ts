@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
 import {
@@ -66,9 +67,9 @@ export type DashboardOperationalPeriod = {
 export function useDashboardOperationalPeriod(period: SummaryPeriod): DashboardOperationalPeriod {
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const { rows: submissions } = useLive<Submission>("submissions");
-  const { rows: executions } = useLive<ExecutionRow>("executions");
-  const { rows: transactions } = useLive<Transaction>("transactions");
+  const { rows: submissions } = useCompleteFinancialTable<Submission>("submissions");
+  const { rows: executions } = useCompleteFinancialTable<ExecutionRow>("executions");
+  const { rows: transactions } = useCompleteFinancialTable<Transaction>("transactions");
   const todayISO = cairoToday();
 
   return useMemo(() => {

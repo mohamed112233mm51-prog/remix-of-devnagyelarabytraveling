@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 /**
  * ============================================================================
  * FINANCIAL SUMMARY ENGINE — طبقة الحسابات المالية الموحدة
@@ -224,8 +225,8 @@ export function summarizeAgent(
 
 /** Hook حي لملخص وكيل واحد. */
 export function useAgentSummary(agentId: string | null | undefined): EntitySummary {
-  const { rows } = useLive<Transaction>("transactions");
-  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
+  const { rows } = useCompleteFinancialTable<Transaction>("transactions");
+  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     if (!agentId) return empty();
     const curMap = resolveSplitCurrencyByRef(splits, "transactions");
@@ -236,8 +237,8 @@ export function useAgentSummary(agentId: string | null | undefined): EntitySumma
 /** Hook حي لملخصات جميع الوكلاء (مفهرسة بالمعرِّف). */
 export function useAgentsSummary(): Map<string, EntitySummary> {
   const { rows: agents } = useLive<Agent>("agents");
-  const { rows: txns } = useLive<Transaction>("transactions");
-  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
+  const { rows: txns } = useCompleteFinancialTable<Transaction>("transactions");
+  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     const grouped = new Map<string, Transaction[]>();
     for (const a of agents) grouped.set(a.id, []);
@@ -275,8 +276,8 @@ export function summarizeCompany(
 }
 
 export function useCompanySummary(companyId: string | null | undefined): EntitySummary {
-  const { rows } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
+  const { rows } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
+  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     if (!companyId) return empty();
     const curMap = resolveSplitCurrencyByRef(splits, "company_transactions");
@@ -286,8 +287,8 @@ export function useCompanySummary(companyId: string | null | undefined): EntityS
 
 export function useCompaniesSummary(): Map<string, EntitySummary> {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const { rows: txns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");
+  const { rows: txns } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
+  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");
   return useMemo(() => {
     const grouped = new Map<string, CompanyTransaction[]>();
     for (const c of companies) grouped.set(c.id, []);
@@ -921,7 +922,7 @@ export function summarizeInvestor(rows: InvestorTransaction[]): InvestorSummary 
 /** Hook حي لملخصات كل المستثمرين (مفهرسة بالمعرِّف). */
 export function useInvestorsSummary(): Map<string, InvestorSummary> {
   const { rows: investors } = useLive<Investor>("investors");
-  const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
+  const { rows: txns } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
   return useMemo(() => {
     const grouped = new Map<string, InvestorTransaction[]>();
     for (const i of investors) grouped.set(i.id, []);
@@ -937,7 +938,7 @@ export function useInvestorsSummary(): Map<string, InvestorSummary> {
 
 /** إجمالي كل المستثمرين مجمَّعاً — لكروت KPI في أعلى الصفحة. */
 export function useInvestorsTotals(): InvestorSummary {
-  const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");
+  const { rows: txns } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
   return useMemo(() => summarizeInvestor(txns), [txns]);
 }
 
@@ -970,7 +971,7 @@ export function summarizeExpenses(rows: Expense[]): ExpensesTotals {
 
 /** Hook حي لإجماليات المصروفات. */
 export function useExpensesTotals(): ExpensesTotals {
-  const { rows } = useLive<Expense>("expenses");
+  const { rows } = useCompleteFinancialTable<Expense>("expenses");
   return useMemo(() => summarizeExpenses(rows), [rows]);
 }
 

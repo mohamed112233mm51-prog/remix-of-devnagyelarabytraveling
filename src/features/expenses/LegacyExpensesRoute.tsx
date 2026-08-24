@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -50,8 +51,8 @@ const legacySourceLabel = (v?: string | null) =>
 type Tab = "add" | "history";
 
 function ExpensesPage() {
-  const { rows: expenses } = useLive<Expense>("expenses");
-  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
+  const { rows: expenses } = useCompleteFinancialTable<Expense>("expenses");
+  const { rows: deductions } = useCompleteFinancialTable<ExpenseDeduction>("expense_deductions");
   const [tab, setTab] = useState<Tab>("history");
 
   // Financial Summary Engine — نفس الأرقام، مصدر واحد.
@@ -397,8 +398,8 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 
 function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: deductions } = useCompleteFinancialTable<ExpenseDeduction>("expense_deductions");
+  const { rows: collections } = useCompleteFinancialTable<MerchantCashCollection>("merchant_cash_collections");
   const [edit, setEdit] = useState<Expense | null>(null);
 
   const merchantName = (id: string | null | undefined) =>

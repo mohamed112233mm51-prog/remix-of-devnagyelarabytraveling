@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/submissions")({
 function SubmissionsPage() {
   const perm = usePerm("submissions");
   const router = useRouter();
-  const { rows: submissions } = useLive<Submission>("submissions");
+  const { rows: submissions } = useCompleteFinancialTable<Submission>("submissions");
   const { rows: agents } = useLive<Agent>("agents");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const APPROVAL_STATUSES = useDropdownOptions("submission_status" as any);

@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -709,11 +710,11 @@ export const tripValue = (t: Pick<Transaction, "count" | "price">) =>
 
 /** Compute live EGP and USD treasury balances by aggregating across all relevant tables. */
 export function useTreasuryBalances() {
-  const { rows: agentTxns } = useLive<Transaction>("transactions");
-  const { rows: companyTxns } = useLive<CompanyTransaction>("company_transactions");
-  const { rows: investorTxns } = useLive<InvestorTransaction>("investor_transactions");
-  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: usdRows } = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const { rows: agentTxns } = useCompleteFinancialTable<Transaction>("transactions");
+  const { rows: companyTxns } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
+  const { rows: investorTxns } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
+  const { rows: deductions } = useCompleteFinancialTable<ExpenseDeduction>("expense_deductions");
+  const { rows: usdRows } = useCompleteFinancialTable<UsdTreasuryTransaction>("usd_treasury_transactions");
 
   return useMemo(() => {
     const egpIn = agentTxns.reduce(

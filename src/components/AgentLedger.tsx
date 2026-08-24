@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -66,7 +67,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const flights: any[] = [];
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
   const { paymentSplits: completePaymentSplits } = useCompleteAgentFinancialData();
-  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const { rows: liveExecutions } = useCompleteFinancialTable<Execution>("executions");
   const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const agents = Array.isArray(liveAgents) ? liveAgents : [];
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
