@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { normalizePermissionsForLoad, normalizePermissionsForSave } from "@/lib/permissionKeys";
+import { isDashboardViewPermissionKey, normalizePermissionBranch, normalizePermissionsForLoad, normalizePermissionsForSave } from "@/lib/permissionKeys";
 
 function admin() {
   return createClient<Database>(
@@ -12,30 +12,69 @@ function admin() {
   );
 }
 
-async function ensureAdmin(_supabase: any, userId: string, subKey: string = "users_manage") {
+type SettingsPermissionKey = "users_manage" | "roles_manage" | "backups_manage" | "company_manage" | "system_tools" | "import_data" | "change_password";
+
+async function loadCallerAccess(userId: string) {
   const sb = admin();
-  const { data: profile } = await sb
+  const { data: profile, error } = await sb
     .from("profiles")
     .select("is_super_admin, permissions")
     .eq("id", userId)
     .maybeSingle();
-  if (profile?.is_super_admin) return;
-  const perms: any = profile?.permissions ?? {};
-  if (perms?.settings?.[subKey] === true || perms?.settings?.view === true) return;
-  const { data: roleRow } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (roleRow) return;
-  throw new Error("Forbidden: admin access required");
+  if (error || !profile) throw new Error("Forbidden: profile not found");
+  return { sb, profile: profile as any, permissions: normalizePermissionsForLoad((profile as any).permissions ?? {}) };
+}
+
+async function ensureSettingsPermission(userId: string, subKey: SettingsPermissionKey) {
+  const access = await loadCallerAccess(userId);
+  if (access.profile.is_super_admin === true) return access;
+  if (access.permissions?.settings?.[subKey] === true) return access;
+  throw new Error(`Forbidden: settings.${subKey} permission required`);
+}
+
+async function ensureAnySettingsPermission(userId: string, subKeys: SettingsPermissionKey[]) {
+  const access = await loadCallerAccess(userId);
+  if (access.profile.is_super_admin === true) return access;
+  if (subKeys.some((key) => access.permissions?.settings?.[key] === true)) return access;
+  throw new Error("Forbidden: explicit settings permission required");
+}
+
+async function ensureSuperAdmin(userId: string) {
+  const access = await loadCallerAccess(userId);
+  if (access.profile.is_super_admin === true) return access;
+  throw new Error("Forbidden: Super Admin access required");
+}
+
+const EDITABLE_PERMISSION_SECTIONS = new Set([
+  "dashboard", "submissions", "executions", "accounts", "companies", "merchants",
+  "currency_suppliers", "investors", "expenses", "service_pricing_manage",
+  "service_price_search", "reports", "data_import", "audit_log_view",
+  "net_profit_view", "profit_summary_view", "financial_position_view", "cash_box_settlement",
+  "settings",
+]);
+
+const SETTINGS_PERMISSION_KEYS = new Set([
+  "view", "users_manage", "roles_manage", "backups_manage", "company_manage",
+  "system_tools", "import_data", "change_password",
+]);
+
+function normalizePermissionSection(sectionKey: string, value: unknown): any {
+  if (!EDITABLE_PERMISSION_SECTIONS.has(sectionKey)) throw new Error("Invalid permission section");
+  if (isDashboardViewPermissionKey(sectionKey)) return value === true;
+  if (sectionKey === "settings") {
+    const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    const out: Record<string, boolean> = {};
+    for (const key of SETTINGS_PERMISSION_KEYS) out[key] = input[key] === true;
+    if (Array.from(SETTINGS_PERMISSION_KEYS).some((key) => key !== "view" && out[key])) out.view = true;
+    return out;
+  }
+  return normalizePermissionBranch(value);
 }
 
 export const listUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureAnySettingsPermission(context.userId, ["users_manage", "roles_manage"]);
     const sb = admin();
     const { data: list } = await sb.auth.admin.listUsers();
     const { data: profiles } = await sb.from("profiles").select("*");
@@ -72,7 +111,7 @@ export const inviteUser = createServerFn({ method: "POST" })
     origin?: string;
   }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
 
     const origin = data.origin || process.env.SITE_URL || "";
@@ -121,7 +160,7 @@ export const createUserDirect = createServerFn({ method: "POST" })
     password?: string;
   }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
 
     function genPassword() {
@@ -191,7 +230,7 @@ export const resendInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { email: string; origin?: string }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
     const origin = data.origin || process.env.SITE_URL || "";
     const redirectTo = origin ? `${origin}/accept-invite` : undefined;
@@ -210,7 +249,7 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { email: string; origin?: string }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
     const origin = data.origin || process.env.SITE_URL || "";
     const redirectTo = origin ? `${origin}/reset-password` : undefined;
@@ -225,7 +264,7 @@ export const deleteUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
     await sb.auth.admin.deleteUser(data.id);
     return { ok: true };
@@ -235,7 +274,7 @@ export const setUserActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string; is_active: boolean }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
     await sb.from("profiles").update({ is_active: data.is_active }).eq("id", data.id);
     return { ok: true };
@@ -245,11 +284,63 @@ export const setUserRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { user_id: string; role: "admin" | "manager" | "user" }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "roles_manage");
     const sb = admin();
     await sb.from("user_roles").delete().eq("user_id", data.user_id);
     await sb.from("user_roles").insert({ user_id: data.user_id, role: data.role });
     return { ok: true };
+  });
+
+export const updateUserPermissionSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; section_key: string; value: unknown }) => d)
+  .handler(async ({ context, data }) => {
+    await ensureSettingsPermission(context.userId, "roles_manage");
+    const sb = admin();
+    const { data: current, error: readError } = await sb
+      .from("profiles")
+      .select("permissions")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message || "تعذر قراءة صلاحيات المستخدم");
+    if (!current) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
+
+    const currentPermissions = normalizePermissionsForLoad((current as any).permissions ?? {});
+    const nextValue = normalizePermissionSection(data.section_key, data.value);
+    const nextPermissions = normalizePermissionsForSave({ ...currentPermissions, [data.section_key]: nextValue });
+    const { data: saved, error } = await sb
+      .from("profiles")
+      .update({ permissions: nextPermissions })
+      .eq("id", data.id)
+      .select("id, permissions, is_super_admin")
+      .maybeSingle();
+    if (error) throw new Error(error.message || "تعذر حفظ صلاحية المستخدم");
+    if (!saved) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
+    return {
+      ok: true,
+      section_key: data.section_key,
+      section_value: normalizePermissionsForLoad((saved as any).permissions ?? {})[data.section_key],
+    };
+  });
+
+export const setUserSuperAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; is_super_admin: boolean }) => d)
+  .handler(async ({ context, data }) => {
+    await ensureSuperAdmin(context.userId);
+    if (context.userId === data.id && data.is_super_admin === false) {
+      throw new Error("لا يمكن إلغاء صلاحية صاحب النظام عن الحساب المستخدم حاليًا");
+    }
+    const sb = admin();
+    const { data: saved, error } = await sb
+      .from("profiles")
+      .update({ is_super_admin: data.is_super_admin })
+      .eq("id", data.id)
+      .select("id, is_super_admin")
+      .maybeSingle();
+    if (error) throw new Error(error.message || "تعذر تحديث صلاحية صاحب النظام");
+    if (!saved) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
+    return { ok: true, profile: saved };
   });
 
 export const updateUserProfile = createServerFn({ method: "POST" })
@@ -258,24 +349,21 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     id: string;
     full_name?: string;
     agent_id?: string | null;
-    permissions?: Record<string, any>;
-    is_super_admin?: boolean;
   }) => d)
   .handler(async ({ context, data }) => {
-    await ensureAdmin(context.supabase, context.userId);
+    await ensureSettingsPermission(context.userId, "users_manage");
     const sb = admin();
     const patch: any = {};
     if (data.full_name !== undefined) patch.full_name = data.full_name;
     if (data.agent_id !== undefined) patch.agent_id = data.agent_id;
-    if (data.permissions !== undefined) patch.permissions = normalizePermissionsForSave(data.permissions);
-    if (data.is_super_admin !== undefined) patch.is_super_admin = data.is_super_admin;
+    if (Object.keys(patch).length === 0) throw new Error("لا توجد بيانات مستخدم قابلة للتحديث");
     const { data: saved, error } = await sb
       .from("profiles")
       .update(patch)
       .eq("id", data.id)
       .select("id, permissions, is_super_admin")
       .maybeSingle();
-    if (error) throw new Error(error.message || "تعذر حفظ صلاحيات المستخدم");
+    if (error) throw new Error(error.message || "تعذر حفظ بيانات المستخدم");
     if (!saved) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
     return { ok: true, profile: { ...saved, permissions: normalizePermissionsForLoad((saved as any).permissions ?? {}) } };
   });
