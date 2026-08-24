@@ -1,0 +1,19 @@
+name: Temporary full useLive audit
+
+on:
+  pull_request:
+    branches:
+      - accounting-scalability-integration
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-financial-summary-complete-loaders
+      - name: List every remaining useLive call
+        shell: bash
+        run: |
+          echo '=== REMAINING useLive REFERENCES ==='
+          grep -RIn --include='*.ts' --include='*.tsx' 'useLive' src || true
