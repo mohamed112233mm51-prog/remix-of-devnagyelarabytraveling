@@ -21,11 +21,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== RLS ENABLEMENT ==='
-          grep -RInEi 'enable row level security|force row level security' supabase/migrations || true
-          echo '=== POLICY DEFINITIONS ==='
-          grep -RInEi 'create policy|drop policy|alter policy' supabase/migrations || true
-          echo '=== FINANCIAL TABLE POLICY REFERENCES ==='
-          grep -RInEi 'transactions|company_transactions|merchant_cash_collections|currency_supplier_transactions|investor_transactions|expense_deductions|usd_treasury_transactions|payment_splits|cash_boxes|profiles|user_roles' supabase/migrations | grep -Ei 'policy|row level|using|with check|grant|revoke|security definer' || true
-          echo '=== PERMISSION HELPERS / CLAIM CHECKS ==='
-          grep -RInEi 'permissions|has_role|is_admin|is_super_admin|auth.uid|user_roles' supabase/migrations | grep -Ei 'function|policy|using|with check|security definer|trigger' || true
+          echo '=== PROFILE PRIVILEGE-ESCALATION PROTECTION ==='
+          grep -RInEi 'profiles|is_super_admin|permissions' supabase/migrations | grep -Ei 'trigger|function|policy|update|old\.|new\.|security definer|raise exception' || true
+          echo '=== LATEST PROFILE / USER_ROLE CHANGES ==='
+          grep -RInEi 'profiles|user_roles' supabase/migrations | grep -Ei 'drop policy|create policy|create trigger|drop trigger|create or replace function|revoke|grant' || true
+          echo '=== FINANCIAL PERMISSION-AWARE POLICIES ==='
+          grep -RInEi 'transactions_perm_|company_transactions_perm_|merchant_collections_perm_|supplier_transactions_perm_|investor_transactions_perm_|expense_deductions_perm_|usd_treasury_perm_|payment_splits_perm_|cash_boxes_perm_' supabase/migrations || true
