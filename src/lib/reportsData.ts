@@ -1,5 +1,6 @@
 // Centralized data layer for the Reports page.
 import { useMemo } from "react";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import {
   useLive,
   type Agent,
@@ -60,13 +61,13 @@ export function useReportsData(): ReportsData {
   const m = useLive<Merchant>("merchants");
   const mc = useLive<MerchantCashCollection>("merchant_cash_collections");
   const inv = useLive<Investor>("investors");
-  const it = useLive<InvestorTransaction>("investor_transactions");
+  const it = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
   const e = useLive<Expense>("expenses");
   const ed = useLive<ExpenseDeduction>("expense_deductions");
   const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
   const sub = useLive<Submission>("submissions");
   const ex = useLive<Execution>("executions");
-  const ps = useLive<PaymentSplitLite>("payment_splits");
+  const ps = useCompleteFinancialTable<PaymentSplitLite>("payment_splits");
 
   const loading =
     a.loading || t.loading || c.loading || ct.loading ||
