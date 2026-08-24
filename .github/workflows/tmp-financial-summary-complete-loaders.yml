@@ -1,0 +1,58 @@
+name: Temporary financial summary complete-loader patch
+
+on:
+  push:
+    branches:
+      - tmp-financial-summary-complete-loaders
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-financial-summary-complete-loaders
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Apply focused patch
+        run: python3 scripts/_tmp_patch_financial_summary_complete_loaders.py
+
+      - name: Verify no large financial table uses useLive directly
+        shell: bash
+        run: |
+          set -euo pipefail
+          tables='transactions|company_transactions|merchant_cash_collections|payment_splits|investor_transactions|currency_supplier_transactions|expense_deductions|expenses|usd_treasury_transactions|executions|submissions'
+          if grep -RInE --include='*.ts' --include='*.tsx' "useLive<[^>]*>\(\"(${tables})\"\)|useLive\(\"(${tables})\"\)" src; then
+            echo 'ERROR: direct useLive remains on a large transaction table'
+            exit 1
+          fi
+          echo 'No direct useLive remains on large transaction tables.'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Commit production change to PR branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/financialSummary.ts
+          if git diff --cached --quiet; then
+            echo "No production changes to commit"
+          else
+            git commit -m "refactor financial summary: load complete transaction history"
+            git push origin HEAD:tmp-financial-summary-complete-loaders
+          fi
