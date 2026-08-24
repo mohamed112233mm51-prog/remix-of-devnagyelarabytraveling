@@ -1,0 +1,46 @@
+name: Temporary financial cancel RLS CI
+
+on:
+  push:
+    branches:
+      - tmp-financial-cancel-rls-ci
+  pull_request:
+    branches:
+      - permissions-hardening
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-financial-cancel-rls-ci
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Verify financial cancel RLS invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          f='supabase/migrations/20260824212500_financial_cancel_permission_hardening.sql'
+          test -f "$f"
+          grep -q 'FINANCIAL_CANCEL_PERMISSION_REQUIRED' "$f"
+          grep -q 'FINANCIAL_EDIT_PERMISSION_REQUIRED' "$f"
+          grep -q "app_financial_row_action_allowed('payment_splits'" "$f"
+          grep -q "ARRAY\['cancelled_at','cancelled_by','cancel_reason'\]" "$f"
+          for t in transactions company_transactions merchant_cash_collections currency_supplier_transactions expense_deductions usd_treasury_transactions payment_splits; do
+            grep -q "BEFORE UPDATE ON public.${t}" "$f"
+          done
+          echo 'Financial cancel/edit intent guards are present.'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
