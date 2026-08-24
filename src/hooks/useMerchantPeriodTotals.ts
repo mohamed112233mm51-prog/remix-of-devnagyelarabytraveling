@@ -2,13 +2,7 @@ import { useMemo } from "react";
 import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { cairoToday } from "@/lib/approvalFines";
 import {
-  merchantCompanyOutflowAmount,
-  type CompanyTransaction,
-  type MerchantCashCollection,
-  type Transaction,
-  type UsdTreasuryTransaction,
-} from "@/lib/db";
-import {
+  buildMerchantMovementInputs,
   buildMerchantMovements,
   summarizeMerchantMovementTotals,
   type MerchantMovementItem,
@@ -16,18 +10,9 @@ import {
 } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 
-type CollectionSplitRow = {
-  id: string;
-  source_table: string | null;
-  source_id: string | null;
-  currency: string | null;
-  cancelled_at?: string | null;
-};
-
 /**
- * إجماليات عرض فقط من نفس حركات كشف حساب تاجر الكاش.
- * تدخل كل حركة مرتبطة بتاجر حتى لو حُذفت بطاقة التاجر لاحقاً،
- * وتستخدم date ثم createdAt كـ fallback للسجلات القديمة.
+ * Period totals from the exact same merchant movements used by statements and
+ * lifetime aggregates. No accounting rule is reimplemented here.
  */
 export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovementTotals {
   const {
@@ -40,31 +25,15 @@ export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovement
   const todayISO = cairoToday();
 
   return useMemo(() => {
-    // نفس تقسيم MerchantStatementTab حتى تظل الكروت مطابقة لكشف الحساب.
-    const merchantCompanyOutSourceIds = new Set(
-      transactions
-        .filter((row) => row.merchant_id && row.source_service_type === "merchant_cash_out_to_company")
-        .map((row) => (row as any).source_service_id)
-        .filter(Boolean),
+    const input = buildMerchantMovementInputs(
+      transactions,
+      companyTransactions,
+      collections,
+      conversions,
+      paymentSplits as any,
     );
 
-    const incomingTxns = transactions.filter(
-      (row) => Number(row.merchant_cash_amount || 0) > 0
-        || Number(row.merchant_cash_physical_amount || 0) > 0,
-    );
-    const outgoingTxns = companyTransactions
-      .filter((row) => merchantCompanyOutflowAmount(row) > 0)
-      .filter((row) => !merchantCompanyOutSourceIds.has(row.id));
-    const cashMoveTxns = transactions.filter(
-      (row) => row.merchant_id && [
-        "merchant_cash_out",
-        "merchant_cash_out_to_company",
-        "merchant_cash_out_to_agent",
-      ].includes(String(row.source_service_type || "")),
-    );
-
-    // نفس سياسة computeMerchantAggregates: المعرّفات تأتي من الحركات نفسها،
-    // وليس فقط من بطاقات التجار الموجودة حالياً.
+    // Include historical movements even if the merchant card was later deleted.
     const merchantIds = new Set<string>();
     for (const row of transactions) if (row.merchant_id) merchantIds.add(row.merchant_id);
     for (const row of companyTransactions) {
@@ -79,20 +48,14 @@ export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovement
 
     const movements: MerchantMovementItem[] = [];
     for (const merchantId of merchantIds) {
-      movements.push(...buildMerchantMovements(merchantId, {
-        incomingTxns,
-        outgoingTxns,
-        cashMoveTxns,
-        collections,
-        conversions,
-        splits: paymentSplits as any,
-      }) as MerchantMovementItem[]);
+      movements.push(...buildMerchantMovements(merchantId, input) as MerchantMovementItem[]);
     }
 
     const periodMovements = movements.filter((movement) => {
       const accountingDate = movement.date || (movement as any).createdAt || null;
       return isDateInSummaryPeriod(accountingDate, period, todayISO);
     });
+
     return summarizeMerchantMovementTotals(periodMovements);
   }, [
     transactions,

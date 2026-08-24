@@ -406,6 +406,12 @@ function accumulateMerchantAgg(target: MerchantAggregate, src: MerchantAggregate
   target.balance.merge(src.balance);
 }
 
+export function summarizeMerchantAggregates(map: Map<string, MerchantAggregate>): MerchantAggregate {
+  const total = emptyMerchantAgg();
+  for (const value of map.values()) accumulateMerchantAgg(total, value);
+  return total;
+}
+
 /**
  * يبني حركات كشف حساب تاجر واحد بنفس المنطق المستخدم في
  * `MerchantStatementTab`. مصدر واحد لكل الإجماليات والكشف — أي رقم في
@@ -531,7 +537,7 @@ export function buildMerchantMovements(
   );
 }
 
-function buildMerchantMovementInputs(
+export function buildMerchantMovementInputs(
   txns: Transaction[],
   companyTxns: CompanyTransaction[],
   collections: MerchantCashCollection[],
@@ -624,11 +630,7 @@ export function useMerchantAggregates(): Map<string, MerchantAggregate> {
  */
 export function useMerchantTotals(): MerchantAggregate {
   const per = useMerchantAggregates();
-  return useMemo(() => {
-    const t = emptyMerchantAgg();
-    for (const v of per.values()) accumulateMerchantAgg(t, v);
-    return t;
-  }, [per]);
+  return useMemo(() => summarizeMerchantAggregates(per), [per]);
 }
 
 

@@ -9,7 +9,7 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap, buildMerchantMovements } from "@/lib/financialSummary";
+import { computeMerchantAggregates, summarizeMerchantAggregates, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap, buildMerchantMovements } from "@/lib/financialSummary";
 
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -76,9 +76,18 @@ function MerchantsPage() {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
   const [tab, setTab] = useState<"list" | "add" | "collect" | "cashout" | "history" | "incoming" | "outgoing" | "statement">("history");
   const [editMerchant, setEditMerchant] = useState<Merchant | null>(null);
-  // Unified financial engine — نفس النتائج السابقة، مصدر واحد للحساب.
-  const merchantTotals = useMerchantAggregates();
-  const kpi = useMerchantTotals();
+  // Build merchant accounting once from the complete data already loaded by this page.
+  const merchantTotals = useMemo(
+    () => computeMerchantAggregates({
+      txns,
+      companyTxns: cTxns,
+      collections,
+      usdRows,
+      splits: paymentSplits as any,
+    }),
+    [txns, cTxns, collections, usdRows, paymentSplits],
+  );
+  const kpi = useMemo(() => summarizeMerchantAggregates(merchantTotals), [merchantTotals]);
   const totalIncoming = kpi.incoming;
   const totalOutgoing = kpi.outgoing;
   const totalCollected = kpi.collected;
