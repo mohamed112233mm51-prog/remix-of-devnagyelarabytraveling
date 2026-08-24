@@ -297,29 +297,22 @@ export const updateUserPermissionSection = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await ensureSettingsPermission(context.userId, "roles_manage");
     const sb = admin();
-    const { data: current, error: readError } = await sb
-      .from("profiles")
-      .select("permissions")
-      .eq("id", data.id)
-      .maybeSingle();
-    if (readError) throw new Error(readError.message || "تعذر قراءة صلاحيات المستخدم");
-    if (!current) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
-
-    const currentPermissions = normalizePermissionsForLoad((current as any).permissions ?? {});
     const nextValue = normalizePermissionSection(data.section_key, data.value);
-    const nextPermissions = normalizePermissionsForSave({ ...currentPermissions, [data.section_key]: nextValue });
-    const { data: saved, error } = await sb
-      .from("profiles")
-      .update({ permissions: nextPermissions })
-      .eq("id", data.id)
-      .select("id, permissions, is_super_admin")
-      .maybeSingle();
+    const { data: savedPermissions, error } = await (sb as any).rpc(
+      "update_profile_permission_section",
+      {
+        p_user_id: data.id,
+        p_section_key: data.section_key,
+        p_value: nextValue,
+      },
+    );
     if (error) throw new Error(error.message || "تعذر حفظ صلاحية المستخدم");
-    if (!saved) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
+    if (!savedPermissions) throw new Error("لم يتم العثور على المستخدم المطلوب تحديثه");
+    const normalized = normalizePermissionsForLoad(savedPermissions as Record<string, any>);
     return {
       ok: true,
       section_key: data.section_key,
-      section_value: normalizePermissionsForLoad((saved as any).permissions ?? {})[data.section_key],
+      section_value: normalized[data.section_key],
     };
   });
 
