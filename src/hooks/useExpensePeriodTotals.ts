@@ -1,7 +1,7 @@
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
-import { useLive, type Expense } from "@/lib/db";
+import type { Expense } from "@/lib/db";
 import { summarizeExpenses } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 
