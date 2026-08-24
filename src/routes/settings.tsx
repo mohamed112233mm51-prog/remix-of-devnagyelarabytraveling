@@ -85,7 +85,7 @@ function permissionEnabledForUi(permissions: Record<string, any> | undefined, ke
 }
 
 function SettingsPage() {
-  const { permissions, isSuperAdmin, loading } = useAuth();
+  const { permissions, isAdmin, isSuperAdmin, loading } = useAuth();
   const can = (sub: SettingsSubKey | "view") => checkSettingsPerm(permissions, isSuperAdmin, sub);
 
   const allTabs: { id: Tab; label: string; icon: React.ReactNode; perm: SettingsSubKey }[] = [
@@ -100,7 +100,10 @@ function SettingsPage() {
     ...(!isProdEnv() ? [{ id: "devtools" as Tab, label: "أدوات التطوير", icon: <Wrench size={15} strokeWidth={2} />, perm: "system_tools" as SettingsSubKey }] : []),
   ];
 
-  const tabs = allTabs.filter((t) => can(t.perm));
+  const tabs = allTabs.filter((t) => {
+    if (t.perm === "system_tools" && !isSuperAdmin && !isAdmin) return false;
+    return can(t.perm);
+  });
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "users");
 
   // Keep selected tab valid as permissions change
