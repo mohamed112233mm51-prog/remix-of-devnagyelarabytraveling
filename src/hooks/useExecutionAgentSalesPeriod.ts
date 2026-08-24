@@ -1,7 +1,6 @@
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
-import { useLive } from "@/lib/db";
 import { computeExecutionAgentSalesByCurrency } from "@/lib/dashboardCollections";
 import type { ExecutionRow } from "@/lib/executionProfit";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
