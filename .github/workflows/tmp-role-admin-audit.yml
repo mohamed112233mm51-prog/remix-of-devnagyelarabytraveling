@@ -16,11 +16,11 @@ jobs:
         with:
           ref: tmp-permissions-hardening-ci
           fetch-depth: 0
-      - name: Find legacy role-admin authorization in application server code
+      - name: Find production wipe authorization and remaining role-admin checks
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== ensureAdmin / role-admin checks ==='
-          grep -RInE --include='*.ts' --include='*.tsx' 'ensureAdmin|has_role|\.eq\("role", *"admin"\)|role[^\n]*admin|isAdmin' src/lib src/routes/api || true
-          echo '=== Service role server functions ==='
-          grep -RInE --include='*.ts' --include='*.tsx' 'SUPABASE_SERVICE_ROLE_KEY|supabaseAdmin|createClient<Database>' src/lib src/routes/api || true
+          echo '=== production reset RPC ==='
+          grep -RIn -A45 -B15 'reset_production_business_data' supabase/migrations || true
+          echo '=== remaining role-admin authorization ==='
+          grep -RInE --include='*.ts' --include='*.tsx' '\.eq\("role", *"admin"\)|rpc\("has_role"|has_role[^\n]*admin' src/lib src/routes/api || true
