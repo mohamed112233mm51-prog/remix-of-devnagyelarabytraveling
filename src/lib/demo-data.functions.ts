@@ -33,13 +33,14 @@ function admin() {
 }
 
 async function ensureAdmin(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_super_admin, permissions")
+    .eq("id", userId)
     .maybeSingle();
-  if (!data) throw new Response("Forbidden", { status: 403 });
+  const permissions = (profile as any)?.permissions ?? {};
+  if ((profile as any)?.is_super_admin === true || permissions?.settings?.system_tools === true) return;
+  throw new Response("Forbidden: settings.system_tools permission required", { status: 403 });
 }
 
 const DEMO_TABLES = [
