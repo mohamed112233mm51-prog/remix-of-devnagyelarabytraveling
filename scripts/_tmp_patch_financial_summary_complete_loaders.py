@@ -1,44 +1,59 @@
 from pathlib import Path
+import re
 
-path = Path('src/lib/financialSummary.ts')
-text = path.read_text(encoding='utf-8')
+RISKY_TABLES = (
+    'transactions',
+    'company_transactions',
+    'merchant_cash_collections',
+    'payment_splits',
+    'investor_transactions',
+    'currency_supplier_transactions',
+    'expense_deductions',
+    'expenses',
+    'usd_treasury_transactions',
+    'executions',
+    'submissions',
+)
 
-repls = [
-    (
-        'import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";\n',
-        'import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";\nimport { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";\n',
-    ),
-    (
-        '  const { rows } = useLive<Transaction>("transactions");\n  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");',
-        '  const { rows } = useCompleteFinancialTable<Transaction>("transactions");\n  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");',
-    ),
-    (
-        '  const { rows: txns } = useLive<Transaction>("transactions");\n  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");',
-        '  const { rows: txns } = useCompleteFinancialTable<Transaction>("transactions");\n  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");',
-    ),
-    (
-        '  const { rows } = useLive<CompanyTransaction>("company_transactions");\n  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");',
-        '  const { rows } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");\n  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");',
-    ),
-    (
-        '  const { rows: txns } = useLive<CompanyTransaction>("company_transactions");\n  const { rows: splits } = useLive<SplitCurrencyRow>("payment_splits");',
-        '  const { rows: txns } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");\n  const { rows: splits } = useCompleteFinancialTable<SplitCurrencyRow>("payment_splits");',
-    ),
-    (
-        '  const { rows: txns } = useLive<InvestorTransaction>("investor_transactions");',
-        '  const { rows: txns } = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");',
-    ),
-    (
-        '  const { rows } = useLive<Expense>("expenses");',
-        '  const { rows } = useCompleteFinancialTable<Expense>("expenses");',
-    ),
-]
+IMPORT_LINE = 'import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";\n'
+changed_files = []
 
-for old, new in repls:
-    count = text.count(old)
-    if count == 0:
-        raise SystemExit(f'Expected pattern not found:\n{old}')
-    text = text.replace(old, new)
+for path in Path('src').rglob('*'):
+    if path.suffix not in {'.ts', '.tsx'}:
+        continue
 
-path.write_text(text, encoding='utf-8')
-print('financialSummary large-table hooks migrated to complete paginated history')
+    text = path.read_text(encoding='utf-8')
+    original = text
+
+    for table in RISKY_TABLES:
+        # Generic calls, kept to one source line to avoid crossing unrelated syntax.
+        text = re.sub(
+            rf'useLive<([^\n]*?)>\("{re.escape(table)}"\)',
+            rf'useCompleteFinancialTable<\1>("{table}")',
+            text,
+        )
+        # Non-generic calls.
+        text = text.replace(
+            f'useLive("{table}")',
+            f'useCompleteFinancialTable("{table}")',
+        )
+
+    if text == original:
+        continue
+
+    if 'useCompleteFinancialTable' in text and '@/hooks/useCompleteFinancialTables' not in text:
+        if text.startswith('"use client";\n') or text.startswith("'use client';\n"):
+            first_nl = text.find('\n') + 1
+            text = text[:first_nl] + IMPORT_LINE + text[first_nl:]
+        else:
+            text = IMPORT_LINE + text
+
+    path.write_text(text, encoding='utf-8')
+    changed_files.append(str(path))
+
+if not changed_files:
+    raise SystemExit('No direct useLive calls on risky tables were found to migrate')
+
+print('Migrated direct useLive calls on large tables in:')
+for file in changed_files:
+    print(f' - {file}')
