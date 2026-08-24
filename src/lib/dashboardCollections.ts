@@ -21,7 +21,7 @@
  */
 
 import { normalizeCurrency, txnCollectedAmount } from "@/lib/db";
-import { CurrencyMap } from "@/lib/financialSummary";
+import { CurrencyMap, buildCurrencySupplierLedgerRows, currencySupplierDelta } from "@/lib/financialSummary";
 import { aggregateExecutionByCurrency, type ExecutionRow } from "@/lib/executionProfit";
 import type { CompanyTransaction, Expense, MerchantCashCollection, Transaction } from "@/lib/db";
 
@@ -353,9 +353,11 @@ export function computeCurrencySupplierStatsByCurrency(
 ): { purchases: CurrencyMap; payments: CurrencyMap; due: CurrencyMap } {
   const purchases = new CurrencyMap();
   const payments = new CurrencyMap();
-  for (const t of txns) {
-    if (t.cancelled_at) continue;
-    if (!t.supplier_id || !activeSupplierIds.has(t.supplier_id)) continue;
+  const activeRows = txns.filter((t) => t.supplier_id && activeSupplierIds.has(t.supplier_id));
+  const ledgerRows = buildCurrencySupplierLedgerRows(activeRows as any);
+
+  // Display metrics remain purchase/payment totals.
+  for (const t of ledgerRows) {
     if ((t.tx_type || "") !== "شراء عملة") continue;
     const owedCur = normalizeCurrency(t.sold_currency);
     const owedAmt = Number(t.sold_amount || 0);
@@ -364,9 +366,15 @@ export function computeCurrencySupplierStatsByCurrency(
     for (const s of splits) {
       const amt = Number((s && s.amount) || 0);
       if (!amt) continue;
-      const cur = normalizeCurrency((s && s.currency) ?? owedCur);
-      payments.add(cur, amt);
+      payments.add(normalizeCurrency(((s as any)?.currency) ?? owedCur), amt);
     }
   }
-  return { purchases, payments, due: subtractCurrencyMaps(purchases, payments) };
+
+  // The due balance is the exact supplier ledger balance, not a second formula.
+  const due = new CurrencyMap();
+  for (const t of ledgerRows) {
+    const { currency, delta } = currencySupplierDelta(t as any);
+    due.add(currency, delta);
+  }
+  return { purchases, payments, due };
 }
