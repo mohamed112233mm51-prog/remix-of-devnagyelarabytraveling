@@ -1,0 +1,39 @@
+name: Temporary final accounting audit
+
+on:
+  push:
+    branches:
+      - tmp-final-accounting-audit
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-final-accounting-audit
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Verify no direct useLive remains on large transaction tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          tables='transactions|company_transactions|merchant_cash_collections|payment_splits|investor_transactions|currency_supplier_transactions|expense_deductions|expenses|usd_treasury_transactions|executions|submissions'
+          if grep -RInE --include='*.ts' --include='*.tsx' "useLive<[^>]*>\(\"(${tables})\"\)|useLive\(\"(${tables})\"\)" src; then
+            echo 'ERROR: direct useLive remains on a large transaction table'
+            exit 1
+          fi
+          echo 'No direct useLive remains on large transaction tables.'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
