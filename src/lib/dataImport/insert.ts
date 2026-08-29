@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { patchLive } from "@/lib/db";
 import { voidAllForSource } from "@/lib/financialEngine";
 import { deleteExecutionLinkedRows } from "@/lib/executionPosting";
+import { importExecutionRows, importFinancialRows } from "./specialImport";
 
 const BATCH = 100;
 
@@ -10,6 +11,15 @@ export async function batchInsert(
   rows: Record<string, any>[],
   onProgress: (done: number, total: number) => void,
 ): Promise<{ insertedIds: string[]; failed: number }> {
+  // These tables have application-side accounting/workflow effects and must
+  // never use the generic direct insert path.
+  if (table === "executions") {
+    return importExecutionRows(rows, onProgress);
+  }
+  if (table === "transactions" || table === "company_transactions") {
+    return importFinancialRows(table, rows, onProgress);
+  }
+
   const insertedIds: string[] = [];
   let failed = 0;
   for (let i = 0; i < rows.length; i += BATCH) {
