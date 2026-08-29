@@ -135,49 +135,18 @@ export const IMPORT_SPECS: ImportSpec[] = [
     dedupeKey: (r) => `sub:${String(r.passport || r.national_id || r.passenger_name || "").trim().toLowerCase()}|${r.submit_date || ""}|${String((r.services || [])[0] || "")}`,
   },
   {
-    // One Excel row = one service line. Repeat the same "كود التنفيذ" for
-    // all company/agent service lines that belong to the same execution.
+    // Simplified import: one Excel row = one execution. Service/pricing data
+    // is intentionally left empty and can be completed later from execution details.
     id: "executions", label: "التنفيذات", table: "executions",
     fields: [
-      { key: "_import_group", label: "كود التنفيذ", type: "string", required: true, synonyms: ["كود التنفيذ", "رقم التنفيذ", "Execution Code"], example: "EXEC-001" },
       { key: "passenger_name", label: "اسم المسافر", type: "string", required: true, synonyms: S.passenger, example: "اسم المسافر" },
       { key: "national_id", label: "الرقم القومي", type: "string", synonyms: S.nationalId },
       { key: "dob", label: "تاريخ الميلاد", type: "date", synonyms: S.dob },
-      { key: "passport", label: "رقم الجواز", type: "string", synonyms: S.passport },
-      { key: "birth_place", label: "محل الميلاد", type: "string", synonyms: ["محل الميلاد", "مكان الميلاد"] },
-      { ...baseAgent, required: false },
-      { key: "status", label: "حالة الموافقة", type: "string", synonyms: ["حالة الموافقة", ...S.status], example: "بطيء" },
-      { key: "operation_status", label: "حالة العملية", type: "string", synonyms: ["حالة العملية", "حالة التنفيذ"], example: "قيد المتابعة" },
-      { key: "departure_from", label: "جهة المغادرة", type: "string", synonyms: S.authority, example: "مطار القاهرة" },
-      { key: "destination", label: "الوجهة", type: "string", synonyms: S.destination, example: "بنغازي" },
-      { key: "airline", label: "الطيران", type: "string", synonyms: S.airline },
-      { key: "travel_date", label: "تاريخ المغادرة", type: "date", synonyms: S.travelDate },
-      { key: "approval_company", label: "جهة الموافقة (الشركة الصادرة)", type: "lookup", lookup: "company", dbColumn: "approval_company_id", synonyms: S.companyName },
       { key: "passenger_type", label: "نوع المسافر", type: "string", synonyms: ["نوع المسافر", "فئة المسافر"] },
-      { key: "issue_date", label: "تاريخ الصدور", type: "date", synonyms: ["تاريخ الصدور", "تاريخ الإصدار"] },
-      { key: "approval_validity_enabled", label: "تفعيل صلاحية الموافقة", type: "boolean", synonyms: ["تفعيل صلاحية الموافقة", "صلاحية الموافقة"], default: false },
-      { key: "notes", label: "ملاحظات التنفيذ", type: "string", synonyms: ["ملاحظات التنفيذ", ...S.notes] },
-      { key: "_service_kind", label: "طرف الخدمة", type: "string", required: true, synonyms: ["طرف الخدمة", "نوع الطرف", "شركة/وكيل"], example: "شركة" },
-      { key: "_service_type", label: "نوع الخدمة", type: "string", required: true, synonyms: S.serviceType, example: "تذكرة طيران" },
-      { key: "_service_company", label: "شركة الخدمة", type: "lookup", lookup: "company", dbColumn: "_service_company_id", synonyms: ["شركة الخدمة", "الشركة المقدمة للخدمة", "شركة الشراء"], example: "اسم الشركة" },
-      { key: "_service_count", label: "عدد الخدمة", type: "integer", synonyms: ["عدد الخدمة", ...S.count], default: 1, example: 1 },
-      { key: "_agent_price", label: "سعر الوكيل", type: "number", synonyms: ["سعر الوكيل", "سعر البيع"], default: 0, example: 0 },
-      { key: "_company_price", label: "سعر الشركة", type: "number", synonyms: ["سعر الشركة", "سعر الشراء"], default: 0, example: 1000 },
-      { key: "_company_value", label: "قيمة الشركة", type: "number", synonyms: ["قيمة الشركة", "إجمالي الشركة"], default: 0, example: 1000 },
-      { key: "_service_currency", label: "عملة الخدمة", type: "string", synonyms: ["عملة الخدمة", ...S.currency], default: "EGP", example: "EGP" },
-      { key: "_service_note", label: "ملاحظة الخدمة", type: "string", synonyms: ["ملاحظة الخدمة", "بيان الخدمة"] },
-    ],
-    exampleRows: [
-      {
-        _import_group: "EXEC-001", passenger_name: "اسم المسافر", status: "بطيء", operation_status: "قيد المتابعة",
-        departure_from: "مطار القاهرة", destination: "بنغازي", _service_kind: "شركة", _service_type: "تذكرة طيران",
-        _service_company: "اسم الشركة", _service_count: 1, _company_price: 1000, _company_value: 1000, _service_currency: "EGP",
-      },
-      {
-        _import_group: "EXEC-001", passenger_name: "اسم المسافر", status: "بطيء", operation_status: "قيد المتابعة",
-        departure_from: "مطار القاهرة", destination: "بنغازي", _service_kind: "وكيل", _service_type: "تذكرة طيران",
-        _service_count: 1, _agent_price: 1200, _service_currency: "EGP",
-      },
+      { key: "passport", label: "رقم الجواز", type: "string", synonyms: S.passport },
+      { key: "agent", label: "الوكيل", type: "lookup", lookup: "agent", dbColumn: "agent_id", synonyms: S.agentName, example: "اسم الوكيل" },
+      { key: "status", label: "حالة الموافقة", type: "string", synonyms: ["حالة الموافقة", ...S.status], example: "بطيء" },
+      { key: "operation_status", label: "حالة العملية", type: "string", synonyms: ["حالة العملية", "حالة التنفيذ"], example: "قيد التنفيذ" },
     ],
   },
   {
