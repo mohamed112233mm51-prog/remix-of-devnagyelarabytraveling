@@ -8,7 +8,7 @@ export type ValidationResult = {
   totalRows: number;
 };
 
-type Lookups = {
+export type Lookups = {
   agent: Map<string, string>;     // normalised name -> id
   company: Map<string, string>;
   merchant: Map<string, string>;
@@ -26,9 +26,7 @@ function parseDate(v: any): string | null {
   if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10);
   const s = String(v).trim();
   if (!s) return null;
-  // Already ISO
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  // dd/mm/yyyy or dd-mm-yyyy
   const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if (m) {
     let [, d, mo, y] = m;
@@ -91,7 +89,7 @@ function coerceField(
     }
     case "boolean": {
       const s = norm(raw);
-      return { ok: true, value: ["true", "1", "نعم", "yes", "y"].includes(s), column };
+      return { ok: true, value: ["true", "1", "نعم", "yes", "y", "مفعل", "مفعله"].includes(s), column };
     }
     default:
       return { ok: true, value: String(raw).trim().slice(0, 1000), column };
@@ -112,7 +110,7 @@ export function validateRows(
 
   rows.forEach((srcRow, idx) => {
     const rowNum = idx + 2; // +1 header +1 1-based
-    const out: Record<string, any> = {};
+    let out: Record<string, any> = {};
     let rowOk = true;
 
     for (const f of spec.fields) {
@@ -129,7 +127,18 @@ export function validateRows(
 
     if (!rowOk) return;
 
-    // dedupe
+    try {
+      if (spec.transformRow) out = spec.transformRow(out);
+    } catch (e: any) {
+      errors.push({
+        row: rowNum,
+        field: "_row",
+        label: "الصف",
+        message: e?.message || "تعذر تجهيز الصف للاستيراد",
+      });
+      return;
+    }
+
     if (spec.dedupeKey) {
       const key = spec.dedupeKey(out);
       if (key) {
@@ -146,5 +155,3 @@ export function validateRows(
 
   return { validRows, errors, duplicates, totalRows: rows.length };
 }
-
-export type { Lookups };
