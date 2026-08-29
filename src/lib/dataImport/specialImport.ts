@@ -219,12 +219,17 @@ function executionCore(row: Record<string, any>, services: any[]) {
 
 function serviceFromRow(row: Record<string, any>) {
   const rawKind = String(row._service_kind || "").trim();
+  const serviceType = String(row._service_type || "").trim();
+  // The simplified execution template has no service/pricing columns.
+  // In that case the execution is imported with an empty services array.
+  if (!rawKind && !serviceType) return null;
+
   const isCompany = rawKind.includes("شركة") || rawKind.toLowerCase() === "company";
   const isAgent = rawKind.includes("وكيل") || rawKind.toLowerCase() === "agent";
   if (!isCompany && !isAgent) throw new Error(`طرف الخدمة غير صحيح: ${rawKind}`);
   const common = {
     kind: isCompany ? "company" as const : "agent" as const,
-    service_type: String(row._service_type || "").trim(),
+    service_type: serviceType,
     count: Math.max(1, Math.round(Number(row._service_count || 1))),
     currency: normalizeCurrency(row._service_currency),
     note: row._service_note || null,
@@ -246,13 +251,15 @@ export async function importExecutionRows(
   onProgress: (done: number, total: number) => void,
 ): Promise<ImportResult> {
   const groups = new Map<string, Record<string, any>[]>();
-  for (const row of rows) {
-    const key = String(row._import_group || "").trim();
-    if (!key) continue;
+  rows.forEach((row, index) => {
+    // Legacy files may still carry an explicit import group. New simplified
+    // files do not, so every row gets its own internal group automatically.
+    const explicitKey = String(row._import_group || "").trim();
+    const key = explicitKey || `__row_${index}`;
     const list = groups.get(key) || [];
     list.push(row);
     groups.set(key, list);
-  }
+  });
 
   const entries = Array.from(groups.entries());
   const insertedIds: string[] = [];
@@ -269,7 +276,7 @@ export async function importExecutionRows(
       );
       if (inconsistent) throw new Error("بيانات المسافر غير متطابقة داخل نفس كود التنفيذ");
 
-      const services = groupRows.map(serviceFromRow);
+      const services = groupRows.map(serviceFromRow).filter((service): service is NonNullable<typeof service> => service !== null);
       const payload = executionCore(first, services);
       const { data, error } = await supabase.from("executions").insert(payload as any).select("id").single();
       if (error || !data?.id) throw new Error(error?.message || "تعذر إنشاء التنفيذ");
@@ -287,7 +294,7 @@ export async function importExecutionRows(
         services: services as any,
       });
 
-      if (payload.operation_status === "منفذ") {
+      if (payload.operation_status === "منفذ" && services.length > 0) {
         try {
           const { data: exRow } = await supabase
             .from("executions")
