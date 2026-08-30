@@ -1,0 +1,41 @@
+name: Apply atomic execution financial posting
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_patch_execution_financial_atomic.py
+      - .github/workflows/apply-execution-financial-atomic.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply atomic execution patch
+        run: python3 scripts/_patch_execution_financial_atomic.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Commit atomic execution posting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/executionPosting.ts
+          if git diff --cached --quiet; then
+            echo "No execution changes to commit"
+          else
+            git commit -m "Make execution financial replacement atomic"
+            git pull --rebase origin devo
+            git push origin devo
+          fi
