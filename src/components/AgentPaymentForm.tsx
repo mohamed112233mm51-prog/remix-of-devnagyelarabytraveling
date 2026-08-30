@@ -8,6 +8,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement } from "@/lib/financialEngine";
+import { confirmFinancialOperation, financialOperationFingerprint, getOrCreateFinancialOperationId, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 
@@ -139,6 +140,14 @@ export function AgentPaymentForm({
       return toast.error("لا يمكن حفظ دفعة واحدة بأكثر من عملة؛ أضف دفعة منفصلة لكل عملة");
     }
 
+    // Company-funded rows must resolve to a real company cash box BEFORE any
+    // parent financial record is created. Never allow an orphan treasury split.
+    for (const r of validSplits) {
+      if (r.source !== "company") continue;
+      const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
+      if (!box) return toast.error(`لا توجد خزنة شركة مطابقة لوسيلة الدفع المختارة بعملة ${r.currency}`);
+    }
+
     // Aggregate amounts onto the transaction record (used by ledger)
     let instapay = 0, cash = 0, merchantWalletGross = 0, merchantWalletNet = 0, merchantPhysical = 0;
     for (const r of validSplits) {
@@ -187,25 +196,16 @@ export function AgentPaymentForm({
     };
 
 
-    setSaving(true);
-    const { data: txnRow, error: txnErr } = await supabase
-      .from("transactions").insert(payload).select("id").single();
-    if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الدفعة"); }
-
-    // Post financial movement via Engine → payment_splits with direction/source
-    // → triggers auto-update cash boxes → ledgers/dashboard/reports all consistent.
     const engineSplits = validSplits.map((r) => {
       const b = splitBreakdown(r);
       let methodLabel = "نقدي";
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
         methodLabel = "إنستاباي";
-        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
-        cashBoxId = box?.id || null;
+        cashBoxId = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)?.id || null;
       } else if (r.method === "company_cash") {
         methodLabel = "نقدي";
-        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
-        cashBoxId = box?.id || null;
+        cashBoxId = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "انستا";
       else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";
       else if (r.method === "merchant_physical") methodLabel = "نقدي";
@@ -223,6 +223,77 @@ export function AgentPaymentForm({
         egpEquivalent: r.currency === "EGP" ? b.net : 0,
       };
     });
+
+    const operationFingerprint = financialOperationFingerprint({
+      agentId: form.agent_id,
+      date: form.date,
+      destination: form.destination || null,
+      serviceType: form.service_type || null,
+      count: Number(form.count) || 0,
+      price: Number(form.price) || 0,
+      splits: validSplits.map((r) => ({
+        source: r.source,
+        currency: r.currency,
+        merchantId: r.merchant_id || null,
+        method: r.method,
+        amount: Number(r.amount) || 0,
+      })),
+    });
+    const operationId = getOrCreateFinancialOperationId("agent-payment", operationFingerprint);
+    const confirmationToastId = `financial:${operationId}`;
+
+    setSaving(true);
+    toast.loading("جارٍ تأكيد العملية...", { id: confirmationToastId });
+
+    let txnRow: { id: string } | null = null;
+    const { data: existingTxn, error: existingTxnError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("id", operationId)
+      .maybeSingle();
+    if (existingTxnError) {
+      setSaving(false);
+      toast.error(
+        isLikelyNetworkError(existingTxnError)
+          ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
+          : existingTxnError.message,
+        { id: confirmationToastId },
+      );
+      return;
+    }
+    txnRow = existingTxn as { id: string } | null;
+
+    if (!txnRow) {
+      const { data: insertedTxn, error: txnErr } = await supabase
+        .from("transactions")
+        .insert({ ...payload, id: operationId })
+        .select("id")
+        .single();
+      if (txnErr || !insertedTxn) {
+        // If the response was lost after commit, try to discover the row. When
+        // the network is still unavailable the same operation id stays pending
+        // and the next user retry will resume it safely.
+        const { data: afterInsert } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("id", operationId)
+          .maybeSingle();
+        txnRow = afterInsert as { id: string } | null;
+        if (!txnRow) {
+          setSaving(false);
+          toast.error(
+            isLikelyNetworkError(txnErr)
+              ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
+              : (txnErr?.message || "تعذر حفظ الدفعة"),
+            { id: confirmationToastId },
+          );
+          return;
+        }
+      } else {
+        txnRow = insertedTxn as { id: string };
+      }
+    }
+
     const engineRes = await postMovement({
       partyType: "agent",
       partyId: form.agent_id,
@@ -234,11 +305,29 @@ export function AgentPaymentForm({
       sourceTable: "transactions",
       sourceId: txnRow.id,
       transactionId: txnRow.id,
+      operationId,
     });
 
-    if (!engineRes.ok) console.warn("engine post error:", engineRes.error);
+    if (!engineRes.ok) {
+      setSaving(false);
+      const networkUnknown = isLikelyNetworkError(engineRes.error);
+      if (!networkUnknown) {
+        // A definitive server-side rejection means the split was not committed;
+        // remove the metadata parent so the agent statement cannot show a half operation.
+        await supabase.from("transactions").delete().eq("id", operationId);
+      }
+      toast.error(
+        networkUnknown
+          ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
+          : (engineRes.error || "تعذر تحديث الأرصدة"),
+        { id: confirmationToastId },
+      );
+      return;
+    }
 
-    await logCreate("transactions", txnRow.id, { ...payload, id: txnRow.id }, "دفعة وكيل");
+    try {
+      await logCreate("transactions", txnRow.id, { ...payload, id: txnRow.id }, "دفعة وكيل");
+    } catch { /* audit logging must not turn a confirmed financial write into a failed UI state */ }
 
 
 
@@ -254,8 +343,9 @@ export function AgentPaymentForm({
     } catch { /* ignore */ }
 
 
+    confirmFinancialOperation(operationId);
     setSaving(false);
-    toast.success("تم تسجيل الدفعة");
+    toast.success("تم تسجيل العملية وتحديث الأرصدة بنجاح", { id: confirmationToastId });
     resetDraft();
     onDone();
   };

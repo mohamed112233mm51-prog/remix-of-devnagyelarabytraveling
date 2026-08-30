@@ -27,6 +27,7 @@
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLive } from "@/lib/db";
+import { deriveFinancialOperationUuid } from "@/lib/financialIdempotency";
 
 /* ============================================================
  *  Types
@@ -76,6 +77,7 @@ export type PostMovementInput = {
   sourceTable?: string;           // اختياري — لربطها بعملية أم موجودة
   sourceId?: string;
   transactionId?: string;         // لو الحركة مرتبطة بصف transactions موجود
+  operationId?: string;           // مفتاح ثابت لإعادة المحاولة بدون تكرار الحركة
 };
 
 
@@ -85,6 +87,23 @@ export type PostMovementResult = {
   splitIds?: string[];
   error?: string;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function sameNullable(a: unknown, b: unknown): boolean {
+  return (a ?? null) === (b ?? null);
+}
+
+function splitMatchesExpected(existing: any, expected: any): boolean {
+  return String(existing.method || "") === String(expected.method || "")
+    && String(existing.currency || "") === String(expected.currency || "")
+    && sameNullable(existing.cash_box_id, expected.cash_box_id)
+    && Number(existing.amount || 0) === Number(expected.amount || 0)
+    && String(existing.direction || "in") === String(expected.direction || "in")
+    && sameNullable(existing.source_table, expected.source_table)
+    && sameNullable(existing.source_id, expected.source_id)
+    && sameNullable(existing.transaction_id, expected.transaction_id);
+}
 
 export type LedgerEntry = {
   id: string;
@@ -145,6 +164,10 @@ export async function postMovement(
 ): Promise<PostMovementResult> {
   try {
     const validSplits = input.splits.filter((s) => Number(s.amount) > 0);
+    const operationId = input.operationId?.trim() || null;
+    if (operationId && !UUID_RE.test(operationId)) {
+      return { ok: false, error: "معرّف العملية المالية غير صالح" };
+    }
     if (validSplits.length === 0) {
       return { ok: false, error: "لا توجد سطور دفع صالحة" };
     }
@@ -184,13 +207,39 @@ export async function postMovement(
         source_service_type: sourceServiceType(input.kind, input.partyType),
       };
 
-      const { data: txn, error: txnErr } = await supabase
-        .from("transactions")
-        .insert(parentPayload)
-        .select("id")
-        .single();
-      if (txnErr || !txn) {
-        return { ok: false, error: txnErr?.message || "تعذر حفظ الصف الأم" };
+      let txn: { id: string } | null = null;
+      if (operationId) {
+        const { data: existingTxn, error: existingTxnError } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("id", operationId)
+          .maybeSingle();
+        if (existingTxnError) return { ok: false, error: existingTxnError.message };
+        txn = existingTxn as { id: string } | null;
+      }
+
+      if (!txn) {
+        const payloadWithId = operationId ? { ...parentPayload, id: operationId } : parentPayload;
+        const { data: insertedTxn, error: txnErr } = await supabase
+          .from("transactions")
+          .insert(payloadWithId as any)
+          .select("id")
+          .single();
+        if (txnErr || !insertedTxn) {
+          // The server may have committed while the response was lost. A retry
+          // with the same operation id must re-use that parent instead of duplicating it.
+          if (operationId) {
+            const { data: afterConflict } = await supabase
+              .from("transactions")
+              .select("id")
+              .eq("id", operationId)
+              .maybeSingle();
+            if (afterConflict) txn = afterConflict as { id: string };
+          }
+          if (!txn) return { ok: false, error: txnErr?.message || "تعذر حفظ الصف الأم" };
+        } else {
+          txn = insertedTxn as { id: string };
+        }
       }
       transactionId = txn.id;
       sourceTable = "transactions";
@@ -209,7 +258,8 @@ export async function postMovement(
     }
 
     // إدراج payment_splits
-    const rows = validSplits.map((s) => ({
+    const rows = validSplits.map((s, index) => ({
+      ...(operationId ? { id: deriveFinancialOperationUuid(operationId, `split:${index}`) } : {}),
       transaction_id: transactionId,
       method: s.method,
       currency: s.currency,
@@ -227,6 +277,50 @@ export async function postMovement(
         s.egpEquivalent ??
         (s.currency === "EGP" ? s.amount : s.amount * (s.exchangeRate ?? 1)),
     }));
+
+    if (operationId) {
+      const expectedRows = rows as any[];
+      const expectedIds = expectedRows.map((row) => row.id as string);
+      const { data: existing, error: existingError } = await supabase
+        .from("payment_splits")
+        .select("id,transaction_id,method,currency,cash_box_id,amount,direction,source_table,source_id")
+        .in("id", expectedIds);
+      if (existingError) return { ok: false, error: existingError.message };
+
+      const existingById = new Map((existing || []).map((row: any) => [row.id, row]));
+      for (const row of expectedRows) {
+        const old = existingById.get(row.id);
+        if (old && !splitMatchesExpected(old, row)) {
+          return { ok: false, error: "تعذر تأكيد العملية: توجد محاولة سابقة بنفس المعرّف ببيانات مختلفة" };
+        }
+      }
+
+      const missing = expectedRows.filter((row) => !existingById.has(row.id));
+      if (missing.length > 0) {
+        const { error: insertError } = await supabase.from("payment_splits").insert(missing as any);
+        if (insertError) {
+          // A concurrent/retried request can win the insert race. Re-read and
+          // accept it only when every deterministic row now matches exactly.
+          const { data: afterInsert, error: afterInsertError } = await supabase
+            .from("payment_splits")
+            .select("id,transaction_id,method,currency,cash_box_id,amount,direction,source_table,source_id")
+            .in("id", expectedIds);
+          if (afterInsertError) return { ok: false, error: insertError.message };
+          const afterById = new Map((afterInsert || []).map((row: any) => [row.id, row]));
+          const complete = expectedRows.every((row) => {
+            const saved = afterById.get(row.id);
+            return saved && splitMatchesExpected(saved, row);
+          });
+          if (!complete) return { ok: false, error: insertError.message };
+        }
+      }
+
+      return {
+        ok: true,
+        transactionId: transactionId ?? undefined,
+        splitIds: expectedIds,
+      };
+    }
 
     const { data: inserted, error } = await supabase
       .from("payment_splits")
@@ -256,11 +350,12 @@ export async function postCashBoxTransfer(args: {
   date: string;
   note?: string;
   method?: string;
+  operationId?: string;
 }): Promise<PostMovementResult> {
   const method = args.method || "تحويل بين الخزائن";
-  const transferRef = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+  const transferRef = args.operationId || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
   return postMovement({
     partyType: "treasury",
     partyId: null,
@@ -269,6 +364,7 @@ export async function postCashBoxTransfer(args: {
     note: args.note,
     sourceTable: "cash_box_transfer",
     sourceId: transferRef,
+    operationId: args.operationId,
     splits: [
       {
         method,
