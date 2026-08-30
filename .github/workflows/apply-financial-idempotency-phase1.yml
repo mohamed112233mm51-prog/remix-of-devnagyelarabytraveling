@@ -1,0 +1,41 @@
+name: Apply financial idempotency phase 1
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_patch_financial_idempotency_phase1.py
+      - .github/workflows/apply-financial-idempotency-phase1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply patch
+        run: python3 scripts/_patch_financial_idempotency_phase1.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/financialEngine.ts src/components/AgentPaymentForm.tsx
+          if git diff --cached --quiet; then
+            echo "No application changes to commit"
+          else
+            git commit -m "Harden agent payments with financial idempotency"
+            git push origin HEAD:devo
+          fi
