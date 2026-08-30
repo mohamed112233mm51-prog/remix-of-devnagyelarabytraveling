@@ -16,6 +16,8 @@ export type FinancialAtomicTable =
 export type FinancialAtomicRow = {
   table: FinancialAtomicTable;
   row: Record<string, unknown>;
+  /** Wrapper-only validation hint consumed by execute_financial_atomic. */
+  require_cash_box?: boolean;
 };
 
 export type FinancialAtomicResult<T = Record<string, unknown>> = {
@@ -28,8 +30,13 @@ export type FinancialAtomicResult<T = Record<string, unknown>> = {
 export function atomicRow(
   table: FinancialAtomicTable,
   row: Record<string, unknown>,
+  options?: { requireCashBox?: boolean },
 ): FinancialAtomicRow {
-  return { table, row };
+  return {
+    table,
+    row,
+    ...(options?.requireCashBox ? { require_cash_box: true } : {}),
+  };
 }
 
 /**
@@ -116,5 +123,5 @@ export function buildAtomicPaymentSplitRows(args: {
       egp_equivalent:
         s.egpEquivalent
         ?? (s.currency === "EGP" ? s.amount : s.amount * (s.exchangeRate ?? 1)),
-    }));
+    }, { requireCashBox: s.requiresCashBox === true }));
 }
