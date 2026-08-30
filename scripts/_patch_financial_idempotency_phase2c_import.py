@@ -92,6 +92,8 @@ new_func = '''export async function importFinancialRows(
   return { insertedIds, failed };
 }'''
 
-text = text[:start] + new_func + text[end:]
+# end points to the newline before the old function's closing brace. Skip that
+# old closing brace but preserve the blank lines + following executionCore().
+text = text[:start] + new_func + text[end + 2:]
 path.write_text(text, encoding="utf-8")
 print("financial import idempotency patch applied")
