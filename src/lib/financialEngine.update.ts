@@ -1,20 +1,9 @@
 /**
- * Financial Engine — update / edit financial transactions.
+ * Financial Engine — atomic edit financial transactions.
  *
- * Strategy: Void + Re-post (safest, mirrors cancel logic).
- *  1. Read parent row + related payment_splits (before value).
- *  2. Validate: if amount is changing AND the direction is `out`, run
- *     `checkOutflowAllowed` on the *net* new amount against the cash box
- *     balance AFTER virtually reversing the old splits.
- *  3. Delete the existing payment_splits (trigger reverses cash-box balance).
- *  4. Re-insert the new payment_splits, preserving method/currency/cash_box
- *     but scaling amounts to match the new total (or, in the single-split
- *     case, using the new amount directly). Trigger re-applies balance.
- *  5. Patch the parent row's amount/metadata columns to match.
- *  6. Write audit log with action='edit', before/after JSON, reason.
- *
- * The dialog restricts editing to single-split rows for amount changes.
- * Multi-split rows can only edit metadata (date / statement / note).
+ * Reads/validation happen first, then every financial WRITE (parent + all
+ * payment_splits) is sent to one PostgreSQL RPC. The payment_splits trigger
+ * updates cash_boxes inside that same DB transaction, so an edit is all-or-none.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -24,8 +13,8 @@ import type { CancellableTable } from "@/lib/financialEngine.cancel";
 export type EditableTable = CancellableTable;
 
 export type EditPatch = {
-  amount?: number;          // new total amount (parent-level)
-  date?: string;            // YYYY-MM-DD
+  amount?: number;
+  date?: string;
   statement?: string | null;
   note?: string | null;
 };
@@ -59,24 +48,19 @@ function entityFieldsFor(table: EditableTable, row: any) {
   }
 }
 
-/** map (table, newAmount) → parent update patch that keeps totals coherent. */
 function parentAmountPatch(table: EditableTable, before: any, newAmount: number): Record<string, unknown> {
   const oldTotal = pickOldTotal(table, before);
   const ratio = oldTotal > 0 ? newAmount / oldTotal : 0;
   switch (table) {
     case "transactions":
     case "company_transactions": {
-      // scale all method-split columns by ratio so per-method totals stay proportional
       const cols = [
         "instapay_amount", "cash_amount", "mobile_cash_amount", "mobile_cash_net_amount",
         "arabic_tourism_cash_amount", "arabic_tourism_cash_net_amount",
         "merchant_cash_amount", "merchant_cash_net_amount", "merchant_cash_physical_amount",
         "usd_amount",
       ];
-      const patch: Record<string, unknown> = {
-        paid: newAmount,
-        total_paid: newAmount,
-      };
+      const patch: Record<string, unknown> = { paid: newAmount, total_paid: newAmount };
       for (const c of cols) {
         const v = Number((before as any)[c]) || 0;
         if (v > 0) patch[c] = oldTotal > 0 ? Math.round(v * ratio * 100) / 100 : 0;
@@ -84,7 +68,6 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
       return patch;
     }
     case "currency_supplier_transactions": {
-      // adjust whichever leg is non-zero (bought or sold)
       const patch: Record<string, unknown> = {};
       if (Number(before.bought_amount) > 0) patch.bought_amount = newAmount;
       else patch.sold_amount = newAmount;
@@ -101,7 +84,7 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
     case "merchant_cash_collections":
       return { amount: newAmount };
     case "payment_splits":
-      return {}; // handled directly on the split row
+      return {};
   }
 }
 
@@ -132,19 +115,43 @@ function pickOldTotal(table: EditableTable, row: any): number {
 function metaPatchFor(table: EditableTable, patch: EditPatch): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (patch.date !== undefined) {
-    // pick the right date column per table
     if (table === "currency_supplier_transactions") out.tx_date = patch.date;
     else if (table === "expense_deductions") out.deduction_date = patch.date;
-    else out.date = patch.date;
+    else if (table !== "payment_splits") out.date = patch.date;
   }
   if (patch.note !== undefined) {
     if (table === "currency_supplier_transactions") out.description = patch.note ?? null;
-    else out.note = patch.note ?? null;
+    else if (table !== "payment_splits") out.note = patch.note ?? null;
   }
-  if (patch.statement !== undefined) {
-    out.statement = patch.statement ?? null;
-  }
+  if (patch.statement !== undefined && table !== "payment_splits") out.statement = patch.statement ?? null;
   return out;
+}
+
+function mutationErrorMessage(error: any): string {
+  const message = String(error?.message || error || "");
+  const code = String(error?.code || "");
+  const lower = message.toLowerCase();
+  const missingRpc = code === "PGRST202"
+    || (lower.includes("update_financial_transaction_atomic") && (lower.includes("could not find") || lower.includes("schema cache")));
+  if (missingRpc) {
+    return "تم إيقاف التعديل بدون تغيير أي جزء: تحديث الحركات المالية الذرية غير مُطبق على قاعدة البيانات بعد.";
+  }
+  return message || "تعذر تعديل الحركة المالية";
+}
+
+function scaleSplitPatch(split: any, ratio: number) {
+  const scale = (v: any) => {
+    const n = Number(v) || 0;
+    return n > 0 ? Math.round(n * ratio * 100) / 100 : n;
+  };
+  return {
+    id: split.id,
+    amount: scale(split.amount),
+    gross_amount: scale(split.gross_amount ?? split.amount),
+    merchant_commission_amount: scale(split.merchant_commission_amount),
+    net_amount: scale(split.net_amount ?? split.amount),
+    egp_equivalent: scale(split.egp_equivalent ?? split.amount),
+  };
 }
 
 export async function updateFinancialTransaction(args: {
@@ -161,7 +168,6 @@ export async function updateFinancialTransaction(args: {
   const userId = userData?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول لتعديل الحركة");
 
-  // 1) Read the parent (BEFORE)
   const { data: before, error: readErr } = await supabase
     .from(table as any)
     .select("*")
@@ -171,126 +177,87 @@ export async function updateFinancialTransaction(args: {
   if (!before) throw new Error("الحركة غير موجودة");
   if ((before as any).cancelled_at) throw new Error("لا يمكن تعديل حركة ملغاة — قم بإعادة التفعيل أولاً");
 
-  // 2) Load current payment_splits (if any)
   let currentSplits: any[] = [];
   if (PAYMENT_SPLIT_PARENTS.has(table)) {
-    const { data: sp } = await supabase
+    const { data: sp, error: splitReadError } = await supabase
       .from("payment_splits")
       .select("*")
       .eq("source_table", table)
       .eq("source_id", id)
       .is("cancelled_at", null);
+    if (splitReadError) throw splitReadError;
     currentSplits = sp || [];
   }
 
   const oldTotal = pickOldTotal(table, before);
   const newAmount = patch.amount !== undefined ? Number(patch.amount) : oldTotal;
   const amountChanged = patch.amount !== undefined && newAmount !== oldTotal;
+  if (amountChanged && !(newAmount > 0)) throw new Error("المبلغ يجب أن يكون أكبر من صفر");
 
-  if (amountChanged && !(newAmount > 0)) {
-    throw new Error("المبلغ يجب أن يكون أكبر من صفر");
-  }
-
-  // 3) Balance guard on outflow deltas (only if increasing an outflow)
+  // Existing business validation remains before the transaction. The actual
+  // parent/split writes themselves are atomic even if validation or network
+  // conditions change afterwards.
   if (amountChanged && newAmount > oldTotal && currentSplits.length > 0) {
     const delta = newAmount - oldTotal;
     for (const s of currentSplits) {
       if (s.direction !== "out" || !s.cash_box_id) continue;
       const share = oldTotal > 0 ? (Number(s.amount) / oldTotal) * delta : delta;
       if (share > 0) {
-        // balance already reflects existing splits; we only need to allow the extra share
         const err = await checkOutflowAllowed(s.cash_box_id, share, "الخزينة");
         if (err) throw new Error(err);
       }
     }
   }
 
-  // 4) Re-post splits (delete + re-insert scaled)
-  if (amountChanged && currentSplits.length > 0 && oldTotal > 0) {
-    const ratio = newAmount / oldTotal;
-    // delete old (trigger reverses balance)
-    const oldIds = currentSplits.map((s) => s.id);
-    const { error: delErr } = await supabase.from("payment_splits").delete().in("id", oldIds);
-    if (delErr) throw delErr;
+  const parentPatch: Record<string, unknown> = table === "payment_splits"
+    ? {}
+    : { ...metaPatchFor(table, patch) };
+  if (amountChanged && table !== "payment_splits") {
+    Object.assign(parentPatch, parentAmountPatch(table, before, newAmount));
+  }
 
-    // re-insert scaled
-    const rows = currentSplits.map((s) => {
-      const scale = (v: any) => {
-        const n = Number(v) || 0;
-        return n > 0 ? Math.round(n * ratio * 100) / 100 : n;
-      };
-      return {
-        transaction_id: s.transaction_id,
-        method: s.method,
-        currency: s.currency,
-        cash_box_id: s.cash_box_id,
-        amount: scale(s.amount),
-        direction: s.direction,
-        source_table: s.source_table,
-        source_id: s.source_id,
-        gross_amount: scale(s.gross_amount ?? s.amount),
-        merchant_commission_rate: s.merchant_commission_rate ?? 0,
-        merchant_commission_amount: scale(s.merchant_commission_amount),
-        net_amount: scale(s.net_amount ?? s.amount),
-        exchange_rate: s.exchange_rate ?? 1,
-        egp_equivalent: scale(s.egp_equivalent ?? s.amount),
-      };
-    });
-    const { error: insErr } = await supabase.from("payment_splits").insert(rows);
-    if (insErr) throw insErr;
-  } else if (amountChanged && table === "payment_splits") {
-    // direct edit on a single split
-    const { error: dErr } = await supabase.from("payment_splits").delete().eq("id", id);
-    if (dErr) throw dErr;
+  let splitPatches: Record<string, unknown>[] = [];
+  if (amountChanged && table === "payment_splits") {
     const s = before as any;
     const ratio = oldTotal > 0 ? newAmount / oldTotal : 1;
-    const scale = (v: any) => {
-      const n = Number(v) || 0;
-      return n > 0 ? Math.round(n * ratio * 100) / 100 : n;
-    };
-    const { error: iErr } = await supabase.from("payment_splits").insert({
-      transaction_id: s.transaction_id,
-      method: s.method,
-      currency: s.currency,
-      cash_box_id: s.cash_box_id,
+    splitPatches = [{
+      id,
       amount: newAmount,
-      direction: s.direction,
-      source_table: s.source_table,
-      source_id: s.source_id,
       gross_amount: newAmount,
-      merchant_commission_rate: s.merchant_commission_rate ?? 0,
-      merchant_commission_amount: scale(s.merchant_commission_amount),
+      merchant_commission_amount: (() => {
+        const n = Number(s.merchant_commission_amount) || 0;
+        return n > 0 ? Math.round(n * ratio * 100) / 100 : n;
+      })(),
       net_amount: newAmount,
-      exchange_rate: s.exchange_rate ?? 1,
       egp_equivalent: s.currency === "EGP" ? newAmount : newAmount * (Number(s.exchange_rate) || 1),
-    } as any);
-    if (iErr) throw iErr;
+    }];
+  } else if (amountChanged && currentSplits.length > 0 && oldTotal > 0) {
+    const ratio = newAmount / oldTotal;
+    splitPatches = currentSplits.map((s) => scaleSplitPatch(s, ratio));
   }
 
-  // 5) Patch parent (amount + metadata)
-  if (table !== "payment_splits") {
-    const parentPatch: Record<string, unknown> = { ...metaPatchFor(table, patch) };
-    if (amountChanged) Object.assign(parentPatch, parentAmountPatch(table, before, newAmount));
-    if (Object.keys(parentPatch).length > 0) {
-      const { error: updErr } = await supabase
-        .from(table as any)
-        .update(parentPatch)
-        .eq("id", id);
-      if (updErr) throw updErr;
-    }
-  }
-
-  // 6) After snapshot + audit
-  const { data: after } = await supabase.from(table as any).select("*").eq("id", id).maybeSingle();
-  const meta = entityFieldsFor(table, before);
-  await supabase.from("financial_audit_log").insert({
-    table_name: table,
-    record_id: id,
-    action: "edit",
-    reason: trimmedReason,
-    performed_by: userId,
-    before_value: before as any,
-    after_value: (after ?? before) as any,
-    ...meta,
+  const { data, error } = await (supabase as any).rpc("update_financial_transaction_atomic", {
+    p_table: table,
+    p_id: id,
+    p_parent_patch: parentPatch,
+    p_split_patches: splitPatches,
   });
+  if (error) throw new Error(mutationErrorMessage(error));
+  if (!data || data.ok !== true) throw new Error(data?.error || "تعذر تأكيد تعديل الحركة المالية");
+
+  try {
+    const meta = entityFieldsFor(table, data.before || before);
+    await supabase.from("financial_audit_log").insert({
+      table_name: table,
+      record_id: id,
+      action: "edit",
+      reason: trimmedReason,
+      performed_by: userId,
+      before_value: (data.before || before) as any,
+      after_value: (data.after || before) as any,
+      ...meta,
+    });
+  } catch (auditError) {
+    console.warn("[financial-audit] edit log failed", auditError);
+  }
 }
