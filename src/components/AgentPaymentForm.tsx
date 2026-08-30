@@ -213,6 +213,7 @@ export function AgentPaymentForm({
         method: methodLabel,
         currency: r.currency,
         cashBoxId,
+        requiresCashBox: r.source === "company",
         amount: b.net,
         direction: "in" as const,
         grossAmount: b.gross,

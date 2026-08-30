@@ -57,7 +57,7 @@ function buildPaymentSplits(
     if (!cashBoxId) {
       throw new Error(`لا توجد خزنة نشطة للعملة ${currency} وطريقة الدفع ${method}`);
     }
-    splits.push({ method, currency, cashBoxId, amount, direction });
+    splits.push({ method, currency, cashBoxId, requiresCashBox: true, amount, direction });
   };
 
   push("إنستاباي", insta);

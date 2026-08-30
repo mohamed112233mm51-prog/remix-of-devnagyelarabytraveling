@@ -53,6 +53,7 @@ function mapSplitsForEngine(
       method: methodLabel,
       currency: r.currency as "EGP" | "USD" | "LYD",
       cashBoxId,
+      requiresCashBox: r.source === "company",
       amount: a,
       direction,
       grossAmount: a,

@@ -251,6 +251,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
         method: selectedBox.name,
         currency: normalizeCurrency(selectedBox.currency) as "EGP" | "USD" | "LYD",
         cashBoxId: selectedBox.id,
+        requiresCashBox: true,
         amount,
         direction: kind === "توريد نقدية" ? "in" : "out",
       }],

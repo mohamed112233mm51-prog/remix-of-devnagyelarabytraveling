@@ -263,6 +263,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           method: r.method === "company_instapay" ? "إنستاباي" : "نقدي",
           currency: (r.currency || "EGP") as any,
           cashBoxId: box?.id || null,
+          requiresCashBox: true,
           amount: a,
           direction: "out",
           grossAmount: a,

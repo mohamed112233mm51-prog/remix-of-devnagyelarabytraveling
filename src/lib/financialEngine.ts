@@ -57,6 +57,7 @@ export type MovementSplit = {
   method: string;                 // "نقدي" | "إنستاباي" | "تاجر الكاش تاجر" | ...
   currency: "EGP" | "USD" | "LYD";
   cashBoxId: string | null;       // null للمحافظ (تاجر) — لا يوجد صف في cash_boxes
+  requiresCashBox?: boolean;           // true = DB must reject the whole operation if cashBoxId is null
   amount: number;                 // موجب دائماً
   direction: Direction;
   exchangeRate?: number;
@@ -300,6 +301,7 @@ export async function postCashBoxTransfer(args: {
         method,
         currency: args.currency,
         cashBoxId: args.fromCashBoxId,
+        requiresCashBox: true,
         amount: args.amount,
         direction: "out",
       },
@@ -307,6 +309,7 @@ export async function postCashBoxTransfer(args: {
         method,
         currency: args.currency,
         cashBoxId: args.toCashBoxId,
+        requiresCashBox: true,
         amount: args.amount,
         direction: "in",
       },
