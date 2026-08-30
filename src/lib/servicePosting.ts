@@ -100,115 +100,64 @@ function companyRow(input: ServicePostingInput & { companyId: string }) {
   };
 }
 
-/** Called after INSERT of a new service record. Creates both debt rows. */
-export async function postServiceFinancials(input: ServicePostingInput): Promise<void> {
-  if (input.agentId) {
-    const { error } = await supabase
-      .from("transactions")
-      .insert(agentRow({ ...input, agentId: input.agentId }));
-    if (error) throw new Error(`فشل إنشاء حركة الوكيل: ${error.message}`);
-  }
-  if (input.companyId && Number(input.companyValue) > 0) {
-    const { error } = await supabase
-      .from("company_transactions")
-      .insert(companyRow({ ...input, companyId: input.companyId }));
-    if (error) throw new Error(`فشل إنشاء حركة الشركة: ${error.message}`);
-  }
-}
-
 /**
- * Called when a service is edited. UPDATEs the linked rows if they exist,
- * INSERTs them if they don't (e.g. legacy services created before posting).
- *
- * Only fields safe to overwrite are touched. We DO NOT overwrite payment
- * fields (instapay/cash/merchant/total_paid) — those belong to the agent
- * payment workflow and must survive service edits.
+ * Synchronize both accounting sides of one service in ONE PostgreSQL
+ * transaction. Updates preserve existing payment fields; company debt is
+ * removed atomically if companyValue becomes zero.
  */
-export async function updateServiceFinancials(input: ServicePostingInput): Promise<void> {
-  // --- Agent side ---
-  if (input.agentId) {
-    const { data: existing, error: selErr } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("source_service_id", input.serviceId)
-      .maybeSingle();
-    if (selErr) throw new Error(selErr.message);
+async function syncService(input: ServicePostingInput, deleting = false): Promise<any> {
+  const agent = !deleting && input.agentId
+    ? agentRow({ ...input, agentId: input.agentId })
+    : null;
+  const company = !deleting && input.companyId && Number(input.companyValue) > 0
+    ? companyRow({ ...input, companyId: input.companyId })
+    : null;
 
-    const base = agentRow({ ...input, agentId: input.agentId });
-    if (existing?.id) {
-      // Update only structural fields; leave payment fields untouched
-      const { error } = await supabase
-        .from("transactions")
-        .update({
-          agent_id: base.agent_id,
-          date: base.date,
-          destination: base.destination,
-          travel_statement: null,
-          service_type: base.service_type,
-          count: base.count,
-          price: base.price,
-          note: base.note,
-          source_service_type: base.source_service_type,
-        })
-        .eq("id", existing.id);
-      if (error) throw new Error(error.message);
-    } else {
-      const { data, error } = await supabase.from("transactions").insert(base).select("id").single();
-      if (error) throw new Error(error.message);
-      if (data?.id) await logCreate("transactions", data.id, { ...base, id: data.id }, "توليد من تقديم خدمة");
-    }
+  const { data, error } = await (supabase as any).rpc("sync_service_financials_atomic", {
+    p_service_id: input.serviceId,
+    p_agent_row: agent,
+    p_company_row: company,
+    p_delete: deleting,
+  });
+  if (error || data?.ok !== true) {
+    const message = String(error?.message || data?.error || "تعذر مزامنة قيود الخدمة المالية");
+    const missingRpc = String((error as any)?.code || "") === "PGRST202" || message.toLowerCase().includes("schema cache");
+    throw new Error(missingRpc ? "تم إيقاف العملية بدون تسجيل أي طرف: تحديث قيود الخدمات الذري غير مُطبق على قاعدة البيانات بعد." : message);
   }
-
-  // --- Company side ---
-  if (input.companyId) {
-    const { data: existing, error: selErr } = await supabase
-      .from("company_transactions")
-      .select("id")
-      .eq("source_service_id", input.serviceId)
-      .maybeSingle();
-    if (selErr) throw new Error(selErr.message);
-
-    const value = Math.max(0, Number(input.companyValue) || 0);
-    const base = companyRow({ ...input, companyId: input.companyId });
-    if (existing?.id) {
-      if (value > 0) {
-        const { error } = await supabase
-          .from("company_transactions")
-          .update({
-            company_id: base.company_id,
-            date: base.date,
-            destination: base.destination,
-            service_type: base.service_type,
-            count: base.count,
-            price: base.price,
-            trip_value: base.trip_value,
-            note: base.note,
-            source_service_type: base.source_service_type,
-          })
-          .eq("id", existing.id);
-        if (error) throw new Error(error.message);
-      } else {
-        // Value cleared on edit → remove the company debt row
-        const { error } = await supabase
-          .from("company_transactions")
-          .delete()
-          .eq("id", existing.id);
-        if (error) throw new Error(error.message);
-      }
-    } else if (value > 0) {
-      const { data, error } = await supabase.from("company_transactions").insert(base).select("id").single();
-      if (error) throw new Error(error.message);
-      if (data?.id) await logCreate("company_transactions", data.id, { ...base, id: data.id }, "توليد من تقديم خدمة");
-    }
-  }
+  return data;
 }
 
-/** Reverse / remove the financial rows linked to a deleted service. */
+/** Called after INSERT of a new service record. Creates both debt rows atomically. */
+export async function postServiceFinancials(input: ServicePostingInput): Promise<void> {
+  const data = await syncService(input, false);
+  try {
+    if (data?.agentTransactionId && input.agentId) {
+      await logCreate("transactions", data.agentTransactionId, { ...agentRow({ ...input, agentId: input.agentId }), id: data.agentTransactionId }, "توليد من تقديم خدمة");
+    }
+    if (data?.companyTransactionId && input.companyId && Number(input.companyValue) > 0) {
+      await logCreate("company_transactions", data.companyTransactionId, { ...companyRow({ ...input, companyId: input.companyId }), id: data.companyTransactionId }, "توليد من تقديم خدمة");
+    }
+  } catch { /* audit is non-financial */ }
+}
+
+/** Called when a service is edited. Both accounting sides change atomically. */
+export async function updateServiceFinancials(input: ServicePostingInput): Promise<void> {
+  await syncService(input, false);
+}
+
+/** Reverse / remove both financial rows linked to a deleted service atomically. */
 export async function deleteServiceLinkedRows(serviceId: string): Promise<void> {
-  const [{ error: e1 }, { error: e2 }] = await Promise.all([
-    supabase.from("transactions").delete().eq("source_service_id", serviceId),
-    supabase.from("company_transactions").delete().eq("source_service_id", serviceId),
-  ]);
-  if (e1) throw new Error(e1.message);
-  if (e2) throw new Error(e2.message);
+  await syncService({
+    serviceId,
+    serviceKind: "flight_ticket",
+    agentId: null,
+    companyId: null,
+    date: null,
+    destination: null,
+    travelStatement: null,
+    passengerName: null,
+    count: 1,
+    price: 0,
+    companyValue: 0,
+  }, true);
 }

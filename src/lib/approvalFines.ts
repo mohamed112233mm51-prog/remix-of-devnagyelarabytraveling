@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logCreate } from "@/lib/financialAudit";
+import { atomicRow, executeFinancialAtomic } from "@/lib/financialAtomic";
+import { deriveFinancialOperationUuid, financialOperationFingerprint } from "@/lib/financialIdempotency";
 
 /**
  * Approval expiry fine logic — applies ONLY to "موافقة أمنية".
@@ -135,9 +137,12 @@ export async function ensureApprovalFines(
   const haveAgent = new Set((existingAgent || []).map((r: any) => String(r.source_service_id)));
   const haveCompany = new Set((existingCompany || []).map((r: any) => String(r.source_service_id)));
 
-  const agentRows = eligible
-    .filter((x) => !haveAgent.has(x.id))
-    .map((x) => ({
+  let created = 0;
+  for (const x of eligible) {
+    const rows = [];
+    const agentId = deriveFinancialOperationUuid(x.id, `${sourceType}:agent-fine`);
+    const companyId = deriveFinancialOperationUuid(x.id, `${sourceType}:company-fine`);
+    const agentPayload = {
       agent_id: x.agent_id,
       date: x.expiry,
       destination: "—",
@@ -150,11 +155,8 @@ export async function ensureApprovalFines(
       note: FINE_LABEL,
       source_service_type: sourceType,
       source_service_id: x.id,
-    }));
-
-  const companyRows = eligible
-    .filter((x) => !haveCompany.has(x.id))
-    .map((x) => ({
+    };
+    const companyPayload = {
       company_id: x.company_id,
       date: x.expiry,
       destination: "—",
@@ -167,37 +169,35 @@ export async function ensureApprovalFines(
       note: FINE_LABEL,
       source_service_type: sourceType,
       source_service_id: x.id,
-    }));
+    };
 
-  const dupes = eligible.length - Math.max(agentRows.length, companyRows.length);
-  if (dupes > 0 && report) skip["already_exists"] = (skip["already_exists"] || 0) + dupes;
+    if (!haveAgent.has(x.id)) rows.push(atomicRow("transactions", { ...agentPayload, id: agentId }));
+    if (!haveCompany.has(x.id)) rows.push(atomicRow("company_transactions", { ...companyPayload, id: companyId }));
+    if (rows.length === 0) {
+      bump("already_exists");
+      continue;
+    }
 
-  let created = 0;
-  try {
-    if (agentRows.length > 0) {
-      const { error, data } = await supabase.from("transactions").insert(agentRows as any).select("id");
-      if (error) console.error("[approvalFines] agent insert error:", error);
-      else {
-        created += data?.length || 0;
-        for (let i = 0; i < (data?.length || 0); i++) {
-          const id = (data![i] as any)?.id;
-          if (id) await logCreate("transactions", id, { ...(agentRows as any)[i], id }, "غرامة انتهاء موافقة");
-        }
-      }
+    const operationId = deriveFinancialOperationUuid(x.id, `${sourceType}:fine-operation`);
+    const fingerprint = financialOperationFingerprint({ sourceType, entityId: x.id, fineAmount, agentPayload, companyPayload });
+    const saved = await executeFinancialAtomic({
+      operationId,
+      fingerprint,
+      rows,
+      result: { agentId, companyId },
+    });
+    if (!saved.ok) {
+      console.error("[approvalFines] atomic insert error:", saved.error);
+      continue;
     }
-    if (companyRows.length > 0) {
-      const { error, data } = await supabase.from("company_transactions").insert(companyRows as any).select("id");
-      if (error) console.error("[approvalFines] company insert error:", error);
-      else {
-        created += data?.length || 0;
-        for (let i = 0; i < (data?.length || 0); i++) {
-          const id = (data![i] as any)?.id;
-          if (id) await logCreate("company_transactions", id, { ...(companyRows as any)[i], id }, "غرامة انتهاء موافقة");
-        }
-      }
+
+    created += rows.length;
+    if (!saved.reused) {
+      try {
+        if (!haveAgent.has(x.id)) await logCreate("transactions", agentId, { ...agentPayload, id: agentId }, "غرامة انتهاء موافقة");
+        if (!haveCompany.has(x.id)) await logCreate("company_transactions", companyId, { ...companyPayload, id: companyId }, "غرامة انتهاء موافقة");
+      } catch { /* audit is non-financial */ }
     }
-  } catch (e) {
-    console.error("[approvalFines] insert exception:", e);
   }
 
   if (report) report.created += created;

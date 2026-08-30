@@ -272,8 +272,6 @@ export async function syncEntityOpeningEntries(
   entries: OpeningEntry[],
 ): Promise<void> {
   if (!entityId) return;
-  const m = mappingFor(kind);
-
   // 1) Clean input
   const clean: OpeningEntry[] = [];
   for (const e of entries || []) {
@@ -302,18 +300,19 @@ export async function syncEntityOpeningEntries(
   }
   const finalEntries = Array.from(merged.values());
 
-  // 3) Full replace
-  const del = await supabase
-    .from(m.table as any)
-    .delete()
-    .eq(m.entityCol, entityId)
-    .in("source_service_type", ["opening_debit", "opening_credit"] as any);
-  if (del.error) throw del.error;
-
-  if (finalEntries.length === 0) return;
+  // 3) Full replace inside ONE PostgreSQL transaction. If any new row fails,
+  // the DELETE is rolled back and the previous opening balance remains intact.
   const rows = finalEntries.map((e) => buildRow(kind, entityId, e));
-  const ins = await supabase.from(m.table as any).insert(rows as any);
-  if (ins.error) throw ins.error;
+  const { data, error } = await (supabase as any).rpc("replace_entity_opening_entries_atomic", {
+    p_kind: kind,
+    p_entity_id: entityId,
+    p_rows: rows,
+  });
+  if (error || data?.ok !== true) {
+    const message = String(error?.message || data?.error || "تعذر حفظ الرصيد الافتتاحي");
+    const missingRpc = String((error as any)?.code || "") === "PGRST202" || message.toLowerCase().includes("schema cache");
+    throw new Error(missingRpc ? "تم إيقاف العملية بدون تغيير أي جزء: تحديث الأرصدة الافتتاحية الذري غير مُطبق على قاعدة البيانات بعد." : message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -338,50 +337,15 @@ export async function syncCashBoxOpeningBalance(cashBoxId: string, op: CashBoxOp
   if (!cashBoxId) return;
   const amount = Number(op.amount) || 0;
   const date = op.date || todayISO();
-
-  const { data: box, error: readErr } = await supabase
-    .from("cash_boxes")
-    .select("id, balance, opening_balance, currency")
-    .eq("id", cashBoxId)
-    .maybeSingle();
-  if (readErr) throw readErr;
-  if (!box) throw new Error("الخزينة غير موجودة");
-
-  const prevOpening = Number((box as any).opening_balance || 0);
-  const prevBalance = Number((box as any).balance || 0);
-  const delta = amount - prevOpening;
-  const newBalance = prevBalance + delta;
-
-  const { error: updErr } = await supabase
-    .from("cash_boxes")
-    .update({
-      opening_balance: amount,
-      opening_date: date,
-      opening_note: op.note || null,
-      balance: newBalance,
-    } as any)
-    .eq("id", cashBoxId);
-  if (updErr) throw updErr;
-
-  await supabase
-    .from("usd_treasury_transactions")
-    .delete()
-    .eq("cash_box_id", cashBoxId)
-    .eq("source_service_type", "opening");
-
-  if (amount !== 0) {
-    const { error: insErr } = await supabase.from("usd_treasury_transactions").insert({
-      cash_box_id: cashBoxId,
-      date,
-      type: "opening",
-      usd_amount: 0,
-      egp_amount: amount,
-      exchange_rate: null,
-      note: op.note || null,
-      statement: "رصيد افتتاحي",
-      source_service_type: "opening",
-      source_service_id: cashBoxId,
-    } as any);
-    if (insErr) throw insErr;
+  const { data, error } = await (supabase as any).rpc("sync_cash_box_opening_atomic", {
+    p_cash_box_id: cashBoxId,
+    p_amount: amount,
+    p_date: date,
+    p_note: op.note || null,
+  });
+  if (error || data?.ok !== true) {
+    const message = String(error?.message || data?.error || "تعذر حفظ رصيد الخزينة الافتتاحي");
+    const missingRpc = String((error as any)?.code || "") === "PGRST202" || message.toLowerCase().includes("schema cache");
+    throw new Error(missingRpc ? "تم إيقاف العملية بدون تغيير أي جزء: تحديث رصيد الخزينة الذري غير مُطبق على قاعدة البيانات بعد." : message);
   }
 }

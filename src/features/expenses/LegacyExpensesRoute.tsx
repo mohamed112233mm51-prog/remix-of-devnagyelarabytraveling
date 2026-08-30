@@ -454,12 +454,14 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
 
   const del = async (id: string) => {
     if (!(await confirmDialog("حذف هذا المصروف؟ سيتم حذف كل وسائل الدفع المرتبطة به."))) return;
-    // Delete linked splits first (no FK cascade)
-    await supabase.from("expense_deductions").delete().eq("expense_id", id);
-    await supabase.from("merchant_cash_collections").delete().eq("expense_id", id);
-    const { error } = await supabase.from("expenses").delete().eq("id", id);
-    if (error) toast.error(error.message);
-    else toast.success("تم حذف المصروف");
+    const { data, error } = await (supabase as any).rpc("delete_expense_atomic", { p_expense_id: id });
+    if (error || data?.ok !== true) {
+      const message = String(error?.message || data?.error || "تعذر حذف المصروف");
+      const missingRpc = String((error as any)?.code || "") === "PGRST202" || message.toLowerCase().includes("schema cache");
+      toast.error(missingRpc ? "تم إيقاف الحذف بدون تغيير أي جزء: تحديث الحذف المالي الذري غير مُطبق على قاعدة البيانات بعد." : message);
+    } else {
+      toast.success("تم حذف المصروف وكل آثاره المالية بنجاح");
+    }
   };
 
   if (edit) return <ExpenseForm initial={edit} onDone={() => setEdit(null)} />;
