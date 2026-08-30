@@ -24,42 +24,52 @@ def line_no(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
+def code_only(text: str) -> str:
+    """Mask comments while preserving offsets/newlines for useful line numbers."""
+    def mask(match: re.Match[str]) -> str:
+        value = match.group(0)
+        return "".join("\n" if ch == "\n" else " " for ch in value)
+
+    # Good enough for an audit guard: comments are the source of false positives
+    # such as documentation containing `from("payment_splits").insert(...)`.
+    text = re.sub(r"/\*.*?\*/", mask, text, flags=re.S)
+    text = re.sub(r"//[^\n]*", mask, text)
+    return text
+
+
 def iter_sources():
     for path in SRC.rglob("*"):
         if path.suffix not in {".ts", ".tsx"}:
             continue
-        yield path, path.read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
+        yield path, raw, code_only(raw)
 
 
-for path, text in iter_sources():
+for path, raw_text, text in iter_sources():
     rel = path.relative_to(ROOT)
 
     # Every postMovement write must carry a stable operationId. postMovement is
     # fail-closed too, but CI catches a forgotten caller before runtime.
     for match in re.finditer(r"\bpostMovement\s*\(\s*\{", text):
         start = match.start()
-        # Calls in this codebase are small object literals; inspect a generous
-        # window through the nearest closing call. This is an audit guard, not a
-        # TypeScript parser.
         tail = text[match.end(): match.end() + 7000]
         close = tail.find("});")
         block = tail if close < 0 else tail[: close + 3]
         if "operationId" not in block:
-            HARD_ERRORS.append(f"{rel}:{line_no(text, start)} postMovement without operationId")
+            HARD_ERRORS.append(f"{rel}:{line_no(raw_text, start)} postMovement without operationId")
 
-    # There must be exactly one application-layer way to create payment_splits:
-    # build them as rows and send them to an atomic DB RPC. Direct client INSERT
-    # can split the treasury side from its parent.
-    if rel.as_posix() not in {
-        "src/lib/financialAtomic.ts",
-    }:
-        for match in re.finditer(r"from\(\s*[\"']payment_splits[\"']\s*\).*?\.insert\s*\(", text, re.S):
-            HARD_ERRORS.append(f"{rel}:{line_no(text, match.start())} direct payment_splits INSERT")
+    # Direct writes have the mutation method immediately after from(...). Do not
+    # span arbitrary code: that previously misread a SELECT followed much later
+    # by an unrelated INSERT as a payment_splits write.
+    if rel.as_posix() != "src/lib/financialAtomic.ts":
+        pattern = r"from\(\s*[\"']payment_splits[\"']\s*\)\s*\.\s*insert\s*\("
+        for match in re.finditer(pattern, text):
+            HARD_ERRORS.append(f"{rel}:{line_no(raw_text, match.start())} direct payment_splits INSERT")
 
     if rel.as_posix() != "src/lib/financialIdempotency.ts":
         for token in ("ensureFinancialParentRow(", "ensureFinancialChildRows("):
             for match in re.finditer(re.escape(token), text):
-                HARD_ERRORS.append(f"{rel}:{line_no(text, match.start())} legacy multi-request helper {token[:-1]}")
+                HARD_ERRORS.append(f"{rel}:{line_no(raw_text, match.start())} legacy multi-request helper {token[:-1]}")
 
     if rel.as_posix() != "src/lib/merchantCounterparty.ts":
         for token in (
@@ -67,16 +77,16 @@ for path, text in iter_sources():
             "postMerchantCashOutToAgentCounterparts(",
         ):
             for match in re.finditer(re.escape(token), text):
-                HARD_ERRORS.append(f"{rel}:{line_no(text, match.start())} separate merchant counterpart write")
+                HARD_ERRORS.append(f"{rel}:{line_no(raw_text, match.start())} separate merchant counterpart write")
 
-    # Inventory remaining direct parent writes so they can be reviewed. Some are
-    # legitimate metadata/admin paths, therefore these are warnings rather than
-    # automatic failures.
+    # Inventory actual direct parent mutations. These are reviewed separately
+    # because some are metadata, demo, opening-balance, or other non-compound
+    # operations rather than a live multi-sided money movement.
     for table in FINANCIAL_PARENT_TABLES:
-        pattern = rf"from\(\s*[\"']{re.escape(table)}[\"']\s*(?:as any)?\s*\).*?\.(insert|update|delete)\s*\("
-        for match in re.finditer(pattern, text, re.S):
+        pattern = rf"from\(\s*[\"']{re.escape(table)}[\"']\s*\)\s*\.\s*(insert|update|delete)\s*\("
+        for match in re.finditer(pattern, text):
             op = match.group(1)
-            WARNINGS.append(f"{rel}:{line_no(text, match.start())} direct {table} {op}")
+            WARNINGS.append(f"{rel}:{line_no(raw_text, match.start())} direct {table} {op}")
 
 print("=== Financial atomicity hard guards ===")
 if HARD_ERRORS:
