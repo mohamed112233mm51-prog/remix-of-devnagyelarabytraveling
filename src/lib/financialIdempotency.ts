@@ -1,5 +1,10 @@
+import { supabase } from "@/integrations/supabase/client";
+
 const STORAGE_KEY = "financial-pending-operations:v1";
 const MAX_PENDING_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const FINANCIAL_CONFIRMING_MESSAGE = "جارٍ تأكيد العملية...";
+export const FINANCIAL_SUCCESS_MESSAGE = "تم تسجيل العملية وتحديث الأرصدة بنجاح";
 
 type PendingOperation = {
   id: string;
@@ -124,4 +129,74 @@ export function isLikelyNetworkError(error: unknown): boolean {
   return (
     typeof navigator !== "undefined" && navigator.onLine === false
   ) || ["fetch", "network", "timeout", "timed out", "failed to fetch", "load failed"].some((token) => message.includes(token));
+}
+
+export function financialConfirmationToastId(operationId: string): string {
+  return `financial:${operationId}`;
+}
+
+/**
+ * Create a metadata/parent row with the operation UUID, or re-use it when a
+ * previous request reached Supabase but its response was lost.
+ */
+export async function ensureFinancialParentRow(
+  table: string,
+  operationId: string,
+  payload: Record<string, unknown>,
+): Promise<{ id: string; reused: boolean; error?: string }> {
+  const client = supabase.from(table as any) as any;
+  const { data: existing, error: readError } = await client
+    .select("id")
+    .eq("id", operationId)
+    .maybeSingle();
+  if (readError) return { id: operationId, reused: false, error: readError.message };
+  if (existing?.id) return { id: String(existing.id), reused: true };
+
+  const { data: inserted, error: insertError } = await client
+    .insert({ ...payload, id: operationId })
+    .select("id")
+    .single();
+  if (inserted?.id) return { id: String(inserted.id), reused: false };
+
+  // The insert may have committed while the HTTP response was lost. Re-read
+  // the deterministic UUID before reporting failure.
+  const { data: afterInsert } = await client
+    .select("id")
+    .eq("id", operationId)
+    .maybeSingle();
+  if (afterInsert?.id) return { id: String(afterInsert.id), reused: true };
+  return { id: operationId, reused: false, error: insertError?.message || "تعذر حفظ السجل المالي" };
+}
+
+/**
+ * Insert dependent rows with deterministic UUIDs. Existing child IDs are
+ * skipped, so a retry resumes missing rows instead of duplicating completed rows.
+ */
+export async function ensureFinancialChildRows(
+  table: string,
+  operationId: string,
+  childPrefix: string,
+  rows: Record<string, unknown>[],
+): Promise<{ ids: string[]; error?: string }> {
+  if (rows.length === 0) return { ids: [] };
+  const client = supabase.from(table as any) as any;
+  const withIds = rows.map((row, index) => ({
+    ...row,
+    id: deriveFinancialOperationUuid(operationId, `${childPrefix}:${index}`),
+  }));
+  const ids = withIds.map((row) => String(row.id));
+  const { data: existing, error: readError } = await client.select("id").in("id", ids);
+  if (readError) return { ids, error: readError.message };
+  const existingIds = new Set((existing || []).map((row: any) => String(row.id)));
+  const missing = withIds.filter((row) => !existingIds.has(String(row.id)));
+  if (missing.length === 0) return { ids };
+
+  const { error: insertError } = await client.insert(missing);
+  if (!insertError) return { ids };
+
+  // Handle a retry race: another request may have inserted the same children.
+  const { data: afterInsert } = await client.select("id").in("id", ids);
+  const afterIds = new Set((afterInsert || []).map((row: any) => String(row.id)));
+  if (ids.every((id) => afterIds.has(id))) return { ids };
+  return { ids, error: insertError.message };
 }
