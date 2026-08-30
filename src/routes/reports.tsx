@@ -27,6 +27,7 @@ import { useEffect } from "react";
 import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { TreasuryMovementLedger } from "@/components/TreasuryMovementLedger";
 import { syncCashBoxOpeningBalance } from "@/lib/openingBalance";
 import { checkOutflowAllowed, postCashBoxTransfer, postMovement } from "@/lib/financialEngine";
 import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
@@ -1830,6 +1831,8 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
             </div>
           </div>
         </div>
+
+        <TreasuryMovementLedger boxes={boxes} inRange={inRange} />
 
         {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}
         {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}
