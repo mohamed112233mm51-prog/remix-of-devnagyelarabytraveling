@@ -1,0 +1,41 @@
+name: Apply secondary atomic financial flows
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_patch_financial_atomic_secondary_flows.py
+      - .github/workflows/apply-financial-atomic-secondary-flows.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply secondary atomic flow patch
+        run: python3 scripts/_patch_financial_atomic_secondary_flows.py
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Commit secondary atomic flows
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/investors.tsx src/lib/dataImport/specialImport.ts
+          if git diff --cached --quiet; then
+            echo "No secondary-flow changes to commit"
+          else
+            git commit -m "Make investor and financial import saves atomic"
+            git pull --rebase origin devo
+            git push origin devo
+          fi
