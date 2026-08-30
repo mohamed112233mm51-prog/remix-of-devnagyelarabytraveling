@@ -1,0 +1,25 @@
+name: Audit financial movement call sites
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - .github/workflows/audit-financial-postmovement.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+      - name: List financial movement call sites
+        run: |
+          echo '=== postMovement call sites ==='
+          grep -R -n --include='*.ts' --include='*.tsx' 'postMovement({' src || true
+          echo '=== postCashBoxTransfer call sites ==='
+          grep -R -n --include='*.ts' --include='*.tsx' 'postCashBoxTransfer({' src || true
