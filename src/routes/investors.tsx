@@ -10,7 +10,7 @@ import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
 import { buildInvestorCapitalSummary, investorTransactionCurrency, type FinancialPositionSplit } from "@/hooks/useFinancialPosition";
 import { checkOutflowAllowed, postMovement } from "@/lib/financialEngine";
-import { confirmFinancialOperation, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { usePerm } from "@/hooks/usePerm";
 import { ExportButton } from "@/components/ExportButton";
@@ -224,7 +224,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
     setSaving(true);
     toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
 
-    const parent = await ensureFinancialParentRow("investor_transactions", operationId, {
+    const parentPayload = {
       investor_id: form.investor_id,
       transaction_type: kind,
       date: form.date,
@@ -232,13 +232,7 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       payment_method: selectedBox.name,
       note: form.note.trim() ? form.note.trim() : null,
       statement: form.statement.trim() ? form.statement.trim() : null,
-    });
-    if (parent.error) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(parent.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : parent.error, { id: toastId });
-      return;
-    }
-
+    };
     const movement = await postMovement({
       partyType: "investor",
       partyId: form.investor_id,
@@ -246,9 +240,13 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
       date: form.date,
       note: form.note.trim() || undefined,
       statement: form.statement.trim() || undefined,
-      sourceTable: "investor_transactions",
-      sourceId: parent.id,
       operationId,
+      atomicFingerprint: fingerprint,
+      atomicParent: {
+        table: "investor_transactions",
+        id: operationId,
+        payload: parentPayload,
+      },
       splits: [{
         method: selectedBox.name,
         currency: normalizeCurrency(selectedBox.currency) as "EGP" | "USD" | "LYD",

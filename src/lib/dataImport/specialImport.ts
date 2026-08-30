@@ -2,7 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { postExecutionFinancials, deleteExecutionLinkedRows } from "@/lib/executionPosting";
 import { logCreate } from "@/lib/financialAudit";
-import { confirmFinancialOperation, deriveFinancialOperationUuid, ensureFinancialParentRow, financialOperationFingerprint, getOrCreateFinancialOperationId, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { confirmFinancialOperation, deriveFinancialOperationUuid, financialOperationFingerprint, getOrCreateFinancialOperationId } from "@/lib/financialIdempotency";
+import { atomicRow, executeFinancialAtomic } from "@/lib/financialAtomic";
 
 export type ImportResult = { insertedIds: string[]; failed: number };
 
@@ -142,33 +143,23 @@ export async function importFinancialRows(
   const insertedIds: string[] = [];
   let failed = 0;
 
-  // The batch id stays stable only while this exact import is pending. Row IDs
-  // are derived from batch + row index, so two intentionally identical Excel
-  // rows remain two separate financial operations.
   const batchFingerprint = financialOperationFingerprint({ table, rows });
   const batchOperationId = getOrCreateFinancialOperationId(`financial-import:${table}`, batchFingerprint);
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowOperationId = deriveFinancialOperationUuid(batchOperationId, `${table}:row:${i}`);
-    let parentId: string | null = null;
-    let parentCreatedOrReused = false;
     try {
       const payload = table === "transactions" ? transactionParent(row) : companyParent(row);
-      // Validate/resolve every target cash box before creating the parent row.
       const splits = buildPaymentSplits(
         row,
         boxes,
         table === "transactions" ? "in" : "out",
         table === "transactions" ? "paid" : "total_paid",
       );
+      const rowFingerprint = financialOperationFingerprint({ table, index: i, row, payload, splits });
 
-      const parent = await ensureFinancialParentRow(table, rowOperationId, payload);
-      if (parent.error) throw new Error(parent.error);
-      parentId = parent.id;
-      parentCreatedOrReused = true;
-
-      if (splits.length) {
+      if (splits.length > 0) {
         const res = await postMovement({
           partyType: table === "transactions" ? "agent" : "company",
           partyId: table === "transactions" ? row.agent_id : row.company_id,
@@ -176,30 +167,34 @@ export async function importFinancialRows(
           date: row.date,
           note: row.note || undefined,
           statement: row.statement || undefined,
-          sourceTable: table,
-          sourceId: parentId,
-          transactionId: table === "transactions" ? parentId : undefined,
           splits,
           operationId: rowOperationId,
+          atomicFingerprint: rowFingerprint,
+          atomicParent: {
+            table,
+            id: rowOperationId,
+            payload,
+          },
         });
-        if (!res.ok) throw new Error(res.error || "تعذر تسجيل حركة الخزنة");
+        if (!res.ok) throw new Error(res.error || "تعذر تسجيل الحركة المالية");
+      } else {
+        // Metadata-only financial import still uses the operation tracker/RPC;
+        // never fall back to a standalone parent INSERT.
+        const saved = await executeFinancialAtomic({
+          operationId: rowOperationId,
+          fingerprint: rowFingerprint,
+          rows: [atomicRow(table, { ...payload, id: rowOperationId })],
+          result: { transactionId: rowOperationId },
+        });
+        if (!saved.ok) throw new Error(saved.error || "تعذر تسجيل الحركة المالية");
       }
 
-      if (!parent.reused) {
-        try { await logCreate(table, parentId, { ...payload, id: parentId }, "استيراد بيانات"); } catch { /* audit must not invalidate a confirmed financial row */ }
-      }
-      insertedIds.push(parentId);
-    } catch (error) {
+      try { await logCreate(table, rowOperationId, { ...payload, id: rowOperationId }, "استيراد بيانات"); } catch { /* audit is non-financial */ }
+      insertedIds.push(rowOperationId);
+    } catch {
+      // execute_financial_atomic is all-or-nothing: no client-side compensating
+      // delete is required, and a retry with the same row id is safe.
       failed++;
-      // If the network state is unknown, keep deterministic rows in place.
-      // Retrying the same batch will discover them and resume safely.
-      if (parentId && parentCreatedOrReused && !isLikelyNetworkError(error)) {
-        try {
-          const { voidAllForSource } = await import("@/lib/financialEngine");
-          await voidAllForSource(table, parentId);
-          await (supabase.from(table as any) as any).delete().eq("id", parentId);
-        } catch { /* best-effort rollback for definitive validation/server errors */ }
-      }
     }
     onProgress(i + 1, rows.length);
     await new Promise((r) => setTimeout(r, 0));
