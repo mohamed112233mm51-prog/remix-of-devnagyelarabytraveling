@@ -26,6 +26,7 @@ import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { confirmFinancialOperation, ensureFinancialChildRows, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
@@ -512,19 +513,20 @@ async function applyTransaction(opts: {
   splits: SplitJson[];
   boxes: CashBox[];
   description: string;
-}) {
-  const { kind, supplierId, txId, txDate, foreignCurrency, foreignAmount, splits, boxes, description } = opts;
+  operationId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { kind, supplierId, txId, txDate, foreignCurrency, foreignAmount, splits, boxes, description, operationId } = opts;
   const isBuy = kind === "شراء عملة";
   const foreignBox = resolveForeignBox(boxes, foreignCurrency);
-  const foreignCode = foreignCurrency;
+  if (foreignAmount > 0 && !foreignBox) return { ok: false, error: `لا توجد خزينة فعالة للعملة ${foreignCurrency}` };
 
   const engineSplits: MovementSplit[] = [];
+  const merchantRows: Record<string, unknown>[] = [];
 
-  // 1. Foreign currency leg (buy → +foreign box, sell → -foreign box)
-  if (foreignBox && foreignCode && foreignAmount > 0) {
+  if (foreignBox && foreignAmount > 0) {
     engineSplits.push({
       method: "نقدي",
-      currency: foreignCode as "EGP" | "USD" | "LYD",
+      currency: foreignCurrency as "EGP" | "USD" | "LYD",
       cashBoxId: foreignBox.id,
       amount: foreignAmount,
       direction: isBuy ? "in" : "out",
@@ -535,14 +537,15 @@ async function applyTransaction(opts: {
     });
   }
 
-  // 2. EGP legs (company boxes update via trigger; merchant legs recorded but no box impact)
   for (const s of splits) {
     const amt = Number(s.amount || 0);
     if (!amt) continue;
-    const dir: "in" | "out" = isBuy ? "out" : "in"; // buy → EGP leaves us; sell → EGP arrives
+    const dir: "in" | "out" = isBuy ? "out" : "in";
     let cashBoxId: string | null = null;
     if (s.source === "company") {
-      cashBoxId = resolveCompanyEgpBox(boxes, s.method)?.id || null;
+      const companyBox = resolveCompanyEgpBox(boxes, s.method);
+      if (!companyBox) return { ok: false, error: `لا توجد خزينة شركة مطابقة لوسيلة الدفع ${methodLabelFor(s)}` };
+      cashBoxId = companyBox.id;
     }
     engineSplits.push({
       method: methodLabelFor(s),
@@ -556,20 +559,20 @@ async function applyTransaction(opts: {
       egpEquivalent: amt,
     });
 
-    // Merchant balance is aggregated from merchant_cash_collections, so keep that row.
     if (s.source === "merchant" && s.merchant_id) {
-      const signed = isBuy ? amt : -amt;
-      await supabase.from("merchant_cash_collections").insert({
+      merchantRows.push({
         merchant_id: s.merchant_id,
         date: txDate,
-        amount: signed,
+        amount: isBuy ? amt : -amt,
         note: null,
         statement: description?.trim() ? description.trim() : null,
       });
     }
   }
 
-  if (engineSplits.length === 0) return;
+  const merchantResult = await ensureFinancialChildRows("merchant_cash_collections", operationId, "supplier-merchant", merchantRows);
+  if (merchantResult.error) return { ok: false, error: merchantResult.error };
+  if (engineSplits.length === 0) return { ok: true };
 
   const res = await postMovement({
     partyType: "currency_supplier",
@@ -580,10 +583,9 @@ async function applyTransaction(opts: {
     splits: engineSplits,
     sourceTable: "currency_supplier_transactions",
     sourceId: txId,
+    operationId,
   });
-  if (!res.ok) {
-    toast.error(res.error || "تعذر تسجيل الحركة في الخزائن");
-  }
+  return res.ok ? { ok: true } : { ok: false, error: res.error || "تعذر تسجيل الحركة في الخزائن" };
 }
 
 // Reverse a previously-applied transaction (used on delete).
@@ -634,6 +636,7 @@ function TxModal({
   const [commission, setCommission] = useState<string>("0");
   const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
   // Track which field was last edited so we know which to auto-compute
   const [lastEdited, setLastEdited] = useState<"amount" | "rate" | "egp" | null>(null);
@@ -755,16 +758,34 @@ function TxModal({
       payment_splits: splitsJson,
     };
 
-    const { data: inserted, error } = await supabase
-      .from("currency_supplier_transactions" as any)
-      .insert(payload)
-      .select("id")
-      .single();
-    if (error) return toast.error(error.message);
-    const txId = (inserted as any)?.id as string;
-    await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
+    const fingerprint = financialOperationFingerprint({
+      supplierId,
+      kind,
+      txDate,
+      foreignCurrency,
+      foreignAmount: a,
+      rate: r,
+      egpAmount: e,
+      commission: commissionValue,
+      splits: splitsJson,
+    });
+    const operationId = getOrCreateFinancialOperationId("currency-supplier-trade", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
 
-    await applyTransaction({
+    const parent = await ensureFinancialParentRow("currency_supplier_transactions", operationId, payload);
+    if (parent.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(parent.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : parent.error, { id: toastId });
+      return;
+    }
+    const txId = parent.id;
+    if (!parent.reused) {
+      try { await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind); } catch { /* non-blocking audit */ }
+    }
+
+    const applied = await applyTransaction({
       kind,
       supplierId,
       txId,
@@ -774,7 +795,13 @@ function TxModal({
       splits: splitsJson,
       boxes,
       description: description.trim(),
+      operationId,
     });
+    if (!applied.ok) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(applied.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (applied.error || "تعذر تسجيل الحركة المالية"), { id: toastId });
+      return;
+    }
 
     // WRITE-SIDE FX LOCK propagation: a newly recorded buy rate can unlock
     // executions and expenses that were pending on this currency. This runs
@@ -792,7 +819,9 @@ function TxModal({
       }
     }
 
-    toast.success("تم حفظ الحركة");
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     onSaved();
   };
 
@@ -866,7 +895,7 @@ function TxModal({
 
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
-          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
+          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "جارٍ التأكيد..." : "💾 حفظ الحركة"}</button>
         </div>
       </div>
     </div>,
@@ -897,6 +926,7 @@ function CashMovementModal({
   const [txDate, setTxDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState<string>("");
   const [note, setNote] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
   // Lock split rows to the modal's currency (single-currency movement).
   const [splits, setSplits] = useState<PaymentSplitRow[]>(() => {
@@ -969,24 +999,44 @@ function CashMovementModal({
       })),
     };
 
-    const { data: inserted, error } = await supabase
-      .from("currency_supplier_transactions" as any)
-      .insert(payload)
-      .select("id")
-      .single();
-    if (error) return toast.error(error.message);
-    const txId = (inserted as any)?.id as string;
-    await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind);
+    for (const r of validSplits) {
+      if (r.source !== "company") continue;
+      if (!resolveCompanyBoxForSplit(boxes, r.currency, r.method)) {
+        return toast.error(`لا توجد خزينة شركة لـ ${methodLabelForSplit(r.method)} بعملة ${r.currency}`);
+      }
+    }
 
-    // ==== Build engine splits + merchant side-effects ====
+    const fingerprint = financialOperationFingerprint({
+      supplierId,
+      kind,
+      txDate,
+      currency,
+      amount: amountNum,
+      splits: validSplits.map((r) => ({ source: r.source, merchantId: r.merchant_id || null, method: r.method, currency: r.currency, amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("currency-supplier-cash", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+    const parent = await ensureFinancialParentRow("currency_supplier_transactions", operationId, payload);
+    if (parent.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(parent.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : parent.error, { id: toastId });
+      return;
+    }
+    const txId = parent.id;
+    if (!parent.reused) {
+      try { await logCreate("currency_supplier_transactions", txId, { ...payload, id: txId }, kind); } catch { /* non-blocking audit */ }
+    }
+
     const engineSplits: MovementSplit[] = [];
+    const merchantRows: Record<string, unknown>[] = [];
     for (const r of validSplits) {
       const amt = Number(r.amount) || 0;
       if (!amt) continue;
       let cashBoxId: string | null = null;
-      if (r.source === "company") {
-        cashBoxId = resolveCompanyBoxForSplit(boxes, r.currency, r.method)?.id || null;
-      }
+      if (r.source === "company") cashBoxId = resolveCompanyBoxForSplit(boxes, r.currency, r.method)?.id || null;
       engineSplits.push({
         method: methodLabelForSplit(r.method),
         currency,
@@ -998,20 +1048,22 @@ function CashMovementModal({
         exchangeRate: 1,
         egpEquivalent: currency === "EGP" ? amt : 0,
       });
-
-      // Merchant balance is aggregated from merchant_cash_collections.
-      // Convention (see applyTransaction): "buy"/"pay-out" via merchant → +amount
-      // (merchant absorbs the outflow on our behalf); collection/receipt → -amount.
       if (r.source === "merchant" && r.merchant_id) {
-        const signed = isOut ? +amt : -amt;
-        await supabase.from("merchant_cash_collections").insert({
+        merchantRows.push({
           merchant_id: r.merchant_id,
           date: txDate,
-          amount: signed,
+          amount: isOut ? +amt : -amt,
           note: null,
           statement: description.trim() ? description.trim() : null,
         });
       }
+    }
+
+    const merchantResult = await ensureFinancialChildRows("merchant_cash_collections", operationId, "supplier-cash-merchant", merchantRows);
+    if (merchantResult.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(merchantResult.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : merchantResult.error, { id: toastId });
+      return;
     }
 
     const res = await postMovement({
@@ -1024,13 +1076,17 @@ function CashMovementModal({
       splits: engineSplits,
       sourceTable: "currency_supplier_transactions",
       sourceId: txId,
+      operationId,
     });
     if (!res.ok) {
-      toast.error(res.error || "تعذر تسجيل الحركة في الخزائن");
+      setSaving(false);
+      toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر تسجيل الحركة في الخزائن"), { id: toastId });
       return;
     }
 
-    toast.success(isOut ? "تم صرف المبلغ للمورد" : "تم تسجيل استلام المبلغ من المورد");
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     onSaved();
   };
 
@@ -1085,7 +1141,7 @@ function CashMovementModal({
 
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
           <button className="action-btn" onClick={onClose}>إلغاء</button>
-          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save}>💾 حفظ الحركة</button>
+          <button data-confirm-save="تأكيد حفظ الحركة" className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "جارٍ التأكيد..." : "💾 حفظ الحركة"}</button>
         </div>
       </div>
     </div>,

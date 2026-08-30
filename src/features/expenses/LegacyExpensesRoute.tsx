@@ -25,6 +25,7 @@ import {
   methodsForSplit,
 } from "@/components/PaymentSplits";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { confirmFinancialOperation, ensureFinancialChildRows, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 import { useExpensesTotals } from "@/lib/financialSummary";
@@ -121,6 +122,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 
   // Multi-payment splits (new): only used on insert (edit keeps original record)
   const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
+  const [saving, setSaving] = useState(false);
 
   const totalAmount = Number(form.amount || 0);
   const splitsTotal = useMemo(
@@ -221,11 +223,31 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
 
 
 
-    const { data: expenseRow, error } = await supabase
-      .from("expenses").insert(expensePayload).select("id").single();
-    if (error || !expenseRow) return toast.error(error?.message || "تعذر حفظ المصروف");
+    for (const r of valid) {
+      if (r.source !== "company") continue;
+      const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency || "EGP", r.method);
+      if (!box) return toast.error(`لا توجد خزنة شركة مطابقة لوسيلة الدفع المختارة بعملة ${r.currency || "EGP"}`);
+    }
 
-    // Insert one record per split into the appropriate ledger
+    const fingerprint = financialOperationFingerprint({
+      name: form.expense_name.trim(),
+      type: form.expense_type,
+      amount: totalAmount,
+      date: form.date,
+      splits: valid.map((r) => ({ source: r.source, merchantId: r.merchant_id || null, method: r.method, currency: r.currency || "EGP", amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("expense", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+    const expenseRow = await ensureFinancialParentRow("expenses", operationId, expensePayload);
+    if (expenseRow.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(expenseRow.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : expenseRow.error, { id: toastId });
+      return;
+    }
+
     const deductionRows: any[] = [];
     const collectionRows: any[] = [];
     const engineSplits: MovementSplit[] = [];
@@ -260,23 +282,19 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
           merchant_id: r.merchant_id,
           date: form.date,
           amount: a,
-          // بدون توليد تلقائي — ننقل بيان/ملاحظات المستخدم كما هي
           note: form.notes.trim() ? form.notes.trim() : null,
           statement: form.statement.trim() ? form.statement.trim() : null,
         });
       }
+    }
 
+    const deductions = await ensureFinancialChildRows("expense_deductions", operationId, "deduction", deductionRows);
+    if (deductions.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(deductions.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : deductions.error, { id: toastId });
+      return;
     }
-    if (deductionRows.length) {
-      const { data: dedIns, error: e2 } = await supabase.from("expense_deductions").insert(deductionRows).select("id");
-      if (e2) toast.error("تم حفظ المصروف لكن تعذر تسجيل بعض الخصومات: " + e2.message);
-      else if (dedIns) {
-        for (let i = 0; i < dedIns.length; i++) {
-          const id = (dedIns[i] as any)?.id;
-          if (id) await logCreate("expense_deductions", id, { ...deductionRows[i], id }, "خصم مصروف");
-        }
-      }
-    }
+
     if (engineSplits.length) {
       const res = await postMovement({
         partyType: "expense",
@@ -288,24 +306,35 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
         splits: engineSplits,
         sourceTable: "expenses",
         sourceId: expenseRow.id,
+        operationId,
       });
-      if (!res.ok) toast.error("تم حفظ المصروف لكن تعذر تحديث رصيد الخزنة: " + res.error);
-    }
-
-    if (collectionRows.length) {
-      const { data: colIns, error: e3 } = await supabase.from("merchant_cash_collections").insert(collectionRows).select("id");
-      if (e3) toast.error("تم حفظ المصروف لكن تعذر خصم رصيد بعض التجار: " + e3.message);
-      else if (colIns) {
-        for (let i = 0; i < colIns.length; i++) {
-          const id = (colIns[i] as any)?.id;
-          if (id) await logCreate("merchant_cash_collections", id, { ...collectionRows[i], id }, "خصم رصيد تاجر (مصروف)");
-        }
+      if (!res.ok) {
+        setSaving(false);
+        toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر تحديث رصيد الخزنة"), { id: toastId });
+        return;
       }
     }
 
+    const collections = await ensureFinancialChildRows("merchant_cash_collections", operationId, "merchant-collection", collectionRows);
+    if (collections.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(collections.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : collections.error, { id: toastId });
+      return;
+    }
 
+    if (!expenseRow.reused) {
+      try { await logCreate("expenses", expenseRow.id, { ...expensePayload, id: expenseRow.id }, "مصروف"); } catch { /* non-blocking audit */ }
+    }
+    for (let i = 0; i < deductions.ids.length; i += 1) {
+      try { await logCreate("expense_deductions", deductions.ids[i], { ...deductionRows[i], id: deductions.ids[i] }, "خصم مصروف"); } catch { /* non-blocking audit */ }
+    }
+    for (let i = 0; i < collections.ids.length; i += 1) {
+      try { await logCreate("merchant_cash_collections", collections.ids[i], { ...collectionRows[i], id: collections.ids[i] }, "خصم رصيد تاجر (مصروف)"); } catch { /* non-blocking audit */ }
+    }
 
-    toast.success("تم حفظ المصروف وخصمه من مصادر الدفع");
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     setForm({
       expense_name: "",
       expense_type: "متغير",
@@ -316,7 +345,6 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       auto_deduct_enabled: false,
       auto_deduct_day: "1",
     });
-
     setSplits([newPaymentSplitRow()]);
     onDone?.();
   };
@@ -388,7 +416,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       )}
 
       <div className="form-footer">
-        <button data-confirm-save={initial ? "تأكيد حفظ تعديلات المصروف" : "تأكيد حفظ المصروف"} className="btn btn-gold" onClick={save}>💾 {initial ? "حفظ التعديلات" : "حفظ المصروف"}</button>
+        <button data-confirm-save={initial ? "تأكيد حفظ تعديلات المصروف" : "تأكيد حفظ المصروف"} className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "جارٍ التأكيد..." : `💾 ${initial ? "حفظ التعديلات" : "حفظ المصروف"}`}</button>
         {initial && onDone && <button className="btn" onClick={onDone} style={{ marginInlineStart: 8 }}>إلغاء</button>}
       </div>
     </div>
