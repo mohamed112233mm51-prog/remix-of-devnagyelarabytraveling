@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { postExecutionFinancials, deleteExecutionLinkedRows } from "@/lib/executionPosting";
 import { logCreate } from "@/lib/financialAudit";
+import { confirmFinancialOperation, deriveFinancialOperationUuid, ensureFinancialParentRow, financialOperationFingerprint, getOrCreateFinancialOperationId, isLikelyNetworkError } from "@/lib/financialIdempotency";
 
 export type ImportResult = { insertedIds: string[]; failed: number };
 
@@ -141,24 +142,32 @@ export async function importFinancialRows(
   const insertedIds: string[] = [];
   let failed = 0;
 
+  // The batch id stays stable only while this exact import is pending. Row IDs
+  // are derived from batch + row index, so two intentionally identical Excel
+  // rows remain two separate financial operations.
+  const batchFingerprint = financialOperationFingerprint({ table, rows });
+  const batchOperationId = getOrCreateFinancialOperationId(`financial-import:${table}`, batchFingerprint);
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+    const rowOperationId = deriveFinancialOperationUuid(batchOperationId, `${table}:row:${i}`);
     let parentId: string | null = null;
+    let parentCreatedOrReused = false;
     try {
       const payload = table === "transactions" ? transactionParent(row) : companyParent(row);
-      const { data, error } = await (supabase.from(table as any) as any)
-        .insert(payload)
-        .select("id")
-        .single();
-      if (error || !data?.id) throw new Error(error?.message || "تعذر إنشاء الحركة");
-      parentId = String(data.id);
-
+      // Validate/resolve every target cash box before creating the parent row.
       const splits = buildPaymentSplits(
         row,
         boxes,
         table === "transactions" ? "in" : "out",
         table === "transactions" ? "paid" : "total_paid",
       );
+
+      const parent = await ensureFinancialParentRow(table, rowOperationId, payload);
+      if (parent.error) throw new Error(parent.error);
+      parentId = parent.id;
+      parentCreatedOrReused = true;
+
       if (splits.length) {
         const res = await postMovement({
           partyType: table === "transactions" ? "agent" : "company",
@@ -171,26 +180,32 @@ export async function importFinancialRows(
           sourceId: parentId,
           transactionId: table === "transactions" ? parentId : undefined,
           splits,
+          operationId: rowOperationId,
         });
         if (!res.ok) throw new Error(res.error || "تعذر تسجيل حركة الخزنة");
       }
 
-      await logCreate(table, parentId, { ...payload, id: parentId }, "استيراد بيانات");
+      if (!parent.reused) {
+        try { await logCreate(table, parentId, { ...payload, id: parentId }, "استيراد بيانات"); } catch { /* audit must not invalidate a confirmed financial row */ }
+      }
       insertedIds.push(parentId);
-    } catch {
+    } catch (error) {
       failed++;
-      if (parentId) {
+      // If the network state is unknown, keep deterministic rows in place.
+      // Retrying the same batch will discover them and resume safely.
+      if (parentId && parentCreatedOrReused && !isLikelyNetworkError(error)) {
         try {
           const { voidAllForSource } = await import("@/lib/financialEngine");
           await voidAllForSource(table, parentId);
           await (supabase.from(table as any) as any).delete().eq("id", parentId);
-        } catch { /* best-effort rollback */ }
+        } catch { /* best-effort rollback for definitive validation/server errors */ }
       }
     }
     onProgress(i + 1, rows.length);
     await new Promise((r) => setTimeout(r, 0));
   }
 
+  if (failed === 0) confirmFinancialOperation(batchOperationId);
   return { insertedIds, failed };
 }
 
