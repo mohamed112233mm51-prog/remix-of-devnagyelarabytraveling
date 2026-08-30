@@ -27,7 +27,8 @@
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLive } from "@/lib/db";
-import { deriveFinancialOperationUuid } from "@/lib/financialIdempotency";
+import { financialOperationFingerprint } from "@/lib/financialIdempotency";
+import { atomicRow, buildAtomicPaymentSplitRows, executeFinancialAtomic, type FinancialAtomicRow, type FinancialAtomicTable } from "@/lib/financialAtomic";
 
 /* ============================================================
  *  Types
@@ -78,6 +79,13 @@ export type PostMovementInput = {
   sourceId?: string;
   transactionId?: string;         // لو الحركة مرتبطة بصف transactions موجود
   operationId?: string;           // مفتاح ثابت لإعادة المحاولة بدون تكرار الحركة
+  atomicFingerprint?: string;     // بصمة ثابتة للعملية الكاملة
+  atomicParent?: {
+    table: FinancialAtomicTable;
+    id?: string;
+    payload: Record<string, unknown>;
+  };
+  atomicExtraRows?: FinancialAtomicRow[]; // قيود/أطراف تابعة يجب أن تنجح أو تفشل مع الحركة
 };
 
 
@@ -89,21 +97,6 @@ export type PostMovementResult = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function sameNullable(a: unknown, b: unknown): boolean {
-  return (a ?? null) === (b ?? null);
-}
-
-function splitMatchesExpected(existing: any, expected: any): boolean {
-  return String(existing.method || "") === String(expected.method || "")
-    && String(existing.currency || "") === String(expected.currency || "")
-    && sameNullable(existing.cash_box_id, expected.cash_box_id)
-    && Number(existing.amount || 0) === Number(expected.amount || 0)
-    && String(existing.direction || "in") === String(expected.direction || "in")
-    && sameNullable(existing.source_table, expected.source_table)
-    && sameNullable(existing.source_id, expected.source_id)
-    && sameNullable(existing.transaction_id, expected.transaction_id);
-}
 
 export type LedgerEntry = {
   id: string;
@@ -164,8 +157,15 @@ export async function postMovement(
 ): Promise<PostMovementResult> {
   try {
     const validSplits = input.splits.filter((s) => Number(s.amount) > 0);
-    const operationId = input.operationId?.trim() || null;
-    if (operationId && !UUID_RE.test(operationId)) {
+    const operationId = input.operationId?.trim() || "";
+
+    // Fail closed: every new financial write must be routed through the atomic
+    // database RPC. A missing id is safer as a hard failure than a legacy
+    // multi-request write that can leave half an operation behind.
+    if (!operationId) {
+      return { ok: false, error: "تم إيقاف العملية بدون تسجيل أي جزء: معرّف العملية المالية مطلوب للحفظ الذري" };
+    }
+    if (!UUID_RE.test(operationId)) {
       return { ok: false, error: "معرّف العملية المالية غير صالح" };
     }
     if (validSplits.length === 0) {
@@ -183,15 +183,29 @@ export async function postMovement(
       return { ok: false, error: "لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة" };
     }
 
-    // إنشاء صف أم في transactions فقط إذا كنا نعمل على وكيل/تاجر بدون parent
-    // (للتوافق مع الشاشات القديمة التي تعتمد على transactions للربط بالوكيل).
-    if (!sourceId && (input.partyType === "agent" || input.partyType === "merchant")) {
+    const atomicRows: FinancialAtomicRow[] = [];
+
+    if (input.atomicParent) {
+      const parentId = input.atomicParent.id?.trim() || operationId;
+      if (!UUID_RE.test(parentId)) return { ok: false, error: "معرّف الصف المالي الأم غير صالح" };
+      sourceTable = input.atomicParent.table;
+      sourceId = parentId;
+      if (sourceTable === "transactions") transactionId = parentId;
+      atomicRows.push(atomicRow(input.atomicParent.table, {
+        ...input.atomicParent.payload,
+        id: parentId,
+      }));
+    } else if (!sourceId && (input.partyType === "agent" || input.partyType === "merchant")) {
       const parentCurrency = movementCurrencies[0];
       const totalAmount = validSplits.reduce((s, r) => s + r.amount, 0);
       const isOut = input.kind === "payment" || input.kind === "expense";
       const signed = isOut ? -totalAmount : totalAmount;
 
-      const parentPayload: Record<string, unknown> = {
+      transactionId = operationId;
+      sourceTable = "transactions";
+      sourceId = operationId;
+      atomicRows.push(atomicRow("transactions", {
+        id: operationId,
         agent_id: input.partyType === "agent" ? input.partyId : null,
         merchant_id: input.partyType === "merchant" ? input.partyId : null,
         date: input.date,
@@ -201,137 +215,53 @@ export async function postMovement(
         total_paid: signed,
         currency: parentCurrency,
         payment_method: firstMethodArabic(validSplits[0].method),
-        // لا نولّد ملاحظات تلقائياً — يظل الحقل فارغاً حتى يكتب المستخدم شيئاً
         note: input.note?.trim() ? input.note.trim() : null,
         statement: input.statement?.trim() ? input.statement.trim() : null,
         source_service_type: sourceServiceType(input.kind, input.partyType),
-      };
-
-      let txn: { id: string } | null = null;
-      if (operationId) {
-        const { data: existingTxn, error: existingTxnError } = await supabase
-          .from("transactions")
-          .select("id")
-          .eq("id", operationId)
-          .maybeSingle();
-        if (existingTxnError) return { ok: false, error: existingTxnError.message };
-        txn = existingTxn as { id: string } | null;
-      }
-
-      if (!txn) {
-        const payloadWithId = operationId ? { ...parentPayload, id: operationId } : parentPayload;
-        const { data: insertedTxn, error: txnErr } = await supabase
-          .from("transactions")
-          .insert(payloadWithId as any)
-          .select("id")
-          .single();
-        if (txnErr || !insertedTxn) {
-          // The server may have committed while the response was lost. A retry
-          // with the same operation id must re-use that parent instead of duplicating it.
-          if (operationId) {
-            const { data: afterConflict } = await supabase
-              .from("transactions")
-              .select("id")
-              .eq("id", operationId)
-              .maybeSingle();
-            if (afterConflict) txn = afterConflict as { id: string };
-          }
-          if (!txn) return { ok: false, error: txnErr?.message || "تعذر حفظ الصف الأم" };
-        } else {
-          txn = insertedTxn as { id: string };
-        }
-      }
-      transactionId = txn.id;
-      sourceTable = "transactions";
-      sourceId = txn.id;
+      }));
     }
 
-    // عند ربط الحركة بصف أم موجود، ثبّت العملة المختارة على الصف نفسه أيضاً
-    // حتى تقرأ كشوف الحساب/التصدير العملة من سجل الحركة ولا ترجع للجنيه افتراضياً.
-    if (sourceId && movementCurrencies.length === 1) {
-      const parentCurrency = movementCurrencies[0];
-      if (sourceTable === "transactions") {
-        await supabase.from("transactions").update({ currency: parentCurrency } as any).eq("id", sourceId);
-      } else if (sourceTable === "company_transactions") {
-        await supabase.from("company_transactions").update({ currency: parentCurrency, payment_currency: parentCurrency } as any).eq("id", sourceId);
-      }
-    }
+    const splitRows = buildAtomicPaymentSplitRows({
+      operationId,
+      splits: validSplits,
+      transactionId,
+      sourceTable,
+      sourceId,
+    });
+    const splitIds = splitRows.map((row) => String(row.row.id));
+    atomicRows.push(...splitRows, ...(input.atomicExtraRows || []));
 
-    // إدراج payment_splits
-    const rows = validSplits.map((s, index) => ({
-      ...(operationId ? { id: deriveFinancialOperationUuid(operationId, `split:${index}`) } : {}),
-      transaction_id: transactionId,
-      method: s.method,
-      currency: s.currency,
-      cash_box_id: s.cashBoxId,
-      amount: s.amount,
-      direction: s.direction,
-      source_table: sourceTable,
-      source_id: sourceId,
-      gross_amount: s.grossAmount ?? s.amount,
-      merchant_commission_rate: s.commissionRate ?? 0,
-      merchant_commission_amount: s.commissionAmount ?? 0,
-      net_amount: s.netAmount ?? s.amount,
-      exchange_rate: s.exchangeRate ?? 1,
-      egp_equivalent:
-        s.egpEquivalent ??
-        (s.currency === "EGP" ? s.amount : s.amount * (s.exchangeRate ?? 1)),
-    }));
+    const fingerprint = input.atomicFingerprint || financialOperationFingerprint({
+      partyType: input.partyType,
+      partyId: input.partyId,
+      kind: input.kind,
+      date: input.date,
+      note: input.note?.trim() || null,
+      statement: input.statement?.trim() || null,
+      sourceTable,
+      sourceId,
+      transactionId,
+      splits: validSplits,
+      parent: input.atomicParent || null,
+      extraRows: input.atomicExtraRows || [],
+    });
 
-    if (operationId) {
-      const expectedRows = rows as any[];
-      const expectedIds = expectedRows.map((row) => row.id as string);
-      const { data: existing, error: existingError } = await supabase
-        .from("payment_splits")
-        .select("id,transaction_id,method,currency,cash_box_id,amount,direction,source_table,source_id")
-        .in("id", expectedIds);
-      if (existingError) return { ok: false, error: existingError.message };
+    const saved = await executeFinancialAtomic({
+      operationId,
+      fingerprint,
+      rows: atomicRows,
+      result: {
+        transactionId,
+        splitIds,
+      },
+    });
 
-      const existingById = new Map((existing || []).map((row: any) => [row.id, row]));
-      for (const row of expectedRows) {
-        const old = existingById.get(row.id);
-        if (old && !splitMatchesExpected(old, row)) {
-          return { ok: false, error: "تعذر تأكيد العملية: توجد محاولة سابقة بنفس المعرّف ببيانات مختلفة" };
-        }
-      }
-
-      const missing = expectedRows.filter((row) => !existingById.has(row.id));
-      if (missing.length > 0) {
-        const { error: insertError } = await supabase.from("payment_splits").insert(missing as any);
-        if (insertError) {
-          // A concurrent/retried request can win the insert race. Re-read and
-          // accept it only when every deterministic row now matches exactly.
-          const { data: afterInsert, error: afterInsertError } = await supabase
-            .from("payment_splits")
-            .select("id,transaction_id,method,currency,cash_box_id,amount,direction,source_table,source_id")
-            .in("id", expectedIds);
-          if (afterInsertError) return { ok: false, error: insertError.message };
-          const afterById = new Map((afterInsert || []).map((row: any) => [row.id, row]));
-          const complete = expectedRows.every((row) => {
-            const saved = afterById.get(row.id);
-            return saved && splitMatchesExpected(saved, row);
-          });
-          if (!complete) return { ok: false, error: insertError.message };
-        }
-      }
-
-      return {
-        ok: true,
-        transactionId: transactionId ?? undefined,
-        splitIds: expectedIds,
-      };
-    }
-
-    const { data: inserted, error } = await supabase
-      .from("payment_splits")
-      .insert(rows)
-      .select("id");
-    if (error) return { ok: false, error: error.message };
-
+    if (!saved.ok) return { ok: false, error: saved.error || "فشل الحفظ المالي الذري" };
+    const result = (saved.result || {}) as { transactionId?: string | null; splitIds?: string[] };
     return {
       ok: true,
-      transactionId: transactionId ?? undefined,
-      splitIds: (inserted || []).map((r: any) => r.id),
+      transactionId: result.transactionId || transactionId || undefined,
+      splitIds: result.splitIds || splitIds,
     };
   } catch (e: any) {
     return { ok: false, error: e?.message || "فشل حفظ الحركة" };
