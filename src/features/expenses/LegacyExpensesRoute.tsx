@@ -25,7 +25,8 @@ import {
   methodsForSplit,
 } from "@/components/PaymentSplits";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { confirmFinancialOperation, ensureFinancialChildRows, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { confirmFinancialOperation, deriveFinancialOperationUuid, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { atomicRow, buildAtomicPaymentSplitRows, executeFinancialAtomic } from "@/lib/financialAtomic";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 import { useExpensesTotals } from "@/lib/financialSummary";
@@ -241,12 +242,7 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     setSaving(true);
     toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
 
-    const expenseRow = await ensureFinancialParentRow("expenses", operationId, expensePayload);
-    if (expenseRow.error) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(expenseRow.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : expenseRow.error, { id: toastId });
-      return;
-    }
+    const expenseRow = { id: operationId };
 
     const deductionRows: any[] = [];
     const collectionRows: any[] = [];
@@ -288,48 +284,50 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
       }
     }
 
-    const deductions = await ensureFinancialChildRows("expense_deductions", operationId, "deduction", deductionRows);
-    if (deductions.error) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(deductions.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : deductions.error, { id: toastId });
-      return;
-    }
+    const deductionIds = deductionRows.map((_, index) =>
+      deriveFinancialOperationUuid(operationId, `deduction:${index}`),
+    );
+    const deductions = { ids: deductionIds };
 
-    if (engineSplits.length) {
-      const res = await postMovement({
-        partyType: "expense",
-        partyId: expenseRow.id,
-        kind: "expense",
-        date: form.date,
-        note: form.notes.trim() ? form.notes.trim() : undefined,
-        statement: form.statement.trim() ? form.statement.trim() : undefined,
+
+    const collectionIds = collectionRows.map((_, index) =>
+      deriveFinancialOperationUuid(operationId, `merchant-collection:${index}`),
+    );
+    const collections = { ids: collectionIds };
+    const atomicRows = [
+      atomicRow("expenses", { ...expensePayload, id: operationId }),
+      ...deductionRows.map((row, index) => atomicRow("expense_deductions", { ...row, id: deductionIds[index] })),
+      ...buildAtomicPaymentSplitRows({
+        operationId,
         splits: engineSplits,
         sourceTable: "expenses",
-        sourceId: expenseRow.id,
-        operationId,
-      });
-      if (!res.ok) {
-        setSaving(false);
-        toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر تحديث رصيد الخزنة"), { id: toastId });
-        return;
-      }
-    }
-
-    const collections = await ensureFinancialChildRows("merchant_cash_collections", operationId, "merchant-collection", collectionRows);
-    if (collections.error) {
+        sourceId: operationId,
+      }),
+      ...collectionRows.map((row, index) => atomicRow("merchant_cash_collections", { ...row, id: collectionIds[index] })),
+    ];
+    const saved = await executeFinancialAtomic({
+      operationId,
+      fingerprint,
+      rows: atomicRows,
+      result: { expenseId: operationId, deductionIds, collectionIds },
+    });
+    if (!saved.ok) {
       setSaving(false);
-      toast.error(isLikelyNetworkError(collections.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : collections.error, { id: toastId });
+      toast.error(isLikelyNetworkError(saved.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (saved.error || "تعذر حفظ المصروف"), { id: toastId });
       return;
     }
 
-    if (!expenseRow.reused) {
+
+    if (!saved.reused) {
       try { await logCreate("expenses", expenseRow.id, { ...expensePayload, id: expenseRow.id }, "مصروف"); } catch { /* non-blocking audit */ }
     }
-    for (let i = 0; i < deductions.ids.length; i += 1) {
-      try { await logCreate("expense_deductions", deductions.ids[i], { ...deductionRows[i], id: deductions.ids[i] }, "خصم مصروف"); } catch { /* non-blocking audit */ }
-    }
-    for (let i = 0; i < collections.ids.length; i += 1) {
-      try { await logCreate("merchant_cash_collections", collections.ids[i], { ...collectionRows[i], id: collections.ids[i] }, "خصم رصيد تاجر (مصروف)"); } catch { /* non-blocking audit */ }
+    if (!saved.reused) {
+      for (let i = 0; i < deductions.ids.length; i += 1) {
+        try { await logCreate("expense_deductions", deductions.ids[i], { ...deductionRows[i], id: deductions.ids[i] }, "خصم مصروف"); } catch { /* non-blocking audit */ }
+      }
+      for (let i = 0; i < collections.ids.length; i += 1) {
+        try { await logCreate("merchant_cash_collections", collections.ids[i], { ...collectionRows[i], id: collections.ids[i] }, "خصم رصيد تاجر (مصروف)"); } catch { /* non-blocking audit */ }
+      }
     }
 
     confirmFinancialOperation(operationId);

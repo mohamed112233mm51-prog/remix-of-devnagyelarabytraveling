@@ -10,8 +10,8 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { confirmFinancialOperation, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
-import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
+import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { buildMerchantCashOutToCompanyCounterpartRows, buildMerchantCashOutToAgentCounterpartRows } from "@/lib/merchantCounterparty";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
 import {
@@ -123,6 +123,13 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
     setSaving(true);
     toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
 
+    const counterpartRows = buildMerchantCashOutToAgentCounterpartRows({
+      splits: valid,
+      agentTransactionId: operationId,
+      date,
+      statement: statement.trim() || "صرف نقدية لوكيل",
+      note: note.trim() || undefined,
+    });
     const res = await postMovement({
       partyType: "agent",
       partyId: agentId,
@@ -132,27 +139,14 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
       operationId,
+      atomicFingerprint: fingerprint,
+      atomicExtraRows: counterpartRows,
     });
 
     if (!res.ok) {
       setSaving(false);
       toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر حفظ الحركة"), { id: toastId });
       return;
-    }
-
-    if (res.transactionId) {
-      const merchantRes = await postMerchantCashOutToAgentCounterparts({
-        splits: valid,
-        agentTransactionId: res.transactionId,
-        date,
-        statement: statement.trim() || "صرف نقدية لوكيل",
-        note: note.trim() || undefined,
-      });
-      if (!merchantRes.ok) {
-        setSaving(false);
-        toast.error(isLikelyNetworkError(merchantRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (merchantRes.error || "تعذر حفظ قيد تاجر الكاش"), { id: toastId });
-        return;
-      }
     }
 
     confirmFinancialOperation(operationId);
@@ -247,6 +241,7 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
       statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
       operationId,
+      atomicFingerprint: fingerprint,
     });
     if (!res.ok) {
       setSaving(false);
@@ -372,13 +367,13 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       statement: statement.trim() ? statement.trim() : null,
       source_service_type: "company_cash_supply",
     };
-    const txn = await ensureFinancialParentRow("company_transactions", operationId, parentPayload);
-    if (txn.error) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(txn.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : txn.error, { id: toastId });
-      return;
-    }
-
+    const counterpartRows = buildMerchantCashOutToCompanyCounterpartRows({
+      splits: valid,
+      companyTransactionId: operationId,
+      date,
+      statement: statement.trim() || "صادر لشركة",
+      note: note.trim() || undefined,
+    });
     const res = await postMovement({
       partyType: "company",
       partyId: companyId,
@@ -387,26 +382,18 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       note: note.trim() ? note.trim() : undefined,
       statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
-      sourceTable: "company_transactions",
-      sourceId: txn.id,
       operationId,
+      atomicFingerprint: fingerprint,
+      atomicParent: {
+        table: "company_transactions",
+        id: operationId,
+        payload: parentPayload,
+      },
+      atomicExtraRows: counterpartRows,
     });
     if (!res.ok) {
       setSaving(false);
-      toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر حفظ سطور الدفع"), { id: toastId });
-      return;
-    }
-
-    const merchantRes = await postMerchantCashOutToCompanyCounterparts({
-      splits: valid,
-      companyTransactionId: txn.id,
-      date,
-      statement: statement.trim() || "صادر لشركة",
-      note: note.trim() || undefined,
-    });
-    if (!merchantRes.ok) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(merchantRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (merchantRes.error || "تعذر حفظ قيد تاجر الكاش"), { id: toastId });
+      toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر حفظ الحركة المالية"), { id: toastId });
       return;
     }
 

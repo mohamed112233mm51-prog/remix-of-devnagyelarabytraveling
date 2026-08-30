@@ -245,55 +245,6 @@ export function AgentPaymentForm({
     setSaving(true);
     toast.loading("جارٍ تأكيد العملية...", { id: confirmationToastId });
 
-    let txnRow: { id: string } | null = null;
-    const { data: existingTxn, error: existingTxnError } = await supabase
-      .from("transactions")
-      .select("id")
-      .eq("id", operationId)
-      .maybeSingle();
-    if (existingTxnError) {
-      setSaving(false);
-      toast.error(
-        isLikelyNetworkError(existingTxnError)
-          ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
-          : existingTxnError.message,
-        { id: confirmationToastId },
-      );
-      return;
-    }
-    txnRow = existingTxn as { id: string } | null;
-
-    if (!txnRow) {
-      const { data: insertedTxn, error: txnErr } = await supabase
-        .from("transactions")
-        .insert({ ...payload, id: operationId })
-        .select("id")
-        .single();
-      if (txnErr || !insertedTxn) {
-        // If the response was lost after commit, try to discover the row. When
-        // the network is still unavailable the same operation id stays pending
-        // and the next user retry will resume it safely.
-        const { data: afterInsert } = await supabase
-          .from("transactions")
-          .select("id")
-          .eq("id", operationId)
-          .maybeSingle();
-        txnRow = afterInsert as { id: string } | null;
-        if (!txnRow) {
-          setSaving(false);
-          toast.error(
-            isLikelyNetworkError(txnErr)
-              ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
-              : (txnErr?.message || "تعذر حفظ الدفعة"),
-            { id: confirmationToastId },
-          );
-          return;
-        }
-      } else {
-        txnRow = insertedTxn as { id: string };
-      }
-    }
-
     const engineRes = await postMovement({
       partyType: "agent",
       partyId: form.agent_id,
@@ -302,28 +253,29 @@ export function AgentPaymentForm({
       note: form.note.trim() ? form.note.trim() : undefined,
       statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
-      sourceTable: "transactions",
-      sourceId: txnRow.id,
-      transactionId: txnRow.id,
       operationId,
+      atomicFingerprint: operationFingerprint,
+      atomicParent: {
+        table: "transactions",
+        id: operationId,
+        payload,
+      },
     });
 
     if (!engineRes.ok) {
       setSaving(false);
-      const networkUnknown = isLikelyNetworkError(engineRes.error);
-      if (!networkUnknown) {
-        // A definitive server-side rejection means the split was not committed;
-        // remove the metadata parent so the agent statement cannot show a half operation.
-        await supabase.from("transactions").delete().eq("id", operationId);
-      }
       toast.error(
-        networkUnknown
+        isLikelyNetworkError(engineRes.error)
           ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
           : (engineRes.error || "تعذر تحديث الأرصدة"),
         { id: confirmationToastId },
       );
       return;
     }
+
+    // The parent and every payment split committed in the SAME PostgreSQL
+    // transaction. No cleanup/rollback request is needed on the client.
+    const txnRow = { id: engineRes.transactionId || operationId };
 
     try {
       await logCreate("transactions", txnRow.id, { ...payload, id: txnRow.id }, "دفعة وكيل");
