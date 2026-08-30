@@ -127,7 +127,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     if (kind === "company") {
       if (s.company_id && companyValue > 0) {
         companyRows.push({
-        id: deriveFinancialOperationUuid(operationId, `company:${i}`),
           id: deriveFinancialOperationUuid(operationId, `company:${i}`),
           company_id: s.company_id,
           date,
@@ -155,7 +154,6 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     if (kind === "agent") {
       if (input.agentId) {
         agentRows.push({
-        id: deriveFinancialOperationUuid(operationId, `agent:${i}`),
           id: deriveFinancialOperationUuid(operationId, `agent:${i}`),
           agent_id: input.agentId,
           date,
