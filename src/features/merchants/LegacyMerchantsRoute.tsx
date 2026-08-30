@@ -35,6 +35,7 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { confirmFinancialOperation, deriveFinancialOperationUuid, ensureFinancialChildRows, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
 import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
@@ -385,6 +386,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
   const [note, setNote] = useState("");
   const [statement, setStatement] = useState("");
   const [rows, setRows] = useState<CollectRow[]>(() => [newCollectRow()]);
+  const [saving, setSaving] = useState(false);
 
   // Only ACTIVE company-owned cash boxes (identified by method_key starting with company_).
   // This is the ONLY source for payment options in this form — merchant methods
@@ -428,8 +430,15 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       const box = companyBoxes.find((b) => b.id === r.cash_box_id)!;
       return { r, box, currency: normalizeCurrency(box.currency) as "EGP" | "USD" | "LYD" };
     });
+    const fingerprint = financialOperationFingerprint({
+      date,
+      rows: enriched.map(({ r, box, currency }) => ({ merchantId: r.merchant_id, cashBoxId: box.id, currency, amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("merchant-cash-collection", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
 
-    // 1) Insert merchant_cash_collections rows (merchant balance is aggregated from this table).
     const insertRows = enriched.map(({ r }) => ({
       merchant_id: r.merchant_id,
       date,
@@ -437,21 +446,17 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       note: note.trim() ? note.trim() : null,
       statement: statement.trim() ? statement.trim() : null,
     }));
-    const { data: inserted, error } = await supabase
-      .from("merchant_cash_collections")
-      .insert(insertRows as any)
-      .select("id, merchant_id, amount");
-    if (error) return toast.error(error.message);
+    const childRows = await ensureFinancialChildRows("merchant_cash_collections", operationId, "collection", insertRows);
+    if (childRows.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(childRows.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : childRows.error, { id: toastId });
+      return;
+    }
 
-    // 2) Mirror each row into payment_splits via the Financial Engine, hitting
-    //    the chosen company cash box directly. This is the SAME
-    //    payment_splits → apply_payment_split_to_cash_box trigger path used by
-    //    every other cash-in flow in the system.
     for (let i = 0; i < enriched.length; i++) {
       const { r, box, currency } = enriched[i];
-      const dbRow = (inserted as any[])?.[i];
-      if (!dbRow) continue;
       const amt = Number(r.amount || 0);
+      const rowOperationId = deriveFinancialOperationUuid(operationId, `collection-movement:${i}`);
       const engineSplits: MovementSplit[] = [{
         method: methodLabelForBox(box),
         currency,
@@ -472,14 +477,19 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         note: note.trim() || undefined,
         splits: engineSplits,
         sourceTable: "merchant_cash_collections",
-        sourceId: dbRow.id,
+        sourceId: childRows.ids[i],
+        operationId: rowOperationId,
       });
       if (!res.ok) {
-        toast.error(res.error || "تعذر تسجيل الحركة في السجل المالي");
+        setSaving(false);
+        toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر تسجيل الحركة في السجل المالي"), { id: toastId });
+        return;
       }
     }
 
-    toast.success("تم حفظ التحصيل");
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     setRows([newCollectRow()]);
     setNote("");
     setStatement("");
@@ -566,7 +576,7 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       <div style={{ padding: "0 8px", textAlign: "end", fontWeight: 600 }}>
         الإجمالي: {fmtDL(total)}
       </div>
-      <div className="form-footer"><button data-confirm-save="تأكيد حفظ التحصيل" className="btn btn-gold" onClick={save} disabled={!hasAnyCompanyBox}>💾 حفظ التحصيل</button></div>
+      <div className="form-footer"><button data-confirm-save="تأكيد حفظ التحصيل" className="btn btn-gold" onClick={save} disabled={!hasAnyCompanyBox || saving}>{saving ? "جارٍ التأكيد..." : "💾 حفظ التحصيل"}</button></div>
     </div>
   );
 }

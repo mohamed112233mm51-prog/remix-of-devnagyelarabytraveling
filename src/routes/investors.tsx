@@ -10,6 +10,7 @@ import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
 import { buildInvestorCapitalSummary, investorTransactionCurrency, type FinancialPositionSplit } from "@/hooks/useFinancialPosition";
 import { checkOutflowAllowed, postMovement } from "@/lib/financialEngine";
+import { confirmFinancialOperation, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { usePerm } from "@/hooks/usePerm";
 import { ExportButton } from "@/components/ExportButton";
@@ -205,58 +206,68 @@ function TxnForm({ investors, kind, methodLabel, title }: { investors: Investor[
     if (amount <= 0) return toast.error("أدخل المبلغ");
     if (!selectedBox) return toast.error(`اختر ${methodLabel}`);
 
-    setSaving(true);
-    let parentId: string | null = null;
-    try {
-      if (kind === "صرف نقدية") {
-        const outflowError = await checkOutflowAllowed(selectedBox.id, amount, selectedBox.name);
-        if (outflowError) { toast.error(outflowError); return; }
-      }
-
-      const { data: parent, error: parentError } = await supabase
-        .from("investor_transactions")
-        .insert({
-          investor_id: form.investor_id,
-          transaction_type: kind,
-          date: form.date,
-          amount,
-          payment_method: selectedBox.name,
-          note: form.note.trim() ? form.note.trim() : null,
-          statement: form.statement.trim() ? form.statement.trim() : null,
-        } as any)
-        .select("id")
-        .single();
-      if (parentError || !parent) throw new Error(parentError?.message || "تعذر حفظ حركة المالك");
-      parentId = parent.id;
-
-      const movement = await postMovement({
-        partyType: "investor",
-        partyId: form.investor_id,
-        kind: kind === "توريد نقدية" ? "receipt" : "payment",
-        date: form.date,
-        note: form.note.trim() || undefined,
-        statement: form.statement.trim() || undefined,
-        sourceTable: "investor_transactions",
-        sourceId: parent.id,
-        splits: [{
-          method: selectedBox.name,
-          currency: normalizeCurrency(selectedBox.currency) as "EGP" | "USD" | "LYD",
-          cashBoxId: selectedBox.id,
-          amount,
-          direction: kind === "توريد نقدية" ? "in" : "out",
-        }],
-      });
-      if (!movement.ok) throw new Error(movement.error || "فشل ربط حركة المالك بالخزينة");
-
-      await refetchLiveTables(["investor_transactions", "payment_splits", "cash_boxes"]);
-      toast.success(kind === "توريد نقدية" ? "تم توريد التمويل إلى الخزينة" : "تم سحب المبلغ من الخزينة");
-      setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", cash_box_id: activeBoxes[0]?.id || "", note: "", statement: "" });
-    } catch (error: any) {
-      if (parentId) await supabase.from("investor_transactions").delete().eq("id", parentId);
-      toast.error(error?.message || "فشل حفظ حركة المالك / المستثمر");
-    } finally {
-      setSaving(false);
+    if (kind === "صرف نقدية") {
+      const outflowError = await checkOutflowAllowed(selectedBox.id, amount, selectedBox.name);
+      if (outflowError) return toast.error(outflowError);
     }
+
+    const fingerprint = financialOperationFingerprint({
+      investorId: form.investor_id,
+      kind,
+      date: form.date,
+      amount,
+      cashBoxId: selectedBox.id,
+      currency: normalizeCurrency(selectedBox.currency),
+    });
+    const operationId = getOrCreateFinancialOperationId("investor-cash-movement", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+    const parent = await ensureFinancialParentRow("investor_transactions", operationId, {
+      investor_id: form.investor_id,
+      transaction_type: kind,
+      date: form.date,
+      amount,
+      payment_method: selectedBox.name,
+      note: form.note.trim() ? form.note.trim() : null,
+      statement: form.statement.trim() ? form.statement.trim() : null,
+    });
+    if (parent.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(parent.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : parent.error, { id: toastId });
+      return;
+    }
+
+    const movement = await postMovement({
+      partyType: "investor",
+      partyId: form.investor_id,
+      kind: kind === "توريد نقدية" ? "receipt" : "payment",
+      date: form.date,
+      note: form.note.trim() || undefined,
+      statement: form.statement.trim() || undefined,
+      sourceTable: "investor_transactions",
+      sourceId: parent.id,
+      operationId,
+      splits: [{
+        method: selectedBox.name,
+        currency: normalizeCurrency(selectedBox.currency) as "EGP" | "USD" | "LYD",
+        cashBoxId: selectedBox.id,
+        amount,
+        direction: kind === "توريد نقدية" ? "in" : "out",
+      }],
+    });
+    if (!movement.ok) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(movement.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (movement.error || "فشل ربط حركة المالك بالخزينة"), { id: toastId });
+      return;
+    }
+
+    try { await refetchLiveTables(["investor_transactions", "payment_splits", "cash_boxes"]); } catch { /* realtime will reconcile */ }
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
+    setForm({ investor_id: "", date: new Date().toISOString().slice(0, 10), amount: "", cash_box_id: activeBoxes[0]?.id || "", note: "", statement: "" });
   };
 
   return (

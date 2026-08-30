@@ -30,6 +30,7 @@ import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { confirmFinancialOperation, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
 import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
 import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, formatCurrencyMap, CurrencyMap, type LedgerRow } from "@/lib/financialSummary";
@@ -855,11 +856,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     };
 
 
-    setSaving(true);
-    const { data: txnRow, error: txnErr } = await supabase
-      .from("company_transactions").insert(payload).select("id").single();
-    if (txnErr || !txnRow) { setSaving(false); return toast.error(txnErr?.message || "تعذر حفظ الحركة"); }
-    await logCreate("company_transactions", txnRow.id, { ...payload, id: txnRow.id }, "حركة شركة");
+    const missingCompanyBox = validSplits.find((r) =>
+      r.source === "company" && !resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)
+    );
+    if (missingCompanyBox) return toast.error(`لا توجد خزنة شركة مطابقة لوسيلة الدفع المختارة بعملة ${missingCompanyBox.currency}`);
 
     const engineSplits: MovementSplit[] = validSplits.map((r) => {
       const a = Number(r.amount) || 0;
@@ -867,12 +867,10 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       let cashBoxId: string | null = null;
       if (r.method === "company_instapay") {
         methodLabel = "إنستاباي";
-        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
-        cashBoxId = box?.id || null;
+        cashBoxId = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)?.id || null;
       } else if (r.method === "company_cash") {
         methodLabel = "نقدي";
-        const box = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method);
-        cashBoxId = box?.id || null;
+        cashBoxId = resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)?.id || null;
       } else if (r.method === "merchant_instapay") methodLabel = "انستا";
       else if (r.method === "merchant_wallet") methodLabel = "فودافون كاش";
       else if (r.method === "merchant_physical") methodLabel = "نقدي";
@@ -890,6 +888,31 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
         egpEquivalent: r.currency === "EGP" ? a : 0,
       };
     });
+
+    const fingerprint = financialOperationFingerprint({
+      companyId: form.company_id,
+      date: form.date,
+      destination: form.destination || null,
+      serviceType: form.service_type || null,
+      count: Number(form.count) || 0,
+      price: Number(form.price) || 0,
+      splits: validSplits.map((r) => ({ source: r.source, merchantId: r.merchant_id || null, method: r.method, currency: r.currency, amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("company-payment", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+    const txnRow = await ensureFinancialParentRow("company_transactions", operationId, payload);
+    if (txnRow.error) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(txnRow.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : txnRow.error, { id: toastId });
+      return;
+    }
+    if (!txnRow.reused) {
+      try { await logCreate("company_transactions", txnRow.id, { ...payload, id: txnRow.id }, "حركة شركة"); } catch { /* non-blocking audit */ }
+    }
+
     const engineRes = await postMovement({
       partyType: "company",
       partyId: form.company_id,
@@ -898,13 +921,14 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       note: form.note.trim() ? form.note.trim() : undefined,
       statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
-
       sourceTable: "company_transactions",
       sourceId: txnRow.id,
+      operationId,
     });
     if (!engineRes.ok) {
       setSaving(false);
-      return toast.error(engineRes.error || "تعذر حفظ سطور الدفع");
+      toast.error(isLikelyNetworkError(engineRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (engineRes.error || "تعذر حفظ سطور الدفع"), { id: toastId });
+      return;
     }
 
     const merchantRes = await postMerchantCashOutToCompanyCounterparts({
@@ -916,12 +940,13 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     });
     if (!merchantRes.ok) {
       setSaving(false);
-      return toast.error(merchantRes.error || "تعذر حفظ قيد تاجر الكاش");
+      toast.error(isLikelyNetworkError(merchantRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (merchantRes.error || "تعذر حفظ قيد تاجر الكاش"), { id: toastId });
+      return;
     }
 
-
+    confirmFinancialOperation(operationId);
     setSaving(false);
-    toast.success("تم تسجيل الحركة");
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     onDone();
   };
 

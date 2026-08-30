@@ -29,6 +29,7 @@ import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { syncCashBoxOpeningBalance } from "@/lib/openingBalance";
 import { checkOutflowAllowed, postCashBoxTransfer, postMovement } from "@/lib/financialEngine";
+import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import {
@@ -1921,11 +1922,15 @@ function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose
     if (fromBox.currency !== toBox.currency) { toast.error("التحويل المباشر يجب أن يكون بين خزائن بنفس العملة"); return; }
     if (!validAmount) { toast.error("أدخل مبلغ تحويل صحيح أكبر من صفر"); return; }
 
-    setSaving(true);
-    try {
-      const outflowError = await checkOutflowAllowed(fromBox.id, amountNum, fromBox.name);
-      if (outflowError) { toast.error(outflowError); return; }
+    const outflowError = await checkOutflowAllowed(fromBox.id, amountNum, fromBox.name);
+    if (outflowError) { toast.error(outflowError); return; }
 
+    const fingerprint = financialOperationFingerprint({ from: fromBox.id, to: toBox.id, currency: fromBox.currency, amount: amountNum });
+    const operationId = getOrCreateFinancialOperationId("cash-box-transfer", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+    try {
       const method = `تحويل بين الخزائن: ${fromBox.name} ← ${toBox.name}`;
       const result = await postCashBoxTransfer({
         fromCashBoxId: fromBox.id,
@@ -1934,13 +1939,15 @@ function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose
         currency: fromBox.currency as "EGP" | "USD" | "LYD",
         date: new Date().toISOString().slice(0, 10),
         method,
+        operationId,
       });
       if (!result.ok) throw new Error(result.error || "فشل التحويل بين الخزائن");
-      await refetchLiveTables(["cash_boxes", "payment_splits"]);
-      toast.success(`تم تحويل ${fmtNum(amountNum)} ${CURRENCY_LABEL[fromBox.currency] || fromBox.currency} من ${fromBox.name} إلى ${toBox.name}`);
+      try { await refetchLiveTables(["cash_boxes", "payment_splits"]); } catch { /* realtime will reconcile */ }
+      confirmFinancialOperation(operationId);
+      toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || "فشل التحويل بين الخزائن");
+      toast.error(isLikelyNetworkError(e) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (e?.message || "فشل التحويل بين الخزائن"), { id: toastId });
     } finally {
       setSaving(false);
     }
@@ -2016,7 +2023,12 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
     if (!hasPhysical) { toast.error("أدخل الرصيد الفعلي بعد الجرد"); return; }
     if (!reason.trim()) { toast.error("سبب التسوية إجباري"); return; }
     if (diff === 0) { toast.error("لا يوجد فرق لتسويته"); return; }
+
+    const fingerprint = financialOperationFingerprint({ boxId: box.id, physical: physicalNum, currency: box.currency });
+    const operationId = getOrCreateFinancialOperationId("cash-box-reconciliation", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
     setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
     try {
       const amount = Math.abs(diff);
       const direction: "in" | "out" = diff > 0 ? "in" : "out";
@@ -2029,6 +2041,7 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
         date: new Date().toISOString().slice(0, 10),
         note: note.trim() || undefined,
         statement,
+        operationId,
         splits: [{
           method,
           currency: box.currency as "EGP" | "USD" | "LYD",
@@ -2038,10 +2051,11 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
         }],
       });
       if (!res.ok) throw new Error(res.error || "فشل حفظ التسوية");
-      toast.success("تم حفظ تسوية الخزنة");
+      confirmFinancialOperation(operationId);
+      toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || "فشل حفظ التسوية");
+      toast.error(isLikelyNetworkError(e) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (e?.message || "فشل حفظ التسوية"), { id: toastId });
     } finally { setSaving(false); }
   };
 

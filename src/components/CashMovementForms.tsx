@@ -10,6 +10,7 @@ import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { confirmFinancialOperation, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { postMerchantCashOutToCompanyCounterparts, postMerchantCashOutToAgentCounterparts } from "@/lib/merchantCounterparty";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
@@ -106,8 +107,22 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
     const merchantDbErr = await assertMerchantOutflowsAllowed(valid);
     if (merchantDbErr) return toast.error(merchantDbErr);
 
-    setSaving(true);
+    const companyBoxError = valid.find((r) =>
+      r.source === "company" && !resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)
+    );
+    if (companyBoxError) return toast.error(`لا توجد خزنة شركة مطابقة لوسيلة الدفع المختارة بعملة ${companyBoxError.currency}`);
+
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
+    const fingerprint = financialOperationFingerprint({
+      agentId,
+      date,
+      splits: valid.map((r) => ({ source: r.source, merchantId: r.merchant_id || null, method: r.method, currency: r.currency, amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("agent-cash-out", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
     const res = await postMovement({
       partyType: "agent",
       partyId: agentId,
@@ -116,11 +131,13 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       note: note.trim() ? note.trim() : undefined,
       statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
+      operationId,
     });
 
     if (!res.ok) {
       setSaving(false);
-      return toast.error(res.error || "تعذر حفظ الحركة");
+      toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر حفظ الحركة"), { id: toastId });
+      return;
     }
 
     if (res.transactionId) {
@@ -133,13 +150,14 @@ export function AgentCashOutForm({ initialAgentId, onDone }: { initialAgentId?: 
       });
       if (!merchantRes.ok) {
         setSaving(false);
-        return toast.error(merchantRes.error || "تعذر حفظ قيد تاجر الكاش");
+        toast.error(isLikelyNetworkError(merchantRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (merchantRes.error || "تعذر حفظ قيد تاجر الكاش"), { id: toastId });
+        return;
       }
     }
 
+    confirmFinancialOperation(operationId);
     setSaving(false);
-
-    toast.success("تم تسجيل صرف النقدية");
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     resetDraft();
     onDone?.();
   };
@@ -204,8 +222,22 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
     const merchantDbErr = await assertMerchantOutflowsAllowed(valid);
     if (merchantDbErr) return toast.error(merchantDbErr);
 
-    setSaving(true);
+    const companyBoxError = valid.find((r) =>
+      r.source === "company" && !resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)
+    );
+    if (companyBoxError) return toast.error(`لا توجد خزنة شركة مطابقة لوسيلة الدفع المختارة بعملة ${companyBoxError.currency}`);
+
     const engineSplits = mapSplitsForEngine(valid, cashBoxes, "out");
+    const fingerprint = financialOperationFingerprint({
+      merchantId,
+      date,
+      splits: valid.map((r) => ({ source: r.source, merchantId: r.merchant_id || null, method: r.method, currency: r.currency, amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("merchant-cash-out", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
     const res = await postMovement({
       partyType: "merchant",
       partyId: merchantId,
@@ -214,11 +246,17 @@ export function MerchantCashOutForm({ initialMerchantId, onDone }: { initialMerc
       note: note.trim() ? note.trim() : undefined,
       statement: statement.trim() ? statement.trim() : undefined,
       splits: engineSplits,
+      operationId,
     });
-    setSaving(false);
-    if (!res.ok) return toast.error(res.error || "تعذر حفظ الحركة");
+    if (!res.ok) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر حفظ الحركة"), { id: toastId });
+      return;
+    }
 
-    toast.success("تم تسجيل صرف النقدية للتاجر");
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     resetDraft();
     onDone?.();
   };
@@ -299,40 +337,48 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
     }
     const firstMerchant = valid.find((r) => r.source === "merchant")?.merchant_id || null;
 
-    setSaving(true);
-    // 1) Metadata parent row on company_transactions (negative = cash inflow).
-    const { supabase } = await import("@/integrations/supabase/client");
-    const { data: txn, error: txnErr } = await supabase
-      .from("company_transactions")
-      .insert({
-        company_id: companyId,
-        date,
-        count: 0,
-        price: 0,
-        trip_value: 0,
-        instapay_amount: -instapay,
-        cash_amount: -cash,
-        merchant_cash_amount: -merchantWallet,
-        merchant_cash_net_amount: -merchantWallet,
-        merchant_cash_physical_amount: -merchantPhysical,
-        total_paid: -total,
-        currency: selectedCurrency,
-        payment_currency: selectedCurrency,
-        merchant_id: firstMerchant,
-        note: note.trim() ? note.trim() : null,
-        statement: statement.trim() ? statement.trim() : null,
-        source_service_type: "company_cash_supply",
+    const companyBoxError = valid.find((r) =>
+      r.source === "company" && !resolveCompanyCashBoxForSplit(cashBoxes, r.currency, r.method)
+    );
+    if (companyBoxError) return toast.error(`لا توجد خزنة شركة مطابقة لوسيلة الدفع المختارة بعملة ${companyBoxError.currency}`);
 
-      } as any)
-      .select("id")
-      .single();
-    if (txnErr || !txn) {
+    const engineSplits = mapSplitsForEngine(valid, cashBoxes, "in");
+    const fingerprint = financialOperationFingerprint({
+      companyId,
+      date,
+      splits: valid.map((r) => ({ source: r.source, merchantId: r.merchant_id || null, method: r.method, currency: r.currency, amount: Number(r.amount) || 0 })),
+    });
+    const operationId = getOrCreateFinancialOperationId("company-cash-supply", fingerprint);
+    const toastId = financialConfirmationToastId(operationId);
+    setSaving(true);
+    toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+    const parentPayload = {
+      company_id: companyId,
+      date,
+      count: 0,
+      price: 0,
+      trip_value: 0,
+      instapay_amount: -instapay,
+      cash_amount: -cash,
+      merchant_cash_amount: -merchantWallet,
+      merchant_cash_net_amount: -merchantWallet,
+      merchant_cash_physical_amount: -merchantPhysical,
+      total_paid: -total,
+      currency: selectedCurrency,
+      payment_currency: selectedCurrency,
+      merchant_id: firstMerchant,
+      note: note.trim() ? note.trim() : null,
+      statement: statement.trim() ? statement.trim() : null,
+      source_service_type: "company_cash_supply",
+    };
+    const txn = await ensureFinancialParentRow("company_transactions", operationId, parentPayload);
+    if (txn.error) {
       setSaving(false);
-      return toast.error(txnErr?.message || "تعذر حفظ الحركة");
+      toast.error(isLikelyNetworkError(txn.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : txn.error, { id: toastId });
+      return;
     }
 
-    // 2) Financial movement via Engine (direction: in → increases cash boxes).
-    const engineSplits = mapSplitsForEngine(valid, cashBoxes, "in");
     const res = await postMovement({
       partyType: "company",
       partyId: companyId,
@@ -340,14 +386,15 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       date,
       note: note.trim() ? note.trim() : undefined,
       statement: statement.trim() ? statement.trim() : undefined,
-
       splits: engineSplits,
       sourceTable: "company_transactions",
       sourceId: txn.id,
+      operationId,
     });
     if (!res.ok) {
       setSaving(false);
-      return toast.error(res.error || "تعذر حفظ سطور الدفع");
+      toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر حفظ سطور الدفع"), { id: toastId });
+      return;
     }
 
     const merchantRes = await postMerchantCashOutToCompanyCounterparts({
@@ -357,10 +404,15 @@ export function CompanySupplyForm({ initialCompanyId, onDone }: { initialCompany
       statement: statement.trim() || "صادر لشركة",
       note: note.trim() || undefined,
     });
-    setSaving(false);
-    if (!merchantRes.ok) return toast.error(merchantRes.error || "تعذر حفظ قيد تاجر الكاش");
+    if (!merchantRes.ok) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(merchantRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (merchantRes.error || "تعذر حفظ قيد تاجر الكاش"), { id: toastId });
+      return;
+    }
 
-    toast.success("تم تسجيل توريد النقدية");
+    confirmFinancialOperation(operationId);
+    setSaving(false);
+    toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
     resetDraft();
     onDone?.();
   };
