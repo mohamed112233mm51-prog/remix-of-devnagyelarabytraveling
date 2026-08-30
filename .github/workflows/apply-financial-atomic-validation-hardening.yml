@@ -1,0 +1,62 @@
+name: Apply financial atomic validation hardening
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_patch_financial_atomic_validation_hardening.py
+      - .github/workflows/apply-financial-atomic-validation-hardening.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply cash-box validation markers
+        run: python3 scripts/_patch_financial_atomic_validation_hardening.py
+
+      - name: Audit atomic financial write paths
+        run: python3 scripts/_audit_financial_atomic.py
+
+      - name: Show cash-box split call sites
+        run: |
+          echo '=== cashBoxId call sites after hardening ==='
+          grep -R -n --include='*.ts' --include='*.tsx' 'cashBoxId' src || true
+          echo '=== requiresCashBox markers ==='
+          grep -R -n --include='*.ts' --include='*.tsx' 'requiresCashBox' src || true
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit hardened client validation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/financialEngine.ts \
+                  src/components/AgentPaymentForm.tsx \
+                  src/components/CashMovementForms.tsx \
+                  src/features/expenses/LegacyExpensesRoute.tsx \
+                  src/features/currency-suppliers/LegacyCurrencySupplierStatementRoute.tsx \
+                  src/routes/investors.tsx \
+                  src/lib/dataImport/specialImport.ts
+          if git diff --cached --quiet; then
+            echo 'No client changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Enforce DB cash box requirements on financial splits'
+          git push origin HEAD:devo
