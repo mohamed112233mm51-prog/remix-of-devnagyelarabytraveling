@@ -5,6 +5,7 @@ on:
     branches: [devo]
     paths:
       - scripts/_patch_financial_idempotency_phase2b.py
+      - scripts/_run_financial_idempotency_phase2b_fixed.py
       - .github/workflows/apply-financial-idempotency-phase2b.yml
   workflow_dispatch:
 
@@ -23,7 +24,7 @@ jobs:
         with:
           node-version: 20
       - name: Apply patch
-        run: python3 scripts/_patch_financial_idempotency_phase2b.py
+        run: python3 scripts/_run_financial_idempotency_phase2b_fixed.py
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build
