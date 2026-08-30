@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeCurrency } from "@/lib/db";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+import { deriveFinancialOperationUuid, ensureFinancialParentRow } from "@/lib/financialIdempotency";
 
 type MerchantCompanySplit = {
   source?: string;
@@ -69,45 +70,46 @@ async function postCounterparts(args: {
     (r) => r.source === "merchant" && r.merchant_id && Number(r.amount || 0) > 0,
   );
 
-  for (const row of merchantSplits) {
+  for (let index = 0; index < merchantSplits.length; index += 1) {
+    const row = merchantSplits[index];
     const amount = Number(row.amount || 0);
     const currency = normalizeCurrency(row.currency) as "EGP" | "USD" | "LYD";
     const statement = args.statement?.trim() || args.defaultStatement;
     const note = args.note?.trim() || null;
     const method = methodLabel(row.method);
+    const counterpartOperationId = deriveFinancialOperationUuid(
+      args.parentId,
+      `merchant-counterpart:${args.sourceServiceType}:${index}:${row.merchant_id || "none"}`,
+    );
 
-    const { data: txn, error: txnErr } = await supabase
-      .from("transactions")
-      .insert({
-        agent_id: null,
-        merchant_id: row.merchant_id,
-        date: args.date,
-        destination: null,
-        travel_statement: null,
-        count: 0,
-        price: 0,
-        paid: -amount,
-        total_paid: -amount,
-        instapay_amount: 0,
-        cash_amount: 0,
-        mobile_cash_amount: 0,
-        mobile_cash_net_amount: 0,
-        arabic_tourism_cash_amount: 0,
-        arabic_tourism_cash_net_amount: 0,
-        merchant_cash_amount: 0,
-        merchant_cash_net_amount: 0,
-        merchant_cash_physical_amount: 0,
-        payment_method: method,
-        service_type: args.serviceType,
-        statement,
-        note,
-        currency,
-        source_service_type: args.sourceServiceType,
-        source_service_id: args.parentId,
-      })
-      .select("id")
-      .single();
-    if (txnErr || !txn) return { ok: false, error: txnErr?.message || "تعذر حفظ قيد تاجر الكاش" };
+    const parent = await ensureFinancialParentRow("transactions", counterpartOperationId, {
+      agent_id: null,
+      merchant_id: row.merchant_id,
+      date: args.date,
+      destination: null,
+      travel_statement: null,
+      count: 0,
+      price: 0,
+      paid: -amount,
+      total_paid: -amount,
+      instapay_amount: 0,
+      cash_amount: 0,
+      mobile_cash_amount: 0,
+      mobile_cash_net_amount: 0,
+      arabic_tourism_cash_amount: 0,
+      arabic_tourism_cash_net_amount: 0,
+      merchant_cash_amount: 0,
+      merchant_cash_net_amount: 0,
+      merchant_cash_physical_amount: 0,
+      payment_method: method,
+      service_type: args.serviceType,
+      statement,
+      note,
+      currency,
+      source_service_type: args.sourceServiceType,
+      source_service_id: args.parentId,
+    });
+    if (parent.error) return { ok: false, error: parent.error };
 
     const split: MovementSplit = {
       method,
@@ -130,8 +132,9 @@ async function postCounterparts(args: {
       note: note || undefined,
       splits: [split],
       sourceTable: "transactions",
-      sourceId: txn.id,
-      transactionId: txn.id,
+      sourceId: parent.id,
+      transactionId: parent.id,
+      operationId: counterpartOperationId,
     });
     if (!res.ok) return { ok: false, error: res.error || "تعذر حفظ قيد تاجر الكاش" };
   }
