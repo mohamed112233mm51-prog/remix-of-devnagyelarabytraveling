@@ -1,0 +1,54 @@
+name: Temporary atomic permission save CI
+
+on:
+  push:
+    branches:
+      - tmp-permissions-atomic-ci
+  pull_request:
+    branches:
+      - permissions-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-permissions-atomic-ci
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - name: Apply atomic permission save patch
+        run: python3 scripts/_tmp_patch_atomic_permission_save.py
+      - name: Verify atomic permission save
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'update_profile_permission_section' src/lib/admin.functions.ts
+          grep -q 'jsonb_set' supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          grep -q 'TO service_role' supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          ! grep -q 'nextPermissions = normalizePermissionsForSave' src/lib/admin.functions.ts
+          echo 'Atomic permission-section save verified.'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Production build
+        run: npm run build
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Commit production changes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/admin.functions.ts supabase/migrations/20260824173500_settings_permission_rls_hardening.sql
+          if git diff --cached --quiet; then
+            echo 'No production changes to commit'
+          else
+            git commit -m 'make permission section saves atomic'
+            git push origin HEAD:tmp-permissions-atomic-ci
+          fi

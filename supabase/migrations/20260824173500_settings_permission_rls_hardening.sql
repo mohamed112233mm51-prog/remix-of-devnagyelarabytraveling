@@ -29,6 +29,50 @@ REVOKE ALL ON FUNCTION public.app_settings_permission_allowed(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.app_settings_permission_allowed(text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.app_settings_permission_allowed(text) TO authenticated, service_role;
 
+
+-- Atomic permission-section update. Only trusted backend service_role may call
+-- this function. jsonb_set updates one top-level section without a read/merge/
+-- rewrite race against another administrator editing a different section.
+CREATE OR REPLACE FUNCTION public.update_profile_permission_section(
+  p_user_id uuid,
+  p_section_key text,
+  p_value jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_permissions jsonb;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'USER_REQUIRED';
+  END IF;
+  IF p_section_key IS NULL OR btrim(p_section_key) = '' OR p_section_key !~ '^[a-z0-9_]+$' THEN
+    RAISE EXCEPTION 'INVALID_PERMISSION_SECTION';
+  END IF;
+  UPDATE public.profiles
+  SET permissions = jsonb_set(
+    COALESCE(permissions, '{}'::jsonb),
+    ARRAY[p_section_key],
+    COALESCE(p_value, 'null'::jsonb),
+    true
+  )
+  WHERE id = p_user_id
+  RETURNING permissions INTO v_permissions;
+  IF v_permissions IS NULL THEN
+    RAISE EXCEPTION 'PROFILE_NOT_FOUND';
+  END IF;
+  RETURN v_permissions;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_profile_permission_section(uuid, text, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_profile_permission_section(uuid, text, jsonb) FROM anon;
+REVOKE ALL ON FUNCTION public.update_profile_permission_section(uuid, text, jsonb) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.update_profile_permission_section(uuid, text, jsonb) TO service_role;
+
 -- Authenticated clients may only read/update their own profile. Administrative
 -- profile changes now go through trusted server functions using service_role.
 DO $$
