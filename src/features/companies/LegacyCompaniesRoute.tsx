@@ -30,9 +30,9 @@ import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { CompanyPricingTab } from "@/components/CompanyPricingTab";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { confirmFinancialOperation, ensureFinancialParentRow, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
-import { postMerchantCashOutToCompanyCounterparts } from "@/lib/merchantCounterparty";
+import { buildMerchantCashOutToCompanyCounterpartRows } from "@/lib/merchantCounterparty";
 import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, formatCurrencyMap, CurrencyMap, type LedgerRow } from "@/lib/financialSummary";
 
 import {
@@ -903,15 +903,13 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     setSaving(true);
     toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
 
-    const txnRow = await ensureFinancialParentRow("company_transactions", operationId, payload);
-    if (txnRow.error) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(txnRow.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : txnRow.error, { id: toastId });
-      return;
-    }
-    if (!txnRow.reused) {
-      try { await logCreate("company_transactions", txnRow.id, { ...payload, id: txnRow.id }, "حركة شركة"); } catch { /* non-blocking audit */ }
-    }
+    const counterpartRows = buildMerchantCashOutToCompanyCounterpartRows({
+      splits: validSplits,
+      companyTransactionId: operationId,
+      date: form.date,
+      statement: form.statement.trim() || "صادر لشركة",
+      note: form.note.trim() || undefined,
+    });
 
     const engineRes = await postMovement({
       partyType: "company",
@@ -921,28 +919,22 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
       note: form.note.trim() ? form.note.trim() : undefined,
       statement: form.statement.trim() ? form.statement.trim() : undefined,
       splits: engineSplits,
-      sourceTable: "company_transactions",
-      sourceId: txnRow.id,
       operationId,
+      atomicFingerprint: fingerprint,
+      atomicParent: {
+        table: "company_transactions",
+        id: operationId,
+        payload,
+      },
+      atomicExtraRows: counterpartRows,
     });
     if (!engineRes.ok) {
       setSaving(false);
-      toast.error(isLikelyNetworkError(engineRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (engineRes.error || "تعذر حفظ سطور الدفع"), { id: toastId });
+      toast.error(isLikelyNetworkError(engineRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (engineRes.error || "تعذر حفظ الحركة المالية"), { id: toastId });
       return;
     }
 
-    const merchantRes = await postMerchantCashOutToCompanyCounterparts({
-      splits: validSplits,
-      companyTransactionId: txnRow.id,
-      date: form.date,
-      statement: form.statement.trim() || "صادر لشركة",
-      note: form.note.trim() || undefined,
-    });
-    if (!merchantRes.ok) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(merchantRes.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (merchantRes.error || "تعذر حفظ قيد تاجر الكاش"), { id: toastId });
-      return;
-    }
+    try { await logCreate("company_transactions", operationId, { ...payload, id: operationId }, "حركة شركة"); } catch { /* non-blocking audit */ }
 
     confirmFinancialOperation(operationId);
     setSaving(false);

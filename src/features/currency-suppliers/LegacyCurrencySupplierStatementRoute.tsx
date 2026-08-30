@@ -598,32 +598,7 @@ async function applyTransaction(opts: {
     : { ok: false, error: saved.error || "تعذر تسجيل الحركة المالية" };
 }
 
-// Reverse a previously-applied transaction (used on delete).
-async function reverseTransaction(r: Tx & { foreignCurrency: string; foreignAmount: number; egpAmount: number }, _boxes: CashBox[]) {
-  void _boxes;
-  // Deleting payment_splits rows triggers cash_boxes reversal automatically.
-  await supabase
-    .from("payment_splits")
-    .delete()
-    .eq("source_table", "currency_supplier_transactions")
-    .eq("source_id", r.id);
-
-  // Reverse merchant balance side-effects (merchant_cash_collections rows).
-  const splits = Array.isArray(r.payment_splits) ? r.payment_splits : [];
-  for (const s of splits) {
-    const amt = Number(s.amount || 0);
-    if (!amt) continue;
-    if (s.source === "merchant" && s.merchant_id) {
-      const signed = r.tx_type === "شراء عملة" ? -amt : +amt;
-      await supabase.from("merchant_cash_collections").insert({
-        merchant_id: s.merchant_id,
-        date: r.tx_date,
-        amount: signed,
-        note: null,
-      });
-    }
-  }
-}
+// Financial cancel/restore is handled by set_financial_cancel_state_atomic.
 
 function TxModal({
   supplierId, kind, boxes, merchants, onClose, onSaved,

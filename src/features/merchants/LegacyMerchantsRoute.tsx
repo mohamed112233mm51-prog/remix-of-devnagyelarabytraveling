@@ -35,7 +35,8 @@ import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility"
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
 import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { confirmFinancialOperation, deriveFinancialOperationUuid, ensureFinancialChildRows, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { confirmFinancialOperation, deriveFinancialOperationUuid, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { atomicRow, buildAtomicPaymentSplitRows, executeFinancialAtomic } from "@/lib/financialAtomic";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
 import { syncEntityOpeningEntries, readEntityOpeningEntries, type OpeningEntry } from "@/lib/openingBalance";
 import { OpeningEntriesEditor } from "@/components/OpeningEntriesEditor";
@@ -446,12 +447,12 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
       note: note.trim() ? note.trim() : null,
       statement: statement.trim() ? statement.trim() : null,
     }));
-    const childRows = await ensureFinancialChildRows("merchant_cash_collections", operationId, "collection", insertRows);
-    if (childRows.error) {
-      setSaving(false);
-      toast.error(isLikelyNetworkError(childRows.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : childRows.error, { id: toastId });
-      return;
-    }
+    const collectionIds = insertRows.map((_, index) =>
+      deriveFinancialOperationUuid(operationId, `collection:${index}`),
+    );
+    const atomicRows = insertRows.map((row, index) =>
+      atomicRow("merchant_cash_collections", { ...row, id: collectionIds[index] }),
+    );
 
     for (let i = 0; i < enriched.length; i++) {
       const { r, box, currency } = enriched[i];
@@ -468,23 +469,25 @@ function CollectForm({ merchants }: { merchants: Merchant[] }) {
         exchangeRate: 1,
         egpEquivalent: currency === "EGP" ? amt : 0,
       }];
-      const res = await postMovement({
-        partyType: "merchant",
-        partyId: r.merchant_id,
-        kind: "receipt",
-        date,
-        statement: statement.trim() || undefined,
-        note: note.trim() || undefined,
+      atomicRows.push(...buildAtomicPaymentSplitRows({
+        operationId: rowOperationId,
         splits: engineSplits,
         sourceTable: "merchant_cash_collections",
-        sourceId: childRows.ids[i],
-        operationId: rowOperationId,
-      });
-      if (!res.ok) {
-        setSaving(false);
-        toast.error(isLikelyNetworkError(res.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (res.error || "تعذر تسجيل الحركة في السجل المالي"), { id: toastId });
-        return;
-      }
+        sourceId: collectionIds[i],
+        childPrefix: "split",
+      }));
+    }
+
+    const saved = await executeFinancialAtomic({
+      operationId,
+      fingerprint,
+      rows: atomicRows,
+      result: { collectionIds },
+    });
+    if (!saved.ok) {
+      setSaving(false);
+      toast.error(isLikelyNetworkError(saved.error) ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات." : (saved.error || "تعذر تسجيل التحصيل المالي"), { id: toastId });
+      return;
     }
 
     confirmFinancialOperation(operationId);
