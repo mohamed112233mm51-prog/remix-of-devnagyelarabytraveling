@@ -38,5 +38,6 @@ jobs:
             echo "No application changes to commit"
           else
             git commit -m "Harden expense and supplier financial retries"
+            git pull --rebase origin devo
             git push origin HEAD:devo
           fi
