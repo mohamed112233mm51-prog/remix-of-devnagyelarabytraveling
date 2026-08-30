@@ -35,11 +35,11 @@ BEGIN
   IF COALESCE(btrim(p_fingerprint), '') = '' THEN
     RAISE EXCEPTION 'بصمة العملية المالية مطلوبة';
   END IF;
-  IF p_financial_posting_date IS NULL THEN
-    RAISE EXCEPTION 'تاريخ القيد المالي مطلوب';
-  END IF;
   IF jsonb_typeof(p_rows) <> 'array' THEN
     RAISE EXCEPTION 'سطور التنفيذ المالية غير صالحة';
+  END IF;
+  IF jsonb_array_length(p_rows) > 0 AND p_financial_posting_date IS NULL THEN
+    RAISE EXCEPTION 'تاريخ القيد المالي مطلوب عند إنشاء قيود التنفيذ';
   END IF;
 
   -- Serialize all rewrites for one execution and also serialize retries of the
@@ -59,12 +59,19 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'reused', true, 'result', COALESCE(v_saved_result, '{}'::jsonb));
   END IF;
 
-  -- Preserve the first accounting date. This UPDATE is part of the same tx as
-  -- the replacement below, so a later failure rolls it back too.
-  UPDATE public.executions
-     SET financial_posting_date = COALESCE(financial_posting_date, p_financial_posting_date)
-   WHERE id = p_execution_id
-   RETURNING financial_posting_date INTO v_actual_date;
+  -- Preserve the first accounting date only for an executed posting. A delete
+  -- caused by changing status away from "منفذ" does not invent a new date.
+  IF p_financial_posting_date IS NOT NULL THEN
+    UPDATE public.executions
+       SET financial_posting_date = COALESCE(financial_posting_date, p_financial_posting_date)
+     WHERE id = p_execution_id
+     RETURNING financial_posting_date INTO v_actual_date;
+  ELSE
+    SELECT financial_posting_date
+      INTO v_actual_date
+    FROM public.executions
+    WHERE id = p_execution_id;
+  END IF;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'التنفيذ غير موجود';
@@ -93,6 +100,9 @@ BEGIN
     END IF;
     IF jsonb_typeof(v_row) <> 'object' OR NOT (v_row ? 'id') THEN
       RAISE EXCEPTION 'سطر التنفيذ المالي غير صالح';
+    END IF;
+    IF v_actual_date IS NULL THEN
+      RAISE EXCEPTION 'تعذر تحديد تاريخ القيد المالي للتنفيذ';
     END IF;
 
     -- Force the immutable posting date selected by the DB.
