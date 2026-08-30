@@ -5,13 +5,14 @@ type BackupType = "daily" | "weekly" | "monthly" | "manual" | "emergency" | "res
 
 async function ensureAdmin(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("is_super_admin, permissions")
+    .eq("id", userId)
     .maybeSingle();
-  if (!data) throw new Response("Forbidden", { status: 403 });
+  const permissions = (profile as any)?.permissions ?? {};
+  if ((profile as any)?.is_super_admin === true || permissions?.settings?.backups_manage === true) return;
+  throw new Response("Forbidden: settings.backups_manage permission required", { status: 403 });
 }
 
 // ---- Admin server functions ----

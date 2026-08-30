@@ -14,7 +14,8 @@ import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, p
 import { withFaviconVersion } from "@/lib/favicon";
 import {
   listUsers, inviteUser, createUserDirect, deleteUser, setUserRole,
-  setUserActive, updateUserProfile, resendInvite, sendPasswordReset,
+  setUserActive, updateUserProfile, updateUserPermissionSection, setUserSuperAdmin,
+  resendInvite, sendPasswordReset,
 } from "@/lib/admin.functions";
 import {
   createBackup, listBackups, downloadBackup, deleteBackup, restoreBackup, previewBackup, runRetentionNow, importBackup,
@@ -839,8 +840,11 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
 }) {
   const setRoleFn = useServerFn(setUserRole);
   const updFn = useServerFn(updateUserProfile);
-  const { user: currentAuthUser, refreshProfile } = useAuth();
+  const updatePermissionFn = useServerFn(updateUserPermissionSection);
+  const setSuperAdminFn = useServerFn(setUserSuperAdmin);
+  const { user: currentAuthUser, isSuperAdmin: currentIsSuperAdmin, refreshProfile } = useAuth();
   const qc = useQueryClient();
+  const permissionCommitQueue = React.useRef<Promise<void>>(Promise.resolve());
   const [draftPermissions, setDraftPermissions] = useState<Record<string, any>>(u.permissions || {});
   const [draftSuperAdmin, setDraftSuperAdmin] = useState(!!u.is_super_admin);
   const pending = !u.last_sign_in_at;
@@ -851,25 +855,33 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
   }, [u.id, u.permissions, u.is_super_admin]);
 
   const commit = async (sectionKey: string, next: Record<string, boolean> | boolean) => {
-    const previous = draftPermissions;
-    const merged = { ...(draftPermissions || {}), [sectionKey]: next };
-    setDraftPermissions(merged);
-    try {
-      const result: any = await updFn({ data: { id: u.id, permissions: merged } });
-      const savedPermissions = result?.profile?.permissions ?? merged;
-      setDraftPermissions(savedPermissions);
-      qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
-      qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
-      qc.removeQueries({ queryKey: ["dashboard-profit"] });
-      if (currentAuthUser?.id === u.id) {
-        await refreshProfile();
+    const previousSection = draftPermissions?.[sectionKey];
+    setDraftPermissions((current) => ({ ...(current || {}), [sectionKey]: next }));
+
+    const saveOneSection = async () => {
+      try {
+        const result: any = await updatePermissionFn({ data: { id: u.id, section_key: sectionKey, value: next } });
+        setDraftPermissions((current) => ({
+          ...(current || {}),
+          [sectionKey]: result?.section_value ?? next,
+        }));
+        qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
+        qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+        qc.removeQueries({ queryKey: ["dashboard-profit"] });
+        if (currentAuthUser?.id === u.id) await refreshProfile();
+        toast.success("تم حفظ الصلاحية");
+      } catch (err: any) {
+        setDraftPermissions((current) => ({ ...(current || {}), [sectionKey]: previousSection }));
+        toast.error(err?.message || "تعذر حفظ الصلاحية");
+        throw err;
       }
+    };
+
+    permissionCommitQueue.current = permissionCommitQueue.current.catch(() => undefined).then(saveOneSection);
+    try {
+      await permissionCommitQueue.current;
       await onChanged();
-      toast.success("تم حفظ الصلاحيات");
-    } catch (err: any) {
-      setDraftPermissions(previous);
-      toast.error(err?.message || "تعذر حفظ الصلاحيات");
-    }
+    } catch {}
   };
 
   const roleStyle = (r: string): React.CSSProperties => {
@@ -980,12 +992,13 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                 <input
                   type="checkbox"
                   checked={draftSuperAdmin}
+                  disabled={!currentIsSuperAdmin}
                   onChange={async (e) => {
                     const nextVal = e.target.checked;
                     const prev = draftSuperAdmin;
                     setDraftSuperAdmin(nextVal);
                     try {
-                      await updFn({ data: { id: u.id, is_super_admin: nextVal } });
+                      await setSuperAdminFn({ data: { id: u.id, is_super_admin: nextVal } });
                       qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
                       qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
                       qc.removeQueries({ queryKey: ["dashboard-profit"] });
@@ -1000,7 +1013,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                     }
                   }}
                 />
-                تفعيل (يتجاوز جميع صلاحيات الإعدادات)
+                {currentIsSuperAdmin ? "تفعيل (يتجاوز جميع صلاحيات الإعدادات)" : "Super Admin فقط يمكنه تغيير هذا الخيار"}
               </label>
             </div>
             <div style={{ fontSize: 11.5, color: "#92400E" }}>صاحب النظام يرى كل تبويبات الإعدادات تلقائيًا. غير ذلك، يجب منح كل صلاحية صراحةً أدناه.</div>
