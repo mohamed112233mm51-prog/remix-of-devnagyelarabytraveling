@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
-import { normalizeCurrency, type LiveTable } from "@/lib/db";
+import { normalizeCurrency } from "@/lib/db";
 
 export type TreasuryLedgerCashBox = {
   id: string;
@@ -134,7 +134,7 @@ export function TreasuryMovementLedger({
   boxes: TreasuryLedgerCashBox[];
   inRange: (d: string | null | undefined) => boolean;
 }) {
-  const { rows: allSplits, loading, error } = useCompleteFinancialTable<TreasuryLedgerSplit>("payment_splits" as LiveTable);
+  const { rows: allSplits, loading, error } = useCompleteFinancialTable<TreasuryLedgerSplit>("payment_splits");
   const trackedBoxes = useMemo(() => resolveTrackedBoxes(boxes), [boxes]);
   const trackedIds = useMemo(() => new Set(trackedBoxes.map((box) => box.id)), [trackedBoxes]);
   const boxNameById = useMemo(() => new Map(boxes.map((box) => [box.id, box.name])), [boxes]);
@@ -155,6 +155,8 @@ export function TreasuryMovementLedger({
       groupBySource.set(key, group);
     }
 
+    // نحسب الرصيد بعد كل حركة بالرجوع من الرصيد الحالي للخزنة للخلف.
+    // ثم نطبق فلتر الفترة في النهاية، لذلك اختيار شهر/فترة لا يغيّر الرصيد التاريخي للحركة.
     const balanceCursor = new Map<string, number>();
     for (const box of trackedBoxes) balanceCursor.set(box.id, Number(box.balance || 0));
 
@@ -213,7 +215,10 @@ export function TreasuryMovementLedger({
   return (
     <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
       <div className="card-header">
-        <div className="card-title">📜 سجل الوارد والصادر وتسويات وتحويلات الخزائن — {filtered.length} من {ledger.length} حركة</div>
+        <div>
+          <div className="card-title">📒 سجل الوارد والصادر للخزائن — {filtered.length} من {ledger.length} حركة</div>
+          <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>يشمل نقدي الشركة وإنستا الشركة والخزينة الرئيسية للدولار والدينار، مع رصيد الخزينة بعد كل حركة.</div>
+        </div>
       </div>
       <div className="card-body">
         <div className="filter-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
