@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { getDashboardNetProfitData, getDashboardProfitSummaryData, getDashboardExecutionSales } from "@/lib/dashboard.functions";
 import {
@@ -16,6 +15,7 @@ import {
   type CompanyTransaction,
   type Expense,
   type ExpenseDeduction,
+  type Execution,
   type IssuingCompany,
   type Merchant,
   type MerchantCashCollection,
@@ -35,11 +35,12 @@ import {
   computeCurrencySupplierStatsByCurrency,
 } from "@/lib/dashboardCollections";
 import { useBranding, BRAND_NAVY, BRAND_GOLD } from "@/lib/branding";
-import { useExpensesTotals, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
+import { summarizeExpenses, computeTreasurySummary, computeTopAgentsByCollected, computeDashboardLifetime, useMerchantTotals, CurrencyMap } from "@/lib/financialSummary";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { FinancialPositionPanel } from "@/components/FinancialPositionPanel";
 import { usePerm } from "@/hooks/usePerm";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { computeServiceExecutionDistribution } from "@/lib/serviceDistribution";
 import {
   Users,
@@ -148,36 +149,24 @@ function Dashboard() {
   const { rows: agents } = useLive<Agent>("agents");
   // Shared source of truth with صفحة حسابات الوكلاء — تُطابق كروتها عملة بعملة.
   const agentAccountTotals = useAgentAccountTotals();
-  const { rows: txns } = useLive<Transaction>("transactions");
+  const { rows: txns } = useCompleteFinancialTable<Transaction>("transactions");
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const { rows: cTxns } = useLive<CompanyTransaction>("company_transactions");
+  const { rows: cTxns } = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
   const { rows: merchants } = useLive<Merchant>("merchants");
-  const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
-  const { rows: collectionSplits } = useLive<{ id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null }>("payment_splits");
+  const { rows: collections } = useCompleteFinancialTable<MerchantCashCollection>("merchant_cash_collections");
+  const { rows: collectionSplits } = useCompleteFinancialTable<{ id: string; source_table: string | null; source_id: string | null; currency: string | null; cancelled_at: string | null; created_at?: string | null }>("payment_splits");
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
-  const { rows: submissions } = useLive<Submission>("submissions");
+  const { rows: submissions } = useCompleteFinancialTable<Submission>("submissions");
 
-  const executionMetricsQuery = useQuery({
-    queryKey: ["dashboard-execution-metrics"],
-    staleTime: 15_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("executions")
-        .select("id, created_at, operation_status, submission_id, services, destination")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as { id: string; created_at: string | null; operation_status: string | null; submission_id: string | null; services: any; destination: string | null }[];
-    },
-  });
-  const executionMetrics = executionMetricsQuery.data ?? [];
+  const { rows: executionMetrics } = useCompleteFinancialTable<Execution>("executions");
   const executedRows = useMemo(
     () => executionMetrics.filter((e) => (e.operation_status || "").trim() === "منفذ"),
     [executionMetrics],
   );
 
-  const { rows: expenses } = useLive<Expense>("expenses");
-  const { rows: expenseDeductions } = useLive<ExpenseDeduction>("expense_deductions");
-  const { rows: currencyTxns } = useLive<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any }>("currency_supplier_transactions");
+  const { rows: expenses } = useCompleteFinancialTable<Expense>("expenses");
+  const { rows: expenseDeductions } = useCompleteFinancialTable<ExpenseDeduction>("expense_deductions");
+  const { rows: currencyTxns } = useCompleteFinancialTable<{ id: string; supplier_id: string | null; tx_type: string | null; bought_currency: string | null; sold_currency: string | null; bought_amount: number | null; sold_amount: number | null; exchange_rate: number | null; tx_date: string; created_at: string; payment_splits: any; opening_currency?: string | null; cancelled_at?: string | null }>("currency_supplier_transactions");
   const { rows: currencySuppliers } = useLive<{ id: string; status: string | null }>("currency_suppliers");
 
   const currencySupplierActiveIds = useMemo(
@@ -278,7 +267,7 @@ function Dashboard() {
 
   // ===== Lifetime totals — single pass per table =====
   // Financial Summary Engine — إجماليات المصروفات موحّدة عبر المحرك.
-  const expensesTotals = useExpensesTotals();
+  const expensesTotals = useMemo(() => summarizeExpenses(expenses), [expenses]);
 
   const lifetime = useMemo(() => {
     const base = computeDashboardLifetime({ txns, cTxns, collections, splits: collectionSplits });

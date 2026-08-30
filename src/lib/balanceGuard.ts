@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 /**
  * Centralized balance guard.
  *
@@ -157,7 +158,7 @@ function debugCashBoxBalance(info: CashBoxBalanceInfo, ready: boolean = true) {
  */
 export function useSourceBalances(): SourceBalances {
   const { rows: cashBoxes, loading: cashBoxesLoading } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: paymentSplits, loading: paymentSplitsLoading } = useLive<PaymentSplitBalanceRow>("payment_splits");
+  const { rows: paymentSplits, loading: paymentSplitsLoading } = useCompleteFinancialTable<PaymentSplitBalanceRow>("payment_splits");
   // Merchant balances MUST be computed from the full history — `useLive` caps at
   // 1000 rows, which silently truncated old merchant movements and produced
   // false "رصيد غير كافٍ" blocks. This hook paginates through every row.
@@ -167,7 +168,7 @@ export function useSourceBalances(): SourceBalances {
     collections,
     conversions: usdRows,
   } = useCompleteMerchantFinancialData();
-  const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
+  const { rows: deductions } = useCompleteFinancialTable<ExpenseDeduction>("expense_deductions");
   // Kept for consumers that expect the hook to also react to these deps.
   void deductions;
 

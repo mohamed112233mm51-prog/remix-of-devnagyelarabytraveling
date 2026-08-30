@@ -1,5 +1,6 @@
 // Centralized data layer for the Reports page.
 import { useMemo } from "react";
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import {
   useLive,
   type Agent,
@@ -30,9 +31,7 @@ export type ReportsData = {
   agents: Agent[];
   /** @deprecated flights table removed — always [] */
   flights: any[];
-  /** Executions (post-approval trips). Live-subscribed. */
   executions: Execution[];
-  /** Security approvals — now sourced from `submissions` table (live). */
   approvals: Submission[];
   submissions: Submission[];
   transactions: Transaction[];
@@ -53,25 +52,28 @@ export type ReportsData = {
 };
 
 export function useReportsData(): ReportsData {
+  // Small master-data tables stay live; they are bounded and benefit from realtime updates.
   const a = useLive<Agent>("agents");
-  const t = useLive<Transaction>("transactions");
   const c = useLive<IssuingCompany>("issuing_companies");
-  const ct = useLive<CompanyTransaction>("company_transactions");
   const m = useLive<Merchant>("merchants");
-  const mc = useLive<MerchantCashCollection>("merchant_cash_collections");
   const inv = useLive<Investor>("investors");
-  const it = useLive<InvestorTransaction>("investor_transactions");
-  const e = useLive<Expense>("expenses");
-  const ed = useLive<ExpenseDeduction>("expense_deductions");
-  const u = useLive<UsdTreasuryTransaction>("usd_treasury_transactions");
-  const sub = useLive<Submission>("submissions");
-  const ex = useLive<Execution>("executions");
-  const ps = useLive<PaymentSplitLite>("payment_splits");
+
+  // Growing history tables must never depend on the implicit API row cap.
+  const t = useCompleteFinancialTable<Transaction>("transactions");
+  const ct = useCompleteFinancialTable<CompanyTransaction>("company_transactions");
+  const mc = useCompleteFinancialTable<MerchantCashCollection>("merchant_cash_collections");
+  const it = useCompleteFinancialTable<InvestorTransaction>("investor_transactions");
+  const e = useCompleteFinancialTable<Expense>("expenses");
+  const ed = useCompleteFinancialTable<ExpenseDeduction>("expense_deductions");
+  const u = useCompleteFinancialTable<UsdTreasuryTransaction>("usd_treasury_transactions");
+  const sub = useCompleteFinancialTable<Submission>("submissions");
+  const ex = useCompleteFinancialTable<Execution>("executions");
+  const ps = useCompleteFinancialTable<PaymentSplitLite>("payment_splits");
 
   const loading =
-    a.loading || t.loading || c.loading || ct.loading ||
-    m.loading || mc.loading || inv.loading || it.loading ||
-    e.loading || ed.loading || u.loading || sub.loading || ex.loading || ps.loading;
+    a.loading || c.loading || m.loading || inv.loading ||
+    t.loading || ct.loading || mc.loading || it.loading || e.loading || ed.loading ||
+    u.loading || sub.loading || ex.loading || ps.loading;
 
   const agentMap = useMemo(() => new Map(a.rows.map((x) => [x.id, x.name])), [a.rows]);
   const companyMap = useMemo(() => new Map(c.rows.map((x) => [x.id, x.company_name])), [c.rows]);

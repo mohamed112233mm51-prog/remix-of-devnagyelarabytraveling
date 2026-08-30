@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -15,6 +16,7 @@ import { AgentPaymentForm } from "@/components/AgentPaymentForm";
 import * as CF from "@/components/ColumnFilter";
 import { ColumnVisibility, type ColumnDef } from "@/components/ColumnVisibility";
 import { usePersistentColumnVisibility } from "@/hooks/usePersistentColumnVisibility";
+import { useCompleteAgentFinancialData } from "@/hooks/useCompleteAgentFinancialData";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { EditTransactionButton } from "@/components/EditTransactionButton";
 import { CurrencyTotalsCards } from "@/components/CurrencyTotalsCards";
@@ -64,8 +66,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const { rows: liveAgents, loading: agentsLoading } = useLive<Agent>("agents");
   const flights: any[] = [];
   const { rows: liveMerchants } = useLive<Merchant>("merchants");
-  const { rows: liveSplits } = useLive<{ source_table: string | null; source_id: string | null; transaction_id: string | null; currency: string | null }>("payment_splits");
-  const { rows: liveExecutions } = useLive<Execution>("executions");
+  const { paymentSplits: completePaymentSplits } = useCompleteAgentFinancialData();
+  const { rows: liveExecutions } = useCompleteFinancialTable<Execution>("executions");
   const absentLookup = useMemo(() => buildAbsentLookup(Array.isArray(liveExecutions) ? liveExecutions : []), [liveExecutions]);
   const agents = Array.isArray(liveAgents) ? liveAgents : [];
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
@@ -185,8 +187,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   const myTxnsAll = agentTxns;
   const splitCurrencyByTxnId = useMemo(
-    () => resolveSplitCurrencyByRef(liveSplits, "transactions"),
-    [liveSplits],
+    () => resolveSplitCurrencyByRef(completePaymentSplits, "transactions"),
+    [completePaymentSplits],
   );
   const ledger = useMemo(() => buildAgentLedgerRows(myTxnsAll, splitCurrencyByTxnId), [myTxnsAll, splitCurrencyByTxnId]);
   const currencyOptions = useMemo(
