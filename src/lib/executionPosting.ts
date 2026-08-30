@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ExecutionServiceItem } from "@/lib/db";
 import { logCreate } from "@/lib/financialAudit";
 import { cairoToday } from "@/lib/approvalFines";
+import { confirmFinancialOperation, deriveFinancialOperationUuid, financialOperationFingerprint, getOrCreateFinancialOperationId } from "@/lib/financialIdempotency";
 
 /**
  * Execution financial posting.
@@ -52,73 +53,54 @@ export interface ExecutionPostingInput {
  * the race where another request stored the value first.
  */
 async function resolveFinancialPostingDate(executionId: string): Promise<string> {
-  const table = (supabase as any).from("executions");
-  const { data: current, error: readError } = await table
+  const { data: current, error: readError } = await (supabase as any)
+    .from("executions")
     .select("financial_posting_date")
     .eq("id", executionId)
     .maybeSingle();
   if (readError) throw new Error(`تعذر قراءة تاريخ الاعتماد المالي: ${readError.message}`);
-
-  const existing = current?.financial_posting_date
+  if (!current) throw new Error("التنفيذ غير موجود");
+  return current.financial_posting_date
     ? String(current.financial_posting_date).slice(0, 10)
-    : null;
-  if (existing) return existing;
-
-  const today = cairoToday();
-  const { data: updated, error: updateError } = await (supabase as any)
-    .from("executions")
-    .update({ financial_posting_date: today })
-    .eq("id", executionId)
-    .is("financial_posting_date", null)
-    .select("financial_posting_date")
-    .maybeSingle();
-  if (updateError) throw new Error(`تعذر تثبيت تاريخ الاعتماد المالي: ${updateError.message}`);
-
-  if (updated?.financial_posting_date) {
-    return String(updated.financial_posting_date).slice(0, 10);
-  }
-
-  // A concurrent save may have won the compare-and-set update.
-  const { data: afterRace, error: raceReadError } = await (supabase as any)
-    .from("executions")
-    .select("financial_posting_date")
-    .eq("id", executionId)
-    .maybeSingle();
-  if (raceReadError) throw new Error(`تعذر التحقق من تاريخ الاعتماد المالي: ${raceReadError.message}`);
-  const resolved = afterRace?.financial_posting_date
-    ? String(afterRace.financial_posting_date).slice(0, 10)
-    : null;
-  if (!resolved) throw new Error("تعذر تحديد تاريخ الاعتماد المالي للتنفيذ");
-  return resolved;
+    : cairoToday();
 }
 
-async function deleteLinked(executionId: string) {
-  // We use prefix matching: `${executionId}::%`
-  const prefix = `${executionId}::`;
-  const [{ error: e1 }, { error: e2 }] = await Promise.all([
-    supabase.from("transactions").delete().like("source_service_id", `${prefix}%`),
-    supabase.from("company_transactions").delete().like("source_service_id", `${prefix}%`),
-  ]);
-  if (e1) throw new Error(e1.message);
-  if (e2) throw new Error(e2.message);
-}
 
 /**
  * Idempotent: removes any previously-posted rows for this execution, then
  * (if status === "منفذ") inserts fresh rows for every service item.
  */
 export async function postExecutionFinancials(input: ExecutionPostingInput): Promise<void> {
+  const fingerprint = financialOperationFingerprint({
+    executionId: input.executionId,
+    operationStatus: input.operationStatus,
+    agentId: input.agentId,
+    destination: input.destination,
+    airline: input.airline,
+    passengerName: input.passengerName,
+    executionNotes: input.executionNotes || null,
+    services: input.services,
+  });
+  const operationId = getOrCreateFinancialOperationId(`execution-financial:${input.executionId}`, fingerprint);
+
+  // A non-executed status means an atomic delete-only replacement. Do not set a
+  // new financial posting date merely because the execution was unposted.
   if (input.operationStatus !== "منفذ") {
-    await deleteLinked(input.executionId);
+    const { data, error } = await (supabase as any).rpc("replace_execution_financials_atomic", {
+      p_operation_id: operationId,
+      p_fingerprint: fingerprint,
+      p_execution_id: input.executionId,
+      p_financial_posting_date: null,
+      p_rows: [],
+    });
+    if (error || data?.ok !== true) {
+      throw new Error(error?.message || data?.error || "تعذر إلغاء قيود التنفيذ المالية");
+    }
+    confirmFinancialOperation(operationId);
     return;
   }
 
-  // Resolve and persist the immutable posting date BEFORE deleting old rows.
-  // If the migration/column is missing, the existing financial rows remain
-  // untouched instead of disappearing after a failed re-post.
   const date = await resolveFinancialPostingDate(input.executionId);
-  await deleteLinked(input.executionId);
-
   const passenger = input.passengerName?.trim() || null;
   const execNotes = input.executionNotes?.trim() || null;
 
@@ -145,6 +127,8 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     if (kind === "company") {
       if (s.company_id && companyValue > 0) {
         companyRows.push({
+        id: deriveFinancialOperationUuid(operationId, `company:${i}`),
+          id: deriveFinancialOperationUuid(operationId, `company:${i}`),
           company_id: s.company_id,
           date,
           destination: input.destination ?? undefined,
@@ -171,6 +155,8 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     if (kind === "agent") {
       if (input.agentId) {
         agentRows.push({
+        id: deriveFinancialOperationUuid(operationId, `agent:${i}`),
+          id: deriveFinancialOperationUuid(operationId, `agent:${i}`),
           agent_id: input.agentId,
           date,
           destination: input.destination ?? undefined,
@@ -217,6 +203,7 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
 
     if (input.agentId) {
       agentRows.push({
+        id: deriveFinancialOperationUuid(operationId, `agent:${i}`),
         agent_id: input.agentId, date,
         destination: input.destination ?? undefined,
         travel_statement: null,
@@ -232,6 +219,7 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     }
     if (s.company_id && companyValue > 0) {
       companyRows.push({
+        id: deriveFinancialOperationUuid(operationId, `company:${i}`),
         company_id: s.company_id, date,
         destination: input.destination ?? undefined,
         service_type: s.service_type,
@@ -249,24 +237,44 @@ export async function postExecutionFinancials(input: ExecutionPostingInput): Pro
     }
   });
 
-  if (agentRows.length) {
-    const { data, error } = await supabase.from("transactions").insert(agentRows).select("id");
-    if (error) throw new Error(`فشل إنشاء حركات الوكيل: ${error.message}`);
-    for (let i = 0; i < (data?.length || 0); i++) {
-      const id = (data![i] as any)?.id;
-      if (id) await logCreate("transactions", id, { ...agentRows[i], id }, "توليد من التنفيذ");
+
+  const rows = [
+    ...agentRows.map((row) => ({ table: "transactions", row })),
+    ...companyRows.map((row) => ({ table: "company_transactions", row })),
+  ];
+
+  const { data, error } = await (supabase as any).rpc("replace_execution_financials_atomic", {
+    p_operation_id: operationId,
+    p_fingerprint: fingerprint,
+    p_execution_id: input.executionId,
+    p_financial_posting_date: date,
+    p_rows: rows,
+  });
+  if (error || data?.ok !== true) {
+    throw new Error(error?.message || data?.error || "تعذر اعتماد قيود التنفيذ المالية");
+  }
+
+  if (!data?.reused) {
+    for (const row of agentRows) {
+      try { await logCreate("transactions", row.id, row, "توليد من التنفيذ"); } catch { /* audit only */ }
+    }
+    for (const row of companyRows) {
+      try { await logCreate("company_transactions", row.id, row, "توليد من التنفيذ"); } catch { /* audit only */ }
     }
   }
-  if (companyRows.length) {
-    const { data, error } = await supabase.from("company_transactions").insert(companyRows).select("id");
-    if (error) throw new Error(`فشل إنشاء حركات الشركة: ${error.message}`);
-    for (let i = 0; i < (data?.length || 0); i++) {
-      const id = (data![i] as any)?.id;
-      if (id) await logCreate("company_transactions", id, { ...companyRows[i], id }, "توليد من التنفيذ");
-    }
-  }
+  confirmFinancialOperation(operationId);
 }
 
 export async function deleteExecutionLinkedRows(executionId: string): Promise<void> {
-  await deleteLinked(executionId);
+  const fingerprint = financialOperationFingerprint({ executionId, action: "delete-linked-financials" });
+  const operationId = getOrCreateFinancialOperationId(`execution-financial-delete:${executionId}`, fingerprint);
+  const { data, error } = await (supabase as any).rpc("replace_execution_financials_atomic", {
+    p_operation_id: operationId,
+    p_fingerprint: fingerprint,
+    p_execution_id: executionId,
+    p_financial_posting_date: null,
+    p_rows: [],
+  });
+  if (error || data?.ok !== true) throw new Error(error?.message || data?.error || "تعذر حذف قيود التنفيذ المالية");
+  confirmFinancialOperation(operationId);
 }
