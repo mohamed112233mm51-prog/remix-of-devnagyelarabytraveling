@@ -1,3 +1,4 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
 import { useLive } from "@/lib/db";
@@ -26,7 +27,7 @@ type CurrencySupplierTransaction = {
 /** نفس منطق كارت موردي العملة الأصلي بعد فلترة tx_date للفترة المختارة. */
 export function useCurrencySuppliersPeriodTotals(period: SummaryPeriod) {
   const { rows: suppliers } = useLive<CurrencySupplier>("currency_suppliers");
-  const { rows: transactions } = useLive<CurrencySupplierTransaction>("currency_supplier_transactions");
+  const { rows: transactions } = useCompleteFinancialTable<CurrencySupplierTransaction>("currency_supplier_transactions");
   const todayISO = cairoToday();
 
   return useMemo(() => {

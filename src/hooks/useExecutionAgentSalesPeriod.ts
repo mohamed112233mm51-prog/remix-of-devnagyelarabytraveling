@@ -1,6 +1,6 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
-import { useLive } from "@/lib/db";
 import { computeExecutionAgentSalesByCurrency } from "@/lib/dashboardCollections";
 import type { ExecutionRow } from "@/lib/executionProfit";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
@@ -16,7 +16,7 @@ type DashboardExecutionRow = ExecutionRow & {
  * مع إبقاء كل عملة منفصلة. الإضافة الوحيدة هي تطبيق فلتر الفترة الحالي.
  */
 export function useExecutionAgentSalesPeriod(period: SummaryPeriod): CurrencyMap {
-  const { rows: executions } = useLive<DashboardExecutionRow>("executions");
+  const { rows: executions } = useCompleteFinancialTable<DashboardExecutionRow>("executions");
   const todayISO = cairoToday();
 
   return useMemo(() => {

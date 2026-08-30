@@ -1,6 +1,7 @@
+import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import { cairoToday } from "@/lib/approvalFines";
-import { useLive, type Expense } from "@/lib/db";
+import type { Expense } from "@/lib/db";
 import { summarizeExpenses } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
 
@@ -9,7 +10,7 @@ import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
  * تاريخ الحركة = date ثم created_at كـ fallback للسجلات القديمة.
  */
 export function useExpensePeriodTotals(period: SummaryPeriod) {
-  const { rows: expenses } = useLive<Expense>("expenses");
+  const { rows: expenses } = useCompleteFinancialTable<Expense>("expenses");
   const todayISO = cairoToday();
 
   return useMemo(() => {
