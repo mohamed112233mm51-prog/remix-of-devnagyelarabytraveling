@@ -27,6 +27,13 @@ type PassportOcrResponse = {
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const MAX_PREPARED_BYTES = 5_500_000;
 const MAX_DIMENSION = 2600;
+const DIRECT_VISION_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const HEIC_MIMES = new Set([
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+]);
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -47,49 +54,164 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
-async function preparePassportImage(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("اختر صورة للجواز");
-  if (file.size > MAX_INPUT_BYTES) throw new Error("حجم الصورة كبير جدًا. الحد الأقصى 20MB");
+function normalizeMime(value: string): string {
+  const mime = String(value || "").trim().toLowerCase().split(";", 1)[0];
+  if (mime === "image/jpg" || mime === "image/pjpeg") return "image/jpeg";
+  if (mime === "image/x-png") return "image/png";
+  return mime;
+}
 
-  const objectUrl = URL.createObjectURL(file);
-  const image = new Image();
+function mimeFromFileName(name: string): string | null {
+  const lower = String(name || "").trim().toLowerCase();
+  if (/\.jpe?g$/.test(lower)) return "image/jpeg";
+  if (/\.png$/.test(lower)) return "image/png";
+  if (/\.webp$/.test(lower)) return "image/webp";
+  if (/\.heic$/.test(lower)) return "image/heic";
+  if (/\.heif$/.test(lower)) return "image/heif";
+  if (/\.avif$/.test(lower)) return "image/avif";
+  return null;
+}
+
+function ascii(bytes: Uint8Array, start: number, length: number): string {
+  return Array.from(bytes.slice(start, start + length))
+    .map((value) => String.fromCharCode(value))
+    .join("");
+}
+
+async function sniffImageMime(file: File): Promise<string | null> {
   try {
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("صيغة الصورة غير مدعومة على هذا الجهاز"));
-      image.src = objectUrl;
-    });
+    const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+    if (
+      bytes.length >= 8
+      && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+      && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
+    ) return "image/png";
+    if (bytes.length >= 12 && ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP") return "image/webp";
 
-    const longest = Math.max(image.naturalWidth, image.naturalHeight);
-    const scale = longest > MAX_DIMENSION ? MAX_DIMENSION / longest : 1;
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    if (bytes.length >= 12 && ascii(bytes, 4, 4) === "ftyp") {
+      const brand = ascii(bytes, 8, 4).toLowerCase();
+      if (["heic", "heix", "hevc", "hevx", "heim", "heis"].includes(brand)) return "image/heic";
+      if (["mif1", "msf1"].includes(brand)) return "image/heif";
+      if (["avif", "avis"].includes(brand)) return "image/avif";
+    }
+  } catch {
+    // A MIME/extension fallback below is still safe; the Edge Function validates the final data URL too.
+  }
+  return null;
+}
+
+async function resolveImageMime(file: File): Promise<string | null> {
+  const sniffed = await sniffImageMime(file);
+  if (sniffed) return sniffed;
+  const declared = normalizeMime(file.type);
+  if (declared.startsWith("image/")) return declared;
+  return mimeFromFileName(file.name);
+}
+
+async function compressCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
+  let blob = await canvasToJpeg(canvas, 0.94);
+  if (blob.size > MAX_PREPARED_BYTES) blob = await canvasToJpeg(canvas, 0.86);
+  if (blob.size > MAX_PREPARED_BYTES) blob = await canvasToJpeg(canvas, 0.78);
+  if (blob.size > MAX_PREPARED_BYTES) {
+    throw new Error("الصورة ما زالت كبيرة بعد التجهيز. جرّب تصوير صفحة الجواز فقط وبشكل أقرب");
+  }
+  return blob;
+}
+
+async function drawToPreparedJpeg(source: CanvasImageSource, sourceWidth: number, sourceHeight: number): Promise<Blob> {
+  const longest = Math.max(sourceWidth, sourceHeight);
+  if (!Number.isFinite(longest) || longest <= 0) throw new Error("أبعاد الصورة غير صالحة");
+
+  const scale = longest > MAX_DIMENSION ? MAX_DIMENSION / longest : 1;
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  try {
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("تعذر تجهيز الصورة للقراءة");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(image, 0, 0, width, height);
-
-    let blob = await canvasToJpeg(canvas, 0.94);
-    if (blob.size > MAX_PREPARED_BYTES) blob = await canvasToJpeg(canvas, 0.86);
-    if (blob.size > MAX_PREPARED_BYTES) blob = await canvasToJpeg(canvas, 0.78);
-    if (blob.size > MAX_PREPARED_BYTES) {
-      throw new Error("الصورة ما زالت كبيرة بعد التجهيز. جرّب تصوير صفحة الجواز فقط وبشكل أقرب");
-    }
-
-    // Drop pixel buffers immediately after the temporary JPEG is produced.
+    ctx.drawImage(source, 0, 0, width, height);
+    return await compressCanvas(canvas);
+  } finally {
+    // Release the potentially large pixel buffer as soon as preprocessing finishes.
     canvas.width = 1;
     canvas.height = 1;
-    return await blobToDataUrl(blob);
+  }
+}
+
+async function prepareWithImageBitmap(blob: Blob): Promise<Blob | null> {
+  if (typeof createImageBitmap !== "function") return null;
+  let bitmap: ImageBitmap | null = null;
+  try {
+    // `from-image` preserves the camera EXIF orientation where the browser supports it.
+    bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" } as any);
+    return await drawToPreparedJpeg(bitmap, bitmap.width, bitmap.height);
+  } catch {
+    return null;
+  } finally {
+    try { bitmap?.close(); } catch { /* no-op */ }
+  }
+}
+
+async function prepareWithHtmlImage(blob: Blob): Promise<Blob | null> {
+  let dataUrl = "";
+  const image = new Image();
+  try {
+    dataUrl = await blobToDataUrl(blob);
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("decode failed"));
+      image.src = dataUrl;
+    });
+    return await drawToPreparedJpeg(image, image.naturalWidth, image.naturalHeight);
+  } catch {
+    return null;
   } finally {
     image.src = "";
-    URL.revokeObjectURL(objectUrl);
+    dataUrl = "";
   }
+}
+
+async function preparePassportImage(file: File): Promise<string> {
+  if (!file || file.size <= 0) throw new Error("اختر صورة للجواز");
+  if (file.size > MAX_INPUT_BYTES) throw new Error("حجم الصورة كبير جدًا. الحد الأقصى 20MB");
+
+  const mime = await resolveImageMime(file);
+  if (!mime) throw new Error("صيغة الصورة غير معروفة. استخدم JPG أو PNG أو WEBP");
+
+  // Some Android/Samsung pickers return a blank or generic MIME. Re-wrap the same bytes
+  // with the detected MIME so browser decoders have the best chance of opening them.
+  const sourceBlob: Blob = normalizeMime(file.type) === mime
+    ? file
+    : new Blob([file], { type: mime });
+
+  // createImageBitmap is more reliable than <img> for several mobile camera files.
+  let prepared = await prepareWithImageBitmap(sourceBlob);
+  if (!prepared) prepared = await prepareWithHtmlImage(sourceBlob);
+  if (prepared) return await blobToDataUrl(prepared);
+
+  // If the browser preview/decoder is the only thing that failed, standard formats can
+  // still be sent directly to Vision. Limit the raw payload so base64 stays under the
+  // Edge Function request guard.
+  if (DIRECT_VISION_MIMES.has(mime) && sourceBlob.size <= MAX_PREPARED_BYTES) {
+    return await blobToDataUrl(sourceBlob);
+  }
+
+  if (HEIC_MIMES.has(mime)) {
+    throw new Error("الصورة HEIC/HEIF ولم يستطع هذا المتصفح تحويلها. اختر JPG/PNG/WEBP أو صوّر صفحة الجواز بالكاميرا من جديد");
+  }
+
+  if (DIRECT_VISION_MIMES.has(mime)) {
+    throw new Error("تعذر ضغط الصورة على هذا الجهاز وحجمها كبير. جرّب تصوير صفحة الجواز فقط أو استخدم صورة JPG أصغر");
+  }
+
+  throw new Error("تعذر تحويل صيغة الصورة على هذا الجهاز. استخدم JPG أو PNG أو WEBP");
 }
 
 export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportScanData) => void | Promise<void> }) {
@@ -133,7 +255,7 @@ export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportS
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
         hidden
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
