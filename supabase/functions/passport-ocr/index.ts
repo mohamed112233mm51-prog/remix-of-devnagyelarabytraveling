@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
         printed_passport_number: { type: ["string", "null"] },
         printed_national_id: { type: ["string", "null"] },
         printed_date_of_birth: { type: ["string", "null"], description: "YYYY-MM-DD only when visibly readable" },
-        printed_place_of_birth: { type: ["string", "null"] },
+        printed_place_of_birth: { type: ["string", "null"], description: "Arabic printed place of birth only, exactly as printed; never translate/transliterate; never derive from MRZ; null if not visibly printed in Arabic" },
         printed_sex: { type: ["string", "null"] },
         printed_expiry_date: { type: ["string", "null"], description: "YYYY-MM-DD only when visibly readable" },
         mrz_lines: { type: "array", items: { type: "string" }, maxItems: 3 },
@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
       "Read the printed visual zone and the MRZ independently. Never invent a value that is not visible.",
       "For Arabic/English names, preserve the printed spelling. For dates use YYYY-MM-DD only if actually readable.",
       "printed_national_id means the Egyptian national ID/الرقم القومي only if visibly printed; do not derive it yourself.",
+      "printed_place_of_birth is ONLY the Arabic place of birth printed on the biodata page (محل الميلاد). Transcribe the Arabic text character-for-character as printed. Never translate, arabize, or transliterate an English place name, and never take it from the MRZ (the MRZ has no place of birth). If the Arabic place of birth is not visible or not printed, return null.",
       "Copy every MRZ line character-for-character, including < filler characters, with no spaces and no corrections.",
       "If glare, blur, crop, fingers, rotation, or low resolution make any value uncertain, leave that value null when necessary and describe the issue in quality_notes.",
       "Return only JSON matching the requested schema.",
@@ -416,7 +417,16 @@ Deno.serve(async (req) => {
 
     const fullNameAr = cleanText(vision.printed_name_ar);
     const fullNameEn = cleanText(vision.printed_name_en) || mrz?.nameEn || null;
-    const placeOfBirth = cleanText(vision.printed_place_of_birth);
+    // Only accept an Arabic printed place of birth; reject any non-Arabic value.
+    const rawPlaceOfBirth = cleanText(vision.printed_place_of_birth);
+    let placeOfBirth: string | null = null;
+    if (rawPlaceOfBirth) {
+      if (/[؀-ۿ]/.test(rawPlaceOfBirth)) {
+        placeOfBirth = rawPlaceOfBirth;
+      } else {
+        warnings.push("محل الميلاد المقروء ليس عربيًا؛ راجع محل الميلاد يدويًا");
+      }
+    }
 
     if (!fullNameAr && !fullNameEn) warnings.push("الاسم لم يُقرأ بوضوح");
     if (!passportNumber) warnings.push("رقم الجواز لم يُقرأ بوضوح");
