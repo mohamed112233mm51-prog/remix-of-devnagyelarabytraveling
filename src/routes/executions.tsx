@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";
+import { PassportScanner, type PassportScanData } from "@/components/PassportScanner";
 import { cairoToday } from "@/lib/approvalFines";
 import { parseDisplayDate } from "@/lib/dateFormat";
 import { refetchLiveTables, useLive, type Execution } from "@/lib/db";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/executions")({
 function ExecutionsRouteWithPeriod() {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [originalKpiStrip, setOriginalKpiStrip] = useState<HTMLElement | null>(null);
+  const [legacyMountKey, setLegacyMountKey] = useState(0);
 
   // فلاتر الوكيل وجهة الموافقة تعتمد على جداول مرجعية منفصلة عن التنفيذات.
   // لا نعتمد فقط على وصول Realtime INSERT: نعيد قراءة القوائم عند فتح الصفحة
@@ -102,26 +104,71 @@ function ExecutionsRouteWithPeriod() {
         delete hiddenStrip.dataset.executionOriginalKpis;
       }
       mountedTarget?.remove();
+      setPortalTarget(null);
+      setOriginalKpiStrip(null);
     };
-  }, []);
+  }, [legacyMountKey]);
 
   const triggerTodayFilter = () => {
     const todayCard = originalKpiStrip?.children.item(3) as HTMLElement | null;
     todayCard?.click();
   };
 
+  const startExecutionFromPassport = (data: PassportScanData) => {
+    if (typeof window === "undefined") return;
+    try {
+      // The image itself is never stored. Only the extracted text is staged
+      // temporarily so the existing execution form can hydrate from it.
+      window.sessionStorage.removeItem("draft:execution:new:form");
+      window.sessionStorage.removeItem("draft:execution:new:services");
+      window.sessionStorage.setItem("execution:fromSubmission", JSON.stringify({
+        id: null,
+        passenger_name: data.full_name_ar || data.full_name_en || "",
+        national_id: data.national_id || "",
+        dob: data.date_of_birth || null,
+        passport: data.passport_number || "",
+        birth_place: data.place_of_birth || "",
+        agent_id: null,
+        status: "",
+        operation_status: "",
+        departure_from: null,
+        destination: null,
+        airline: null,
+        travel_date: null,
+        notes: null,
+        approval_company_id: null,
+        passenger_type: data.passenger_type || null,
+        issue_date: null,
+        approval_validity_enabled: false,
+        services: [],
+      }));
+      setLegacyMountKey((value) => value + 1);
+    } catch {
+      throw new Error("تعذر فتح نموذج التنفيذ ببيانات الجواز");
+    }
+  };
+
   return (
     <>
-      <LegacyExecutionsComponent />
+      <LegacyExecutionsComponent key={legacyMountKey} />
       {portalTarget && createPortal(
-        <ExecutionSummaryCards onTodayClick={triggerTodayFilter} />,
+        <ExecutionSummaryCards
+          onTodayClick={triggerTodayFilter}
+          onPassportExtracted={startExecutionFromPassport}
+        />,
         portalTarget,
       )}
     </>
   );
 }
 
-function ExecutionSummaryCards({ onTodayClick }: { onTodayClick: () => void }) {
+function ExecutionSummaryCards({
+  onTodayClick,
+  onPassportExtracted,
+}: {
+  onTodayClick: () => void;
+  onPassportExtracted: (data: PassportScanData) => void;
+}) {
   const { rows: executions } = useCompleteFinancialTable<Execution>("executions");
   const [summaryPeriod, setSummaryPeriod] = useState<SummaryPeriod>("month");
   const todayISO = cairoToday();
@@ -152,6 +199,9 @@ function ExecutionSummaryCards({ onTodayClick }: { onTodayClick: () => void }) {
 
   return (
     <div style={{ display: "grid", gap: 10, marginBottom: 0 }}>
+      <div style={{ padding: 12, borderRadius: 12, background: "#fff", border: "1px solid #e2e8f0" }}>
+        <PassportScanner onExtracted={onPassportExtracted} />
+      </div>
       <SummaryPeriodFilter value={summaryPeriod} onChange={setSummaryPeriod} />
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
         <SummaryKpiCard icon="📋" label="إجمالي التنفيذ" value={totalCount} tone="navy" />
