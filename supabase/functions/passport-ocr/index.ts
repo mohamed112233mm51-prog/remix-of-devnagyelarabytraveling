@@ -417,7 +417,16 @@ Deno.serve(async (req) => {
 
     const fullNameAr = cleanText(vision.printed_name_ar);
     const fullNameEn = cleanText(vision.printed_name_en) || mrz?.nameEn || null;
-    const placeOfBirth = cleanText(vision.printed_place_of_birth);
+    // Only accept an Arabic printed place of birth; reject any non-Arabic value.
+    const rawPlaceOfBirth = cleanText(vision.printed_place_of_birth);
+    let placeOfBirth: string | null = null;
+    if (rawPlaceOfBirth) {
+      if (/[؀-ۿ]/.test(rawPlaceOfBirth)) {
+        placeOfBirth = rawPlaceOfBirth;
+      } else {
+        warnings.push("محل الميلاد المقروء ليس عربيًا؛ راجع محل الميلاد يدويًا");
+      }
+    }
 
     if (!fullNameAr && !fullNameEn) warnings.push("الاسم لم يُقرأ بوضوح");
     if (!passportNumber) warnings.push("رقم الجواز لم يُقرأ بوضوح");
