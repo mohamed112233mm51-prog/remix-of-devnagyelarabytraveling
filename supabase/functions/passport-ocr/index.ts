@@ -245,15 +245,20 @@ async function authenticated(req: Request): Promise<boolean> {
 }
 
 function outputText(payload: any): string | null {
-  if (typeof payload?.output_text === "string") return payload.output_text;
-  const items = Array.isArray(payload?.output) ? payload.output : [];
-  for (const item of items) {
-    const content = Array.isArray(item?.content) ? item.content : [];
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === "string" && content.trim()) return content;
+  if (Array.isArray(content)) {
     for (const part of content) {
-      if (part?.type === "output_text" && typeof part?.text === "string") return part.text;
+      if (typeof part?.text === "string" && part.text.trim()) return part.text;
     }
   }
   return null;
+}
+
+function stripJsonFence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+  return trimmed.replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
 }
 
 Deno.serve(async (req) => {
