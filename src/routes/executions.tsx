@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";
 import { PassportScanner, type PassportScanData } from "@/components/PassportScanner";
-import { BulkPassportImporter } from "@/components/BulkPassportImporter";
 import { cairoToday } from "@/lib/approvalFines";
 import { parseDisplayDate } from "@/lib/dateFormat";
 import { refetchLiveTables, useLive, type Execution } from "@/lib/db";
@@ -163,6 +162,39 @@ function ExecutionsRouteWithPeriod() {
   );
 }
 
+function BulkPassportUploadLauncher() {
+  const openLightweightUpload = () => {
+    if (typeof window === "undefined") return;
+    // Full navigation intentionally unloads the heavy executions table before
+    // Android opens the Gallery, reducing the chance of the browser killing
+    // and reloading the tab while the user selects several large photos.
+    window.location.assign("/passport-bulk-upload");
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openLightweightUpload}
+      style={{
+        minHeight: 40,
+        border: "1px solid #d4af37",
+        borderRadius: 10,
+        padding: "9px 14px",
+        background: "#fffaf0",
+        color: "#0f1b3d",
+        fontWeight: 800,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        cursor: "pointer",
+      }}
+    >
+      <span aria-hidden="true" style={{ fontSize: 16 }}>📚</span>
+      رفع جماعي للجوازات
+    </button>
+  );
+}
+
 function ExecutionSummaryCards({
   onTodayClick,
   onPassportExtracted,
@@ -203,7 +235,7 @@ function ExecutionSummaryCards({
       <div style={{ padding: 12, borderRadius: 12, background: "#fff", border: "1px solid #e2e8f0" }}>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
           <PassportScanner onExtracted={onPassportExtracted} />
-          <BulkPassportImporter />
+          <BulkPassportUploadLauncher />
         </div>
       </div>
       <SummaryPeriodFilter value={summaryPeriod} onChange={setSummaryPeriod} />
