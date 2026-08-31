@@ -25,8 +25,8 @@ type PassportOcrResponse = {
 };
 
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
-const MAX_DIMENSION = 2800;
-const JPEG_QUALITY = 0.95;
+const MAX_PREPARED_BYTES = 5_500_000;
+const MAX_DIMENSION = 2600;
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -34,6 +34,16 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("تعذر قراءة صورة الجواز"));
     reader.readAsDataURL(blob);
+  });
+}
+
+function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (result) => result ? resolve(result) : reject(new Error("تعذر تجهيز صورة الجواز")),
+      "image/jpeg",
+      quality,
+    );
   });
 }
 
@@ -65,13 +75,12 @@ async function preparePassportImage(file: File): Promise<string> {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(image, 0, 0, width, height);
 
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (result) => result ? resolve(result) : reject(new Error("تعذر تجهيز صورة الجواز")),
-        "image/jpeg",
-        JPEG_QUALITY,
-      );
-    });
+    let blob = await canvasToJpeg(canvas, 0.94);
+    if (blob.size > MAX_PREPARED_BYTES) blob = await canvasToJpeg(canvas, 0.86);
+    if (blob.size > MAX_PREPARED_BYTES) blob = await canvasToJpeg(canvas, 0.78);
+    if (blob.size > MAX_PREPARED_BYTES) {
+      throw new Error("الصورة ما زالت كبيرة بعد التجهيز. جرّب تصوير صفحة الجواز فقط وبشكل أقرب");
+    }
 
     // Drop pixel buffers immediately after the temporary JPEG is produced.
     canvas.width = 1;
