@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Camera, FileText, Images, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, FileText, Images, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { scanPassportFile, type PassportScanData } from "@/components/PassportScanner";
 import { usePerm } from "@/hooks/usePerm";
@@ -11,6 +11,8 @@ const MAX_PDF_BYTES = 50 * 1024 * 1024;
 const PDF_RENDER_MAX_DIMENSION = 1500;
 const PDF_RENDER_TIMEOUT_MS = 9000;
 const PDF_OCR_CONCURRENCY = 2;
+const BATCH_STORAGE_KEY = "passport-bulk-upload:rows:v1";
+const BATCH_ROWS_EVENT = "passport-bulk-upload:rows";
 
 type RowState = "waiting" | "rendering" | "reading" | "ready" | "review" | "error" | "saving" | "saved" | "save_error";
 
@@ -51,6 +53,7 @@ const EMPTY_COMMON: CommonFields = {
 };
 
 let pdfJsPromise: Promise<any> | null = null;
+let batchRowsCache: BatchRow[] | null = null;
 
 async function loadPdfJs() {
   if (!pdfJsPromise) {
@@ -94,6 +97,36 @@ function scanPatch(data: PassportScanData): Partial<BatchRow> {
 
 function normalizePassport(value: string) { return value.trim().toUpperCase().replace(/\s+/g, ""); }
 function normalizeNationalId(value: string) { return value.replace(/\D/g, ""); }
+
+function loadBatchRows(): BatchRow[] {
+  if (batchRowsCache) return batchRowsCache;
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(BATCH_STORAGE_KEY) || "[]");
+    batchRowsCache = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    batchRowsCache = [];
+  }
+  return batchRowsCache;
+}
+
+function publishBatchRows(rows: BatchRow[]) {
+  batchRowsCache = rows;
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.setItem(BATCH_STORAGE_KEY, JSON.stringify(rows)); } catch { /* keep in-memory cache */ }
+  window.dispatchEvent(new CustomEvent(BATCH_ROWS_EVENT, { detail: rows }));
+}
+
+function mutateBatchRows(mutator: (current: BatchRow[]) => BatchRow[]) {
+  const current = loadBatchRows();
+  const next = mutator(current);
+  publishBatchRows(next);
+  return next;
+}
+
+function patchPersistedRow(id: string, patch: Partial<BatchRow>) {
+  mutateBatchRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+}
 
 async function canvasToJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
   const make = (quality: number) => new Promise<Blob>((resolve, reject) => {
@@ -170,14 +203,25 @@ export function PassportBulkUploadWorkspaceV3() {
   const airlines = useDropdownOptions("airline");
   const passengerTypes = useDropdownOptions("passenger_type");
 
-  const [rows, setRows] = useState<BatchRow[]>([]);
+  const [rows, setRows] = useState<BatchRow[]>(() => [...loadBatchRows()]);
   const [busyMode, setBusyMode] = useState<"" | "single" | "multi" | "pdf" | "save">("");
   const [progress, setProgress] = useState("");
   const [common, setCommon] = useState<CommonFields>(EMPTY_COMMON);
 
+  useEffect(() => {
+    const sync = (event: Event) => {
+      const next = (event as CustomEvent<BatchRow[]>).detail;
+      setRows(Array.isArray(next) ? [...next] : [...loadBatchRows()]);
+    };
+    window.addEventListener(BATCH_ROWS_EVENT, sync);
+    setRows([...loadBatchRows()]);
+    return () => window.removeEventListener(BATCH_ROWS_EVENT, sync);
+  }, []);
+
+  const commitRows = (updater: (current: BatchRow[]) => BatchRow[]) => mutateBatchRows(updater);
   const activeAgents = useMemo(() => agents.filter((a) => String(a.status || "نشط") === "نشط"), [agents]);
   const busy = busyMode !== "";
-  const updateRow = (id: string, patch: Partial<BatchRow>) => setRows((current) => current.map((r) => r.id === id ? { ...r, ...patch } : r));
+  const updateRow = (id: string, patch: Partial<BatchRow>) => patchPersistedRow(id, patch);
   const selectedRows = rows.filter((r) => r.selected && r.state !== "saved");
 
   const duplicateIds = useMemo(() => {
@@ -207,9 +251,10 @@ export function PassportBulkUploadWorkspaceV3() {
   };
 
   const addSingleImage = async (file: File) => {
-    if (rows.length >= MAX_BATCH_ITEMS) return toast.error(`الحد الأقصى ${MAX_BATCH_ITEMS} جواز`);
-    const row = emptyRow(file.name || `صورة ${rows.length + 1}`);
-    setRows((current) => [...current, row]);
+    const currentRows = loadBatchRows();
+    if (currentRows.length >= MAX_BATCH_ITEMS) return toast.error(`الحد الأقصى ${MAX_BATCH_ITEMS} جواز`);
+    const row = emptyRow(file.name || `صورة ${currentRows.length + 1}`);
+    commitRows((current) => [...current, row]);
     setBusyMode("single"); setProgress("جارِ قراءة الصورة...");
     await scanIntoExistingRow(row.id, file);
     setBusyMode(""); setProgress("");
@@ -219,14 +264,15 @@ export function PassportBulkUploadWorkspaceV3() {
   const addManyImages = async (filesList: FileList | null) => {
     const files = Array.from(filesList || []);
     if (!files.length) return;
-    const available = MAX_BATCH_ITEMS - rows.length;
+    const currentRows = loadBatchRows();
+    const available = MAX_BATCH_ITEMS - currentRows.length;
     if (files.length > available) { toast.error(`اختر بحد أقصى ${available} صورة`); return; }
     setBusyMode("multi");
     let ok = 0;
     for (let i = 0; i < files.length; i++) {
       setProgress(`جارِ قراءة الصورة ${i + 1} من ${files.length}`);
-      const row = emptyRow(files[i].name || `صورة ${rows.length + i + 1}`);
-      setRows((current) => [...current, row]);
+      const row = emptyRow(files[i].name || `صورة ${currentRows.length + i + 1}`);
+      commitRows((current) => [...current, row]);
       if (await scanIntoExistingRow(row.id, files[i])) ok++;
     }
     toast.success(`تمت قراءة ${ok} من ${files.length} صورة`);
@@ -237,7 +283,7 @@ export function PassportBulkUploadWorkspaceV3() {
   const addPdf = async (file: File) => {
     if (!file || !file.size) return toast.error("ملف PDF فارغ");
     if (file.size > MAX_PDF_BYTES) return toast.error("حجم PDF أكبر من 50MB");
-    const available = MAX_BATCH_ITEMS - rows.length;
+    const available = MAX_BATCH_ITEMS - loadBatchRows().length;
     if (available <= 0) return toast.error(`الدفعة وصلت للحد الأقصى ${MAX_BATCH_ITEMS}`);
 
     setBusyMode("pdf"); setProgress("جارِ فتح ملف PDF...");
@@ -251,7 +297,7 @@ export function PassportBulkUploadWorkspaceV3() {
         if (pdf.numPages > available) throw new Error(`الملف يحتوي ${pdf.numPages} صفحة والمتاح في الدفعة ${available}`);
 
         const pageRows = Array.from({ length: pdf.numPages }, (_, i) => emptyRow(`${file.name} — صفحة ${i + 1}`, i + 1));
-        setRows((current) => [...current, ...pageRows]);
+        commitRows((current) => [...current, ...pageRows]);
         setProgress(`تم فتح ${pdf.numPages} صفحة — جارِ المعالجة...`);
 
         const inFlight = new Set<Promise<boolean>>();
@@ -295,13 +341,15 @@ export function PassportBulkUploadWorkspaceV3() {
     }
   };
 
-  const applyCommon = () => setRows((current) => current.map((r) => r.selected && r.state !== "saved" ? { ...r, ...common } : r));
-  const removeRow = (id: string) => !busy && setRows((current) => current.filter((r) => r.id !== id));
+  const applyCommon = () => commitRows((current) => current.map((r) => r.selected && r.state !== "saved" ? { ...r, ...common } : r));
+  const removeRow = (id: string) => !busy && commitRows((current) => current.filter((r) => r.id !== id));
+  const clearBatch = () => !busy && commitRows(() => []);
 
   const saveSelected = async () => {
     if (busy) return;
     if (!perm.create) return toast.error("ليس لديك صلاحية إنشاء تنفيذات");
-    const selected = rows.filter((r) => r.selected && ["ready", "review", "save_error"].includes(r.state));
+    const currentRows = loadBatchRows();
+    const selected = currentRows.filter((r) => r.selected && ["ready", "review", "save_error"].includes(r.state));
     if (!selected.length) return toast.error("اختر مسافرًا جاهزًا واحدًا على الأقل");
     if (selected.some((r) => !r.passenger_name.trim())) return toast.error("راجع أسماء المسافرين قبل الحفظ");
     if (selected.some((r) => r.operation_status.trim() === "منفذ")) return toast.error("لا يمكن الحفظ الجماعي بحالة «منفذ» قبل استكمال الخدمات والأسعار");
@@ -340,10 +388,10 @@ export function PassportBulkUploadWorkspaceV3() {
         <button disabled={busy} type="button" onClick={() => oneInput.current?.click()} className="btn btn-primary"><Camera size={16} /> {rows.length ? "إضافة صورة واحدة" : "إضافة أول صورة"}</button>
         <button disabled={busy} type="button" onClick={() => multiInput.current?.click()} className="btn btn-secondary"><Images size={16} /> اختيار مجموعة صور</button>
         <button disabled={busy} type="button" onClick={() => pdfInput.current?.click()} className="btn btn-secondary"><FileText size={16} /> رفع ملف PDF جوازات</button>
-        {rows.length > 0 && <button disabled={busy} type="button" onClick={() => setRows([])} className="btn btn-secondary"><Trash2 size={15} /> مسح الدفعة</button>}
+        {rows.length > 0 && <button disabled={busy} type="button" onClick={clearBatch} className="btn btn-secondary"><Trash2 size={15} /> مسح الدفعة</button>}
       </div>
       <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
-        <span style={{ color: "#166534", fontWeight: 900 }}><ShieldCheck size={14} style={{ verticalAlign: "middle" }} /> الملفات لا تُحفظ في Supabase</span>
+        <span style={{ color: "#166534", fontWeight: 900 }}><ShieldCheck size={14} style={{ verticalAlign: "middle" }} /> الملفات لا تُحفظ في Supabase — يتم حفظ البيانات النصية المؤقتة فقط داخل جلسة المتصفح حتى لا تضيع أثناء القراءة</span>
         {busy && <span style={{ color: "#1d4ed8", fontWeight: 900 }}><Loader2 size={14} className="animate-spin" style={{ verticalAlign: "middle" }} /> {progress}</span>}
       </div>
     </div>
