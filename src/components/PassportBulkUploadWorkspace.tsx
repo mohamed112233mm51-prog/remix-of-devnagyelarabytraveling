@@ -12,6 +12,20 @@ const PDF_RENDER_MAX_DIMENSION = 2200;
 
 let pdfJsPromise: Promise<any> | null = null;
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function loadPdfJs() {
   if (!pdfJsPromise) {
     pdfJsPromise = (async () => {
@@ -22,6 +36,37 @@ async function loadPdfJs() {
     })();
   }
   return pdfJsPromise;
+}
+
+function readWithFileReader(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+      else reject(new Error("المتصفح لم يرجع بيانات PDF بصورة صحيحة"));
+    };
+    reader.onerror = () => reject(reader.error || new Error("تعذر قراءة ملف PDF من الهاتف"));
+    reader.onabort = () => reject(new Error("تم إلغاء قراءة ملف PDF"));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function readPdfBytes(file: File): Promise<Uint8Array> {
+  try {
+    const buffer = await withTimeout(
+      file.arrayBuffer(),
+      8000,
+      "تأخر Android في تسليم ملف PDF للتطبيق",
+    );
+    return new Uint8Array(buffer);
+  } catch {
+    const fallback = await withTimeout(
+      readWithFileReader(file),
+      12000,
+      "تعذر قراءة ملف PDF من مدير الملفات على هذا الجهاز",
+    );
+    return new Uint8Array(fallback);
+  }
 }
 
 type RowState = "ready" | "review" | "saving" | "saved" | "save_error";
@@ -99,6 +144,12 @@ function normalizeNationalId(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 async function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return await new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -110,7 +161,11 @@ async function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise
 }
 
 async function renderPdfPage(pdf: any, pageNumber: number, sourceName: string): Promise<File> {
-  const page = await pdf.getPage(pageNumber);
+  const page = await withTimeout(
+    pdf.getPage(pageNumber),
+    10000,
+    `تعذر فتح صفحة ${pageNumber} من PDF`,
+  );
   const canvas = document.createElement("canvas");
   try {
     const baseViewport = page.getViewport({ scale: 1 });
@@ -127,7 +182,11 @@ async function renderPdfPage(pdf: any, pageNumber: number, sourceName: string): 
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    await page.render({ canvasContext: ctx, viewport, background: "#ffffff" } as any).promise;
+    await withTimeout(
+      page.render({ canvasContext: ctx, viewport, background: "#ffffff" } as any).promise,
+      15000,
+      `استغرق تجهيز صفحة ${pageNumber} وقتًا أطول من المتوقع`,
+    );
 
     let blob = await canvasToJpeg(canvas, 0.9);
     if (blob.size > 5_700_000) blob = await canvasToJpeg(canvas, 0.8);
@@ -150,6 +209,7 @@ export function PassportBulkUploadWorkspace() {
   const oneImageInputRef = useRef<HTMLInputElement | null>(null);
   const multiImageInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const pdfSelectionLockRef = useRef(false);
 
   const { rows: agents } = useLive<Agent>("agents");
   const approvalStatuses = useDropdownOptions("execution_status");
@@ -162,13 +222,12 @@ export function PassportBulkUploadWorkspace() {
   const [rows, setRows] = useState<BatchRow[]>([]);
   const [busyMode, setBusyMode] = useState<"" | "single" | "multi" | "pdf" | "save">("");
   const [progress, setProgress] = useState("");
+  const [pdfSelectedLabel, setPdfSelectedLabel] = useState("");
   const [common, setCommon] = useState<CommonFields>(EMPTY_COMMON);
 
   useEffect(() => {
-    // Preload PDF.js while the user is still on the page. This avoids loading
-    // the PDF worker only after Android returns from the document picker.
     void loadPdfJs().catch(() => {
-      // A visible error is shown if the user actually chooses a PDF.
+      pdfJsPromise = null;
     });
   }, []);
 
@@ -237,7 +296,6 @@ export function PassportBulkUploadWorkspace() {
     let success = 0;
     let failed = 0;
     try {
-      // Process sequentially after one multi-select. This keeps memory stable on Android.
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
         setProgress(`جارِ قراءة الصورة ${index + 1} من ${files.length}`);
@@ -261,25 +319,38 @@ export function PassportBulkUploadWorkspace() {
   };
 
   const addPdf = async (file: File) => {
-    if (!file || file.size <= 0) return toast.error("ملف PDF فارغ");
-    if (file.size > MAX_PDF_BYTES) return toast.error("حجم ملف PDF أكبر من 50MB");
+    if (!file || file.size <= 0) throw new Error("ملف PDF فارغ");
+    if (file.size > MAX_PDF_BYTES) throw new Error("حجم ملف PDF أكبر من 50MB");
 
     setBusyMode("pdf");
-    setProgress("جارِ فتح ملف PDF...");
+    setProgress(`جارِ قراءة ${file.name || "ملف PDF"} من الهاتف...`);
     let success = 0;
     let failed = 0;
     try {
-      const pdfjs = await loadPdfJs();
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const loadingTask = pdfjs.getDocument({ data: bytes, isEvalSupported: false });
-      const pdf = await loadingTask.promise;
+      const bytes = await readPdfBytes(file);
+      setProgress("جارِ تحميل أداة قراءة PDF...");
+      const pdfjs = await withTimeout(
+        loadPdfJs(),
+        12000,
+        "تعذر تحميل أداة قراءة PDF على هذا المتصفح",
+      );
+
+      setProgress("جارِ فتح صفحات PDF...");
+      const loadingTask = pdfjs.getDocument({ data: bytes, isEvalSupported: false, useWorkerFetch: false });
+      const pdf = await withTimeout(
+        loadingTask.promise,
+        15000,
+        "تعذر فتح PDF أو أن الملف يحتاج وقتًا طويلًا للمعالجة",
+      );
+
       try {
         const available = MAX_BATCH_ITEMS - rows.length;
         if (available <= 0) throw new Error(`الدفعة وصلت للحد الأقصى ${MAX_BATCH_ITEMS}`);
         if (pdf.numPages > available) throw new Error(`الملف يحتوي ${pdf.numPages} صفحة والمتاح ${available} فقط`);
+        if (!pdf.numPages) throw new Error("ملف PDF لا يحتوي صفحات قابلة للقراءة");
 
         for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-          setProgress(`جارِ قراءة صفحة ${pageNumber} من ${pdf.numPages}`);
+          setProgress(`جارِ تجهيز وقراءة صفحة ${pageNumber} من ${pdf.numPages}`);
           try {
             const pageFile = await renderPdfPage(pdf, pageNumber, file.name);
             const data = await scanPassportFile(pageFile);
@@ -292,18 +363,40 @@ export function PassportBulkUploadWorkspace() {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
       } finally {
-        await pdf.destroy();
+        try { await pdf.destroy(); } catch { /* no-op */ }
       }
+
       if (success) toast.success(`تمت إضافة ${success} جواز من PDF${failed ? `، وفشل ${failed}` : ""}`);
-      else if (failed) toast.error("تعذر قراءة صفحات ملف PDF");
+      else if (failed) toast.error("تعذر قراءة أي صفحة من ملف PDF");
     } catch (error: any) {
       pdfJsPromise = null;
-      toast.error(`تعذر فتح PDF: ${error?.message || "خطأ غير معروف"}`);
+      throw new Error(error?.message || "تعذر فتح ملف PDF");
     } finally {
       setProgress("");
       setBusyMode("");
-      if (pdfInputRef.current) pdfInputRef.current.value = "";
     }
+  };
+
+  const handlePdfSelection = (input: HTMLInputElement) => {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (pdfSelectionLockRef.current) return;
+
+    pdfSelectionLockRef.current = true;
+    setPdfSelectedLabel(`${file.name || "ملف PDF"} — ${formatBytes(file.size)}`);
+    setBusyMode("pdf");
+    setProgress("تم اختيار ملف PDF — جارِ التجهيز...");
+
+    window.setTimeout(() => {
+      void addPdf(file)
+        .catch((error: any) => {
+          toast.error(`تعذر قراءة PDF: ${error?.message || "خطأ غير معروف"}`);
+        })
+        .finally(() => {
+          pdfSelectionLockRef.current = false;
+          if (pdfInputRef.current) pdfInputRef.current.value = "";
+        });
+    }, 30);
   };
 
   const applyCommonToSelected = () => {
@@ -319,6 +412,7 @@ export function PassportBulkUploadWorkspace() {
     if (rows.length && !window.confirm("مسح كل بيانات الدفعة الحالية؟")) return;
     setRows([]);
     setCommon(EMPTY_COMMON);
+    setPdfSelectedLabel("");
   };
 
   const saveSelected = async () => {
@@ -390,6 +484,15 @@ export function PassportBulkUploadWorkspace() {
   const renderOptions = (options: readonly string[], current: string) =>
     withSelected(options, current).map((value) => <option key={value} value={value}>{value}</option>);
 
+  const pdfInputStyle: React.CSSProperties = {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
+    overflow: "hidden",
+    clipPath: "inset(50%)",
+  };
+
   return (
     <div dir="rtl" style={{ display: "grid", gap: 14 }}>
       <input
@@ -411,14 +514,17 @@ export function PassportBulkUploadWorkspace() {
         onChange={(event) => void addManyImages(event.currentTarget.files)}
       />
       <input
+        id="passport-bulk-pdf-input"
         ref={pdfInputRef}
         type="file"
         accept="application/pdf,.pdf"
-        hidden
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          if (file) void addPdf(file);
+        style={pdfInputStyle}
+        onClick={(event) => {
+          event.currentTarget.value = "";
+          setPdfSelectedLabel("");
         }}
+        onInput={(event) => handlePdfSelection(event.currentTarget)}
+        onChange={(event) => handlePdfSelection(event.currentTarget)}
       />
 
       <div style={{ padding: 14, borderRadius: 12, border: "1px solid #dbe3ee", background: "#f8fafc" }}>
@@ -433,19 +539,43 @@ export function PassportBulkUploadWorkspace() {
             {busyMode === "multi" ? progress : "اختيار مجموعة صور"}
           </button>
 
-          <button type="button" disabled={busy || rows.length >= MAX_BATCH_ITEMS} onClick={() => pdfInputRef.current?.click()} style={{ minHeight: 42, border: "1px solid #d4af37", borderRadius: 10, padding: "9px 14px", background: "#fffaf0", color: "#0f1b3d", fontWeight: 900, display: "inline-flex", alignItems: "center", gap: 7, cursor: busy ? "wait" : "pointer" }}>
+          <label
+            htmlFor="passport-bulk-pdf-input"
+            aria-disabled={busy || rows.length >= MAX_BATCH_ITEMS}
+            style={{
+              minHeight: 42,
+              border: "1px solid #d4af37",
+              borderRadius: 10,
+              padding: "9px 14px",
+              background: "#fffaf0",
+              color: "#0f1b3d",
+              fontWeight: 900,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              cursor: busy ? "wait" : "pointer",
+              opacity: busy || rows.length >= MAX_BATCH_ITEMS ? 0.55 : 1,
+              pointerEvents: busy || rows.length >= MAX_BATCH_ITEMS ? "none" : "auto",
+            }}
+          >
             {busyMode === "pdf" ? <Loader2 size={17} className="animate-spin" /> : <FileText size={17} />}
             {busyMode === "pdf" ? progress : "رفع ملف PDF جوازات"}
-          </button>
+          </label>
 
           {rows.length > 0 && (
             <button type="button" disabled={busy} onClick={clearBatch} style={{ minHeight: 40, border: "1px solid #fecaca", borderRadius: 10, padding: "8px 12px", background: "#fff", color: "#b91c1c", fontWeight: 800, cursor: "pointer" }}>مسح الدفعة</button>
           )}
         </div>
 
+        {pdfSelectedLabel && (
+          <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 10, border: "1px solid #fde68a", background: "#fffbeb", color: "#854d0e", fontSize: 12, fontWeight: 800 }}>
+            تم اختيار PDF: {pdfSelectedLabel}{busyMode === "pdf" && progress ? ` — ${progress}` : ""}
+          </div>
+        )}
+
         <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 12, lineHeight: 1.7 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#166534", fontWeight: 900 }}><ShieldCheck size={15} /> الملفات لا تُحفظ في Supabase</span>
-          <span style={{ color: "#64748b", fontWeight: 700 }}>لو Android أعاد تحميل الصفحة عند «مجموعة صور»، استخدم زر الصورة الواحدة؛ أما الحفظ النهائي فيظل جماعيًا.</span>
+          <span style={{ color: "#64748b", fontWeight: 700 }}>الصور الجماعية تُقرأ بالتتابع، وPDF يُحوّل مؤقتًا صفحة بصفحة ثم تُرسل الصفحة للقراءة فقط.</span>
         </div>
       </div>
 
