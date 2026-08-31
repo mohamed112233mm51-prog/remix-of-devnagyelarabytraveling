@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PassportBulkUploadWorkspaceV3 } from "@/components/PassportBulkUploadWorkspaceV3";
+import { PassportBulkUploadWorkspaceV4 } from "@/components/PassportBulkUploadWorkspaceV4";
 import { usePerm } from "@/hooks/usePerm";
 
 export const Route = createFileRoute("/passport-bulk-upload")({
@@ -24,7 +24,7 @@ function PassportBulkUploadRoute() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, color: "#0f1b3d", fontWeight: 900 }}>الرفع الجماعي للجوازات</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-            اختر صورة واحدة، أو مجموعة صور، أو ملف PDF. في PDF تظهر كل الصفحات وحالتها فورًا، وتتم القراءة بمسار خفيف مناسب للموبايل.
+            اختر صورة واحدة، أو مجموعة صور، أو ملف PDF. في PDF تظهر كل الصفحات وحالتها فورًا، وتظل البيانات النصية المؤقتة محفوظة داخل نفس جلسة المتصفح حتى لو أعادت الواجهة تركيب نفسها.
           </p>
         </div>
         <button
@@ -53,10 +53,10 @@ function PassportBulkUploadRoute() {
         </div>
       )}
 
-      <PassportBulkUploadWorkspaceV3 />
+      <PassportBulkUploadWorkspaceV4 />
 
       <div style={{ padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
-        ملفات الصور وPDF لا يتم حفظها في Supabase أو قاعدة البيانات. PDF يُجهّز صفحة بصفحة مؤقتًا، وأي عملية رسم تتعطل يتم إلغاؤها فعليًا بدل تركها تعمل في الخلفية.
+        ملفات الصور وPDF لا يتم حفظها في Supabase أو قاعدة البيانات. الذي يُحفظ مؤقتًا داخل sessionStorage هو النص المستخرج وحالة الصفوف فقط، ويُمسح عند مسح الدفعة أو انتهاء جلسة المتصفح.
       </div>
     </div>
   );
