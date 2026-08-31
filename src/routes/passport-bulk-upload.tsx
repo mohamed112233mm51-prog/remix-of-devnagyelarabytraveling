@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NativePdfPassportImporter } from "@/components/NativePdfPassportImporter";
-import { PassportBulkUploadWorkspace } from "@/components/PassportBulkUploadWorkspace";
+import { PassportBulkUploadWorkspaceV3 } from "@/components/PassportBulkUploadWorkspaceV3";
 import { usePerm } from "@/hooks/usePerm";
 
 export const Route = createFileRoute("/passport-bulk-upload")({
@@ -25,7 +24,7 @@ function PassportBulkUploadRoute() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, color: "#0f1b3d", fontWeight: 900 }}>الرفع الجماعي للجوازات</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-            للصور استخدم الرفع الجماعي المعتاد بالأسفل. للـPDF استخدم صندوق «PDF — وضع Android المباشر» أولًا؛ اختيار الملف والبدء في قراءته خطوتان منفصلتان لتجاوز مشكلة Android File Picker.
+            اختر صورة واحدة، أو مجموعة صور، أو ملف PDF. في PDF تظهر كل الصفحات وحالتها فورًا، وتتم القراءة بمسار خفيف مناسب للموبايل.
           </p>
         </div>
         <button
@@ -54,15 +53,10 @@ function PassportBulkUploadRoute() {
         </div>
       )}
 
-      <NativePdfPassportImporter />
-
-      <div style={{ padding: "2px 0", fontSize: 13, color: "#334155", fontWeight: 900 }}>
-        الصور — صورة واحدة أو مجموعة صور
-      </div>
-      <PassportBulkUploadWorkspace />
+      <PassportBulkUploadWorkspaceV3 />
 
       <div style={{ padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
-        مسار PDF المباشر لا يعتمد على onChange لبدء القراءة: بعد اختيار الملف من خانة المتصفح الظاهرة اضغط «ابدأ قراءة PDF المختار». الملف لا يُحفظ في Supabase أو قاعدة البيانات؛ يتم تحويل صفحاته مؤقتًا داخل المتصفح وإرسال صور الصفحات لنفس قارئ الجواز الحالي.
+        ملفات الصور وPDF لا يتم حفظها في Supabase أو قاعدة البيانات. PDF يُجهّز صفحة بصفحة مؤقتًا، وأي عملية رسم تتعطل يتم إلغاؤها فعليًا بدل تركها تعمل في الخلفية.
       </div>
     </div>
   );
