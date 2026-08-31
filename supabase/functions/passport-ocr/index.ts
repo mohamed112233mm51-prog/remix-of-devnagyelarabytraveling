@@ -280,7 +280,7 @@ Deno.serve(async (req) => {
       return respond(413, { ok: false, error: "صورة الجواز أكبر من الحد المسموح بعد التجهيز" });
     }
 
-    const model = Deno.env.get("PASSPORT_OCR_MODEL") || "gpt-5.6-sol";
+    const model = Deno.env.get("PASSPORT_OCR_MODEL") || "google/gemini-3.1-pro-preview";
     const schema = {
       type: "object",
       additionalProperties: false,
@@ -314,7 +314,9 @@ Deno.serve(async (req) => {
       "Return only JSON matching the requested schema.",
     ].join(" ");
 
-    const aiResponse = await fetch("https://api.openai.com/v1/responses", {
+    // Lovable AI Gateway (vision). The image stays in request memory only:
+    // it is never written to Storage, DB, or logs.
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -322,32 +324,33 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model,
-        store: false,
-        max_output_tokens: 1400,
-        input: [{
+        messages: [{
           role: "user",
           content: [
-            { type: "input_text", text: prompt },
-            { type: "input_image", image_url: imageDataUrl, detail: "high" },
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: imageDataUrl } },
           ],
         }],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "passport_extraction",
-            strict: true,
-            schema,
-          },
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "passport_extraction", strict: true, schema },
         },
       }),
     });
 
     if (!aiResponse.ok) {
+      if (aiResponse.status === 429) {
+        return respond(429, { ok: false, error: "تم تجاوز حد الاستخدام للحظة. أعد المحاولة بعد قليل" });
+      }
+      if (aiResponse.status === 402 || aiResponse.status === 403) {
+        return respond(402, { ok: false, error: "رصيد خدمة الذكاء الاصطناعي غير كافٍ أو الخدمة موقوفة" });
+      }
       return respond(502, { ok: false, error: "تعذر تحليل صورة الجواز حاليًا" });
     }
     const aiJson = await aiResponse.json();
-    const text = outputText(aiJson);
-    if (!text) return respond(502, { ok: false, error: "لم ترجع خدمة القراءة بيانات صالحة" });
+    const rawText = outputText(aiJson);
+    if (!rawText) return respond(502, { ok: false, error: "لم ترجع خدمة القراءة بيانات صالحة" });
+    const text = stripJsonFence(rawText);
 
     let vision: VisionPayload;
     try {
