@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -778,6 +778,30 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_operation_requests: {
+        Row: {
+          created_at: string
+          created_by: string
+          fingerprint: string
+          operation_id: string
+          result: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          fingerprint: string
+          operation_id: string
+          result?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          fingerprint?: string
+          operation_id?: string
+          result?: Json
+        }
+        Relationships: []
+      }
       import_batches: {
         Row: {
           created_at: string
@@ -1488,11 +1512,25 @@ export type Database = {
         Args: { p_action?: string; p_section: string }
         Returns: boolean
       }
+      app_settings_permission_allowed: {
+        Args: { p_subkey: string }
+        Returns: boolean
+      }
       assert_merchant_balance: {
         Args: { p_amount: number; p_currency: string; p_merchant_id: string }
         Returns: Json
       }
       can_view_audit_log: { Args: { _uid: string }; Returns: boolean }
+      delete_expense_atomic: { Args: { p_expense_id: string }; Returns: Json }
+      execute_financial_atomic: {
+        Args: {
+          p_fingerprint: string
+          p_operation_id: string
+          p_result?: Json
+          p_rows: Json
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1504,6 +1542,20 @@ export type Database = {
         Args: { p_currency: string; p_merchant_id: string }
         Returns: number
       }
+      replace_entity_opening_entries_atomic: {
+        Args: { p_entity_id: string; p_kind: string; p_rows?: Json }
+        Returns: Json
+      }
+      replace_execution_financials_atomic: {
+        Args: {
+          p_execution_id: string
+          p_financial_posting_date: string
+          p_fingerprint: string
+          p_operation_id: string
+          p_rows?: Json
+        }
+        Returns: Json
+      }
       reset_production_business_data: {
         Args: { p_confirm: string; p_user_id: string }
         Returns: Json
@@ -1511,8 +1563,44 @@ export type Database = {
       restore_disable_guards: { Args: never; Returns: undefined }
       restore_enable_guards: { Args: never; Returns: undefined }
       run_auto_expense_deductions: { Args: never; Returns: undefined }
+      set_financial_cancel_state_atomic: {
+        Args: {
+          p_cancel: boolean
+          p_id: string
+          p_reason?: string
+          p_table: string
+        }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_cash_box_opening_atomic: {
+        Args: {
+          p_amount: number
+          p_cash_box_id: string
+          p_date: string
+          p_note?: string
+        }
+        Returns: Json
+      }
+      sync_service_financials_atomic: {
+        Args: {
+          p_agent_row?: Json
+          p_company_row?: Json
+          p_delete?: boolean
+          p_service_id: string
+        }
+        Returns: Json
+      }
+      update_financial_transaction_atomic: {
+        Args: {
+          p_id: string
+          p_parent_patch?: Json
+          p_split_patches?: Json
+          p_table: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "user"
