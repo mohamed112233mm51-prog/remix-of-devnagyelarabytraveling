@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { NativePdfPassportImporter } from "@/components/NativePdfPassportImporter";
 import { PassportBulkUploadWorkspace } from "@/components/PassportBulkUploadWorkspace";
 import { usePerm } from "@/hooks/usePerm";
 
@@ -24,7 +25,7 @@ function PassportBulkUploadRoute() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, color: "#0f1b3d", fontWeight: 900 }}>الرفع الجماعي للجوازات</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-            اختر صورة واحدة، أو مجموعة صور في ضغطة واحدة، أو ملف PDF واحد يحتوي عدة جوازات. بعد القراءة تراجع البيانات ثم تنشئ التنفيذات المحددة دفعة واحدة.
+            للصور استخدم الرفع الجماعي المعتاد بالأسفل. للـPDF استخدم صندوق «PDF — وضع Android المباشر» أولًا؛ اختيار الملف والبدء في قراءته خطوتان منفصلتان لتجاوز مشكلة Android File Picker.
           </p>
         </div>
         <button
@@ -53,10 +54,15 @@ function PassportBulkUploadRoute() {
         </div>
       )}
 
+      <NativePdfPassportImporter />
+
+      <div style={{ padding: "2px 0", fontSize: 13, color: "#334155", fontWeight: 900 }}>
+        الصور — صورة واحدة أو مجموعة صور
+      </div>
       <PassportBulkUploadWorkspace />
 
       <div style={{ padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
-        تم فصل اختيار الصور عن PDF بالكامل لتحسين توافق Android. زر «اختيار مجموعة صور» يستخدم Photo Picker للصور فقط، بينما PDF يستخدم مسار قراءة مستقل. إذا كان جهاز معين يعيد تحميل الصفحة عند اختيار مجموعة صور، يظل زر الصورة الواحدة متاحًا كحل بديل مع بقاء الحفظ النهائي جماعيًا.
+        مسار PDF المباشر لا يعتمد على onChange لبدء القراءة: بعد اختيار الملف من خانة المتصفح الظاهرة اضغط «ابدأ قراءة PDF المختار». الملف لا يُحفظ في Supabase أو قاعدة البيانات؛ يتم تحويل صفحاته مؤقتًا داخل المتصفح وإرسال صور الصفحات لنفس قارئ الجواز الحالي.
       </div>
     </div>
   );
