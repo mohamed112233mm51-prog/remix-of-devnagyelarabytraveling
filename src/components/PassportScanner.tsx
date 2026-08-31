@@ -64,6 +64,38 @@ async function functionErrorMessage(error: any): Promise<string> {
   return String(error?.message || "تعذر الاتصال بخدمة قراءة الجواز");
 }
 
+/**
+ * Read one passport image through the same transient upload/vision pipeline used
+ * by the single-passport UI. The File is streamed directly to the Edge Function;
+ * it is never persisted in Storage, DB, localStorage, sessionStorage, or logs.
+ */
+export async function scanPassportFile(file: File): Promise<PassportScanData> {
+  if (!file || file.size <= 0) throw new Error("اختر صورة للجواز");
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("حجم الصورة أكبر من 6MB. صوّر صفحة الجواز فقط أو اختر صورة أصغر مع الحفاظ على وضوح البيانات");
+  }
+
+  const mime = resolveFileMime(file);
+  if (!mime) throw new Error("صيغة الصورة غير معروفة. استخدم JPG أو PNG أو WEBP");
+  if (HEIC_MIMES.has(mime)) throw new Error("الصورة بصيغة HEIC/HEIF. استخدم JPG أو PNG أو WEBP");
+  if (!SUPPORTED_MIMES.has(mime)) throw new Error("صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP");
+
+  // Important for Android/Lovable preview: do not read or convert the image in
+  // the browser. FormData lets the browser network layer stream the File to the
+  // Edge Function, which performs the transient conversion server-side.
+  const formData = new FormData();
+  formData.append("image", file, file.name || "passport.jpg");
+
+  const { data, error } = await supabase.functions.invoke("passport-ocr-upload", {
+    body: formData,
+  });
+  if (error) throw new Error(await functionErrorMessage(error));
+
+  const response = (data || {}) as PassportOcrResponse;
+  if (!response.ok || !response.data) throw new Error(response.error || "تعذر استخراج بيانات الجواز");
+  return response.data;
+}
+
 export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportScanData) => void | Promise<void> }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [reading, setReading] = useState(false);
@@ -74,33 +106,10 @@ export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportS
     setLastResult(null);
 
     try {
-      if (!file || file.size <= 0) throw new Error("اختر صورة للجواز");
-      if (file.size > MAX_UPLOAD_BYTES) {
-        throw new Error("حجم الصورة أكبر من 6MB. صوّر صفحة الجواز فقط أو اختر صورة أصغر مع الحفاظ على وضوح البيانات");
-      }
-
-      const mime = resolveFileMime(file);
-      if (!mime) throw new Error("صيغة الصورة غير معروفة. استخدم JPG أو PNG أو WEBP");
-      if (HEIC_MIMES.has(mime)) throw new Error("الصورة بصيغة HEIC/HEIF. استخدم JPG أو PNG أو WEBP");
-      if (!SUPPORTED_MIMES.has(mime)) throw new Error("صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP");
-
-      // Important for Android/Lovable preview: do not read or convert the file in the browser.
-      // Passing the File inside FormData lets the browser network layer stream it directly
-      // to the Edge Function, which performs validation/base64 conversion server-side.
-      const formData = new FormData();
-      formData.append("image", file, file.name || "passport.jpg");
-
-      const { data, error } = await supabase.functions.invoke("passport-ocr-upload", {
-        body: formData,
-      });
-      if (error) throw new Error(await functionErrorMessage(error));
-
-      const response = (data || {}) as PassportOcrResponse;
-      if (!response.ok || !response.data) throw new Error(response.error || "تعذر استخراج بيانات الجواز");
-
-      await onExtracted(response.data);
-      setLastResult(response.data);
-      if (response.data.needs_review) {
+      const extracted = await scanPassportFile(file);
+      await onExtracted(extracted);
+      setLastResult(extracted);
+      if (extracted.needs_review) {
         toast.warning("تمت قراءة الجواز، لكن توجد بيانات تحتاج مراجعة");
       } else {
         toast.success("تمت قراءة الجواز وتعبئة البيانات");
