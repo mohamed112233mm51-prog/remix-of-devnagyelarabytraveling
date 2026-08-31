@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { PassportBulkUploadWorkspaceV4 } from "@/components/PassportBulkUploadWorkspaceV4";
 import { usePerm } from "@/hooks/usePerm";
+
+const BULK_DRAFT_SESSION_KEY = "passport-bulk-upload:text-draft:v4";
 
 export const Route = createFileRoute("/passport-bulk-upload")({
   component: PassportBulkUploadRoute,
@@ -8,6 +11,41 @@ export const Route = createFileRoute("/passport-bulk-upload")({
 
 function PassportBulkUploadRoute() {
   const perm = usePerm("executions");
+  const [, forceDraftRender] = useState(0);
+  const lastDraftRef = useRef("");
+
+  // Lovable's Android preview can occasionally miss a React external-store
+  // repaint while long PDF/OCR jobs continue in the background. V4 already
+  // persists text-only row state in sessionStorage, so watch that same draft
+  // and trigger a normal parent render whenever it changes. This does NOT
+  // remount the workspace, does not retain image/PDF bytes, and does not
+  // interfere with the in-flight OCR requests.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncDraft = () => {
+      let next = "";
+      try {
+        next = window.sessionStorage.getItem(BULK_DRAFT_SESSION_KEY) || "";
+      } catch {
+        return;
+      }
+      if (next === lastDraftRef.current) return;
+      lastDraftRef.current = next;
+      forceDraftRender((value) => value + 1);
+    };
+
+    syncDraft();
+    const timer = window.setInterval(syncDraft, 350);
+    window.addEventListener("focus", syncDraft);
+    document.addEventListener("visibilitychange", syncDraft);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", syncDraft);
+      document.removeEventListener("visibilitychange", syncDraft);
+    };
+  }, []);
 
   return (
     <div
@@ -24,7 +62,10 @@ function PassportBulkUploadRoute() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, color: "#0f1b3d", fontWeight: 900 }}>الرفع الجماعي للجوازات</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-            اختر صورة واحدة، أو مجموعة صور، أو ملف PDF. في PDF تظهر كل الصفحات وحالتها فورًا، وتظل البيانات النصية المؤقتة محفوظة داخل نفس جلسة المتصفح حتى لو أعادت الواجهة تركيب نفسها.
+            اختر صورة واحدة، أو مجموعة صور، أو ملف PDF. في PDF تظهر كل الصفحات وحالتها أثناء القراءة، وتظل البيانات النصية المؤقتة محفوظة داخل نفس جلسة المتصفح حتى لو أعادت الواجهة الرسم.
+          </p>
+          <p style={{ margin: "4px 0 0", color: "#92400e", fontSize: 11, fontWeight: 800, lineHeight: 1.7 }}>
+            قراءة الجوازات لا تنشئ تنفيذات تلقائيًا: بعد ظهور البيانات راجع الصفوف ثم اضغط «إنشاء التنفيذات المحددة».
           </p>
         </div>
         <button
