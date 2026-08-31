@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MobileSafePassportBatch } from "@/components/MobileSafePassportBatch";
+import { PassportBulkUploadWorkspace } from "@/components/PassportBulkUploadWorkspace";
 import { usePerm } from "@/hooks/usePerm";
 
 export const Route = createFileRoute("/passport-bulk-upload")({
@@ -24,7 +24,7 @@ function PassportBulkUploadRoute() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, color: "#0f1b3d", fontWeight: 900 }}>الرفع الجماعي للجوازات</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-            وضع الموبايل الآمن: أضف صور الجوازات واحدة وراء الثانية لنفس الدفعة، أو ارفع ملف PDF واحد ليتم قراءة صفحاته بالتتابع.
+            اختر صورة واحدة، أو مجموعة صور في ضغطة واحدة، أو ملف PDF واحد يحتوي عدة جوازات. بعد القراءة تراجع البيانات ثم تنشئ التنفيذات المحددة دفعة واحدة.
           </p>
         </div>
         <button
@@ -53,10 +53,10 @@ function PassportBulkUploadRoute() {
         </div>
       )}
 
-      <MobileSafePassportBatch />
+      <PassportBulkUploadWorkspace />
 
       <div style={{ padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
-        تم إلغاء اختيار عدة صور في ضغطة واحدة على الموبايل لأن بعض أجهزة Android تعيد تحميل تبويب المتصفح قبل تسليم الملفات للتطبيق. كل صورة تُقرأ فور اختيارها ثم تُضاف لنفس الدفعة، لذلك تظل عملية إنشاء التنفيذات جماعية في النهاية بدون حفظ الصور في Supabase أو قاعدة البيانات.
+        تم فصل اختيار الصور عن PDF بالكامل لتحسين توافق Android. زر «اختيار مجموعة صور» يستخدم Photo Picker للصور فقط، بينما PDF يستخدم مسار قراءة مستقل. إذا كان جهاز معين يعيد تحميل الصفحة عند اختيار مجموعة صور، يظل زر الصورة الواحدة متاحًا كحل بديل مع بقاء الحفظ النهائي جماعيًا.
       </div>
     </div>
   );
