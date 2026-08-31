@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
       "Read the printed visual zone and the MRZ independently. Never invent a value that is not visible.",
       "For Arabic/English names, preserve the printed spelling. For dates use YYYY-MM-DD only if actually readable.",
       "printed_national_id means the Egyptian national ID/الرقم القومي only if visibly printed; do not derive it yourself.",
+      "printed_place_of_birth is ONLY the Arabic place of birth printed on the biodata page (محل الميلاد). Transcribe the Arabic text character-for-character as printed. Never translate, arabize, or transliterate an English place name, and never take it from the MRZ (the MRZ has no place of birth). If the Arabic place of birth is not visible or not printed, return null.",
       "Copy every MRZ line character-for-character, including < filler characters, with no spaces and no corrections.",
       "If glare, blur, crop, fingers, rotation, or low resolution make any value uncertain, leave that value null when necessary and describe the issue in quality_notes.",
       "Return only JSON matching the requested schema.",
