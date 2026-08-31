@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";
 import { PassportScanner, type PassportScanData } from "@/components/PassportScanner";
+import { BulkPassportImporter } from "@/components/BulkPassportImporter";
 import { cairoToday } from "@/lib/approvalFines";
 import { parseDisplayDate } from "@/lib/dateFormat";
 import { refetchLiveTables, useLive, type Execution } from "@/lib/db";
@@ -200,7 +201,10 @@ function ExecutionSummaryCards({
   return (
     <div style={{ display: "grid", gap: 10, marginBottom: 0 }}>
       <div style={{ padding: 12, borderRadius: 12, background: "#fff", border: "1px solid #e2e8f0" }}>
-        <PassportScanner onExtracted={onPassportExtracted} />
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <PassportScanner onExtracted={onPassportExtracted} />
+          <BulkPassportImporter />
+        </div>
       </div>
       <SummaryPeriodFilter value={summaryPeriod} onChange={setSummaryPeriod} />
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
