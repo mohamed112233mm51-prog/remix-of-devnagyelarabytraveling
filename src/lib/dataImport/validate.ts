@@ -91,8 +91,17 @@ function coerceField(
       const s = norm(raw);
       return { ok: true, value: ["true", "1", "نعم", "yes", "y", "مفعل", "مفعله"].includes(s), column };
     }
-    default:
-      return { ok: true, value: String(raw).trim().slice(0, 1000), column };
+    default: {
+      const value = String(raw).trim().slice(0, 1000);
+      if (Array.isArray(f.enum) && f.enum.length > 0) {
+        const allowed = f.enum.find((candidate) => norm(candidate) === norm(value));
+        if (!allowed) {
+          return { ok: false, message: `قيمة "${f.label}" يجب أن تكون واحدة من: ${f.enum.join("، ")}` };
+        }
+        return { ok: true, value: allowed, column };
+      }
+      return { ok: true, value, column };
+    }
   }
 }
 

@@ -1,3 +1,5 @@
+import { EXECUTION_PASSENGER_TYPES, deriveEgyptianPassengerData } from "./executionImportConfig";
+
 // Smart import specs: target tables, columns, synonyms (Arabic), validation hints.
 export type FieldType = "string" | "number" | "integer" | "date" | "lookup" | "boolean";
 
@@ -135,19 +137,35 @@ export const IMPORT_SPECS: ImportSpec[] = [
     dedupeKey: (r) => `sub:${String(r.passport || r.national_id || r.passenger_name || "").trim().toLowerCase()}|${r.submit_date || ""}|${String((r.services || [])[0] || "")}`,
   },
   {
-    // Simplified import: one Excel row = one execution. Service/pricing data
-    // is intentionally left empty and can be completed later from execution details.
+    // One Excel row = one execution. Compact service cells are expanded into
+    // separate execution service items without duplicating the passenger row.
     id: "executions", label: "التنفيذات", table: "executions",
     fields: [
-      { key: "passenger_name", label: "اسم المسافر", type: "string", required: true, synonyms: S.passenger, example: "اسم المسافر" },
+      { key: "passenger_name", label: "اسم المسافر", type: "string", required: true, synonyms: S.passenger },
       { key: "national_id", label: "الرقم القومي", type: "string", synonyms: S.nationalId },
       { key: "dob", label: "تاريخ الميلاد", type: "date", synonyms: S.dob },
-      { key: "passenger_type", label: "نوع المسافر", type: "string", synonyms: ["نوع المسافر", "فئة المسافر"] },
+      { key: "passenger_type", label: "نوع المسافر", type: "string", synonyms: ["نوع المسافر", "فئة المسافر"], enum: [...EXECUTION_PASSENGER_TYPES] },
       { key: "passport", label: "رقم الجواز", type: "string", synonyms: S.passport },
-      { key: "agent", label: "الوكيل", type: "lookup", lookup: "agent", dbColumn: "agent_id", synonyms: S.agentName, example: "اسم الوكيل" },
-      { key: "status", label: "حالة الموافقة", type: "string", synonyms: ["حالة الموافقة", ...S.status], example: "بطيء" },
-      { key: "operation_status", label: "حالة العملية", type: "string", synonyms: ["حالة العملية", "حالة التنفيذ"], example: "قيد التنفيذ" },
+      { key: "birth_place", label: "محل الميلاد", type: "string", synonyms: ["محل الميلاد", "مكان الميلاد"] },
+      { key: "agent", label: "الوكيل", type: "lookup", lookup: "agent", dbColumn: "agent_id", synonyms: S.agentName },
+      { key: "status", label: "حالة الموافقة", type: "string", synonyms: ["حالة الموافقة", ...S.status] },
+      { key: "operation_status", label: "حالة العملية", type: "string", synonyms: ["حالة العملية", "حالة التنفيذ"] },
+      { key: "departure_from", label: "جهة المغادرة", type: "string", synonyms: S.authority },
+      { key: "destination", label: "الوجهة", type: "string", synonyms: S.destination },
+      { key: "airline", label: "الطيران", type: "string", synonyms: S.airline },
+      { key: "travel_date", label: "تاريخ المغادرة", type: "date", synonyms: S.travelDate },
+      { key: "_agent_services", label: "خدمات الوكيل", type: "string", synonyms: ["خدمات الوكيل", "خدمة الوكيل", "Agent Services"] },
+      { key: "_company_services", label: "خدمات الشركة", type: "string", synonyms: ["خدمات الشركة", "خدمة الشركة", "Company Services"] },
     ],
+    transformRow: (r) => {
+      const derived = deriveEgyptianPassengerData(r.national_id);
+      if (!derived) return r;
+      return {
+        ...r,
+        dob: r.dob || derived.dob,
+        passenger_type: r.passenger_type || derived.passengerType,
+      };
+    },
   },
   {
     id: "transactions", label: "الحركات المالية للوكلاء", table: "transactions",

@@ -2,7 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { patchLive } from "@/lib/db";
 import { voidAllForSource } from "@/lib/financialEngine";
 import { deleteExecutionLinkedRows } from "@/lib/executionPosting";
-import { importExecutionRows, importFinancialRows } from "./specialImport";
+import { importFinancialRows } from "./specialImport";
+import { importExecutionRows } from "./executionImport";
 
 const BATCH = 100;
 
