@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return respond(405, { ok: false, error: "Method not allowed" });
   if (!(await authenticated(req))) return respond(401, { ok: false, error: "غير مصرح باستخدام خدمة قراءة الجواز" });
 
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) return respond(503, { ok: false, error: "خدمة قراءة الجواز غير مفعلة بعد" });
 
   let imageDataUrl = "";
