@@ -35,13 +35,47 @@ const HEIC_MIMES = new Set([
   "image/heif-sequence",
 ]);
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("تعذر قراءة صورة الجواز"));
-    reader.readAsDataURL(blob);
-  });
+function normalizeMime(value: string): string {
+  const mime = String(value || "").trim().toLowerCase().split(";", 1)[0];
+  if (mime === "image/jpg" || mime === "image/pjpeg") return "image/jpeg";
+  if (mime === "image/x-png") return "image/png";
+  return mime;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    let part = "";
+    for (let i = 0; i < chunk.length; i++) part += String.fromCharCode(chunk[i]);
+    binary += part;
+  }
+  return btoa(binary);
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const mime = normalizeMime(blob.type) || "image/jpeg";
+
+  // Android/WebView file pickers can fire FileReader.onerror even for a valid JPG.
+  // Prefer Blob.arrayBuffer() and encode ourselves; keep FileReader only as a fallback.
+  try {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (!bytes.length) throw new Error("empty image");
+    return `data:${mime};base64,${bytesToBase64(bytes)}`;
+  } catch {
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        if (result.startsWith("data:image/")) resolve(result);
+        else reject(new Error("تعذر تحويل صورة الجواز داخل المتصفح"));
+      };
+      reader.onerror = () => reject(new Error("تعذر تحويل صورة الجواز داخل المتصفح"));
+      reader.onabort = () => reject(new Error("تم إلغاء قراءة صورة الجواز"));
+      reader.readAsDataURL(blob);
+    });
+  }
 }
 
 function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
@@ -52,13 +86,6 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
       quality,
     );
   });
-}
-
-function normalizeMime(value: string): string {
-  const mime = String(value || "").trim().toLowerCase().split(";", 1)[0];
-  if (mime === "image/jpg" || mime === "image/pjpeg") return "image/jpeg";
-  if (mime === "image/x-png") return "image/png";
-  return mime;
 }
 
 function mimeFromFileName(name: string): string | null {
@@ -160,21 +187,23 @@ async function prepareWithImageBitmap(blob: Blob): Promise<Blob | null> {
 }
 
 async function prepareWithHtmlImage(blob: Blob): Promise<Blob | null> {
-  let dataUrl = "";
   const image = new Image();
+  let objectUrl = "";
   try {
-    dataUrl = await blobToDataUrl(blob);
+    // Avoid FileReader here completely. Object URLs are much more reliable with
+    // Android document-provider / gallery files inside embedded previews.
+    objectUrl = URL.createObjectURL(blob);
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
       image.onerror = () => reject(new Error("decode failed"));
-      image.src = dataUrl;
+      image.src = objectUrl;
     });
     return await drawToPreparedJpeg(image, image.naturalWidth, image.naturalHeight);
   } catch {
     return null;
   } finally {
     image.src = "";
-    dataUrl = "";
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }
 
