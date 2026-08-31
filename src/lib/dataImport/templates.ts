@@ -29,7 +29,7 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
   workbook.creator = "Nagy El Araby Traveling ERP";
   workbook.created = new Date();
   workbook.calcProperties.fullCalcOnLoad = true;
-  workbook.calcProperties.forceFullCalc = true;
+  (workbook.calcProperties as { forceFullCalc?: boolean }).forceFullCalc = true;
 
   const worksheet = workbook.addWorksheet("التنفيذات", {
     views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }],
@@ -105,6 +105,7 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
     rules: [
       {
         type: "expression",
+        priority: 1,
         formulae: ['D2="طفل تحت18"'],
         style: {
           fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDEBF7" } },

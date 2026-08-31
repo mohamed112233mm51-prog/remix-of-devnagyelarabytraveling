@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type AuditTable =
   | "transactions"
+  | "expenses"
   | "company_transactions"
   | "currency_supplier_transactions"
   | "expense_deductions"
