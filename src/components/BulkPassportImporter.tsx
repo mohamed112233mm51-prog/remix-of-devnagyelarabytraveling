@@ -281,7 +281,6 @@ export function BulkPassportImporter() {
       error: "",
       statusCode: data.needs_review ? "review" : "done",
     });
-    // Successful items retain text only. Drop the image/PDF reference immediately.
     sourceRefs.current.delete(id);
   };
 
@@ -292,7 +291,6 @@ export function BulkPassportImporter() {
       selected: false,
       error: error instanceof Error ? error.message : "تعذر قراءة الجواز",
     });
-    // Keep only this failed source in memory so the user can retry it.
   };
 
   const processImages = async (files: File[]) => {
@@ -423,6 +421,10 @@ export function BulkPassportImporter() {
 
   const saveSelected = async () => {
     if (processing || saving) return;
+    if (!perm.create) {
+      toast.error("ليس لديك صلاحية إنشاء تنفيذات. يمكن مراجعة قراءة الجوازات فقط.");
+      return;
+    }
     const selected = items.filter((item) => item.selected && item.statusCode !== "saved");
     if (!selected.length) { toast.error("اختر مسافرًا واحدًا على الأقل"); return; }
 
@@ -483,8 +485,6 @@ export function BulkPassportImporter() {
     }
   };
 
-  if (!perm.create) return null;
-
   const inputStyle: React.CSSProperties = {
     width: "100%",
     minHeight: 36,
@@ -513,6 +513,7 @@ export function BulkPassportImporter() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        title={perm.create ? "رفع مجموعة جوازات" : "يمكن قراءة الجوازات ومراجعتها، لكن إنشاء التنفيذات يحتاج صلاحية إنشاء"}
         style={{
           minHeight: 40,
           border: "1px solid #d4af37",
@@ -547,7 +548,8 @@ export function BulkPassportImporter() {
                 type="button"
                 className="btn btn-primary"
                 onClick={() => void saveSelected()}
-                disabled={processing || saving || selectedCount === 0}
+                disabled={!perm.create || processing || saving || selectedCount === 0}
+                title={!perm.create ? "تحتاج صلاحية إنشاء في قسم التنفيذات" : undefined}
               >
                 {saving ? "جارِ إنشاء التنفيذات..." : `إنشاء التنفيذات المحددة${selectedCount ? ` (${selectedCount})` : ""}`}
               </button>
@@ -556,6 +558,12 @@ export function BulkPassportImporter() {
         )}
       >
         <div dir="rtl" style={{ display: "grid", gap: 14 }}>
+          {!perm.create && (
+            <div style={{ padding: 10, border: "1px solid #fde68a", borderRadius: 10, background: "#fffbeb", color: "#92400e", fontSize: 12, fontWeight: 800 }}>
+              يمكنك رفع الجوازات وقراءة البيانات ومراجعتها، لكن إنشاء التنفيذات يحتاج صلاحية «إنشاء» في قسم التنفيذات.
+            </div>
+          )}
+
           <div style={{ padding: 12, border: "1px solid #dbe3ee", borderRadius: 12, background: "#f8fafc" }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <button
