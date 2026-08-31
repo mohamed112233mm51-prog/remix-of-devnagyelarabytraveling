@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
         printed_passport_number: { type: ["string", "null"] },
         printed_national_id: { type: ["string", "null"] },
         printed_date_of_birth: { type: ["string", "null"], description: "YYYY-MM-DD only when visibly readable" },
-        printed_place_of_birth: { type: ["string", "null"] },
+        printed_place_of_birth: { type: ["string", "null"], description: "Arabic printed place of birth only, exactly as printed; never translate/transliterate; never derive from MRZ; null if not visibly printed in Arabic" },
         printed_sex: { type: ["string", "null"] },
         printed_expiry_date: { type: ["string", "null"], description: "YYYY-MM-DD only when visibly readable" },
         mrz_lines: { type: "array", items: { type: "string" }, maxItems: 3 },
