@@ -1,0 +1,53 @@
+name: Temporary system tools admin gate CI
+
+on:
+  push:
+    branches:
+      - tmp-permissions-hardening-ci
+  pull_request:
+    branches:
+      - permissions-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp-permissions-hardening-ci
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - name: Apply system tools gate patch
+        run: python3 scripts/_tmp_patch_system_tools_admin_gate.py
+      - name: Verify system tools gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'settings.system_tools permission required' src/lib/demo-data.functions.ts
+          grep -q 'system tools require the admin role' src/lib/demo-data.functions.ts
+          grep -q 't.perm === "system_tools"' src/routes/settings.tsx
+          echo 'System tools authorization verified.'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Production build
+        run: npm run build
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Commit production changes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/demo-data.functions.ts src/routes/settings.tsx
+          if git diff --cached --quiet; then
+            echo 'No production changes to commit'
+          else
+            git commit -m 'require admin role plus explicit system tools permission'
+            git push origin HEAD:tmp-permissions-hardening-ci
+          fi

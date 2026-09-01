@@ -38,9 +38,20 @@ async function ensureAdmin(supabase: any, userId: string) {
     .select("is_super_admin, permissions")
     .eq("id", userId)
     .maybeSingle();
+  if ((profile as any)?.is_super_admin === true) return;
   const permissions = (profile as any)?.permissions ?? {};
-  if ((profile as any)?.is_super_admin === true || permissions?.settings?.system_tools === true) return;
-  throw new Response("Forbidden: settings.system_tools permission required", { status: 403 });
+  if (permissions?.settings?.system_tools !== true) {
+    throw new Response("Forbidden: settings.system_tools permission required", { status: 403 });
+  }
+  const { data: adminRole } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (!adminRole) {
+    throw new Response("Forbidden: system tools require the admin role", { status: 403 });
+  }
 }
 
 const DEMO_TABLES = [
