@@ -470,15 +470,21 @@ function AuditLogPage() {
       });
       const uids = Array.from(userIdSet);
       if (uids.length) {
-        const { data: profs } = await supabase
-          .from("profiles")
-          .select("id,full_name,email")
-          .in("id", uids);
+        // profiles is intentionally self-only after the RLS hardening migration.
+        // Resolve audit actors through the narrow, permission-gated RPC instead
+        // of reopening profile rows to the browser.
+        const { data: profs, error: usersError } = await (supabase as any).rpc(
+          "get_audit_user_labels",
+          { p_user_ids: uids },
+        );
+        if (usersError) throw usersError;
         const map: Record<string, string> = {};
         (profs || []).forEach((p: any) => {
-          map[p.id] = p.full_name || p.email || "مستخدم غير معروف";
+          if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
         });
         setUsers(map);
+      } else {
+        setUsers({});
       }
     } catch (e: any) {
       toast.error(e?.message || "تعذر تحميل السجل");
