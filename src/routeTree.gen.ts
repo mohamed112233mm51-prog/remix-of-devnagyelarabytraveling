@@ -15,6 +15,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ServicePricingRouteImport } from './routes/service-pricing'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as PassportBulkUploadRouteImport } from './routes/passport-bulk-upload'
 import { Route as MerchantsRouteImport } from './routes/merchants'
 import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as ExpensesRouteImport } from './routes/expenses'
@@ -58,6 +59,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PassportBulkUploadRoute = PassportBulkUploadRouteImport.update({
+  id: '/passport-bulk-upload',
+  path: '/passport-bulk-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MerchantsRoute = MerchantsRouteImport.update({
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof ExpensesRoute
   '/investors': typeof InvestorsRoute
   '/merchants': typeof MerchantsRoute
+  '/passport-bulk-upload': typeof PassportBulkUploadRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/service-pricing': typeof ServicePricingRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByTo {
   '/expenses': typeof ExpensesRoute
   '/investors': typeof InvestorsRoute
   '/merchants': typeof MerchantsRoute
+  '/passport-bulk-upload': typeof PassportBulkUploadRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/service-pricing': typeof ServicePricingRoute
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/expenses': typeof ExpensesRoute
   '/investors': typeof InvestorsRoute
   '/merchants': typeof MerchantsRoute
+  '/passport-bulk-upload': typeof PassportBulkUploadRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/service-pricing': typeof ServicePricingRoute
@@ -213,6 +222,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/investors'
     | '/merchants'
+    | '/passport-bulk-upload'
     | '/reports'
     | '/reset-password'
     | '/service-pricing'
@@ -235,6 +245,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/investors'
     | '/merchants'
+    | '/passport-bulk-upload'
     | '/reports'
     | '/reset-password'
     | '/service-pricing'
@@ -257,6 +268,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/investors'
     | '/merchants'
+    | '/passport-bulk-upload'
     | '/reports'
     | '/reset-password'
     | '/service-pricing'
@@ -280,6 +292,7 @@ export interface RootRouteChildren {
   ExpensesRoute: typeof ExpensesRoute
   InvestorsRoute: typeof InvestorsRoute
   MerchantsRoute: typeof MerchantsRoute
+  PassportBulkUploadRoute: typeof PassportBulkUploadRoute
   ReportsRoute: typeof ReportsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ServicePricingRoute: typeof ServicePricingRoute
@@ -333,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/passport-bulk-upload': {
+      id: '/passport-bulk-upload'
+      path: '/passport-bulk-upload'
+      fullPath: '/passport-bulk-upload'
+      preLoaderRoute: typeof PassportBulkUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/merchants': {
@@ -448,6 +468,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExpensesRoute: ExpensesRoute,
   InvestorsRoute: InvestorsRoute,
   MerchantsRoute: MerchantsRoute,
+  PassportBulkUploadRoute: PassportBulkUploadRoute,
   ReportsRoute: ReportsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ServicePricingRoute: ServicePricingRoute,
