@@ -245,15 +245,30 @@ async function authenticated(req: Request): Promise<boolean> {
 }
 
 function outputText(payload: any): string | null {
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content === "string" && content.trim()) return content;
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (typeof part?.text === "string" && part.text.trim()) return part.text;
-    }
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    const joined = parts
+      .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+      .join("")
+      .trim();
+    if (joined) return joined;
   }
   return null;
 }
+
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+  const data = match[2].replace(/\s/g, "");
+  if (!data) return null;
+  return { mimeType, data };
+}
+
+function normalizeModel(value: string): string {
+  return value.trim().replace(/^google\//i, "");
+}
+
 
 function stripJsonFence(text: string): string {
   const trimmed = text.trim();
