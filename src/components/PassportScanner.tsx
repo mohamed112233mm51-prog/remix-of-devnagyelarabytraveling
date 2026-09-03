@@ -78,6 +78,49 @@ function nationalIdMatchesDob(nationalId: string, dob: string | null): boolean {
   return dob === `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+async function createNationalIdCrop(file: File): Promise<File | null> {
+  let bitmap: ImageBitmap | null = null;
+  try {
+    if (typeof createImageBitmap !== "function") return null;
+    bitmap = await createImageBitmap(file);
+    const width = bitmap.width;
+    const height = bitmap.height;
+    if (!width || !height) return null;
+
+    // Egyptian passport identity text is concentrated on the right/center of the
+    // biodata page. This removes the portrait and most MRZ clutter for the retry.
+    const sx = Math.floor(width * 0.38);
+    const sy = Math.floor(height * 0.27);
+    const sw = Math.max(1, width - sx);
+    const sh = Math.max(1, Math.floor(height * 0.52));
+    const maxWidth = 1400;
+    const scale = Math.min(1, maxWidth / sw);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) return null;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.92);
+    });
+    canvas.width = 1;
+    canvas.height = 1;
+    if (!blob || blob.size <= 0 || blob.size > MAX_UPLOAD_BYTES) return null;
+
+    const baseName = String(file.name || "passport").replace(/\.[^.]+$/, "");
+    return new File([blob], `${baseName}-national-id.jpg`, { type: "image/jpeg" });
+  } catch {
+    return null;
+  } finally {
+    try { bitmap?.close(); } catch { /* no-op */ }
+  }
+}
+
 async function functionErrorMessage(error: any): Promise<string> {
   try {
     const response = error?.context;
@@ -122,16 +165,18 @@ export async function scanPassportFile(file: File): Promise<PassportScanData> {
   if (!SUPPORTED_MIMES.has(mime)) throw new Error("صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP");
 
   // Important for Android/Lovable preview: do not read or convert the image in
-  // the browser. FormData lets the browser network layer stream the File to the
-  // Edge Function, which performs the transient conversion server-side.
+  // the browser for the normal pass. The optional crop below only runs when the
+  // first OCR result is missing the national ID, and safely falls back if needed.
   let extracted = await invokePassportOcr(file);
 
   // Gemini vision can occasionally omit a clearly visible national ID on one pass.
-  // Retry only that passport once, and merge only a valid national ID from the
-  // second result. All other first-pass fields stay untouched.
+  // Retry only that passport once. Prefer a smaller text-region crop to reduce
+  // visual distraction and image-token usage; fall back to the original image if
+  // the browser cannot create the crop. Merge only a validated national ID.
   if (!String(extracted.national_id || "").trim()) {
     try {
-      const retry = await invokePassportOcr(file);
+      const retryFile = await createNationalIdCrop(file) || file;
+      const retry = await invokePassportOcr(retryFile);
       const retryNationalId = normalizeNationalId(retry.national_id);
       if (nationalIdMatchesDob(retryNationalId, extracted.date_of_birth)) {
         extracted = {
