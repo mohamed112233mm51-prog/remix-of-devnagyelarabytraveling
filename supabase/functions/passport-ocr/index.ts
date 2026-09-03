@@ -245,15 +245,30 @@ async function authenticated(req: Request): Promise<boolean> {
 }
 
 function outputText(payload: any): string | null {
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content === "string" && content.trim()) return content;
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (typeof part?.text === "string" && part.text.trim()) return part.text;
-    }
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    const joined = parts
+      .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+      .join("")
+      .trim();
+    if (joined) return joined;
   }
   return null;
 }
+
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+  const data = match[2].replace(/\s/g, "");
+  if (!data) return null;
+  return { mimeType, data };
+}
+
+function normalizeModel(value: string): string {
+  return value.trim().replace(/^google\//i, "");
+}
+
 
 function stripJsonFence(text: string): string {
   const trimmed = text.trim();
@@ -266,8 +281,8 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return respond(405, { ok: false, error: "Method not allowed" });
   if (!(await authenticated(req))) return respond(401, { ok: false, error: "غير مصرح باستخدام خدمة قراءة الجواز" });
 
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) return respond(503, { ok: false, error: "خدمة قراءة الجواز غير مفعلة بعد" });
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) return respond(503, { ok: false, error: "خدمة Gemini لقراءة الجواز غير مفعلة بعد" });
 
   let imageDataUrl = "";
   try {
@@ -279,28 +294,30 @@ Deno.serve(async (req) => {
     if (imageDataUrl.length > 9_000_000) {
       return respond(413, { ok: false, error: "صورة الجواز أكبر من الحد المسموح بعد التجهيز" });
     }
+    const inlineImage = parseDataUrl(imageDataUrl);
+    if (!inlineImage) return respond(400, { ok: false, error: "صيغة صورة الجواز غير صالحة" });
 
-    const model = Deno.env.get("PASSPORT_OCR_MODEL") || "google/gemini-3.1-pro-preview";
+    const model = normalizeModel(Deno.env.get("PASSPORT_OCR_MODEL") || "gemini-3.7-flash") || "gemini-3.7-flash";
+    const nullableString = { type: "STRING", nullable: true };
     const schema = {
-      type: "object",
-      additionalProperties: false,
+      type: "OBJECT",
       required: [
         "printed_name_ar", "printed_name_en", "printed_passport_number", "printed_national_id",
         "printed_date_of_birth", "printed_place_of_birth", "printed_sex", "printed_expiry_date",
         "mrz_lines", "image_quality", "quality_notes",
       ],
       properties: {
-        printed_name_ar: { type: ["string", "null"] },
-        printed_name_en: { type: ["string", "null"] },
-        printed_passport_number: { type: ["string", "null"] },
-        printed_national_id: { type: ["string", "null"] },
-        printed_date_of_birth: { type: ["string", "null"], description: "YYYY-MM-DD only when visibly readable" },
-        printed_place_of_birth: { type: ["string", "null"], description: "Arabic printed place of birth only, exactly as printed; never translate/transliterate; never derive from MRZ; null if not visibly printed in Arabic" },
-        printed_sex: { type: ["string", "null"] },
-        printed_expiry_date: { type: ["string", "null"], description: "YYYY-MM-DD only when visibly readable" },
-        mrz_lines: { type: "array", items: { type: "string" }, maxItems: 3 },
-        image_quality: { type: "string", enum: ["clear", "usable", "poor"] },
-        quality_notes: { type: "array", items: { type: "string" }, maxItems: 6 },
+        printed_name_ar: { ...nullableString },
+        printed_name_en: { ...nullableString },
+        printed_passport_number: { ...nullableString },
+        printed_national_id: { ...nullableString },
+        printed_date_of_birth: { ...nullableString, description: "YYYY-MM-DD only when visibly readable" },
+        printed_place_of_birth: { ...nullableString, description: "Arabic printed place of birth only, exactly as printed; never translate/transliterate; never derive from MRZ; null if not visibly printed in Arabic" },
+        printed_sex: { ...nullableString },
+        printed_expiry_date: { ...nullableString, description: "YYYY-MM-DD only when visibly readable" },
+        mrz_lines: { type: "ARRAY", items: { type: "STRING" }, maxItems: 3 },
+        image_quality: { type: "STRING", enum: ["clear", "usable", "poor"] },
+        quality_notes: { type: "ARRAY", items: { type: "STRING" }, maxItems: 6 },
       },
     };
 
@@ -315,39 +332,43 @@ Deno.serve(async (req) => {
       "Return only JSON matching the requested schema.",
     ].join(" ");
 
-    // Lovable AI Gateway (vision). The image stays in request memory only:
+    // Google Gemini Developer API (vision). The image stays in request memory only:
     // it is never written to Storage, DB, or logs.
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: imageDataUrl } },
-          ],
-        }],
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "passport_extraction", strict: true, schema },
+    const aiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          contents: [{
+            role: "user",
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: inlineImage.mimeType, data: inlineImage.data } },
+            ],
+          }],
+          generationConfig: {
+            temperature: 0,
+            responseMimeType: "application/json",
+            responseSchema: schema,
+          },
+        }),
+      },
+    );
 
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) {
         return respond(429, { ok: false, error: "تم تجاوز حد الاستخدام للحظة. أعد المحاولة بعد قليل" });
       }
-      if (aiResponse.status === 402 || aiResponse.status === 403) {
-        return respond(402, { ok: false, error: "رصيد خدمة الذكاء الاصطناعي غير كافٍ أو الخدمة موقوفة" });
+      if (aiResponse.status === 400 || aiResponse.status === 401 || aiResponse.status === 403) {
+        return respond(503, { ok: false, error: "إعداد خدمة Gemini لقراءة الجواز غير صالح أو غير مفعّل" });
       }
       return respond(502, { ok: false, error: "تعذر تحليل صورة الجواز حاليًا" });
     }
+
     const aiJson = await aiResponse.json();
     const rawText = outputText(aiJson);
     if (!rawText) return respond(502, { ok: false, error: "لم ترجع خدمة القراءة بيانات صالحة" });

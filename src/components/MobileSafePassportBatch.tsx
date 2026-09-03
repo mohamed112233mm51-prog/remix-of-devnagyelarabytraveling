@@ -254,7 +254,7 @@ export function MobileSafePassportBatch() {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
       } finally {
-        await pdf.destroy();
+        await (pdf as any).destroy();
       }
       if (success) toast.success(`تمت إضافة ${success} جواز من PDF${failed ? `، وفشل ${failed}` : ""}`);
       else if (failed) toast.error("تعذر قراءة أي صفحة من ملف PDF");
