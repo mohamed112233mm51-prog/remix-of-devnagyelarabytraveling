@@ -265,9 +265,9 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
   return { mimeType, data };
 }
 
-function normalizeModel(value: string): string {
-  return value.trim().replace(/^google\//i, "");
-}
+
+
+
 
 
 function stripJsonFence(text: string): string {
@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
     const inlineImage = parseDataUrl(imageDataUrl);
     if (!inlineImage) return respond(400, { ok: false, error: "صيغة صورة الجواز غير صالحة" });
 
-    const model = normalizeModel(Deno.env.get("PASSPORT_OCR_MODEL") || "gemini-3.7-flash") || "gemini-3.7-flash";
+    const model = "gemini-3.7-flash";
     const nullableString = { type: "STRING", nullable: true };
     const schema = {
       type: "OBJECT",
