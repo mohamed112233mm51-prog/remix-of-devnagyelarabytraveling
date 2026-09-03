@@ -479,7 +479,15 @@ Deno.serve(async (req) => {
         passport_number: passportNumber,
         expiry_date: expiryDate,
         mrz_verified: mrzVerified,
-        needs_review: uniqueWarnings.length > 0,
+        needs_review: Boolean(
+          (!fullNameAr && !fullNameEn)
+          || !passportNumber
+          || !national
+          || !dob
+          || !placeOfBirth
+          || !sex
+          || (printedNational && optionalNational && printedNational.value !== optionalNational.value)
+        ),
         warnings: uniqueWarnings,
       },
     });
