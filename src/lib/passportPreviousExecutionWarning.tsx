@@ -21,7 +21,6 @@ type PassportIdentity = {
   nationalId?: string | null;
 };
 
-const checkedKeys = new Set<string>();
 let warningQueue: Promise<void> = Promise.resolve();
 
 function normalizePassport(value: unknown): string {
@@ -30,10 +29,6 @@ function normalizePassport(value: unknown): string {
 
 function normalizeNationalId(value: unknown): string {
   return String(value ?? "").replace(/\D/g, "");
-}
-
-function warningKey(passport: string, nationalId: string): string {
-  return nationalId ? `nid:${nationalId}` : `passport:${passport}`;
 }
 
 function isCancelledStatus(value: unknown): boolean {
@@ -126,19 +121,16 @@ export async function warnIfPassportPassengerHasPreviousExecution(identity: Pass
   const nationalId = normalizeNationalId(identity.nationalId);
   if (!passport && !nationalId) return;
 
-  const key = warningKey(passport, nationalId);
-  if (checkedKeys.has(key)) return;
-  checkedKeys.add(key);
-
   try {
     const matches = await findPreviousExecutions(passport, nationalId);
     if (!matches.length) return;
 
+    // Every new upload performs its own history check. The queue only prevents
+    // several warnings from a multi-image/PDF batch from overlapping visually.
     warningQueue = warningQueue
       .catch(() => undefined)
       .then(() => showPreviousExecutionModal(matches, String(identity.passengerName || "").trim()));
   } catch {
-    checkedKeys.delete(key);
     // Duplicate-history lookup is informational only and must never block OCR.
   }
 }
