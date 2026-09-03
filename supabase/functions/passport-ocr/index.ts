@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
     const inlineImage = parseDataUrl(imageDataUrl);
     if (!inlineImage) return respond(400, { ok: false, error: "صيغة صورة الجواز غير صالحة" });
 
-    const model = "gemini-3.7-flash";
+    const model = "gemini-3.5-flash-lite";
     const nullableString = { type: "STRING", nullable: true };
     const schema = {
       type: "OBJECT",
@@ -354,6 +354,7 @@ Deno.serve(async (req) => {
             temperature: 0,
             responseMimeType: "application/json",
             responseSchema: schema,
+            thinkingConfig: { thinkingLevel: "minimal" },
           },
         }),
       },
