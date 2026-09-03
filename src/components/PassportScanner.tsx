@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Camera, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { warnIfPassportPassengerHasPreviousExecution } from "@/lib/passportPreviousExecutionWarning";
 
 export type PassportScanData = {
   full_name_ar: string | null;
@@ -207,7 +208,20 @@ export async function scanPassportFile(file: File): Promise<PassportScanData> {
     || !extracted.sex
   );
 
-  return { ...extracted, needs_review: needsReview };
+  const result = { ...extracted, needs_review: needsReview };
+
+  // Bulk passport upload should surface the same previous-execution warning used
+  // by the normal execution flow as soon as the passport identity is available.
+  // The lookup is informational and runs in the background so it never blocks OCR.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/passport-bulk-upload")) {
+    void warnIfPassportPassengerHasPreviousExecution({
+      passengerName: result.full_name_ar || result.full_name_en,
+      passport: result.passport_number,
+      nationalId: result.national_id,
+    });
+  }
+
+  return result;
 }
 
 export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportScanData) => void | Promise<void> }) {
