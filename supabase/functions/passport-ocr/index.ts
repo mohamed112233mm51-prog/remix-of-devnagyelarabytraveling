@@ -127,7 +127,6 @@ function mrzCheck(data: string, checkDigit: string): boolean {
   for (let i = 0; i < data.length; i++) sum += mrzValue(data[i]) * weights[i % 3];
   return String(sum % 10) === checkDigit;
 }
-
 function normalizeMrzLine(value: unknown): string {
   return String(value ?? "")
     .toUpperCase()
@@ -486,7 +485,6 @@ Deno.serve(async (req) => {
           || !dob
           || !placeOfBirth
           || !sex
-          || (printedNational && optionalNational && printedNational.value !== optionalNational.value)
         ),
         warnings: uniqueWarnings,
       },
