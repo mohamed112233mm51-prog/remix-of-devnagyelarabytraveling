@@ -51,6 +51,33 @@ function resolveFileMime(file: File): string | null {
   return mimeFromFileName(file.name);
 }
 
+function normalizeNationalId(value: unknown): string {
+  const arabicDigits: Record<string, string> = {
+    "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+    "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+  };
+  return String(value ?? "")
+    .replace(/[٠-٩]/g, (digit) => arabicDigits[digit] || digit)
+    .replace(/\D/g, "");
+}
+
+function nationalIdMatchesDob(nationalId: string, dob: string | null): boolean {
+  if (!/^\d{14}$/.test(nationalId) || !["2", "3"].includes(nationalId[0])) return false;
+
+  const year = (nationalId[0] === "2" ? 1900 : 2000) + Number(nationalId.slice(1, 3));
+  const month = Number(nationalId.slice(3, 5));
+  const day = Number(nationalId.slice(5, 7));
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) return false;
+
+  if (!dob) return true;
+  return dob === `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 async function functionErrorMessage(error: any): Promise<string> {
   try {
     const response = error?.context;
@@ -62,6 +89,20 @@ async function functionErrorMessage(error: any): Promise<string> {
     // Fall back to the SDK message below.
   }
   return String(error?.message || "تعذر الاتصال بخدمة قراءة الجواز");
+}
+
+async function invokePassportOcr(file: File): Promise<PassportScanData> {
+  const formData = new FormData();
+  formData.append("image", file, file.name || "passport.jpg");
+
+  const { data, error } = await supabase.functions.invoke("passport-ocr-upload", {
+    body: formData,
+  });
+  if (error) throw new Error(await functionErrorMessage(error));
+
+  const response = (data || {}) as PassportOcrResponse;
+  if (!response.ok || !response.data) throw new Error(response.error || "تعذر استخراج بيانات الجواز");
+  return response.data;
 }
 
 /**
@@ -83,21 +124,34 @@ export async function scanPassportFile(file: File): Promise<PassportScanData> {
   // Important for Android/Lovable preview: do not read or convert the image in
   // the browser. FormData lets the browser network layer stream the File to the
   // Edge Function, which performs the transient conversion server-side.
-  const formData = new FormData();
-  formData.append("image", file, file.name || "passport.jpg");
+  let extracted = await invokePassportOcr(file);
 
-  const { data, error } = await supabase.functions.invoke("passport-ocr-upload", {
-    body: formData,
-  });
-  if (error) throw new Error(await functionErrorMessage(error));
-
-  const response = (data || {}) as PassportOcrResponse;
-  if (!response.ok || !response.data) throw new Error(response.error || "تعذر استخراج بيانات الجواز");
+  // Gemini vision can occasionally omit a clearly visible national ID on one pass.
+  // Retry only that passport once, and merge only a valid national ID from the
+  // second result. All other first-pass fields stay untouched.
+  if (!String(extracted.national_id || "").trim()) {
+    try {
+      const retry = await invokePassportOcr(file);
+      const retryNationalId = normalizeNationalId(retry.national_id);
+      if (nationalIdMatchesDob(retryNationalId, extracted.date_of_birth)) {
+        extracted = {
+          ...extracted,
+          national_id: retryNationalId,
+          warnings: (Array.isArray(extracted.warnings) ? extracted.warnings : []).filter((warning) => {
+            const text = String(warning || "");
+            return !text.includes("الرقم القومي لم يتم التحقق منه")
+              && !text.includes("الرقم القومي المقروء يحتاج مراجعة");
+          }),
+        };
+      }
+    } catch {
+      // A retry is best-effort only. Keep the successful first-pass result.
+    }
+  }
 
   // Review status is derived from the actual required identity fields instead of
   // any advisory warning returned by the OCR runtime. Warnings remain available
   // to the UI, but they do not mark a complete row as requiring review.
-  const extracted = response.data;
   const hasName = Boolean(String(extracted.full_name_ar || extracted.full_name_en || "").trim());
   const needsReview = Boolean(
     !hasName
