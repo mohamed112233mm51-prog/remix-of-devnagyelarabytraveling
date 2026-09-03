@@ -93,7 +93,22 @@ export async function scanPassportFile(file: File): Promise<PassportScanData> {
 
   const response = (data || {}) as PassportOcrResponse;
   if (!response.ok || !response.data) throw new Error(response.error || "تعذر استخراج بيانات الجواز");
-  return response.data;
+
+  // Review status is derived from the actual required identity fields instead of
+  // any advisory warning returned by the OCR runtime. Warnings remain available
+  // to the UI, but they do not mark a complete row as requiring review.
+  const extracted = response.data;
+  const hasName = Boolean(String(extracted.full_name_ar || extracted.full_name_en || "").trim());
+  const needsReview = Boolean(
+    !hasName
+    || !String(extracted.passport_number || "").trim()
+    || !String(extracted.national_id || "").trim()
+    || !String(extracted.date_of_birth || "").trim()
+    || !String(extracted.place_of_birth || "").trim()
+    || !extracted.sex
+  );
+
+  return { ...extracted, needs_review: needsReview };
 }
 
 export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportScanData) => void | Promise<void> }) {
