@@ -85,6 +85,7 @@ const TITLES: Record<string, ReactNode> = {
   "/": (<>لوحة <span>التحكم</span></>),
   "/submissions": (<>قائمة <span>التقديمات</span></>),
   "/executions": (<>قائمة <span>التنفيذ</span></>),
+  "/passport-bulk-upload": (<>قائمة <span>التنفيذ</span></>),
   "/accounts": (<>حسابات <span>الوكلاء</span></>),
   "/companies": (<>حسابات <span>الشركات الصادرة</span></>),
   "/merchants": (<>حسابات <span>تاجر الكاش</span></>),
