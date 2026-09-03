@@ -286,11 +286,6 @@ export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportS
           {reading ? <Loader2 size={17} className="animate-spin" /> : <Camera size={17} />}
           {reading ? "جارِ رفع وقراءة الجواز..." : "رفع / تصوير الجواز"}
         </button>
-
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", fontWeight: 700 }}>
-          <ShieldCheck size={15} color="#15803d" />
-          الصورة لا تُحفظ في Supabase
-        </span>
       </div>
 
       {lastResult && (
