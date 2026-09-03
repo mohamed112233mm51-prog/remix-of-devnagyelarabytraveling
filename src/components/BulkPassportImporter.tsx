@@ -177,7 +177,7 @@ async function renderOnePdfSource(source: Extract<SourceRef, { kind: "pdf-page" 
   try {
     return await renderPdfPage(pdf, source.pageNumber, source.file.name);
   } finally {
-    await pdf.destroy();
+    await (pdf as any).destroy();
   }
 }
 
@@ -357,7 +357,7 @@ export function BulkPassportImporter() {
           }
         });
       } finally {
-        await pdf.destroy();
+        await (pdf as any).destroy();
       }
     } catch (error) {
       if (batchToken.current === token && items.length === 0) {

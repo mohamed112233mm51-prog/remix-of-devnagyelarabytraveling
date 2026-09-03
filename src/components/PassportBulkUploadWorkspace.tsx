@@ -161,7 +161,7 @@ async function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise
 }
 
 async function renderPdfPage(pdf: any, pageNumber: number, sourceName: string): Promise<File> {
-  const page = await withTimeout(
+  const page: any = await withTimeout(
     pdf.getPage(pageNumber),
     10000,
     `تعذر فتح صفحة ${pageNumber} من PDF`,
@@ -329,7 +329,7 @@ export function PassportBulkUploadWorkspace() {
     try {
       const bytes = await readPdfBytes(file);
       setProgress("جارِ تحميل أداة قراءة PDF...");
-      const pdfjs = await withTimeout(
+      const pdfjs: any = await withTimeout(
         loadPdfJs(),
         12000,
         "تعذر تحميل أداة قراءة PDF على هذا المتصفح",
@@ -337,7 +337,7 @@ export function PassportBulkUploadWorkspace() {
 
       setProgress("جارِ فتح صفحات PDF...");
       const loadingTask = pdfjs.getDocument({ data: bytes, isEvalSupported: false, useWorkerFetch: false });
-      const pdf = await withTimeout(
+      const pdf: any = await withTimeout(
         loadingTask.promise,
         15000,
         "تعذر فتح PDF أو أن الملف يحتاج وقتًا طويلًا للمعالجة",
