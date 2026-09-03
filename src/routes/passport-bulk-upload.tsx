@@ -47,6 +47,19 @@ function PassportBulkUploadRoute() {
     };
   }, []);
 
+  // This route belongs to executions; keep the topbar title consistent with
+  // the main executions page instead of falling back to the account title.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const title = document.querySelector<HTMLElement>(".page-title");
+    if (!title) return;
+    const previous = title.innerHTML;
+    title.innerHTML = "قائمة <span>التنفيذ</span>";
+    return () => {
+      title.innerHTML = previous;
+    };
+  }, []);
+
   return (
     <div
       dir="rtl"
@@ -140,6 +153,10 @@ function PassportBulkUploadRoute() {
           box-shadow: none !important;
         }
 
+        .passport-bulk-workspace > div > div:first-of-type > div:nth-child(2) > span:first-child {
+          display: none !important;
+        }
+
         .passport-bulk-workspace > div > div:nth-of-type(2) > button.btn-secondary {
           min-height: 44px !important;
           margin-top: 12px !important;
@@ -231,12 +248,6 @@ function PassportBulkUploadRoute() {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, color: "#0f1b3d", fontWeight: 900 }}>الرفع الجماعي للجوازات</h1>
-          <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, fontWeight: 700, lineHeight: 1.7 }}>
-            اختر صورة واحدة، أو مجموعة صور، أو ملف PDF. في PDF تظهر كل الصفحات وحالتها أثناء القراءة، وتظل البيانات النصية المؤقتة محفوظة داخل نفس جلسة المتصفح حتى لو أعادت الواجهة الرسم.
-          </p>
-          <p style={{ margin: "4px 0 0", color: "#92400e", fontSize: 11, fontWeight: 800, lineHeight: 1.7 }}>
-            قراءة الجوازات لا تنشئ تنفيذات تلقائيًا: بعد ظهور البيانات راجع الصفوف ثم اضغط «إنشاء التنفيذات المحددة».
-          </p>
         </div>
         <button
           type="button"
@@ -266,10 +277,6 @@ function PassportBulkUploadRoute() {
 
       <div className="passport-bulk-workspace">
         <PassportBulkUploadWorkspaceV4 />
-      </div>
-
-      <div style={{ padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
-        ملفات الصور وPDF لا يتم حفظها في Supabase أو قاعدة البيانات. الذي يُحفظ مؤقتًا داخل sessionStorage هو النص المستخرج وحالة الصفوف فقط، ويُمسح عند مسح الدفعة أو انتهاء جلسة المتصفح.
       </div>
     </div>
   );
