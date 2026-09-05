@@ -435,6 +435,81 @@ export type MerchantMovementRow = {
   sourceId: string;
 };
 
+
+type MerchantInstapayAmount = { gross: number; net: number };
+
+function normalizeMerchantPaymentMethod(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .replace(/[إأآ]/g, "ا")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+/**
+ * Rebuild merchant-funded InstaPay from payment_splits on the read side only.
+ * New rows normally carry source_id + transaction_id; historical rows may have
+ * only one of them. Company InstaPay is excluded by cash_box_id.
+ */
+function buildMerchantInstapayByTransaction(
+  splits: readonly CollectionSplitRow[] | null | undefined,
+): Map<string, MerchantInstapayAmount> {
+  const out = new Map<string, MerchantInstapayAmount>();
+  for (const raw of splits || []) {
+    const s = raw as any;
+    if (s.cancelled_at) continue;
+
+    const transactionRef = String(s.source_id || s.transaction_id || "").trim();
+    if (!transactionRef) continue;
+    if (s.source_table && s.source_table !== "transactions") continue;
+    if (s.cash_box_id) continue;
+
+    const method = normalizeMerchantPaymentMethod(s.method);
+    const isMerchantInsta = method.includes("انستا") && !method.includes("الشركه") && !method.includes("الشركة");
+    if (!isMerchantInsta) continue;
+
+    const amount = Math.abs(Number(s.amount || 0));
+    const gross = Math.abs(Number(s.gross_amount || 0)) || amount;
+    const net = Math.abs(Number(s.net_amount || 0)) || amount;
+    if (gross <= 0 && net <= 0) continue;
+
+    const prev = out.get(transactionRef) || { gross: 0, net: 0 };
+    prev.gross += gross;
+    prev.net += net;
+    out.set(transactionRef, prev);
+  }
+  return out;
+}
+
+function merchantIncomingAmounts(
+  t: Transaction,
+  merchantInstapayByTxnId: ReadonlyMap<string, MerchantInstapayAmount>,
+): { gross: number; net: number } {
+  let insta = merchantInstapayByTxnId.get(t.id) || { gross: 0, net: 0 };
+  const physical = Number(t.merchant_cash_physical_amount || 0);
+  const walletGross = merchantCashGross(t);
+  const walletNet = merchantCashNet(t);
+
+  // Historical compatibility: older merchant InstaPay rows can be missing the
+  // split reference. Restrict fallback to a merchant-linked, pure InstaPay row
+  // so company InstaPay and mixed payments cannot be double counted.
+  if (
+    insta.net <= 0
+    && t.merchant_id
+    && walletGross <= 0
+    && physical <= 0
+    && normalizeMerchantPaymentMethod((t as any).payment_method).includes("انستا")
+  ) {
+    const legacyAmount = Math.abs(Number((t as any).instapay_amount || 0));
+    if (legacyAmount > 0) insta = { gross: legacyAmount, net: legacyAmount };
+  }
+
+  return {
+    gross: walletGross + physical + insta.gross,
+    net: walletNet + physical + insta.net,
+  };
+}
+
 export function buildMerchantMovements(
   merchantId: string,
   input: {
@@ -454,12 +529,12 @@ export function buildMerchantMovements(
   if (!merchantId) return [];
   const { incomingTxns, outgoingTxns, cashMoveTxns, collections, conversions, splits } = input;
   const collectionCurrencyById = buildCollectionCurrencyMap(splits);
+  const merchantInstapayByTxnId = buildMerchantInstapayByTransaction(splits);
   const list: MerchantMovementRow[] = [];
   for (const t of incomingTxns) {
     if (t.merchant_id !== merchantId) continue;
     if ((t as any).cancelled_at) continue;
-    const gross = merchantCashGross(t) + Number(t.merchant_cash_physical_amount || 0);
-    const net = merchantCashNet(t) + Number(t.merchant_cash_physical_amount || 0);
+    const { gross, net } = merchantIncomingAmounts(t, merchantInstapayByTxnId);
     const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
     list.push({
       id: `in-${t.id}`, date: t.date, createdAt: (t as any).created_at || "", type: "وارد من وكيل",
@@ -545,9 +620,12 @@ export function buildMerchantMovementInputs(
   usdRows: UsdTreasuryTransaction[],
   splits?: readonly CollectionSplitRow[] | null,
 ): Parameters<typeof buildMerchantMovements>[1] {
-  const incomingTxns = txns.filter((t) =>
-    Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0,
-  );
+  const merchantInstapayByTxnId = buildMerchantInstapayByTransaction(splits);
+  const incomingTxns = txns.filter((t) => {
+    if (!t.merchant_id) return false;
+    const { net } = merchantIncomingAmounts(t, merchantInstapayByTxnId);
+    return net > 0;
+  });
   const outgoingAll = companyTxns.filter((t) => merchantCompanyOutflowAmount(t) > 0);
   const mirrorSourceIds = new Set<string>();
   for (const t of txns) {
@@ -1953,25 +2031,36 @@ export function summarizeMerchantCollectionsPeriod(
 
 export function summarizeMerchantIncomingPeriod(
   txns: Transaction[], agentId: string, from: string, to: string,
-): { filtered: Transaction[]; total: number; totalByCurrency: CurrencyMap; totalPaidByCurrency: CurrencyMap } {
+  splits?: readonly CollectionSplitRow[] | null,
+): {
+  filtered: Transaction[];
+  total: number;
+  totalByCurrency: CurrencyMap;
+  totalPaidByCurrency: CurrencyMap;
+  amountsById: Map<string, { gross: number; net: number }>;
+} {
   const filtered: Transaction[] = [];
   let total = 0;
   const totalByCurrency = new CurrencyMap();
   const totalPaidByCurrency = new CurrencyMap();
+  const amountsById = new Map<string, { gross: number; net: number }>();
+  const merchantInstapayByTxnId = buildMerchantInstapayByTransaction(splits);
   for (const t of txns) {
     if ((t as any).cancelled_at) continue;
     if (agentId && t.agent_id !== agentId) continue;
     if (from && (t.date || "") < from) continue;
     if (to && (t.date || "") > to) continue;
+    const amounts = merchantIncomingAmounts(t, merchantInstapayByTxnId);
+    if (amounts.net <= 0) continue;
     filtered.push(t);
-    const net = merchantCashNet(t) + Number((t as any).merchant_cash_physical_amount || 0);
+    amountsById.set(t.id, amounts);
     // transactions table has NO payment_currency column — currency is stored in `currency`.
     const cur = normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP");
-    total += net;
-    totalByCurrency.add(cur, net);
+    total += amounts.net;
+    totalByCurrency.add(cur, amounts.net);
     totalPaidByCurrency.add(cur, Number(t.total_paid || 0));
   }
-  return { filtered, total, totalByCurrency, totalPaidByCurrency };
+  return { filtered, total, totalByCurrency, totalPaidByCurrency, amountsById };
 }
 
 export function summarizeMerchantOutgoingPeriod(

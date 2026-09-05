@@ -1,14 +1,9 @@
 import { useMemo } from "react";
 import { useCompleteMerchantFinancialData } from "@/hooks/useCompleteMerchantFinancialData";
 import { cairoToday } from "@/lib/approvalFines";
+import type { Transaction } from "@/lib/db";
 import {
-  merchantCompanyOutflowAmount,
-  type CompanyTransaction,
-  type MerchantCashCollection,
-  type Transaction,
-  type UsdTreasuryTransaction,
-} from "@/lib/db";
-import {
+  buildMerchantMovementInputs,
   buildMerchantMovements,
   summarizeMerchantMovementTotals,
   type MerchantMovementItem,
@@ -40,27 +35,13 @@ export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovement
   const todayISO = cairoToday();
 
   return useMemo(() => {
-    // نفس تقسيم MerchantStatementTab حتى تظل الكروت مطابقة لكشف الحساب.
-    const merchantCompanyOutSourceIds = new Set(
-      transactions
-        .filter((row) => row.merchant_id && row.source_service_type === "merchant_cash_out_to_company")
-        .map((row) => (row as any).source_service_id)
-        .filter(Boolean),
-    );
-
-    const incomingTxns = transactions.filter(
-      (row) => Number(row.merchant_cash_amount || 0) > 0
-        || Number(row.merchant_cash_physical_amount || 0) > 0,
-    );
-    const outgoingTxns = companyTransactions
-      .filter((row) => merchantCompanyOutflowAmount(row) > 0)
-      .filter((row) => !merchantCompanyOutSourceIds.has(row.id));
-    const cashMoveTxns = transactions.filter(
-      (row) => row.merchant_id && [
-        "merchant_cash_out",
-        "merchant_cash_out_to_company",
-        "merchant_cash_out_to_agent",
-      ].includes(String(row.source_service_type || "")),
+    // Same central source as merchant statement, including merchant InstaPay.
+    const movementInput = buildMerchantMovementInputs(
+      transactions,
+      companyTransactions,
+      collections,
+      conversions,
+      paymentSplits as any,
     );
 
     // نفس سياسة computeMerchantAggregates: المعرّفات تأتي من الحركات نفسها،
@@ -79,14 +60,7 @@ export function useMerchantPeriodTotals(period: SummaryPeriod): MerchantMovement
 
     const movements: MerchantMovementItem[] = [];
     for (const merchantId of merchantIds) {
-      movements.push(...buildMerchantMovements(merchantId, {
-        incomingTxns,
-        outgoingTxns,
-        cashMoveTxns,
-        collections,
-        conversions,
-        splits: paymentSplits as any,
-      }) as MerchantMovementItem[]);
+      movements.push(...buildMerchantMovements(merchantId, movementInput) as MerchantMovementItem[]);
     }
 
     const periodMovements = movements.filter((movement) => {

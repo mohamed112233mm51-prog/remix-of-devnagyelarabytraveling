@@ -9,7 +9,7 @@ import {
   type Agent, type IssuingCompany, type Merchant, type MerchantCashCollection,
   type Transaction, type CompanyTransaction, type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap, buildMerchantMovements } from "@/lib/financialSummary";
+import { useMerchantAggregates, useMerchantTotals, summarizeMerchantCollectionsPeriod, summarizeMerchantIncomingPeriod, summarizeMerchantOutgoingPeriod, summarizeMerchantMovementTotals, formatCurrencyMap, CurrencyMap, buildMerchantMovements, buildMerchantMovementInputs } from "@/lib/financialSummary";
 
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -98,7 +98,10 @@ function MerchantsPage() {
     ),
     [txns],
   );
-  const incomingTxns = useMemo(() => txns.filter((t) => Number(t.merchant_cash_amount || 0) > 0 || Number(t.merchant_cash_physical_amount || 0) > 0), [txns]);
+  const incomingTxns = useMemo(
+    () => buildMerchantMovementInputs(txns, cTxns, collections, usdRows, paymentSplits as any).incomingTxns,
+    [txns, cTxns, collections, usdRows, paymentSplits],
+  );
   const outgoingTxns = useMemo(
     () => cTxns.filter((t) => merchantCompanyOutflowAmount(t) > 0),
     [cTxns],
@@ -271,7 +274,7 @@ function MerchantsPage() {
       )}
 
       {tab === "incoming" && (
-        <IncomingTab txns={incomingTxns} agentName={agentName} agents={agents} />
+        <IncomingTab txns={incomingTxns} agentName={agentName} agents={agents} splits={paymentSplits} />
       )}
       {tab === "outgoing" && (
         <OutgoingTab txns={outgoingTxns} companyName={companyName} companies={companies} />
@@ -639,15 +642,15 @@ function HistoryTab({ collections, merchants, splits }: { collections: MerchantC
   );
 }
 
-function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentName: (id: string) => string; agents: Agent[] }) {
+function IncomingTab({ txns, agentName, agents, splits }: { txns: Transaction[]; agentName: (id: string) => string; agents: Agent[]; splits: readonly any[] }) {
   const { rows: merchants } = useLive<Merchant>("merchants");
   const mName = (id: string | null) => id ? (merchants.find((m) => m.id === id)?.merchant_name || "—") : "—";
   const [agentId, setAgentId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const { filtered, totalByCurrency, totalPaidByCurrency } = useMemo(
-    () => summarizeMerchantIncomingPeriod(txns, agentId, from, to),
-    [txns, agentId, from, to],
+  const { filtered, totalByCurrency, totalPaidByCurrency, amountsById } = useMemo(
+    () => summarizeMerchantIncomingPeriod(txns, agentId, from, to, splits),
+    [txns, agentId, from, to, splits],
   );
   const rowCurrency = (t: Transaction) =>
     normalizeCurrency((t as any).payment_currency || (t as any).currency || "EGP") as "EGP" | "USD" | "LYD";
@@ -674,8 +677,8 @@ function IncomingTab({ txns, agentName, agents }: { txns: Transaction[]; agentNa
                   <td className="bold" data-label="الوكيل">{agentName(t.agent_id)}</td>
                   <td data-label="التاجر">{mName(t.merchant_id)}</td>
                   <td data-label="بيان">{(t as any).statement || ""}</td>
-                  <td data-label="تاجر الكاش">{fmtCurrency(merchantCashGross(t) + Number((t as any).merchant_cash_physical_amount || 0), cur)}</td>
-                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(merchantCashNet(t) + Number((t as any).merchant_cash_physical_amount || 0), cur)}</td>
+                  <td data-label="تاجر الكاش">{fmtCurrency(amountsById.get(t.id)?.gross || 0, cur)}</td>
+                  <td data-label="صافي تاجر الكاش بعد الخصم">{fmtCurrency(amountsById.get(t.id)?.net || 0, cur)}</td>
                   <td data-label="إجمالي المدفوع">{fmtCurrency(Number(t.total_paid || 0), cur)}</td>
                 </tr>
               );})}
