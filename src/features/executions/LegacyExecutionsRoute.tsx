@@ -48,6 +48,32 @@ const PAYMENT_METHODS = ["نقدي", "إنستاباي", "محفظة", "تاجر
 
 const SERVICE_KINDS = ["موافقة أمنية", "تذكرة طيران", "استثمار ليبي"] as const;
 
+function deriveDobFromEgyptianNationalId(value: string): string | null {
+  const digits = String(value || "")
+    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/\D/g, "");
+  if (digits.length !== 14) return null;
+
+  const centuryCode = digits[0];
+  if (centuryCode !== "2" && centuryCode !== "3") return null;
+
+  const yy = Number(digits.slice(1, 3));
+  const month = Number(digits.slice(3, 5));
+  const day = Number(digits.slice(5, 7));
+  const year = (centuryCode === "2" ? 1900 : 2000) + yy;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    month < 1 || month > 12 || day < 1 || day > 31
+    || date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) return null;
+
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
+}
+
 function ExecutionsPage() {
   const perm = usePerm("executions");
   const { rows: executions } = useCompleteFinancialTable<Execution>("executions");
@@ -832,7 +858,11 @@ function ExecutionForm({
 
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
-        <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} style={inputStyle} /></Field>
+        <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => {
+          const nationalId = e.target.value;
+          const derivedDob = deriveDobFromEgyptianNationalId(nationalId);
+          setForm({ ...form, national_id: nationalId, ...(derivedDob ? { dob: derivedDob } : {}) });
+        }} style={inputStyle} /></Field>
         <Field label="تاريخ الميلاد"><DateInput value={parseDisplayDate(form.dob) || ""} onChange={(iso) => setForm({ ...form, dob: toDisplayDate(iso) || "" })} /></Field>
         <Field label="رقم الجواز"><input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} style={inputStyle} /></Field>
         <Field label="محل الميلاد"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} style={inputStyle} /></Field>
