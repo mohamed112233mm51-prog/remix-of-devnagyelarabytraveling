@@ -1,0 +1,46 @@
+name: Temporary passport execution identity sync
+
+on:
+  push:
+    branches:
+      - fix-passport-execution-colors
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix-passport-execution-colors
+          fetch-depth: 0
+
+      - name: Apply focused passport execution patch
+        run: python .github/scripts/_temp_sync_passport_execution_identity.py
+
+      - name: Verify focused source scope
+        run: |
+          git diff -- src/features/executions/LegacyExecutionsRoute.tsx src/components/PassportBulkUploadWorkspaceV4.tsx src/lib/executionPassengerIdentity.ts
+          test -z "$(git diff --name-only | grep -Ev '^(src/features/executions/LegacyExecutionsRoute.tsx|src/components/PassportBulkUploadWorkspaceV4.tsx|src/lib/executionPassengerIdentity.ts)$' || true)"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Commit tested source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/executions/LegacyExecutionsRoute.tsx src/components/PassportBulkUploadWorkspaceV4.tsx src/lib/executionPassengerIdentity.ts
+          git commit -m "Sync passport executions with manual identity behavior"
+          git push origin HEAD:fix-passport-execution-colors
