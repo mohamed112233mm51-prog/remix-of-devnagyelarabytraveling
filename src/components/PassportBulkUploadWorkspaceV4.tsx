@@ -5,6 +5,7 @@ import { scanPassportFile, type PassportScanData } from "@/components/PassportSc
 import { usePerm } from "@/hooks/usePerm";
 import { refetchLiveTables, useDropdownOptions, useLive, withSelected, type Agent } from "@/lib/db";
 import { importExecutionRows } from "@/lib/dataImport/executionImport";
+import { deriveDobIsoFromEgyptianNationalId } from "@/lib/executionPassengerIdentity";
 
 const MAX_BATCH_ITEMS = 50;
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
@@ -136,6 +137,8 @@ function updateStoredRow(id: string, patch: Partial<BatchRow>) {
 }
 
 function scanPatch(data: PassportScanData): Partial<BatchRow> {
+  const nationalId = data.national_id || "";
+  const derivedDobIso = deriveDobIsoFromEgyptianNationalId(nationalId);
   return {
     selected: true,
     state: data.needs_review ? "review" : "ready",
@@ -143,8 +146,8 @@ function scanPatch(data: PassportScanData): Partial<BatchRow> {
     warnings: Array.isArray(data.warnings) ? data.warnings : [],
     mrzVerified: !!data.mrz_verified,
     passenger_name: data.full_name_ar || data.full_name_en || "",
-    national_id: data.national_id || "",
-    dob: data.date_of_birth || "",
+    national_id: nationalId,
+    dob: derivedDobIso || data.date_of_birth || "",
     passenger_type: data.passenger_type || "",
     passport: data.passport_number || "",
     birth_place: data.place_of_birth || "",
@@ -453,7 +456,11 @@ export function PassportBulkUploadWorkspaceV4() {
         {r.error && <div style={{ marginBottom: 8, color: "#b91c1c", fontSize: 11, fontWeight: 800 }}>{r.error}</div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 8 }}>
           <label style={{ fontSize: 11, fontWeight: 800 }}>الاسم<input style={inputStyle} disabled={!editable} value={r.passenger_name} onChange={(e) => updateRow(r.id, { passenger_name: e.target.value })} /></label>
-          <label style={{ fontSize: 11, fontWeight: 800 }}>الرقم القومي<input style={inputStyle} disabled={!editable} value={r.national_id} onChange={(e) => updateRow(r.id, { national_id: e.target.value })} /></label>
+          <label style={{ fontSize: 11, fontWeight: 800 }}>الرقم القومي<input style={inputStyle} disabled={!editable} value={r.national_id} onChange={(e) => {
+            const nationalId = e.target.value;
+            const derivedDobIso = deriveDobIsoFromEgyptianNationalId(nationalId);
+            updateRow(r.id, { national_id: nationalId, ...(derivedDobIso ? { dob: derivedDobIso } : {}) });
+          }} /></label>
           <label style={{ fontSize: 11, fontWeight: 800 }}>تاريخ الميلاد<input style={inputStyle} type="date" disabled={!editable} value={r.dob} onChange={(e) => updateRow(r.id, { dob: e.target.value })} /></label>
           <label style={{ fontSize: 11, fontWeight: 800 }}>نوع المسافر<select style={inputStyle} disabled={!editable} value={r.passenger_type} onChange={(e) => updateRow(r.id, { passenger_type: e.target.value })}><option value="">—</option>{opts(passengerTypes, r.passenger_type)}</select></label>
           <label style={{ fontSize: 11, fontWeight: 800 }}>رقم الجواز<input style={inputStyle} disabled={!editable} value={r.passport} onChange={(e) => updateRow(r.id, { passport: e.target.value })} /></label>
