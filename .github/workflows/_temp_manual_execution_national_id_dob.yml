@@ -1,0 +1,49 @@
+name: Temporary manual execution national ID DOB
+
+on:
+  push:
+    branches:
+      - fix-manual-execution-national-id-dob
+    paths:
+      - '.github/scripts/patch_manual_execution_national_id_dob.py'
+      - '.github/workflows/_temp_manual_execution_national_id_dob.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix-manual-execution-national-id-dob
+          fetch-depth: 0
+
+      - name: Apply isolated execution form fix
+        run: python .github/scripts/patch_manual_execution_national_id_dob.py
+
+      - name: Verify only execution source is functionally changed
+        run: |
+          git diff -- src/features/executions/LegacyExecutionsRoute.tsx
+          test -z "$(git diff --name-only | grep -v '^src/features/executions/LegacyExecutionsRoute.tsx$')"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Commit tested source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/executions/LegacyExecutionsRoute.tsx
+          git diff --cached --quiet || git commit -m "Auto derive execution DOB from national ID"
+          git push origin HEAD:fix-manual-execution-national-id-dob
