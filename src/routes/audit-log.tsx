@@ -631,7 +631,7 @@ function AuditLogPage() {
             <RefreshCcw size={14} /> تحديث
           </button>
           {canExport && (
-            <ExportButton getData={buildExportData} disabled={loading || filtered.length === 0} />
+            <ExportButton getData={buildExportData} disabled={loading || total === 0} />
           )}
         </div>
       </div>
@@ -657,7 +657,7 @@ function AuditLogPage() {
             </select>
             <select className="filter-select" value={userId} onChange={(e)=>setUserId(e.target.value)}>
               <option value="">كل المستخدمين</option>
-              {Object.entries(users).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+              {Object.entries(userOptions).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </select>
             <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
               <Search size={14} style={{ position: "absolute", top: 12, insetInlineEnd: 10, color: "var(--text3)" }} />
@@ -665,7 +665,8 @@ function AuditLogPage() {
                 className="search-input"
                 value={q}
                 onChange={(e)=>setQ(e.target.value)}
-                placeholder="بحث حر: سبب / مرجع / جهة / مستخدم..."
+                placeholder="بحث في الصفحة الحالية: سبب / مرجع / جهة / مستخدم..."
+                title="يبحث داخل الصفحة المعروضة حاليًا فقط، ويُطبَّق على كامل النتائج عند التصدير"
                 style={{ paddingInlineEnd: 32 }}
               />
             </div>
@@ -674,7 +675,7 @@ function AuditLogPage() {
       </div>
 
       <div className="card">
-        <div className="card-header"><div className="card-title">📋 السجل — {filtered.length} عملية</div></div>
+        <div className="card-header"><div className="card-title">📋 السجل — {total.toLocaleString("ar")} عملية</div></div>
         <div className="card-body">
           <div className="table-wrap enterprise-table">
             <table className="mobile-cards">
@@ -716,6 +717,13 @@ function AuditLogPage() {
               </tbody>
             </table>
           </div>
+          <PaginationBar
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            pageSize={PAGE_SIZE}
+            onPage={setPage}
+          />
         </div>
       </div>
 
