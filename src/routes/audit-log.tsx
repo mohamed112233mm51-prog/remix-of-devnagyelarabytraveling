@@ -587,29 +587,37 @@ function AuditLogPage() {
     );
   }
 
-  const buildExportData = () => ({
-    title: "سجل تدقيق الحركات المالية",
-    subtitle: `عدد العمليات: ${filtered.length}`,
-    fileName: `سجل تدقيق الحركات المالية ${new Date().toISOString().slice(0, 10)}`,
-    columns: [
-      { header: "التاريخ والوقت", key: "when" },
-      { header: "المستخدم", key: "user" },
-      { header: "العملية", key: "action" },
-      { header: "نوع الحركة", key: "table" },
-      { header: "نوع الجهة", key: "entity" },
-      { header: "رقم المرجع", key: "ref" },
-      { header: "السبب", key: "reason" },
-    ],
-    rows: filtered.map((r) => ({
-      when: new Date(r.performed_at).toLocaleString("ar-EG"),
-      user: users[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—"),
-      action: ACTION_LABEL[r.action] || r.action,
-      table: TABLE_LABEL[r.table_name] || r.table_name,
-      entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
-      ref: r.reference_no || "—",
-      reason: r.reason || "—",
-    })),
-  });
+  // Runs only when the user explicitly clicks Export: loads every row matching
+  // the current server-side filters, applies the free-text search to that set,
+  // and resolves user labels for exactly those rows.
+  const buildExportData = async () => {
+    const allRows = await fetchAllFiltered();
+    const allUsers = { ...(await resolveUserLabels(allRows)), ...users };
+    const exportRows = allRows.filter((r) => matchesQ(r, allUsers));
+    return {
+      title: "سجل تدقيق الحركات المالية",
+      subtitle: `عدد العمليات: ${exportRows.length}`,
+      fileName: `سجل تدقيق الحركات المالية ${new Date().toISOString().slice(0, 10)}`,
+      columns: [
+        { header: "التاريخ والوقت", key: "when" },
+        { header: "المستخدم", key: "user" },
+        { header: "العملية", key: "action" },
+        { header: "نوع الحركة", key: "table" },
+        { header: "نوع الجهة", key: "entity" },
+        { header: "رقم المرجع", key: "ref" },
+        { header: "السبب", key: "reason" },
+      ],
+      rows: exportRows.map((r) => ({
+        when: new Date(r.performed_at).toLocaleString("ar-EG"),
+        user: allUsers[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—"),
+        action: ACTION_LABEL[r.action] || r.action,
+        table: TABLE_LABEL[r.table_name] || r.table_name,
+        entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
+        ref: r.reference_no || "—",
+        reason: r.reason || "—",
+      })),
+    };
+  };
 
   return (
     <div className="page" dir="rtl">
