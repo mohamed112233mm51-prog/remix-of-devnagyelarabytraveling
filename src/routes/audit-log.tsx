@@ -371,8 +371,12 @@ function AuditLogPage() {
   const allowed = isSuperAdmin || isAdmin || checkPerm(permissions, false, "audit_log_view", "view");
   const canExport = isSuperAdmin || isAdmin || checkPerm(permissions, false, "audit_log_view", "export");
 
+  const PAGE_SIZE = 100;
   const [rows, setRows] = useState<AuditRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [users, setUsers] = useState<Record<string, string>>({});
+  const [userOptions, setUserOptions] = useState<Record<string, string>>({});
   const [lookups, setLookups] = useState<Lookups>({
     agents: {}, companies: {}, merchants: {}, suppliers: {}, cashBoxes: {},
   });
