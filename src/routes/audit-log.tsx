@@ -419,77 +419,69 @@ function AuditLogPage() {
 
 
 
+  const applyFilters = (query: any) => {
+    if (from) query = query.gte("performed_at", `${from}T00:00:00`);
+    if (to) query = query.lte("performed_at", `${to}T23:59:59`);
+    if (action) query = query.eq("action", action);
+    if (tableName) query = query.eq("table_name", tableName);
+    if (entityType) query = query.eq("entity_type", entityType);
+    if (userId) query = query.eq("performed_by", userId);
+    return query;
+  };
+
+  // Resolve labels for the performer plus any *_by field in before/after
+  // snapshots — only for the rows handed in (current page, or export set).
+  const resolveUserLabels = async (rowsToScan: AuditRow[]): Promise<Record<string, string>> => {
+    const userIdSet = new Set<string>();
+    rowsToScan.forEach((r: any) => {
+      if (r.performed_by) userIdSet.add(r.performed_by);
+      const scan = (obj: any) => {
+        if (!obj || typeof obj !== "object") return;
+        for (const [k, v] of Object.entries(obj)) {
+          if (typeof v !== "string" || !UUID_RE.test(v)) continue;
+          if (k.endsWith("_by") || k === "user_id" || k === "performed_by") {
+            userIdSet.add(v);
+          }
+        }
+      };
+      scan(r.before_value);
+      scan(r.after_value);
+    });
+    const uids = Array.from(userIdSet);
+    if (!uids.length) return {};
+    // profiles is intentionally self-only after the RLS hardening migration.
+    // Resolve audit actors through the narrow, permission-gated RPC instead
+    // of reopening profile rows to the browser.
+    const { data: profs, error } = await (supabase as any).rpc(
+      "get_audit_user_labels",
+      { p_user_ids: uids },
+    );
+    if (error) throw error;
+    const map: Record<string, string> = {};
+    (profs || []).forEach((p: any) => {
+      if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
+    });
+    return map;
+  };
+
+  // Server-side pagination: one page (PAGE_SIZE rows) + exact total count.
   const refresh = async () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const PAGE_SIZE = 1000;
-      const allRows: AuditRow[] = [];
-      let offset = 0;
-
-      // Supabase/PostgREST can cap a single response at the project's API row
-      // limit (commonly 1000), even when a larger .limit() is requested. Page
-      // explicitly until the final partial page so the UI count reflects every
-      // matching audit row instead of stopping at the first API page.
-      while (true) {
-        let query = supabase
+      const query = applyFilters(
+        supabase
           .from("financial_audit_log")
-          .select("*")
+          .select("*", { count: "exact" })
           .order("performed_at", { ascending: false })
-          .range(offset, offset + PAGE_SIZE - 1);
-        if (from) query = query.gte("performed_at", `${from}T00:00:00`);
-        if (to) query = query.lte("performed_at", `${to}T23:59:59`);
-        if (action) query = query.eq("action", action);
-        if (tableName) query = query.eq("table_name", tableName);
-        if (entityType) query = query.eq("entity_type", entityType);
-        if (userId) query = query.eq("performed_by", userId);
-
-        const { data, error } = await query;
-        if (error) throw error;
-        const page = (data || []) as AuditRow[];
-        allRows.push(...page);
-        if (page.length < PAGE_SIZE) break;
-        offset += PAGE_SIZE;
-      }
-
-      setRows(allRows);
-
-      // Collect every user id that might appear in the UI: the audit
-      // performer, plus any *_by field in before/after snapshots
-      // (cancelled_by, restored_by, created_by, updated_by, ...).
-      const userIdSet = new Set<string>();
-      allRows.forEach((r: any) => {
-        if (r.performed_by) userIdSet.add(r.performed_by);
-        const scan = (obj: any) => {
-          if (!obj || typeof obj !== "object") return;
-          for (const [k, v] of Object.entries(obj)) {
-            if (typeof v !== "string" || !UUID_RE.test(v)) continue;
-            if (k.endsWith("_by") || k === "user_id" || k === "performed_by") {
-              userIdSet.add(v);
-            }
-          }
-        };
-        scan(r.before_value);
-        scan(r.after_value);
-      });
-      const uids = Array.from(userIdSet);
-      if (uids.length) {
-        // profiles is intentionally self-only after the RLS hardening migration.
-        // Resolve audit actors through the narrow, permission-gated RPC instead
-        // of reopening profile rows to the browser.
-        const { data: profs, error: usersError } = await (supabase as any).rpc(
-          "get_audit_user_labels",
-          { p_user_ids: uids },
-        );
-        if (usersError) throw usersError;
-        const map: Record<string, string> = {};
-        (profs || []).forEach((p: any) => {
-          if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
-        });
-        setUsers(map);
-      } else {
-        setUsers({});
-      }
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
+      );
+      const { data, error, count } = await query;
+      if (error) throw error;
+      const pageRows = (data || []) as AuditRow[];
+      setRows(pageRows);
+      setTotal(count ?? 0);
+      setUsers(await resolveUserLabels(pageRows));
     } catch (e: any) {
       toast.error(e?.message || "تعذر تحميل السجل");
     } finally {
@@ -497,12 +489,73 @@ function AuditLogPage() {
     }
   };
 
-  // Auto-refresh whenever any server-side filter changes (no apply button).
+  // Fetch ALL rows matching the current server-side filters. Used ONLY by the
+  // explicit Export action — never during page load.
+  const fetchAllFiltered = async (): Promise<AuditRow[]> => {
+    const all: AuditRow[] = [];
+    let offset = 0;
+    while (true) {
+      const query = applyFilters(
+        supabase
+          .from("financial_audit_log")
+          .select("*")
+          .order("performed_at", { ascending: false })
+          .range(offset, offset + 999),
+      );
+      const { data, error } = await query;
+      if (error) throw error;
+      const chunk = (data || []) as AuditRow[];
+      all.push(...chunk);
+      if (chunk.length < 1000) break;
+      offset += 1000;
+    }
+    return all;
+  };
+
+  // Lightweight distinct user list for the user filter dropdown — fetches
+  // only the performed_by column (no before/after snapshots).
+  const loadUserOptions = async () => {
+    if (!allowed) return;
+    try {
+      const ids = new Set<string>();
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("financial_audit_log")
+          .select("performed_by")
+          .order("performed_at", { ascending: false })
+          .range(offset, offset + 999);
+        if (error) throw error;
+        (data || []).forEach((r: any) => { if (r?.performed_by) ids.add(r.performed_by); });
+        if ((data || []).length < 1000 || offset >= 9000) break;
+        offset += 1000;
+      }
+      if (!ids.size) { setUserOptions({}); return; }
+      const { data: profs, error } = await (supabase as any).rpc(
+        "get_audit_user_labels",
+        { p_user_ids: Array.from(ids) },
+      );
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (profs || []).forEach((p: any) => {
+        if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
+      });
+      setUserOptions(map);
+    } catch { /* dropdown enrichment only — never block the page */ }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadUserOptions(); }, [allowed]);
+
+  // Any filter change returns to page 1.
+  useEffect(() => { setPage(0); }, [from, to, action, tableName, entityType, userId]);
+
+  // Auto-refresh whenever any server-side filter or the page changes.
   useEffect(() => {
     const t = setTimeout(() => { refresh(); }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to, action, tableName, entityType, userId]);
+  }, [from, to, action, tableName, entityType, userId, page, allowed]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
