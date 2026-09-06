@@ -740,6 +740,105 @@ function AuditLogPage() {
   );
 }
 
+function PaginationBar({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onPage,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onPage: (p: number) => void;
+}) {
+  if (total === 0) return null;
+  const fromRow = page * pageSize + 1;
+  const toRow = Math.min(total, (page + 1) * pageSize);
+
+  // Compact window: first page, current ±1, last page — never thousands of buttons.
+  const pages = new Set<number>([0, pageCount - 1]);
+  for (let i = Math.max(1, page - 1); i <= Math.min(pageCount - 2, page + 1); i++) pages.add(i);
+  const sorted = Array.from(pages).sort((a, b) => a - b);
+
+  const btn: React.CSSProperties = {
+    minWidth: 32,
+    height: 32,
+    padding: "0 10px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    color: "var(--primary)",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+  const activeBtn: React.CSSProperties = { ...btn, background: "var(--primary)", color: "var(--card)", borderColor: "var(--primary)" };
+  const disabledBtn: React.CSSProperties = { ...btn, opacity: 0.45, cursor: "not-allowed" };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        padding: "12px 4px 0",
+        borderTop: "1px solid var(--border)",
+        marginTop: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 600 }}>
+        عرض <b style={{ color: "var(--text)" }}>{fromRow.toLocaleString("ar")}</b>
+        {" – "}
+        <b style={{ color: "var(--text)" }}>{toRow.toLocaleString("ar")}</b>
+        {" من أصل "}
+        <b style={{ color: "var(--text)" }}>{total.toLocaleString("ar")}</b>
+        {" عملية"}
+      </div>
+      {pageCount > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <button
+            style={page === 0 ? disabledBtn : btn}
+            disabled={page === 0}
+            onClick={() => onPage(page - 1)}
+            aria-label="السابق"
+          >
+            ‹ السابق
+          </button>
+          {sorted.map((p, i) => (
+            <React.Fragment key={p}>
+              {i > 0 && p - sorted[i - 1] > 1 && (
+                <span style={{ color: "var(--text3)", padding: "0 4px" }}>…</span>
+              )}
+              <button
+                style={p === page ? activeBtn : btn}
+                onClick={() => onPage(p)}
+                aria-current={p === page ? "page" : undefined}
+              >
+                {(p + 1).toLocaleString("ar")}
+              </button>
+            </React.Fragment>
+          ))}
+          <button
+            style={page >= pageCount - 1 ? disabledBtn : btn}
+            disabled={page >= pageCount - 1}
+            onClick={() => onPage(page + 1)}
+            aria-label="التالي"
+          >
+            التالي ›
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DetailsModal({ row, userLabel, lookups, users, onClose }: { row: AuditRow; userLabel: string; lookups: Lookups; users: Record<string, string>; onClose: () => void }) {
   const before = (row.before_value || {}) as Record<string, any>;
   const after = (row.after_value || {}) as Record<string, any>;
