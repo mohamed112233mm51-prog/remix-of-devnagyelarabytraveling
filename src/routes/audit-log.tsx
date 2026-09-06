@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm } from "@/hooks/usePerm";
@@ -762,7 +762,7 @@ function PaginationBar({
   for (let i = Math.max(1, page - 1); i <= Math.min(pageCount - 2, page + 1); i++) pages.add(i);
   const sorted = Array.from(pages).sort((a, b) => a - b);
 
-  const btn: React.CSSProperties = {
+  const btn: CSSProperties = {
     minWidth: 32,
     height: 32,
     padding: "0 10px",
