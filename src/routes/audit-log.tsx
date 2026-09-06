@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { checkPerm } from "@/hooks/usePerm";
@@ -371,8 +371,12 @@ function AuditLogPage() {
   const allowed = isSuperAdmin || isAdmin || checkPerm(permissions, false, "audit_log_view", "view");
   const canExport = isSuperAdmin || isAdmin || checkPerm(permissions, false, "audit_log_view", "export");
 
+  const PAGE_SIZE = 100;
   const [rows, setRows] = useState<AuditRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [users, setUsers] = useState<Record<string, string>>({});
+  const [userOptions, setUserOptions] = useState<Record<string, string>>({});
   const [lookups, setLookups] = useState<Lookups>({
     agents: {}, companies: {}, merchants: {}, suppliers: {}, cashBoxes: {},
   });
@@ -415,77 +419,69 @@ function AuditLogPage() {
 
 
 
+  const applyFilters = (query: any) => {
+    if (from) query = query.gte("performed_at", `${from}T00:00:00`);
+    if (to) query = query.lte("performed_at", `${to}T23:59:59`);
+    if (action) query = query.eq("action", action);
+    if (tableName) query = query.eq("table_name", tableName);
+    if (entityType) query = query.eq("entity_type", entityType);
+    if (userId) query = query.eq("performed_by", userId);
+    return query;
+  };
+
+  // Resolve labels for the performer plus any *_by field in before/after
+  // snapshots — only for the rows handed in (current page, or export set).
+  const resolveUserLabels = async (rowsToScan: AuditRow[]): Promise<Record<string, string>> => {
+    const userIdSet = new Set<string>();
+    rowsToScan.forEach((r: any) => {
+      if (r.performed_by) userIdSet.add(r.performed_by);
+      const scan = (obj: any) => {
+        if (!obj || typeof obj !== "object") return;
+        for (const [k, v] of Object.entries(obj)) {
+          if (typeof v !== "string" || !UUID_RE.test(v)) continue;
+          if (k.endsWith("_by") || k === "user_id" || k === "performed_by") {
+            userIdSet.add(v);
+          }
+        }
+      };
+      scan(r.before_value);
+      scan(r.after_value);
+    });
+    const uids = Array.from(userIdSet);
+    if (!uids.length) return {};
+    // profiles is intentionally self-only after the RLS hardening migration.
+    // Resolve audit actors through the narrow, permission-gated RPC instead
+    // of reopening profile rows to the browser.
+    const { data: profs, error } = await (supabase as any).rpc(
+      "get_audit_user_labels",
+      { p_user_ids: uids },
+    );
+    if (error) throw error;
+    const map: Record<string, string> = {};
+    (profs || []).forEach((p: any) => {
+      if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
+    });
+    return map;
+  };
+
+  // Server-side pagination: one page (PAGE_SIZE rows) + exact total count.
   const refresh = async () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const PAGE_SIZE = 1000;
-      const allRows: AuditRow[] = [];
-      let offset = 0;
-
-      // Supabase/PostgREST can cap a single response at the project's API row
-      // limit (commonly 1000), even when a larger .limit() is requested. Page
-      // explicitly until the final partial page so the UI count reflects every
-      // matching audit row instead of stopping at the first API page.
-      while (true) {
-        let query = supabase
+      const query = applyFilters(
+        supabase
           .from("financial_audit_log")
-          .select("*")
+          .select("*", { count: "exact" })
           .order("performed_at", { ascending: false })
-          .range(offset, offset + PAGE_SIZE - 1);
-        if (from) query = query.gte("performed_at", `${from}T00:00:00`);
-        if (to) query = query.lte("performed_at", `${to}T23:59:59`);
-        if (action) query = query.eq("action", action);
-        if (tableName) query = query.eq("table_name", tableName);
-        if (entityType) query = query.eq("entity_type", entityType);
-        if (userId) query = query.eq("performed_by", userId);
-
-        const { data, error } = await query;
-        if (error) throw error;
-        const page = (data || []) as AuditRow[];
-        allRows.push(...page);
-        if (page.length < PAGE_SIZE) break;
-        offset += PAGE_SIZE;
-      }
-
-      setRows(allRows);
-
-      // Collect every user id that might appear in the UI: the audit
-      // performer, plus any *_by field in before/after snapshots
-      // (cancelled_by, restored_by, created_by, updated_by, ...).
-      const userIdSet = new Set<string>();
-      allRows.forEach((r: any) => {
-        if (r.performed_by) userIdSet.add(r.performed_by);
-        const scan = (obj: any) => {
-          if (!obj || typeof obj !== "object") return;
-          for (const [k, v] of Object.entries(obj)) {
-            if (typeof v !== "string" || !UUID_RE.test(v)) continue;
-            if (k.endsWith("_by") || k === "user_id" || k === "performed_by") {
-              userIdSet.add(v);
-            }
-          }
-        };
-        scan(r.before_value);
-        scan(r.after_value);
-      });
-      const uids = Array.from(userIdSet);
-      if (uids.length) {
-        // profiles is intentionally self-only after the RLS hardening migration.
-        // Resolve audit actors through the narrow, permission-gated RPC instead
-        // of reopening profile rows to the browser.
-        const { data: profs, error: usersError } = await (supabase as any).rpc(
-          "get_audit_user_labels",
-          { p_user_ids: uids },
-        );
-        if (usersError) throw usersError;
-        const map: Record<string, string> = {};
-        (profs || []).forEach((p: any) => {
-          if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
-        });
-        setUsers(map);
-      } else {
-        setUsers({});
-      }
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
+      );
+      const { data, error, count } = await query;
+      if (error) throw error;
+      const pageRows = (data || []) as AuditRow[];
+      setRows(pageRows);
+      setTotal(count ?? 0);
+      setUsers(await resolveUserLabels(pageRows));
     } catch (e: any) {
       toast.error(e?.message || "تعذر تحميل السجل");
     } finally {
@@ -493,30 +489,95 @@ function AuditLogPage() {
     }
   };
 
-  // Auto-refresh whenever any server-side filter changes (no apply button).
+  // Fetch ALL rows matching the current server-side filters. Used ONLY by the
+  // explicit Export action — never during page load.
+  const fetchAllFiltered = async (): Promise<AuditRow[]> => {
+    const all: AuditRow[] = [];
+    let offset = 0;
+    while (true) {
+      const query = applyFilters(
+        supabase
+          .from("financial_audit_log")
+          .select("*")
+          .order("performed_at", { ascending: false })
+          .range(offset, offset + 999),
+      );
+      const { data, error } = await query;
+      if (error) throw error;
+      const chunk = (data || []) as AuditRow[];
+      all.push(...chunk);
+      if (chunk.length < 1000) break;
+      offset += 1000;
+    }
+    return all;
+  };
+
+  // Lightweight distinct user list for the user filter dropdown — fetches
+  // only the performed_by column (no before/after snapshots).
+  const loadUserOptions = async () => {
+    if (!allowed) return;
+    try {
+      const ids = new Set<string>();
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("financial_audit_log")
+          .select("performed_by")
+          .order("performed_at", { ascending: false })
+          .range(offset, offset + 999);
+        if (error) throw error;
+        (data || []).forEach((r: any) => { if (r?.performed_by) ids.add(r.performed_by); });
+        if ((data || []).length < 1000 || offset >= 9000) break;
+        offset += 1000;
+      }
+      if (!ids.size) { setUserOptions({}); return; }
+      const { data: profs, error } = await (supabase as any).rpc(
+        "get_audit_user_labels",
+        { p_user_ids: Array.from(ids) },
+      );
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (profs || []).forEach((p: any) => {
+        if (p?.id) map[p.id] = p.user_label || "مستخدم غير معروف";
+      });
+      setUserOptions(map);
+    } catch { /* dropdown enrichment only — never block the page */ }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadUserOptions(); }, [allowed]);
+
+  // Any filter change returns to page 1.
+  useEffect(() => { setPage(0); }, [from, to, action, tableName, entityType, userId]);
+
+  // Auto-refresh whenever any server-side filter or the page changes.
   useEffect(() => {
     const t = setTimeout(() => { refresh(); }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to, action, tableName, entityType, userId]);
+  }, [from, to, action, tableName, entityType, userId, page, allowed]);
 
-  const filtered = useMemo(() => {
+  // Free-text search: applied client-side to a given set of rows (the current
+  // page on screen, or the full filtered set at export time).
+  const matchesQ = (r: AuditRow, usersMap: Record<string, string>) => {
     const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => {
-      const hay = [
-        r.reason,
-        r.reference_no,
-        r.record_id,
-        r.entity_id,
-        TABLE_LABEL[r.table_name],
-        ACTION_LABEL[r.action],
-        ENTITY_LABEL[r.entity_type || ""],
-        users[r.performed_by || ""],
-      ].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(s);
-    });
-  }, [rows, q, users]);
+    if (!s) return true;
+    const hay = [
+      r.reason,
+      r.reference_no,
+      r.record_id,
+      r.entity_id,
+      TABLE_LABEL[r.table_name],
+      ACTION_LABEL[r.action],
+      ENTITY_LABEL[r.entity_type || ""],
+      usersMap[r.performed_by || ""],
+    ].filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(s);
+  };
+
+  const filtered = useMemo(() => rows.filter((r) => matchesQ(r, users)), [rows, q, users]);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (!allowed) {
     return (
@@ -526,29 +587,37 @@ function AuditLogPage() {
     );
   }
 
-  const buildExportData = () => ({
-    title: "سجل تدقيق الحركات المالية",
-    subtitle: `عدد العمليات: ${filtered.length}`,
-    fileName: `سجل تدقيق الحركات المالية ${new Date().toISOString().slice(0, 10)}`,
-    columns: [
-      { header: "التاريخ والوقت", key: "when" },
-      { header: "المستخدم", key: "user" },
-      { header: "العملية", key: "action" },
-      { header: "نوع الحركة", key: "table" },
-      { header: "نوع الجهة", key: "entity" },
-      { header: "رقم المرجع", key: "ref" },
-      { header: "السبب", key: "reason" },
-    ],
-    rows: filtered.map((r) => ({
-      when: new Date(r.performed_at).toLocaleString("ar-EG"),
-      user: users[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—"),
-      action: ACTION_LABEL[r.action] || r.action,
-      table: TABLE_LABEL[r.table_name] || r.table_name,
-      entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
-      ref: r.reference_no || "—",
-      reason: r.reason || "—",
-    })),
-  });
+  // Runs only when the user explicitly clicks Export: loads every row matching
+  // the current server-side filters, applies the free-text search to that set,
+  // and resolves user labels for exactly those rows.
+  const buildExportData = async () => {
+    const allRows = await fetchAllFiltered();
+    const allUsers = { ...(await resolveUserLabels(allRows)), ...users };
+    const exportRows = allRows.filter((r) => matchesQ(r, allUsers));
+    return {
+      title: "سجل تدقيق الحركات المالية",
+      subtitle: `عدد العمليات: ${exportRows.length}`,
+      fileName: `سجل تدقيق الحركات المالية ${new Date().toISOString().slice(0, 10)}`,
+      columns: [
+        { header: "التاريخ والوقت", key: "when" },
+        { header: "المستخدم", key: "user" },
+        { header: "العملية", key: "action" },
+        { header: "نوع الحركة", key: "table" },
+        { header: "نوع الجهة", key: "entity" },
+        { header: "رقم المرجع", key: "ref" },
+        { header: "السبب", key: "reason" },
+      ],
+      rows: exportRows.map((r) => ({
+        when: new Date(r.performed_at).toLocaleString("ar-EG"),
+        user: allUsers[r.performed_by || ""] || (r.performed_by ? "مستخدم غير معروف" : "—"),
+        action: ACTION_LABEL[r.action] || r.action,
+        table: TABLE_LABEL[r.table_name] || r.table_name,
+        entity: ENTITY_LABEL[r.entity_type || ""] || r.entity_type || "—",
+        ref: r.reference_no || "—",
+        reason: r.reason || "—",
+      })),
+    };
+  };
 
   return (
     <div className="page" dir="rtl">
@@ -562,7 +631,7 @@ function AuditLogPage() {
             <RefreshCcw size={14} /> تحديث
           </button>
           {canExport && (
-            <ExportButton getData={buildExportData} disabled={loading || filtered.length === 0} />
+            <ExportButton getData={buildExportData} disabled={loading || total === 0} />
           )}
         </div>
       </div>
@@ -588,7 +657,7 @@ function AuditLogPage() {
             </select>
             <select className="filter-select" value={userId} onChange={(e)=>setUserId(e.target.value)}>
               <option value="">كل المستخدمين</option>
-              {Object.entries(users).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+              {Object.entries(userOptions).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </select>
             <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
               <Search size={14} style={{ position: "absolute", top: 12, insetInlineEnd: 10, color: "var(--text3)" }} />
@@ -596,7 +665,8 @@ function AuditLogPage() {
                 className="search-input"
                 value={q}
                 onChange={(e)=>setQ(e.target.value)}
-                placeholder="بحث حر: سبب / مرجع / جهة / مستخدم..."
+                placeholder="بحث في الصفحة الحالية: سبب / مرجع / جهة / مستخدم..."
+                title="يبحث داخل الصفحة المعروضة حاليًا فقط، ويُطبَّق على كامل النتائج عند التصدير"
                 style={{ paddingInlineEnd: 32 }}
               />
             </div>
@@ -605,7 +675,7 @@ function AuditLogPage() {
       </div>
 
       <div className="card">
-        <div className="card-header"><div className="card-title">📋 السجل — {filtered.length} عملية</div></div>
+        <div className="card-header"><div className="card-title">📋 السجل — {total.toLocaleString("ar")} عملية</div></div>
         <div className="card-body">
           <div className="table-wrap enterprise-table">
             <table className="mobile-cards">
@@ -647,6 +717,13 @@ function AuditLogPage() {
               </tbody>
             </table>
           </div>
+          <PaginationBar
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            pageSize={PAGE_SIZE}
+            onPage={setPage}
+          />
         </div>
       </div>
 
@@ -658,6 +735,105 @@ function AuditLogPage() {
           users={users}
           onClose={()=>setSelected(null)}
         />
+      )}
+    </div>
+  );
+}
+
+function PaginationBar({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onPage,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onPage: (p: number) => void;
+}) {
+  if (total === 0) return null;
+  const fromRow = page * pageSize + 1;
+  const toRow = Math.min(total, (page + 1) * pageSize);
+
+  // Compact window: first page, current ±1, last page — never thousands of buttons.
+  const pages = new Set<number>([0, pageCount - 1]);
+  for (let i = Math.max(1, page - 1); i <= Math.min(pageCount - 2, page + 1); i++) pages.add(i);
+  const sorted = Array.from(pages).sort((a, b) => a - b);
+
+  const btn: CSSProperties = {
+    minWidth: 32,
+    height: 32,
+    padding: "0 10px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    color: "var(--primary)",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+  const activeBtn: CSSProperties = { ...btn, background: "var(--primary)", color: "var(--card)", borderColor: "var(--primary)" };
+  const disabledBtn: CSSProperties = { ...btn, opacity: 0.45, cursor: "not-allowed" };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        padding: "12px 4px 0",
+        borderTop: "1px solid var(--border)",
+        marginTop: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 600 }}>
+        عرض <b style={{ color: "var(--text)" }}>{fromRow.toLocaleString("ar")}</b>
+        {" – "}
+        <b style={{ color: "var(--text)" }}>{toRow.toLocaleString("ar")}</b>
+        {" من أصل "}
+        <b style={{ color: "var(--text)" }}>{total.toLocaleString("ar")}</b>
+        {" عملية"}
+      </div>
+      {pageCount > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <button
+            style={page === 0 ? disabledBtn : btn}
+            disabled={page === 0}
+            onClick={() => onPage(page - 1)}
+            aria-label="السابق"
+          >
+            ‹ السابق
+          </button>
+          {sorted.map((p, i) => (
+            <Fragment key={p}>
+              {i > 0 && p - sorted[i - 1] > 1 && (
+                <span style={{ color: "var(--text3)", padding: "0 4px" }}>…</span>
+              )}
+              <button
+                style={p === page ? activeBtn : btn}
+                onClick={() => onPage(p)}
+                aria-current={p === page ? "page" : undefined}
+              >
+                {(p + 1).toLocaleString("ar")}
+              </button>
+            </Fragment>
+          ))}
+          <button
+            style={page >= pageCount - 1 ? disabledBtn : btn}
+            disabled={page >= pageCount - 1}
+            onClick={() => onPage(page + 1)}
+            aria-label="التالي"
+          >
+            التالي ›
+          </button>
+        </div>
       )}
     </div>
   );

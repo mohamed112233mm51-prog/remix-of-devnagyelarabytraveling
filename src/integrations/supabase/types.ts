@@ -1531,6 +1531,13 @@ export type Database = {
         }
         Returns: Json
       }
+      get_audit_user_labels: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          id: string
+          user_label: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

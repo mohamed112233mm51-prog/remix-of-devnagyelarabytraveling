@@ -20,7 +20,8 @@ export function ExportButton({
   disabled,
   whatsapp,
 }: {
-  getData: () => StatementExportData;
+  /** Sync or async data builder — async is awaited; existing sync callers are unaffected. */
+  getData: () => StatementExportData | Promise<StatementExportData>;
   disabled?: boolean;
   whatsapp?: WhatsappProps;
 }) {
@@ -59,17 +60,19 @@ export function ExportButton({
 
   const handleExport = async (kind: "pdf" | "excel") => {
     setOpen(null);
-    const data = getData();
-    if (kind === "excel") {
-      try { await exportStatementToExcel(data); }
-      catch (e) { toast.error("تعذر تصدير ملف Excel: " + (e as Error).message); }
-    } else exportStatementToPDF(data);
+    try {
+      const data = await getData();
+      if (kind === "excel") await exportStatementToExcel(data);
+      else exportStatementToPDF(data);
+    } catch (e) {
+      toast.error("تعذر التصدير: " + (e as Error).message);
+    }
   };
 
   const handleWhatsapp = async (kind: "pdf" | "excel") => {
     setOpen(null);
-    const data = getData();
     try {
+      const data = await getData();
       await shareStatementViaWhatsApp({ kind, data, phone: whatsapp?.phone });
     } catch (e) {
       toast.error("تعذر الإرسال عبر واتساب: " + (e as Error).message);
