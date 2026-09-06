@@ -777,8 +777,8 @@ function PaginationBar({
     alignItems: "center",
     justifyContent: "center",
   };
-  const activeBtn: React.CSSProperties = { ...btn, background: "var(--primary)", color: "var(--card)", borderColor: "var(--primary)" };
-  const disabledBtn: React.CSSProperties = { ...btn, opacity: 0.45, cursor: "not-allowed" };
+  const activeBtn: CSSProperties = { ...btn, background: "var(--primary)", color: "var(--card)", borderColor: "var(--primary)" };
+  const disabledBtn: CSSProperties = { ...btn, opacity: 0.45, cursor: "not-allowed" };
 
   return (
     <div
@@ -812,7 +812,7 @@ function PaginationBar({
             ‹ السابق
           </button>
           {sorted.map((p, i) => (
-            <React.Fragment key={p}>
+            <Fragment key={p}>
               {i > 0 && p - sorted[i - 1] > 1 && (
                 <span style={{ color: "var(--text3)", padding: "0 4px" }}>…</span>
               )}
@@ -823,7 +823,7 @@ function PaginationBar({
               >
                 {(p + 1).toLocaleString("ar")}
               </button>
-            </React.Fragment>
+            </Fragment>
           ))}
           <button
             style={page >= pageCount - 1 ? disabledBtn : btn}
