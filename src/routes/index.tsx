@@ -130,6 +130,7 @@ function Dashboard() {
   const { user, roles, permissions, isSuperAdmin, profileLoaded } = useAuth();
   const queryClient = useQueryClient();
   const merchantsPerm = usePerm("merchants");
+  const expensesPerm = usePerm("expenses");
   const merchantTotals = useMerchantTotals();
   const merchantBalanceMap = merchantTotals.balance;
   // Profit cards are strict: super_admin/admin always see them; manager/user require an explicit true value.
@@ -580,6 +581,7 @@ function Dashboard() {
           tone="success"
           sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
+        {expensesPerm.view && (
         <HeroKpi
           label={`المصروفات — ${periodLabel}`}
           value={periodAgg.expenses}
@@ -590,6 +592,7 @@ function Dashboard() {
           deltaPositive={prevAgg ? pctDelta(periodAgg.expenses, prevAgg.expenses) <= 0 : undefined}
           sub={prevAgg ? "مقارنة بالفترة السابقة" : undefined}
         />
+        )}
         <HeroKpi
           label={`التقديمات — ${periodLabel}`}
           value={submissions.filter((s) => inRange(s.created_at, periodRange)).length}
@@ -665,7 +668,7 @@ function Dashboard() {
             <QuickAction to="/executions" icon={<Plane size={16} />} label="تنفيذ جديد" />
             <QuickAction to="/accounts" icon={<Users size={16} />} label="حساب وكيل" />
             <QuickAction to="/companies" icon={<Building2 size={16} />} label="شركة صادرة" />
-            <QuickAction to="/expenses" icon={<Wallet size={16} />} label="تسجيل مصروف" />
+            {expensesPerm.view && <QuickAction to="/expenses" icon={<Wallet size={16} />} label="تسجيل مصروف" />}
             <QuickAction to="/reports" icon={<TrendingUp size={16} />} label="التقارير" />
           </div>
         </div>
@@ -841,12 +844,14 @@ function Dashboard() {
         </SectionCard>
 
 
+        {expensesPerm.view && (
         <SectionCard title="المصروفات" icon={<Wallet size={16} />} accent="navy">
           <Stat label="الإجمالي" valueNode={<CurrencyLines map={expensesByCurrency.total} />} tone="red" />
           <Stat label="ثابتة" valueNode={<CurrencyLines map={expensesByCurrency.fixed} />} />
           <Stat label="متغيرة" valueNode={<CurrencyLines map={expensesByCurrency.variable} />} />
 
         </SectionCard>
+        )}
 
 
         <SectionCard title="موردو العملة" icon={<Landmark size={16} />} accent="navy">
@@ -862,7 +867,7 @@ function Dashboard() {
         <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
           <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(executionAgentSalesEGP)} tone="green" />
           <Stat label="إجمالي تكلفة الشركات" value={fmtDL(profitExecCompanyCost)} tone="red" />
-          <Stat label="إجمالي المصروفات" value={fmtDL(profitExpensesAll)} tone="red" />
+          {expensesPerm.view && <Stat label="إجمالي المصروفات" value={fmtDL(profitExpensesAll)} tone="red" />}
           <Stat label="صافي الأرباح" value={fmtDL(profitSummaryData?.companyProfit ?? 0)} highlight />
         </SectionCard>
         )}

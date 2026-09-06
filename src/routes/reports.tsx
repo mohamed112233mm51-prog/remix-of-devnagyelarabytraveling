@@ -205,6 +205,7 @@ const chartsCss = `
 `;
 
 function ReportsPage() {
+  const expensesPerm = usePerm("expenses");
   const [tab, setTab] = useState<Tab>("agents");
   const today = new Date();
   const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -238,7 +239,7 @@ function ReportsPage() {
     console.log("[Reports] period:", period, "from:", from, "to:", to, "flights:", data.flights.length, "approvals:", data.approvals.length, "loading:", data.loading);
   }
 
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "agents", label: "الوكلاء", icon: <Users size={15} strokeWidth={2} /> },
     { id: "companies", label: "الشركات الصادرة", icon: <Building2 size={15} strokeWidth={2} /> },
     { id: "merchants", label: "تاجر الكاش", icon: <Handshake size={15} strokeWidth={2} /> },
@@ -246,6 +247,13 @@ function ReportsPage() {
     { id: "treasuries", label: "الخزائن", icon: <Wallet size={15} strokeWidth={2} /> },
     { id: "currency_suppliers", label: "شراء وبيع العملات", icon: <DollarSign size={15} strokeWidth={2} /> },
   ];
+  const TABS = expensesPerm.view
+    ? ALL_TABS
+    : ALL_TABS.filter((t) => t.id !== "expenses");
+
+  useEffect(() => {
+    if (tab === "expenses" && !expensesPerm.view) setTab("agents");
+  }, [tab, expensesPerm.view]);
 
   return (
     <div className="section active fin-page accounts-page reports-page">
@@ -303,7 +311,7 @@ function ReportsPage() {
       {tab === "agents" && <AgentsReport inRange={inRange} data={data} />}
       {tab === "companies" && <CompaniesReport inRange={inRange} data={data} />}
       {tab === "merchants" && <MerchantsReport inRange={inRange} data={data} />}
-      {tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
+      {expensesPerm.view && tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
       {tab === "treasuries" && <TreasuriesReport inRange={inRange} />}
       {tab === "currency_suppliers" && <CurrencySuppliersReport inRange={inRange} />}
       <style>{chartsCss}</style>
