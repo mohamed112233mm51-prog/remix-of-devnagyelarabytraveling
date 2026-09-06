@@ -557,23 +557,27 @@ function AuditLogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to, action, tableName, entityType, userId, page, allowed]);
 
-  const filtered = useMemo(() => {
+  // Free-text search: applied client-side to a given set of rows (the current
+  // page on screen, or the full filtered set at export time).
+  const matchesQ = (r: AuditRow, usersMap: Record<string, string>) => {
     const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => {
-      const hay = [
-        r.reason,
-        r.reference_no,
-        r.record_id,
-        r.entity_id,
-        TABLE_LABEL[r.table_name],
-        ACTION_LABEL[r.action],
-        ENTITY_LABEL[r.entity_type || ""],
-        users[r.performed_by || ""],
-      ].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(s);
-    });
-  }, [rows, q, users]);
+    if (!s) return true;
+    const hay = [
+      r.reason,
+      r.reference_no,
+      r.record_id,
+      r.entity_id,
+      TABLE_LABEL[r.table_name],
+      ACTION_LABEL[r.action],
+      ENTITY_LABEL[r.entity_type || ""],
+      usersMap[r.performed_by || ""],
+    ].filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(s);
+  };
+
+  const filtered = useMemo(() => rows.filter((r) => matchesQ(r, users)), [rows, q, users]);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (!allowed) {
     return (
