@@ -112,11 +112,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
 
     profileLoadInFlight.current.set(uid, task);
-    void task.finally(() => {
+    const clearInFlight = () => {
       if (profileLoadInFlight.current.get(uid) === task) {
         profileLoadInFlight.current.delete(uid);
       }
-    });
+    };
+    void task.then(clearInFlight, clearInFlight);
     return task;
   }, [applyPermissions]);
 
@@ -207,9 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (reconcileInFlight) return reconcileInFlight;
       const task = safeLoadProfile(uid, loadProfile);
       reconcileInFlight = task;
-      void task.finally(() => {
+      const clearReconcile = () => {
         if (reconcileInFlight === task) reconcileInFlight = null;
-      });
+      };
+      void task.then(clearReconcile, clearReconcile);
       return task;
     };
 
