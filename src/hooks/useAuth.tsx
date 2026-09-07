@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 const STARTUP_TIMEOUT_MS = 8000;
+const FOREGROUND_RECONCILE_AFTER_MS = 60_000;
 
 function withStartupTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsPassword, setNeedsPassword] = useState(false);
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const profileLoadInFlight = useRef<Map<string, Promise<void>>>(new Map());
 
   const safeLoadProfile = useCallback(async (uid: string, loader: (uid: string) => Promise<void>) => {
     try { setProfileError(null); await loader(uid); }
@@ -70,39 +72,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const loadProfile = useCallback(async (uid: string) => {
+  const loadProfile = useCallback((uid: string): Promise<void> => {
+    const existing = profileLoadInFlight.current.get(uid);
+    if (existing) return existing;
+
     console.info("[startup] Profile/Permissions loading start");
-    try {
-      const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
-        await Promise.all([
-          supabase.from("user_roles").select("role").eq("user_id", uid),
-          supabase
-            .from("profiles")
-            .select("is_active, invite_accepted, permissions, is_super_admin")
-            .eq("id", uid)
-            .maybeSingle(),
-        ]);
-      if (roleError || profileError) {
-        throw new Error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
+    const task = (async () => {
+      try {
+        const [{ data: roleRows, error: roleError }, { data: profile, error: profileError }] =
+          await Promise.all([
+            supabase.from("user_roles").select("role").eq("user_id", uid),
+            supabase
+              .from("profiles")
+              .select("is_active, invite_accepted, permissions, is_super_admin")
+              .eq("id", uid)
+              .maybeSingle(),
+          ]);
+        if (roleError || profileError) {
+          throw new Error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
+        }
+        const nextRoles = (roleRows ?? []).map((r: any) => r.role);
+        const nextPerms = (((profile as any)?.permissions as Record<string, any>) ?? {});
+        const nextIsSuperAdmin = !!(profile as any)?.is_super_admin;
+        setRoles(nextRoles);
+        setIsSuperAdmin(nextIsSuperAdmin);
+        applyPermissions(uid, nextPerms, nextIsSuperAdmin);
+        if (!profile) setBlocked("not_invited");
+        else if ((profile as any).is_active === false) setBlocked("disabled");
+        else if ((profile as any).invite_accepted === false) setBlocked("disabled");
+        else setBlocked(null);
+        setProfileLoaded(true);
+        console.info("[startup] Profile/Permissions loading complete");
+      } catch (error: any) {
+        console.warn("[startup] Profile/Permissions failed", error);
+        // Do NOT set profileLoaded=true on real errors — that would render an Unauthorized screen.
+        // Leave profileLoaded=false so the UI shows the retry state via __root.
+        throw error;
       }
-      const nextRoles = (roleRows ?? []).map((r: any) => r.role);
-      const nextPerms = (((profile as any)?.permissions as Record<string, any>) ?? {});
-      const nextIsSuperAdmin = !!(profile as any)?.is_super_admin;
-      setRoles(nextRoles);
-      setIsSuperAdmin(nextIsSuperAdmin);
-      applyPermissions(uid, nextPerms, nextIsSuperAdmin);
-      if (!profile) setBlocked("not_invited");
-      else if ((profile as any).is_active === false) setBlocked("disabled");
-      else if ((profile as any).invite_accepted === false) setBlocked("disabled");
-      else setBlocked(null);
-      setProfileLoaded(true);
-      console.info("[startup] Profile/Permissions loading complete");
-    } catch (error: any) {
-      console.warn("[startup] Profile/Permissions failed", error);
-      // Do NOT set profileLoaded=true on real errors — that would render an Unauthorized screen.
-      // Leave profileLoaded=false so the UI shows the retry state via __root.
-      throw error;
-    }
+    })();
+
+    profileLoadInFlight.current.set(uid, task);
+    void task.finally(() => {
+      if (profileLoadInFlight.current.get(uid) === task) {
+        profileLoadInFlight.current.delete(uid);
+      }
+    });
+    return task;
   }, [applyPermissions]);
 
   const refreshProfile = useCallback(async () => {
@@ -155,9 +170,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .finally(() => setLoading(false));
     return () => sub.subscription.unsubscribe();
-  }, [loadProfile]);
+  }, [loadProfile, safeLoadProfile]);
 
-  // Realtime: subscribe to current user's profile + roles; sign out if disabled
+  // Realtime: subscribe to current user's profile + roles; sign out if disabled.
+  // No fixed-interval polling: reconciliation happens only after a real
+  // connection interruption, coming back online, or a meaningful background gap.
   useEffect(() => {
     const uid = session?.user?.id;
     if (!uid) return;
@@ -179,12 +196,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    let realtimeInterrupted = false;
+    let reconcileInFlight: Promise<void> | null = null;
+    let hiddenAt: number | null =
+      typeof document !== "undefined" && document.visibilityState === "hidden"
+        ? Date.now()
+        : null;
+
+    const reconcile = () => {
+      if (reconcileInFlight) return reconcileInFlight;
+      const task = safeLoadProfile(uid, loadProfile);
+      reconcileInFlight = task;
+      void task.finally(() => {
+        if (reconcileInFlight === task) reconcileInFlight = null;
+      });
+      return task;
+    };
+
     const channel = supabase
       .channel(`user-watch-${uid}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "profiles", filter: `id=eq.${uid}` },
-        (payload) => {
+        (payload: any) => {
           const next: any = (payload as any).new;
           if (payload.eventType === "DELETE") {
             handleDisabled();
@@ -209,64 +243,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         { event: "*", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
         () => {
-          safeLoadProfile(uid, loadProfile);
+          void reconcile();
         },
       )
-      .subscribe();
-
-    // Polling fallback every 8s in case realtime drops
-    const poll = setInterval(async () => {
-      try {
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select("is_active, invite_accepted, permissions, is_super_admin")
-          .eq("id", uid)
-          .maybeSingle();
-        if (error) return;
-        if (
-          !profile ||
-          (profile as any).is_active === false ||
-          (profile as any).invite_accepted === false
-        ) {
-          handleDisabled();
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          if (realtimeInterrupted) {
+            realtimeInterrupted = false;
+            void reconcile();
+          }
           return;
         }
-        setBlocked(null);
-        const nextIsSuperAdmin = !!(profile as any).is_super_admin;
-        setIsSuperAdmin(nextIsSuperAdmin);
-        const nextPerms = ((profile as any).permissions ?? {}) as Record<string, any>;
-        applyPermissions(uid, nextPerms, nextIsSuperAdmin);
-        const { data: roleRows } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", uid);
-        const nextRoles = (roleRows ?? []).map((r: any) => r.role) as Role[];
-        setRoles((prev) =>
-          prev.length === nextRoles.length && prev.every((r) => nextRoles.includes(r))
-            ? prev
-            : nextRoles,
-        );
-      } catch {}
-    }, 8000);
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          realtimeInterrupted = true;
+        }
+      });
 
-    // Multi-tab: react to logout in other tabs
+    const onOnline = () => {
+      void reconcile();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      const hiddenFor = hiddenAt ? Date.now() - hiddenAt : 0;
+      hiddenAt = null;
+      if (hiddenFor >= FOREGROUND_RECONCILE_AFTER_MS) {
+        void reconcile();
+      }
+    };
+
+    // Multi-tab: react to logout in other tabs.
     const onStorage = (e: StorageEvent) => {
       if (e.key && e.key.startsWith("sb-") && e.newValue === null) {
         if (typeof window !== "undefined") window.location.href = "/";
       }
     };
+
     if (typeof window !== "undefined") {
+      window.addEventListener("online", onOnline);
       window.addEventListener("storage", onStorage);
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
     }
 
     return () => {
-      supabase.removeChannel(channel);
-      clearInterval(poll);
+      void supabase.removeChannel(channel);
       if (typeof window !== "undefined") {
+        window.removeEventListener("online", onOnline);
         window.removeEventListener("storage", onStorage);
       }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
     };
-  }, [applyPermissions, loadProfile, session?.user?.id]);
+  }, [applyPermissions, loadProfile, safeLoadProfile, session?.user?.id]);
 
   const value: AuthCtx = {
     session,
