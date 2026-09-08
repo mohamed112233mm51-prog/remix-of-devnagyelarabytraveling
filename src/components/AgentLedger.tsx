@@ -73,6 +73,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
   const merchants = Array.isArray(liveMerchants) ? liveMerchants : [];
   const [selectedAgentId, setSelectedAgentId] = useState(lockedAgentId || initialAgentId || "");
   const [agentTxns, setAgentTxns] = useState<Transaction[]>([]);
+  const [agentTxnsSourceAgentId, setAgentTxnsSourceAgentId] = useState("");
+  const [agentTxnsLoading, setAgentTxnsLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [currencyFilter, setCurrencyFilter] = useState<string>("");
@@ -113,11 +115,20 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
+    if (!selectedAgentId) {
+      setAgentTxns([]);
+      setAgentTxnsSourceAgentId("");
+      setAgentTxnsLoading(false);
+      return;
+    }
+
+    setAgentTxns([]);
+    setAgentTxnsSourceAgentId("");
+    setAgentTxnsLoading(true);
+
     const loadAllAgentTransactions = async () => {
-      if (!selectedAgentId) {
-        if (!cancelled) setAgentTxns([]);
-        return;
-      }
+      if (!selectedAgentId) return;
+      if (!cancelled) setAgentTxnsLoading(true);
 
       const allRows: Transaction[] = [];
       let from = 0;
@@ -132,6 +143,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
           .range(from, from + AGENT_TX_PAGE_SIZE - 1);
 
         if (error) {
+          if (!cancelled) setAgentTxnsLoading(false);
           toast.error(error.message || "تعذر تحميل كشف حساب الوكيل");
           return;
         }
@@ -142,21 +154,23 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
         from += AGENT_TX_PAGE_SIZE;
       }
 
-      if (!cancelled) setAgentTxns(allRows);
+      if (!cancelled) {
+        setAgentTxns(allRows);
+        setAgentTxnsSourceAgentId(selectedAgentId);
+        setAgentTxnsLoading(false);
+      }
     };
 
     loadAllAgentTransactions();
 
-    if (selectedAgentId) {
-      channel = supabase
-        .channel(`agent-ledger-transactions-${selectedAgentId}-${Math.random().toString(36).slice(2)}`)
-        .on(
-          "postgres_changes" as any,
-          { event: "*", schema: "public", table: "transactions", filter: `agent_id=eq.${selectedAgentId}` },
-          () => loadAllAgentTransactions(),
-        )
-        .subscribe();
-    }
+    channel = supabase
+      .channel(`agent-ledger-transactions-${selectedAgentId}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "transactions", filter: `agent_id=eq.${selectedAgentId}` },
+        () => loadAllAgentTransactions(),
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
@@ -185,7 +199,8 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
   const myFlights = useMemo(() => flights.filter((f) => f.agent_id === selectedAgentId), [flights, selectedAgentId]);
 
-  const myTxnsAll = agentTxns;
+  const agentTransactionsReady = Boolean(selectedAgentId) && agentTxnsSourceAgentId === selectedAgentId && !agentTxnsLoading;
+  const myTxnsAll = agentTxnsSourceAgentId === selectedAgentId ? agentTxns : [];
   const splitCurrencyByTxnId = useMemo(
     () => resolveSplitCurrencyByRef(completePaymentSplits, "transactions"),
     [completePaymentSplits],
@@ -279,44 +294,50 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
 
 
 
-  const buildExportData = () => ({
-    title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${currencyFilter})` : ""}`,
-    subtitle: `${agent?.name || ""} — من ${period.start} إلى ${period.endInclusive}`,
-    fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name, currencyFilter),
-    summary: [
-      { label: "الفترة", value: `${period.start} → ${period.endInclusive}` },
-      ...Object.keys(monthlyView.closingBalanceByCurrency).sort().flatMap((cur) => [
-        { label: `رصيد سابق (${cur})`, value: fmtCurrency(monthlyView.openingByCurrency[cur] || 0, cur) },
-        { label: `إجمالي مدين الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyDebitByCurrency[cur] || 0, cur) },
-        { label: `إجمالي دائن الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyCreditByCurrency[cur] || 0, cur) },
-        { label: `الرصيد الختامي (${cur})`, value: fmtCurrency(monthlyView.closingBalanceByCurrency[cur] || 0, cur) },
-      ]),
-      { label: "حالة الحساب", value: accountStatus },
-    ],
-    columns: ([
-      { header: "#", key: "n" }, { header: "التاريخ", key: "date" }, { header: "البيان", key: "description" },
-      { header: "نوع الخدمة", key: "service" }, { header: "وجهة السفر", key: "destination" },
-      { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
-      { header: "قيمة الرحلة", key: "serviceValue", exportKey: "sv" },
-      { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
-      { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" }, { header: "تاريخ المغادرة", key: "departureDate" },
-    ] as Array<{ header: string; key: string; exportKey?: string }>)
-      .filter((c) => isVisible(c.key))
-      .map((c) => ({ header: c.header, key: c.exportKey || c.key })),
-    rows: displayRows.map((e, i) => ({
-      n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
-      count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
-      sv: fmtCurrency(e.serviceValue, e.currency), sv__excel: e.serviceValue,
-      debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
-      credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
-      balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
-      method: e.methodLabel, note: e.note, departureDate: e.departureDate,
-    })),
-  });
+  const buildExportData = () => {
+    if (!agentTransactionsReady) {
+      throw new Error("جاري تحميل معاملات الوكيل. انتظر اكتمال التحميل ثم أعد التصدير.");
+    }
+
+    return ({
+      title: `كشف حساب الوكيل${agent?.name ? ` — ${agent.name}` : ""} — ${monthLabel(period.monthKey)}${currencyFilter ? ` (${currencyFilter})` : ""}`,
+      subtitle: `${agent?.name || ""} — من ${period.start} إلى ${period.endInclusive}`,
+      fileName: buildArabicFileName("كشف حساب الوكيل", agent?.name, currencyFilter),
+      summary: [
+        { label: "الفترة", value: `${period.start} → ${period.endInclusive}` },
+        ...Object.keys(monthlyView.closingBalanceByCurrency).sort().flatMap((cur) => [
+          { label: `رصيد سابق (${cur})`, value: fmtCurrency(monthlyView.openingByCurrency[cur] || 0, cur) },
+          { label: `إجمالي مدين الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyDebitByCurrency[cur] || 0, cur) },
+          { label: `إجمالي دائن الشهر (${cur})`, value: fmtCurrency(monthlyView.monthlyCreditByCurrency[cur] || 0, cur) },
+          { label: `الرصيد الختامي (${cur})`, value: fmtCurrency(monthlyView.closingBalanceByCurrency[cur] || 0, cur) },
+        ]),
+        { label: "حالة الحساب", value: accountStatus },
+      ],
+      columns: ([
+        { header: "#", key: "n" }, { header: "التاريخ", key: "date" }, { header: "البيان", key: "description" },
+        { header: "نوع الخدمة", key: "service" }, { header: "وجهة السفر", key: "destination" },
+        { header: "العدد", key: "count" }, { header: "السعر", key: "price" },
+        { header: "قيمة الرحلة", key: "serviceValue", exportKey: "sv" },
+        { header: "مدين", key: "debit" }, { header: "دائن", key: "credit" },
+        { header: "الرصيد الحالي", key: "balance" }, { header: "وسيلة الدفع", key: "method" }, { header: "ملاحظات", key: "note" }, { header: "تاريخ المغادرة", key: "departureDate" },
+      ] as Array<{ header: string; key: string; exportKey?: string }>)
+        .filter((c) => isVisible(c.key))
+        .map((c) => ({ header: c.header, key: c.exportKey || c.key })),
+      rows: displayRows.map((e, i) => ({
+        n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
+        count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
+        sv: fmtCurrency(e.serviceValue, e.currency), sv__excel: e.serviceValue,
+        debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
+        credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
+        balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
+        method: e.methodLabel, note: e.note, departureDate: e.departureDate,
+      })),
+    });
+  };
 
   useRegisterStatementCapture(
     () => ({ data: buildExportData(), whatsapp: agent?.whatsapp || null, contextId: agent?.id || null }),
-    [agent, displayRows, byCurrency, accountStatus, filters],
+    [agent, displayRows, byCurrency, accountStatus, filters, agentTransactionsReady],
   );
 
   if (agentsLoading && showAgentProfile) return null;
@@ -374,7 +395,7 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
               <CurrencyFilter value={currencyFilter} onChange={setCurrencyFilter} options={currencyOptions} />
               {anyActive && <button type="button" className="action-btn" onClick={resetAll}>مسح جميع الفلاتر</button>}
               <ColumnVisibility columns={LEDGER_COLUMNS} visible={visible} onChange={setVisible} />
-              {canExport && <ExportButton disabled={displayRows.length === 0} getData={buildExportData} whatsapp={{ phone: agent?.whatsapp || null, recipientName: agent?.name || null }} />}
+              {canExport && <ExportButton disabled={!agentTransactionsReady || displayRows.length === 0} getData={buildExportData} whatsapp={{ phone: agent?.whatsapp || null, recipientName: agent?.name || null }} />}
             </div>
           </div>
           <div className="card-body">
