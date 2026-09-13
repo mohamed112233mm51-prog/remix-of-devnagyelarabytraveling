@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { SummaryPeriodFilter } from "@/components/SummaryPeriodFilter";
 import { PassportScanner, type PassportScanData } from "@/components/PassportScanner";
+import { ExecutionTripReconciliation } from "@/components/ExecutionTripReconciliation";
 import { cairoToday } from "@/lib/approvalFines";
 import { parseDisplayDate } from "@/lib/dateFormat";
 import { refetchLiveTables, useLive, type Execution } from "@/lib/db";
@@ -236,6 +237,7 @@ function ExecutionSummaryCards({
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
           <PassportScanner onExtracted={onPassportExtracted} />
           <BulkPassportUploadLauncher />
+          <ExecutionTripReconciliation />
         </div>
       </div>
       <SummaryPeriodFilter value={summaryPeriod} onChange={setSummaryPeriod} />

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:agent-company-direct": "node scripts/test-agent-company-direct.mjs"
+    "test:agent-company-direct": "node scripts/test-agent-company-direct.mjs",
+    "test:trip-reconciliation": "node --experimental-strip-types --test tests/executionTripReconciliation.test.ts tests/executionBulkExecutionCore.test.ts tests/executionTripReconciliationRoute.test.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.51.2",
