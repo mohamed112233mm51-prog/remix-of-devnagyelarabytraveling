@@ -19,5 +19,11 @@ jobs:
         run: python3 scripts/_audit_financial_atomic.py
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Trip reconciliation tests
+        run: npm run test:trip-reconciliation
+      - name: Direct transfer regression
+        run: npm run test:agent-company-direct
+      - name: TypeScript
+        run: npx tsc --noEmit
       - name: Production build
         run: npm run build
