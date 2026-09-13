@@ -2,37 +2,11 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
 import sys
-import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE_REPO = "mohamed112233mm51-prog/develsayad"
-BASE_REF = "e0e5f53dae65541078f9a8fc9a47cac64da45ad1"
-POST_REF = "271270287d5d6dcc34a53e86b5e1c1ff45d92d3f"
-
-EXISTING_FILES = [
-    "src/components/PaymentSplits.tsx",
-    "src/features/companies/LegacyCompaniesRoute.tsx",
-    "src/lib/dashboardCollections.ts",
-    "src/lib/financialEngine.cancel.ts",
-    "src/lib/financialEngine.update.ts",
-    "src/lib/financialSummary.ts",
-]
-
-NEW_FILES = [
-    "src/lib/agentCompanyDirectTransfer.ts",
-    "supabase/migrations/20260907183000_agent_company_direct_transfer_cancel.sql",
-]
-
-
-def raw_url(ref: str, path: str) -> str:
-    return f"https://raw.githubusercontent.com/{SOURCE_REPO}/{ref}/{path}"
-
-
-def download(ref: str, path: str) -> bytes:
-    req = urllib.request.Request(raw_url(ref, path), headers={"User-Agent": "agent-company-direct-patch"})
-    with urllib.request.urlopen(req, timeout=30) as response:
-        return response.read()
+PATCH = ROOT / "scripts" / "agent_company_direct.patch"
 
 
 def fail(message: str) -> None:
@@ -40,30 +14,30 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def assert_base_matches() -> None:
-    mismatches: list[str] = []
-    for rel in EXISTING_FILES:
-        current_path = ROOT / rel
-        if not current_path.exists():
-            mismatches.append(f"{rel}: missing in target repo")
-            continue
-        expected = download(BASE_REF, rel)
-        actual = current_path.read_bytes()
-        if actual != expected:
-            mismatches.append(f"{rel}: target no longer matches reviewed base")
-    if mismatches:
+def run_git_apply(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "apply", *args, str(PATCH)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def apply_reviewed_change() -> None:
+    if not PATCH.exists():
+        fail(f"Reviewed patch is missing: {PATCH.relative_to(ROOT)}")
+
+    check = run_git_apply("--check")
+    if check.returncode != 0:
         fail(
-            "Architecture preflight failed; refusing to overwrite divergent files:\n- "
-            + "\n- ".join(mismatches)
+            "Architecture preflight failed; one or more reviewed hunks no longer match the current devo branch.\n"
+            + (check.stderr or check.stdout)
         )
 
-
-def copy_reviewed_change() -> None:
-    for rel in EXISTING_FILES + NEW_FILES:
-        target = ROOT / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(download(POST_REF, rel))
-        print(f"updated {rel}")
+    applied = run_git_apply()
+    if applied.returncode != 0:
+        fail("Reviewed patch could not be applied after preflight.\n" + (applied.stderr or applied.stdout))
 
 
 def add_regression_test() -> None:
@@ -126,16 +100,14 @@ console.log("agent-company direct transfer regression checks passed");
 
     package_path = ROOT / "package.json"
     package = json.loads(package_path.read_text(encoding="utf-8"))
-    scripts = package.setdefault("scripts", {})
-    scripts["test:agent-company-direct"] = "node scripts/test-agent-company-direct.mjs"
+    package.setdefault("scripts", {})["test:agent-company-direct"] = "node scripts/test-agent-company-direct.mjs"
     package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> None:
-    print("Preflight: verifying reviewed architecture base...")
-    assert_base_matches()
-    print("Base matches. Applying reviewed client change...")
-    copy_reviewed_change()
+    print("Preflight: checking reviewed hunks against current devo architecture...")
+    apply_reviewed_change()
+    print("Reviewed hunks applied without overwriting unrelated branch changes.")
     add_regression_test()
     print("Patch complete. Run npm run test:agent-company-direct, npx tsc --noEmit, and npm run build.")
 
