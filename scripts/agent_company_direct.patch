@@ -1,0 +1,674 @@
+diff --git a/src/components/PaymentSplits.tsx b/src/components/PaymentSplits.tsx
+--- a/src/components/PaymentSplits.tsx
++++ b/src/components/PaymentSplits.tsx
+@@ -1,5 +1,5 @@
+ import { useMemo } from "react";
+-import type { Merchant } from "@/lib/db";
++import type { Agent, Merchant } from "@/lib/db";
+ 
+ /**
+  * Reusable multi-row payment widget.
+@@ -23,6 +23,7 @@ export type PaymentSplitRow = {
+   source: SplitSource;
+   currency: SplitCurrency;
+   merchant_id: string;
++  agent_id?: string;
+   method: string;
+   amount: string;
+ };
+@@ -43,6 +44,7 @@ export const newPaymentSplitRow = (): PaymentSplitRow => ({
+   source: "company",
+   currency: "EGP",
+   merchant_id: "",
++  agent_id: "",
+   method: "company_cash",
+   amount: "",
+ });
+@@ -52,6 +54,7 @@ export function methodsForSplit(
+   merchants: Merchant[],
+ ): { key: string; label: string }[] {
+   if (row.source === "company") return SPLIT_COMPANY_METHODS;
++  if (String((row as any).source) === "agent") return [{ key: "agent_direct", label: "دفع مباشر من الوكيل" }];
+   const m = merchants.find((x) => x.id === row.merchant_id);
+   if (!m) return [];
+   const opts: { key: string; label: string }[] = [];
+@@ -64,6 +67,8 @@ export function PaymentSplits({
+ export function PaymentSplits({
+   splits,
+   merchants,
++  agents = [],
++  allowAgentSource = false,
+   onChange,
+   title = "وسيلة الدفع",
+   hideSource = false,
+@@ -73,6 +78,8 @@ export function PaymentSplits({
+   lockMerchantId?: string;
+   splits: PaymentSplitRow[];
+   merchants: Merchant[];
++  agents?: Agent[];
++  allowAgentSource?: boolean;
+   onChange: (next: PaymentSplitRow[]) => void;
+   title?: string;
+ }) {
+@@ -103,14 +110,19 @@ export function PaymentSplits({
+                 <div className="form-group"><label>جهة الدفع</label>
+                   <select
+                     value={row.source}
+-                    onChange={(e) => update(row.uid, {
+-                      source: e.target.value as SplitSource,
+-                      merchant_id: "",
+-                      method: e.target.value === "company" ? "company_cash" : "",
+-                    })}
++                    onChange={(e) => {
++                      const source = e.target.value as SplitSource | "agent";
++                      update(row.uid, {
++                        source: source as SplitSource,
++                        merchant_id: "",
++                        agent_id: "",
++                        method: source === "company" ? "company_cash" : source === "agent" ? "agent_direct" : "",
++                      });
++                    }}
+                   >
+                     <option value="company">الشركة</option>
+                     <option value="merchant">تاجر</option>
++                    {allowAgentSource && <option value="agent">وكيل</option>}
+                   </select>
+                 </div>
+               )}
+@@ -134,8 +146,23 @@ export function PaymentSplits({
+                   </select>
+                 </div>
+               )}
++              {String((row as any).source) === "agent" && (
++                <div className="form-group"><label>الوكيل</label>
++                  <select value={row.agent_id} onChange={(e) => update(row.uid, { agent_id: e.target.value, method: "agent_direct" })}>
++                    <option value="" disabled>اختر...</option>
++                    {agents
++                      .filter((a) => ((a as any).status || "نشط") === "نشط" || a.id === row.agent_id)
++                      .map((a) => (
++                        <option key={a.id} value={a.id}>
++                          {a.name}
++                          {((a as any).status || "نشط") !== "نشط" ? " (غير نشط)" : ""}
++                        </option>
++                      ))}
++                  </select>
++                </div>
++              )}
+               <div className="form-group"><label>وسيلة الدفع</label>
+-                <select value={row.method} onChange={(e) => update(row.uid, { method: e.target.value })}>
++                <select value={row.method} onChange={(e) => update(row.uid, { method: e.target.value })} disabled={String((row as any).source) === "agent"}>
+                   <option value="" disabled>اختر...</option>
+                   {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                 </select>
+@@ -172,6 +199,7 @@ export function validatePaymentSplits(splits: PaymentSplitRow[]): string | null {
+   for (const r of valid) {
+     if (!r.currency) return "يجب اختيار العملة";
+     if (r.source === "merchant" && !r.merchant_id) return "اختر التاجر لكل سطر تاجر";
++    if (String((r as any).source) === "agent" && !r.agent_id) return "اختر الوكيل للدفع المباشر";
+     if (!r.method) return "اختر وسيلة الدفع لكل سطر";
+   }
+   return null;
+diff --git a/src/features/companies/LegacyCompaniesRoute.tsx b/src/features/companies/LegacyCompaniesRoute.tsx
+--- a/src/features/companies/LegacyCompaniesRoute.tsx
++++ b/src/features/companies/LegacyCompaniesRoute.tsx
+@@ -35,6 +35,7 @@ import { postMovement, type MovementSplit } from "@/lib/financialEngine";
+ import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
+ import { logCreate } from "@/lib/financialAudit";
+ import { buildMerchantCashOutToCompanyCounterpartRows } from "@/lib/merchantCounterparty";
++import { postAgentCompanyDirectTransfer } from "@/lib/agentCompanyDirectTransfer";
+ import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, formatCurrencyMap, CurrencyMap, type LedgerRow } from "@/lib/financialSummary";
+ 
+ import {
+@@ -793,7 +794,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
+ 
+ type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
+ 
+-function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
++function CompanyTxnForm({ companies, merchants, agents, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
+   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
+   const SERVICE_TYPES = useDropdownOptions("service_type");
+   const DESTINATIONS = useDropdownOptions("destination");
+@@ -840,6 +841,68 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
+     if (validSplits.some((r) => r.currency !== selectedCurrency)) {
+       return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
+     }
++
++    const directRows = validSplits.filter((r) => String((r as any).source) === "agent");
++    if (directRows.length > 0) {
++      if (directRows.length !== 1 || validSplits.length !== 1) {
++        return toast.error("الدفع المباشر من الوكيل يجب أن يكون في حركة مستقلة بدون خلطه بالشركة أو التاجر");
++      }
++      if (tripValueNum > 0) {
++        return toast.error("الدفع المباشر من الوكيل تسوية مالية فقط؛ اترك العدد والسعر فارغين");
++      }
++      const direct = directRows[0];
++      const amount = Number(direct.amount) || 0;
++      const fingerprint = financialOperationFingerprint({
++        type: "agent_company_direct",
++        companyId: form.company_id,
++        agentId: String(direct.agent_id || ""),
++        date: form.date,
++        currency: selectedCurrency,
++        amount,
++        destination: form.destination || null,
++        serviceType: form.service_type || null,
++        statement: form.statement.trim() || null,
++        note: form.note.trim() || null,
++      });
++      const operationId = getOrCreateFinancialOperationId("agent-company-direct", fingerprint);
++      const toastId = financialConfirmationToastId(operationId);
++      setSaving(true);
++      toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
++
++      const directRes = await postAgentCompanyDirectTransfer({
++        operationId,
++        fingerprint,
++        companyId: form.company_id,
++        agentId: String(direct.agent_id || ""),
++        date: form.date,
++        currency: selectedCurrency,
++        amount,
++        destination: form.destination || null,
++        serviceType: form.service_type || null,
++        statement: form.statement.trim() || null,
++        note: form.note.trim() || null,
++      });
++      if (!directRes.ok) {
++        setSaving(false);
++        toast.error(
++          isLikelyNetworkError(directRes.error)
++            ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
++            : (directRes.error || "تعذر حفظ التحويل المباشر"),
++          { id: toastId },
++        );
++        return;
++      }
++
++      try { await logCreate("company_transactions", directRes.companyTransactionId, directRes.companyRow, "دفع مباشر من وكيل"); } catch { /* non-blocking audit */ }
++      try { await logCreate("transactions", directRes.agentTransactionId, directRes.agentRow, "دفع مباشر للشركة"); } catch { /* non-blocking audit */ }
++
++      confirmFinancialOperation(operationId);
++      setSaving(false);
++      toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
++      onDone();
++      return;
++    }
++
+     const balanceErr = validateSplitOutflows(validSplits, balances, merchants);
+     const merchantDbErr = await assertMerchantOutflowsAllowed(validSplits);
+     if (merchantDbErr) return toast.error(merchantDbErr);
+@@ -1010,7 +1073,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
+ 
+       </div>
+ 
+-      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} />
++      <PaymentSplits splits={splits} merchants={merchants} agents={agents} allowAgentSource onChange={setSplits} />
+ 
+ 
+       <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+diff --git a/src/lib/agentCompanyDirectTransfer.ts b/src/lib/agentCompanyDirectTransfer.ts
+new file mode 100644
+--- /dev/null
++++ b/src/lib/agentCompanyDirectTransfer.ts
+@@ -0,0 +1,95 @@
++import { atomicRow, executeFinancialAtomic } from "@/lib/financialAtomic";
++import { deriveFinancialOperationUuid } from "@/lib/financialIdempotency";
++
++export const AGENT_COMPANY_DIRECT_SOURCE = "agent_direct_to_company";
++
++type DirectTransferArgs = {
++  operationId: string;
++  fingerprint: string;
++  companyId: string;
++  agentId: string;
++  date: string;
++  currency: string;
++  amount: number;
++  destination?: string | null;
++  serviceType?: string | null;
++  statement?: string | null;
++  note?: string | null;
++};
++
++export async function postAgentCompanyDirectTransfer(args: DirectTransferArgs) {
++  const amount = Number(args.amount || 0);
++  if (!args.operationId || !args.fingerprint || !args.companyId || !args.agentId || !args.date || !args.currency || !(amount > 0)) {
++    return { ok: false as const, error: "بيانات التحويل المباشر بين الوكيل والشركة غير مكتملة" };
++  }
++
++  const companyTransactionId = args.operationId;
++  const agentTransactionId = deriveFinancialOperationUuid(args.operationId, "agent-company-direct:agent");
++  const common = {
++    date: args.date,
++    destination: args.destination || null,
++    service_type: args.serviceType || null,
++    note: args.note || null,
++    statement: args.statement || null,
++    source_service_type: AGENT_COMPANY_DIRECT_SOURCE,
++  };
++
++  const companyRow = {
++    id: companyTransactionId,
++    company_id: args.companyId,
++    ...common,
++    count: 0,
++    price: 0,
++    trip_value: 0,
++    instapay_amount: 0,
++    cash_amount: 0,
++    mobile_cash_amount: 0,
++    mobile_cash_net_amount: 0,
++    arabic_tourism_cash_amount: 0,
++    arabic_tourism_cash_net_amount: 0,
++    merchant_cash_amount: 0,
++    merchant_cash_net_amount: 0,
++    merchant_cash_physical_amount: 0,
++    total_paid: amount,
++    usd_amount: 0,
++    currency: args.currency,
++    payment_currency: args.currency,
++    merchant_id: null,
++    source_service_id: agentTransactionId,
++  };
++
++  const agentRow = {
++    id: agentTransactionId,
++    agent_id: args.agentId,
++    ...common,
++    count: 0,
++    price: 0,
++    paid: amount,
++    payment_method: "دفع مباشر للشركة",
++    instapay_amount: 0,
++    cash_amount: 0,
++    mobile_cash_amount: 0,
++    mobile_cash_net_amount: 0,
++    arabic_tourism_cash_amount: 0,
++    arabic_tourism_cash_net_amount: 0,
++    merchant_cash_amount: 0,
++    merchant_cash_net_amount: 0,
++    merchant_cash_physical_amount: 0,
++    total_paid: amount,
++    currency: args.currency,
++    merchant_id: null,
++    source_service_id: companyTransactionId,
++  };
++
++  const result = await executeFinancialAtomic({
++    operationId: args.operationId,
++    fingerprint: args.fingerprint,
++    rows: [
++      atomicRow("company_transactions", companyRow),
++      atomicRow("transactions", agentRow),
++    ],
++    result: { companyTransactionId, agentTransactionId },
++  });
++
++  return { ...result, companyTransactionId, agentTransactionId, companyRow, agentRow };
++}
+diff --git a/src/lib/dashboardCollections.ts b/src/lib/dashboardCollections.ts
+--- a/src/lib/dashboardCollections.ts
++++ b/src/lib/dashboardCollections.ts
+@@ -67,6 +67,15 @@ export type DatePredicate = (dateISO: string | null) => boolean;
+ function txnCurrency(t: Partial<Transaction>): string {
+   return normalizeCurrency((t as any).currency);
+ }
++
++function agentCollectionAmount(t: Partial<Transaction>): number {
++  const collected = txnCollectedAmount(t);
++  if (collected > 0) return collected;
++  if ((t as any).source_service_type === "agent_direct_to_company") {
++    return Math.round(Number((t as any).total_paid || (t as any).paid || 0));
++  }
++  return collected;
++}
+ function collectionCurrency(c: Partial<MerchantCashCollection>): string {
+   return normalizeCurrency((c as any).opening_currency ?? (c as any).currency);
+ }
+@@ -89,7 +98,7 @@ export function computeAgentCollections(
+     if (isCancelled(t as unknown as MaybeCancelled)) continue;
+     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+     if (!(t as any).agent_id) continue;
+-    total += txnCollectedAmount(t);
++    total += agentCollectionAmount(t);
+   }
+   return total;
+ }
+@@ -134,7 +143,7 @@ export function computeAgentCollectionsByCurrency(
+     if (isCancelled(t as unknown as MaybeCancelled)) continue;
+     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+     if (!(t as any).agent_id) continue;
+-    const amount = txnCollectedAmount(t);
++    const amount = agentCollectionAmount(t);
+     if (!amount) continue;
+     map.add(txnCurrency(t), amount);
+   }
+@@ -193,7 +202,7 @@ export function computeAgentPaymentsByCurrencyPerAgent(
+     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
+     const aid = (t as any).agent_id as string | null;
+     if (!aid) continue;
+-    const amount = txnCollectedAmount(t);
++    const amount = agentCollectionAmount(t);
+     if (!amount) continue;
+     let m = out.get(aid);
+     if (!m) { m = new CurrencyMap(); out.set(aid, m); }
+diff --git a/src/lib/financialEngine.cancel.ts b/src/lib/financialEngine.cancel.ts
+--- a/src/lib/financialEngine.cancel.ts
++++ b/src/lib/financialEngine.cancel.ts
+@@ -66,13 +66,26 @@ async function changeCancelState(args: {
+   const userId = userData?.user?.id;
+   if (!userId) throw new Error("يجب تسجيل الدخول");
+ 
+-  const { data, error } = await (supabase as any).rpc("set_financial_cancel_state_atomic", {
++  let rpcName = "set_financial_cancel_state_atomic";
++  if (args.table === "transactions" || args.table === "company_transactions") {
++    const { data: sourceRow, error: sourceReadError } = await supabase
++      .from(args.table as any)
++      .select("source_service_type")
++      .eq("id", args.id)
++      .maybeSingle();
++    if (sourceReadError) throw sourceReadError;
++    if ((sourceRow as any)?.source_service_type === "agent_direct_to_company") {
++      rpcName = "set_agent_company_direct_cancel_state_atomic";
++    }
++  }
++
++  const { data, error } = await (supabase as any).rpc(rpcName, {
+     p_table: args.table,
+     p_id: args.id,
+     p_cancel: args.cancel,
+     p_reason: trimmed,
+   });
+-  if (error) throw new Error(mutationErrorMessage(error, "set_financial_cancel_state_atomic"));
++  if (error) throw new Error(mutationErrorMessage(error, rpcName));
+   if (!data || data.ok !== true) throw new Error(data?.error || "تعذر تأكيد التغيير المالي");
+ 
+   // Audit is intentionally outside the financial transaction: failure to write
+@@ -93,6 +106,23 @@ async function changeCancelState(args: {
+         after_value: after as any,
+         ...meta,
+       } as any);
++
++      if (data.counterpart_before && data.counterpart_table && data.counterpart_id) {
++        const counterpartTable = data.counterpart_table as CancellableTable;
++        const counterpartBefore = data.counterpart_before || {};
++        const counterpartAfter = data.counterpart_after || counterpartBefore;
++        const counterpartMeta = entityFieldsFor(counterpartTable, counterpartBefore);
++        await supabase.from("financial_audit_log").insert({
++          table_name: counterpartTable,
++          record_id: String(data.counterpart_id),
++          action: args.cancel ? "cancel" : "restore",
++          reason: trimmed,
++          performed_by: userId,
++          before_value: counterpartBefore as any,
++          after_value: counterpartAfter as any,
++          ...counterpartMeta,
++        } as any);
++      }
+     } catch (auditError) {
+       console.warn("[financial-audit] cancel/restore log failed", auditError);
+     }
+diff --git a/src/lib/financialEngine.update.ts b/src/lib/financialEngine.update.ts
+--- a/src/lib/financialEngine.update.ts
++++ b/src/lib/financialEngine.update.ts
+@@ -175,6 +175,9 @@ export async function updateFinancialTransaction(args: {
+     .maybeSingle();
+   if (readErr) throw readErr;
+   if (!before) throw new Error("الحركة غير موجودة");
++  if ((table === "transactions" || table === "company_transactions") && (before as any).source_service_type === "agent_direct_to_company") {
++    throw new Error("لا يمكن تعديل التحويل المباشر بين الوكيل والشركة من طرف واحد؛ ألغِ الحركة وأعد تسجيلها");
++  }
+   if ((before as any).cancelled_at) throw new Error("لا يمكن تعديل حركة ملغاة — قم بإعادة التفعيل أولاً");
+ 
+   let currentSplits: any[] = [];
+diff --git a/src/lib/financialSummary.ts b/src/lib/financialSummary.ts
+--- a/src/lib/financialSummary.ts
++++ b/src/lib/financialSummary.ts
+@@ -200,6 +200,15 @@ function txnSaleAndPaid(t: Partial<Transaction>): { sale: number; paid: number } {
+   };
+ }
+ 
++function companySettlementAmount(t: Partial<CompanyTransaction>): number {
++  const collected = txnCollectedAmount(t);
++  if (collected > 0) return collected;
++  if ((t as any).source_service_type === "agent_direct_to_company") {
++    return Math.round(Number((t as any).total_paid || 0));
++  }
++  return collected;
++}
++
+ 
+ /* ============================================================
+  *  AGENTS — ملخص الوكلاء
+@@ -1193,7 +1202,7 @@ export function computeDashboardLifetime(input: {
+     companyServices +=
+       Number((t as any).trip_value || 0) ||
+       Number((t as any).count || 0) * Number((t as any).price || 0);
+-    companyOutgoingNet += txnCollectedAmount(t);
++    companyOutgoingNet += companySettlementAmount(t);
+     merchantOutgoing += Number((t as any).merchant_cash_amount || 0);
+   }
+   const companyPaid = companyOutgoingNet;
+@@ -1365,7 +1374,7 @@ export function buildAgentLedgerRows(
+         payment: credit,
+         debit: isPayment ? 0 : serviceValue,
+         credit,
+-        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
++        paymentMethod: credit > 0 ? (sourceType === "agent_direct_to_company" ? "دفع مباشر للشركة" : paymentMethodLabel(t)) : "—",
+         note: t.note || "—",
+         currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
+         raw: t,
+@@ -1404,7 +1413,7 @@ export function buildCompanyLedgerRows(
+     let description = rawStatement;
+     const sourceType = String((t as any).source_service_type || "");
+     const isOpening = sourceType === "opening_debit" || sourceType === "opening_credit";
+-    if (statementContext && payment !== 0 && sourceType !== "execution" && !isOpening) {
++    if (statementContext && payment !== 0 && sourceType !== "execution" && sourceType !== "agent_direct_to_company" && !isOpening) {
+       const merchantId = String((t as any).merchant_id || "");
+       const merchant = merchantId ? statementContext.merchantNames?.get(merchantId) : "";
+       const counterpartyName = merchant ? `تاجر الكاش ${merchant}` : (statementContext.businessLabel || "الشركة");
+@@ -1427,7 +1436,7 @@ export function buildCompanyLedgerRows(
+       payment,
+       debit: serviceValue,
+       credit: payment,
+-      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
++      paymentMethod: payment > 0 ? (sourceType === "agent_direct_to_company" ? "دفع مباشر من وكيل" : paymentMethodLabel(t)) : "—",
+       note: (t as any).note || "—",
+       currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
+       raw: t,
+diff --git a/supabase/migrations/20260907183000_agent_company_direct_transfer_cancel.sql b/supabase/migrations/20260907183000_agent_company_direct_transfer_cancel.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/20260907183000_agent_company_direct_transfer_cancel.sql
+@@ -0,0 +1,191 @@
++-- Direct agent -> issuing-company settlement.
++-- Two linked ledger rows, intentionally without payment_splits/cash-box movement.
++
++DROP POLICY IF EXISTS transactions_perm_insert ON public.transactions;
++CREATE POLICY transactions_perm_insert ON public.transactions
++FOR INSERT TO authenticated WITH CHECK (
++  public.app_permission_allowed('accounts','create')
++  OR (agent_id IS NULL AND merchant_id IS NOT NULL AND public.app_permission_allowed('merchants','create'))
++  OR (
++    source_service_type = 'execution'
++    AND public.app_permission_allowed('executions','edit')
++    AND EXISTS (
++      SELECT 1 FROM public.executions e
++      WHERE e.id::text = split_part(COALESCE(source_service_id,''), '::', 1)
++    )
++  )
++  OR (
++    source_service_type = 'merchant_cash_out_to_company'
++    AND agent_id IS NULL AND merchant_id IS NOT NULL
++    AND public.app_permission_allowed('companies','create')
++  )
++  OR (
++    source_service_type = 'merchant_cash_out_to_agent'
++    AND agent_id IS NULL AND merchant_id IS NOT NULL
++    AND public.app_permission_allowed('accounts','create')
++  )
++  OR (source_service_type = 'submission_fine' AND public.app_permission_allowed('submissions','edit'))
++  OR (source_service_type = 'execution_fine' AND public.app_permission_allowed('executions','edit'))
++  OR (
++    source_service_type IN ('flight_ticket','security_approval','libyan_investment')
++    AND public.app_has_any_permission(ARRAY['submissions','executions'],'edit')
++  )
++  OR (
++    source_service_type IN ('opening_debit','opening_credit')
++    AND public.app_permission_allowed('accounts','edit')
++  )
++  OR (
++    source_service_type = 'agent_direct_to_company'
++    AND agent_id IS NOT NULL
++    AND merchant_id IS NULL
++    AND public.app_permission_allowed('companies','create')
++    AND EXISTS (
++      SELECT 1 FROM public.company_transactions ct
++      WHERE ct.id::text = COALESCE(public.transactions.source_service_id, '')
++        AND ct.source_service_type = 'agent_direct_to_company'
++        AND COALESCE(ct.source_service_id, '') = public.transactions.id::text
++        AND ct.cancelled_at IS NULL
++    )
++  )
++);
++
++CREATE OR REPLACE FUNCTION public.set_agent_company_direct_cancel_state_atomic(
++  p_table text,
++  p_id uuid,
++  p_cancel boolean,
++  p_reason text DEFAULT NULL
++)
++RETURNS jsonb
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = public
++AS $$
++DECLARE
++  v_actor uuid := auth.uid();
++  v_reason text := NULLIF(BTRIM(COALESCE(p_reason, '')), '');
++  v_source_type text;
++  v_source_id text;
++  v_counterpart_id uuid;
++  v_parent_before jsonb;
++  v_parent_after jsonb;
++  v_counter_before jsonb;
++  v_counter_after jsonb;
++  v_counter_table text;
++  v_now timestamptz := now();
++  v_reused boolean := false;
++BEGIN
++  IF v_actor IS NULL THEN
++    RAISE EXCEPTION 'يجب تسجيل الدخول' USING ERRCODE = '42501';
++  END IF;
++  IF p_table NOT IN ('transactions', 'company_transactions') THEN
++    RAISE EXCEPTION 'نوع الحركة غير مدعوم';
++  END IF;
++  IF p_cancel AND v_reason IS NULL THEN
++    RAISE EXCEPTION 'سبب الإلغاء مطلوب';
++  END IF;
++
++  IF p_table = 'transactions' THEN
++    IF NOT public.app_financial_action_allowed('accounts', 'delete') THEN
++      RAISE EXCEPTION 'لا تملك صلاحية إلغاء حركة الوكيل' USING ERRCODE = '42501';
++    END IF;
++    SELECT t.source_service_type, t.source_service_id
++      INTO v_source_type, v_source_id
++      FROM public.transactions t WHERE t.id = p_id;
++    v_counter_table := 'company_transactions';
++  ELSE
++    IF NOT public.app_financial_action_allowed('companies', 'delete') THEN
++      RAISE EXCEPTION 'لا تملك صلاحية إلغاء حركة الشركة' USING ERRCODE = '42501';
++    END IF;
++    SELECT ct.source_service_type, ct.source_service_id
++      INTO v_source_type, v_source_id
++      FROM public.company_transactions ct WHERE ct.id = p_id;
++    v_counter_table := 'transactions';
++  END IF;
++
++  IF v_source_type IS DISTINCT FROM 'agent_direct_to_company' OR NULLIF(v_source_id, '') IS NULL THEN
++    RAISE EXCEPTION 'الحركة ليست تحويلاً مباشراً مرتبطاً بين وكيل وشركة';
++  END IF;
++  BEGIN
++    v_counterpart_id := v_source_id::uuid;
++  EXCEPTION WHEN invalid_text_representation THEN
++    RAISE EXCEPTION 'رابط الطرف المقابل غير صالح';
++  END;
++
++  PERFORM pg_advisory_xact_lock(
++    hashtextextended(LEAST(p_id::text, v_counterpart_id::text) || '|' || GREATEST(p_id::text, v_counterpart_id::text), 0)
++  );
++
++  IF p_table = 'transactions' THEN
++    SELECT to_jsonb(t) INTO v_parent_before FROM public.transactions t WHERE t.id = p_id FOR UPDATE;
++    SELECT to_jsonb(ct) INTO v_counter_before FROM public.company_transactions ct WHERE ct.id = v_counterpart_id FOR UPDATE;
++  ELSE
++    SELECT to_jsonb(ct) INTO v_parent_before FROM public.company_transactions ct WHERE ct.id = p_id FOR UPDATE;
++    SELECT to_jsonb(t) INTO v_counter_before FROM public.transactions t WHERE t.id = v_counterpart_id FOR UPDATE;
++  END IF;
++
++  IF v_parent_before IS NULL OR v_counter_before IS NULL THEN
++    RAISE EXCEPTION 'أحد طرفي التحويل المباشر غير موجود';
++  END IF;
++  IF COALESCE(v_parent_before->>'source_service_type', '') <> 'agent_direct_to_company'
++     OR COALESCE(v_counter_before->>'source_service_type', '') <> 'agent_direct_to_company'
++     OR COALESCE(v_parent_before->>'source_service_id', '') <> v_counterpart_id::text
++     OR COALESCE(v_counter_before->>'source_service_id', '') <> p_id::text THEN
++    RAISE EXCEPTION 'رابط التحويل المباشر بين الطرفين غير متطابق';
++  END IF;
++
++  v_reused := CASE
++    WHEN p_cancel THEN (v_parent_before->>'cancelled_at') IS NOT NULL AND (v_counter_before->>'cancelled_at') IS NOT NULL
++    ELSE (v_parent_before->>'cancelled_at') IS NULL AND (v_counter_before->>'cancelled_at') IS NULL
++  END;
++
++  IF NOT v_reused THEN
++    IF p_table = 'transactions' THEN
++      UPDATE public.transactions SET
++        cancelled_at = CASE WHEN p_cancel THEN v_now ELSE NULL END,
++        cancelled_by = CASE WHEN p_cancel THEN v_actor ELSE NULL END,
++        cancel_reason = CASE WHEN p_cancel THEN v_reason ELSE NULL END
++      WHERE id = p_id;
++      UPDATE public.company_transactions SET
++        cancelled_at = CASE WHEN p_cancel THEN v_now ELSE NULL END,
++        cancelled_by = CASE WHEN p_cancel THEN v_actor ELSE NULL END,
++        cancel_reason = CASE WHEN p_cancel THEN v_reason ELSE NULL END
++      WHERE id = v_counterpart_id;
++    ELSE
++      UPDATE public.company_transactions SET
++        cancelled_at = CASE WHEN p_cancel THEN v_now ELSE NULL END,
++        cancelled_by = CASE WHEN p_cancel THEN v_actor ELSE NULL END,
++        cancel_reason = CASE WHEN p_cancel THEN v_reason ELSE NULL END
++      WHERE id = p_id;
++      UPDATE public.transactions SET
++        cancelled_at = CASE WHEN p_cancel THEN v_now ELSE NULL END,
++        cancelled_by = CASE WHEN p_cancel THEN v_actor ELSE NULL END,
++        cancel_reason = CASE WHEN p_cancel THEN v_reason ELSE NULL END
++      WHERE id = v_counterpart_id;
++    END IF;
++  END IF;
++
++  IF p_table = 'transactions' THEN
++    SELECT to_jsonb(t) INTO v_parent_after FROM public.transactions t WHERE t.id = p_id;
++    SELECT to_jsonb(ct) INTO v_counter_after FROM public.company_transactions ct WHERE ct.id = v_counterpart_id;
++  ELSE
++    SELECT to_jsonb(ct) INTO v_parent_after FROM public.company_transactions ct WHERE ct.id = p_id;
++    SELECT to_jsonb(t) INTO v_counter_after FROM public.transactions t WHERE t.id = v_counterpart_id;
++  END IF;
++
++  RETURN jsonb_build_object(
++    'ok', true,
++    'reused', v_reused,
++    'before', v_parent_before,
++    'after', v_parent_after,
++    'counterpart_before', v_counter_before,
++    'counterpart_after', v_counter_after,
++    'counterpart_table', v_counter_table,
++    'counterpart_id', v_counterpart_id
++  );
++END;
++$$;
++
++REVOKE ALL ON FUNCTION public.set_agent_company_direct_cancel_state_atomic(text, uuid, boolean, text) FROM PUBLIC;
++REVOKE ALL ON FUNCTION public.set_agent_company_direct_cancel_state_atomic(text, uuid, boolean, text) FROM anon;
++GRANT EXECUTE ON FUNCTION public.set_agent_company_direct_cancel_state_atomic(text, uuid, boolean, text)
++TO authenticated, service_role;
