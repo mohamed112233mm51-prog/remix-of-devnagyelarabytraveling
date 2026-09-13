@@ -1,0 +1,63 @@
+name: Apply agent-company direct transfer
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_patch_agent_company_direct.py
+      - .github/workflows/apply-agent-company-direct.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply guarded direct-transfer patch
+        run: python3 scripts/_patch_agent_company_direct.py
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Direct-transfer regression checks
+        run: npm run test:agent-company-direct
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit verified change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/components/PaymentSplits.tsx \
+            src/features/companies/LegacyCompaniesRoute.tsx \
+            src/lib/agentCompanyDirectTransfer.ts \
+            src/lib/dashboardCollections.ts \
+            src/lib/financialEngine.cancel.ts \
+            src/lib/financialEngine.update.ts \
+            src/lib/financialSummary.ts \
+            supabase/migrations/20260907183000_agent_company_direct_transfer_cancel.sql \
+            scripts/test-agent-company-direct.mjs \
+            package.json \
+            package-lock.json
+          if git diff --cached --quiet; then
+            echo "No direct-transfer changes to commit"
+          else
+            git commit -m "Add atomic agent-to-company direct payments with tests"
+            git pull --rebase origin devo
+            git push origin devo
+          fi
