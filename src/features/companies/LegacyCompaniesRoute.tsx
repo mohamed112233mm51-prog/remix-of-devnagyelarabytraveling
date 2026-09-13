@@ -35,6 +35,7 @@ import { confirmFinancialOperation, financialConfirmationToastId, financialOpera
 import { logCreate } from "@/lib/financialAudit";
 import { buildMerchantCashOutToCompanyCounterpartRows } from "@/lib/merchantCounterparty";
 import { postAgentCompanyDirectTransfer } from "@/lib/agentCompanyDirectTransfer";
+import { isDirectTransferPaymentMethod } from "@/lib/directTransferPaymentMethod";
 import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, formatCurrencyMap, CurrencyMap, type LedgerRow } from "@/lib/financialSummary";
 
 import {
@@ -820,6 +821,7 @@ function CompanyTxnForm({ companies, merchants, agents, onDone }: { companies: I
         return toast.error("الدفع المباشر من الوكيل تسوية مالية فقط؛ اترك العدد والسعر فارغين");
       }
       const direct = directRows[0];
+      if (!isDirectTransferPaymentMethod(direct.method)) return toast.error("اختر وسيلة الدفع للتحويل المباشر");
       const amount = Number(direct.amount) || 0;
       const fingerprint = financialOperationFingerprint({
         type: "agent_company_direct",
@@ -828,6 +830,7 @@ function CompanyTxnForm({ companies, merchants, agents, onDone }: { companies: I
         date: form.date,
         currency: selectedCurrency,
         amount,
+        paymentMethod: direct.method,
         destination: form.destination || null,
         serviceType: form.service_type || null,
         statement: form.statement.trim() || null,
@@ -846,6 +849,7 @@ function CompanyTxnForm({ companies, merchants, agents, onDone }: { companies: I
         date: form.date,
         currency: selectedCurrency,
         amount,
+        paymentMethod: direct.method,
         destination: form.destination || null,
         serviceType: form.service_type || null,
         statement: form.statement.trim() || null,

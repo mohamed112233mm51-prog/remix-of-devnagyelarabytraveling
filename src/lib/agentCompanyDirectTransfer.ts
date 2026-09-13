@@ -1,5 +1,6 @@
 import { atomicRow, executeFinancialAtomic } from "@/lib/financialAtomic";
 import { deriveFinancialOperationUuid } from "@/lib/financialIdempotency";
+import { directTransferPaymentAmounts, directTransferPaymentLabel, isDirectTransferPaymentMethod, type DirectTransferPaymentMethod } from "@/lib/directTransferPaymentMethod";
 
 export const AGENT_COMPANY_DIRECT_SOURCE = "agent_direct_to_company";
 
@@ -11,6 +12,7 @@ type DirectTransferArgs = {
   date: string;
   currency: string;
   amount: number;
+  paymentMethod: DirectTransferPaymentMethod;
   destination?: string | null;
   serviceType?: string | null;
   statement?: string | null;
@@ -22,9 +24,14 @@ export async function postAgentCompanyDirectTransfer(args: DirectTransferArgs) {
   if (!args.operationId || !args.fingerprint || !args.companyId || !args.agentId || !args.date || !args.currency || !(amount > 0)) {
     return { ok: false as const, error: "بيانات التحويل المباشر بين الوكيل والشركة غير مكتملة" };
   }
+  if (!isDirectTransferPaymentMethod(args.paymentMethod)) {
+    return { ok: false as const, error: "اختر وسيلة الدفع للتحويل المباشر" };
+  }
 
   const companyTransactionId = args.operationId;
   const agentTransactionId = deriveFinancialOperationUuid(args.operationId, "agent-company-direct:agent");
+  const paymentAmounts = directTransferPaymentAmounts(args.paymentMethod, amount);
+  const paymentMethodLabel = directTransferPaymentLabel(args.paymentMethod);
   const common = {
     date: args.date,
     destination: args.destination || null,
@@ -41,10 +48,10 @@ export async function postAgentCompanyDirectTransfer(args: DirectTransferArgs) {
     count: 0,
     price: 0,
     trip_value: 0,
-    instapay_amount: 0,
-    cash_amount: 0,
-    mobile_cash_amount: 0,
-    mobile_cash_net_amount: 0,
+    instapay_amount: paymentAmounts.instapayAmount,
+    cash_amount: paymentAmounts.cashAmount,
+    mobile_cash_amount: paymentAmounts.mobileCashAmount,
+    mobile_cash_net_amount: paymentAmounts.mobileCashNetAmount,
     arabic_tourism_cash_amount: 0,
     arabic_tourism_cash_net_amount: 0,
     merchant_cash_amount: 0,
@@ -65,11 +72,11 @@ export async function postAgentCompanyDirectTransfer(args: DirectTransferArgs) {
     count: 0,
     price: 0,
     paid: amount,
-    payment_method: "دفع مباشر للشركة",
-    instapay_amount: 0,
-    cash_amount: 0,
-    mobile_cash_amount: 0,
-    mobile_cash_net_amount: 0,
+    payment_method: paymentMethodLabel,
+    instapay_amount: paymentAmounts.instapayAmount,
+    cash_amount: paymentAmounts.cashAmount,
+    mobile_cash_amount: paymentAmounts.mobileCashAmount,
+    mobile_cash_net_amount: paymentAmounts.mobileCashNetAmount,
     arabic_tourism_cash_amount: 0,
     arabic_tourism_cash_net_amount: 0,
     merchant_cash_amount: 0,

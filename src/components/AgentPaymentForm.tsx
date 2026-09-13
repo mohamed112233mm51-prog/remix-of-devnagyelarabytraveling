@@ -1,27 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useLive, useDropdownOptions, type Agent, type Merchant } from "@/lib/db";
+import { useLive, useDropdownOptions, type Agent, type Merchant, type IssuingCompany } from "@/lib/db";
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { activeOptions } from "@/lib/activeFilter";
 import { postMovement } from "@/lib/financialEngine";
-import { confirmFinancialOperation, financialOperationFingerprint, getOrCreateFinancialOperationId, isLikelyNetworkError } from "@/lib/financialIdempotency";
+import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
 import { resolveCompanyCashBoxForSplit } from "@/lib/balanceGuard";
+import { postAgentCompanyDirectTransfer } from "@/lib/agentCompanyDirectTransfer";
+import { usePerm } from "@/hooks/usePerm";
+import { DIRECT_TRANSFER_PAYMENT_METHODS, isDirectTransferPaymentMethod } from "@/lib/directTransferPaymentMethod";
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
 type Currency = "EGP" | "USD" | "LYD";
-type Source = "company" | "merchant";
+type Source = "company" | "merchant" | "issuing_company";
 
 type SplitRow = {
   uid: string;
   source: Source;
   currency: Currency;
   merchant_id: string;
+  issuing_company_id: string;
   method: string; // chosen label key from method dropdown
   amount: string;
 };
@@ -43,6 +47,7 @@ const newRow = (): SplitRow => ({
   source: "company",
   currency: "EGP",
   merchant_id: "",
+  issuing_company_id: "",
   method: "company_cash",
   amount: "",
 });
@@ -59,6 +64,8 @@ export function AgentPaymentForm({
   onDone: () => void;
 }) {
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
+  const { rows: issuingCompanies } = useLive<IssuingCompany>("issuing_companies");
+  const companyPerm = usePerm("companies");
   const SERVICE_TYPES = useDropdownOptions("service_type");
   const DESTINATIONS = useDropdownOptions("destination");
 
@@ -93,6 +100,7 @@ export function AgentPaymentForm({
 
   const methodsForSplit = (row: SplitRow): { key: string; label: string }[] => {
     if (row.source === "company") return COMPANY_METHODS;
+    if (row.source === "issuing_company") return DIRECT_TRANSFER_PAYMENT_METHODS;
     const m = merchants.find((x) => x.id === row.merchant_id);
     if (!m) return [];
     const opts: { key: string; label: string }[] = [];
@@ -130,6 +138,7 @@ export function AgentPaymentForm({
     for (const r of validSplits) {
       if (!r.currency) return toast.error("يجب اختيار العملة");
       if (r.source === "merchant" && !r.merchant_id) return toast.error("اختر التاجر لكل سطر تاجر");
+      if (r.source === "issuing_company" && !r.issuing_company_id) return toast.error("اختر الشركة الصادرة للدفع المباشر");
       if (!r.method) return toast.error("اختر وسيلة الدفع لكل سطر");
       const allowed = methodsForSplit(r).map((m) => m.key);
       if (!allowed.includes(r.method)) return toast.error("وسيلة الدفع غير مفعلة لهذا التاجر");
@@ -138,6 +147,71 @@ export function AgentPaymentForm({
     if (!selectedCurrency) return toast.error("يجب اختيار العملة");
     if (validSplits.some((r) => r.currency !== selectedCurrency)) {
       return toast.error("لا يمكن حفظ دفعة واحدة بأكثر من عملة؛ أضف دفعة منفصلة لكل عملة");
+    }
+
+    const directRows = validSplits.filter((r) => r.source === "issuing_company");
+    if (directRows.length > 0) {
+      if (directRows.length !== 1 || validSplits.length !== 1) {
+        return toast.error("الدفع المباشر للشركة الصادرة يجب أن يكون في حركة مستقلة بدون خلطه بخزنة الشركة أو التاجر");
+      }
+      if (tripValueNum > 0) {
+        return toast.error("الدفع المباشر للشركة الصادرة تسوية مالية فقط؛ اترك العدد والسعر فارغين");
+      }
+      const direct = directRows[0];
+      if (!isDirectTransferPaymentMethod(direct.method)) return toast.error("اختر وسيلة الدفع للتحويل المباشر");
+      const amount = Number(direct.amount) || 0;
+      const fingerprint = financialOperationFingerprint({
+        type: "agent_company_direct",
+        companyId: direct.issuing_company_id,
+        agentId: form.agent_id,
+        date: form.date,
+        currency: selectedCurrency,
+        amount,
+        paymentMethod: direct.method,
+        destination: form.destination || null,
+        serviceType: form.service_type || null,
+        statement: form.statement.trim() || null,
+        note: form.note.trim() || null,
+      });
+      const operationId = getOrCreateFinancialOperationId("agent-company-direct", fingerprint);
+      const toastId = financialConfirmationToastId(operationId);
+      setSaving(true);
+      toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+      const directRes = await postAgentCompanyDirectTransfer({
+        operationId,
+        fingerprint,
+        companyId: direct.issuing_company_id,
+        agentId: form.agent_id,
+        date: form.date,
+        currency: selectedCurrency,
+        amount,
+        paymentMethod: direct.method,
+        destination: form.destination || null,
+        serviceType: form.service_type || null,
+        statement: form.statement.trim() || null,
+        note: form.note.trim() || null,
+      });
+      if (!directRes.ok) {
+        setSaving(false);
+        toast.error(
+          isLikelyNetworkError(directRes.error)
+            ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
+            : (directRes.error || "تعذر حفظ التحويل المباشر"),
+          { id: toastId },
+        );
+        return;
+      }
+
+      try { await logCreate("company_transactions", directRes.companyTransactionId, directRes.companyRow, "دفع مباشر من وكيل"); } catch { /* non-blocking audit */ }
+      try { await logCreate("transactions", directRes.agentTransactionId, directRes.agentRow, "دفع مباشر للشركة"); } catch { /* non-blocking audit */ }
+
+      confirmFinancialOperation(operationId);
+      setSaving(false);
+      toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
+      resetDraft();
+      onDone();
+      return;
     }
 
     // Company-funded rows must resolve to a real company cash box BEFORE any
@@ -357,8 +431,8 @@ export function AgentPaymentForm({
               <div className="form-group"><label>جهة التحصيل</label>
                 <SearchableSelect
                   value={row.source}
-                  onChange={(v) => updateSplit(row.uid, { source: v as Source, merchant_id: "", method: v === "company" ? "company_cash" : "" })}
-                  options={[{ value: "company", label: "الشركة" }, { value: "merchant", label: "تاجر" }]}
+                  onChange={(v) => updateSplit(row.uid, { source: v as Source, merchant_id: "", issuing_company_id: "", method: v === "company" ? "company_cash" : "" })}
+                  options={[{ value: "company", label: "الشركة" }, { value: "merchant", label: "تاجر" }, ...(companyPerm.create ? [{ value: "issuing_company", label: "شركة صادرة" }] : [])]}
                   allowClear={false}
                 />
               </div>
@@ -376,6 +450,16 @@ export function AgentPaymentForm({
                     value={row.merchant_id}
                     onChange={(v) => updateSplit(row.uid, { merchant_id: v, method: "" })}
                     options={activeOptions(merchants, row.merchant_id, (m) => m.merchant_name)}
+                    placeholder="اختر..."
+                  />
+                </div>
+              )}
+              {row.source === "issuing_company" && (
+                <div className="form-group"><label>الشركة الصادرة</label>
+                  <SearchableSelect
+                    value={row.issuing_company_id}
+                    onChange={(v) => updateSplit(row.uid, { issuing_company_id: v })}
+                    options={activeOptions(issuingCompanies, row.issuing_company_id, (c) => c.company_name)}
                     placeholder="اختر..."
                   />
                 </div>

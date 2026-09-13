@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Agent, Merchant } from "@/lib/db";
+import { DIRECT_TRANSFER_PAYMENT_METHODS } from "@/lib/directTransferPaymentMethod";
 
 /**
  * Reusable multi-row payment widget.
@@ -54,7 +55,7 @@ export function methodsForSplit(
   merchants: Merchant[],
 ): { key: string; label: string }[] {
   if (row.source === "company") return SPLIT_COMPANY_METHODS;
-  if (String((row as any).source) === "agent") return [{ key: "agent_direct", label: "دفع مباشر من الوكيل" }];
+  if (String((row as any).source) === "agent") return DIRECT_TRANSFER_PAYMENT_METHODS;
   const m = merchants.find((x) => x.id === row.merchant_id);
   if (!m) return [];
   const opts: { key: string; label: string }[] = [];
@@ -116,7 +117,7 @@ export function PaymentSplits({
                         source: source as SplitSource,
                         merchant_id: "",
                         agent_id: "",
-                        method: source === "company" ? "company_cash" : source === "agent" ? "agent_direct" : "",
+                        method: source === "company" ? "company_cash" : "",
                       });
                     }}
                   >
@@ -148,7 +149,7 @@ export function PaymentSplits({
               )}
               {String((row as any).source) === "agent" && (
                 <div className="form-group"><label>الوكيل</label>
-                  <select value={row.agent_id} onChange={(e) => update(row.uid, { agent_id: e.target.value, method: "agent_direct" })}>
+                  <select value={row.agent_id} onChange={(e) => update(row.uid, { agent_id: e.target.value })}>
                     <option value="" disabled>اختر...</option>
                     {agents
                       .filter((a) => ((a as any).status || "نشط") === "نشط" || a.id === row.agent_id)
@@ -162,7 +163,7 @@ export function PaymentSplits({
                 </div>
               )}
               <div className="form-group"><label>وسيلة الدفع</label>
-                <select value={row.method} onChange={(e) => update(row.uid, { method: e.target.value })} disabled={String((row as any).source) === "agent"}>
+                <select value={row.method} onChange={(e) => update(row.uid, { method: e.target.value })}>
                   <option value="" disabled>اختر...</option>
                   {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>

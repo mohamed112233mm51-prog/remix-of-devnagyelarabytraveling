@@ -1,4 +1,5 @@
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
+import { directTransferPaymentLabelFromRow } from "@/lib/directTransferPaymentMethod";
 /**
  * ============================================================================
  * FINANCIAL SUMMARY ENGINE — طبقة الحسابات المالية الموحدة
@@ -1323,7 +1324,7 @@ export function buildAgentLedgerRows(
         payment: credit,
         debit: isPayment ? 0 : serviceValue,
         credit,
-        paymentMethod: credit > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? "دفع مباشر للشركة" : paymentMethodLabel(t)) : "—",
+        paymentMethod: credit > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? (directTransferPaymentLabelFromRow(t as any) || "دفع مباشر للشركة") : paymentMethodLabel(t)) : "—",
         note: t.note || "—",
         currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
         raw: t,
@@ -1371,7 +1372,7 @@ export function buildCompanyLedgerRows(
       payment,
       debit: serviceValue,
       credit: payment,
-      paymentMethod: payment > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? "دفع مباشر من وكيل" : paymentMethodLabel(t)) : "—",
+      paymentMethod: payment > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? (directTransferPaymentLabelFromRow(t as any) || "دفع مباشر من وكيل") : paymentMethodLabel(t)) : "—",
       note: (t as any).note || "—",
       currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
       raw: t,
