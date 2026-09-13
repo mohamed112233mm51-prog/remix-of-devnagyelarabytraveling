@@ -68,7 +68,7 @@ export async function fetchReconciliationReferenceLabels(
 
   const companies = (Array.isArray(companyResult.data) ? companyResult.data : [])
     .map((company: any) => ({ value: String(company.id), label: String(company.company_name || company.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+    .sort((a: { value: string; label: string }, b: { value: string; label: string }) => a.label.localeCompare(b.label, "ar"));
 
   const agents: Record<string, string> = {};
   for (const agent of Array.isArray(agentResult.data) ? agentResult.data : []) {
