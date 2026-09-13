@@ -23,7 +23,7 @@ jobs:
         run: npm run test:trip-reconciliation
       - name: Direct transfer regression
         run: npm run test:agent-company-direct
-      - name: TypeScript
-        run: npx tsc --noEmit
       - name: Production build
         run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
