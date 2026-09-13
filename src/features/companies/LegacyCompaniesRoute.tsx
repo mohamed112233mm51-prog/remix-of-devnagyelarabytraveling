@@ -34,6 +34,7 @@ import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { confirmFinancialOperation, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { logCreate } from "@/lib/financialAudit";
 import { buildMerchantCashOutToCompanyCounterpartRows } from "@/lib/merchantCounterparty";
+import { postAgentCompanyDirectTransfer } from "@/lib/agentCompanyDirectTransfer";
 import { useCompaniesSummary, summarizeLedgerByCurrency, attachLedgerRunningBalance, resolveSplitCurrencyByRef, buildCompanyLedgerRows, computeUsdConversionSourceBalance, formatCurrencyMap, CurrencyMap, type LedgerRow } from "@/lib/financialSummary";
 
 import {
@@ -762,7 +763,7 @@ function CompanyForm({ onDone }: { onDone: () => void }) {
 
 type CashBox = { id: string; name: string; currency: string; balance: number; is_active: boolean };
 
-function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
+function CompanyTxnForm({ companies, merchants, agents, onDone }: { companies: IssuingCompany[]; merchants: Merchant[]; txns: CompanyTransaction[]; flights: any[]; approvals: any[]; agents: Agent[]; onDone: () => void }) {
   const { rows: cashBoxes } = useLive<CashBox>("cash_boxes");
   const SERVICE_TYPES = useDropdownOptions("service_type");
   const DESTINATIONS = useDropdownOptions("destination");
@@ -809,6 +810,68 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
     if (validSplits.some((r) => r.currency !== selectedCurrency)) {
       return toast.error("لا يمكن حفظ حركة واحدة بأكثر من عملة؛ أضف حركة منفصلة لكل عملة");
     }
+
+    const directRows = validSplits.filter((r) => String((r as any).source) === "agent");
+    if (directRows.length > 0) {
+      if (directRows.length !== 1 || validSplits.length !== 1) {
+        return toast.error("الدفع المباشر من الوكيل يجب أن يكون في حركة مستقلة بدون خلطه بالشركة أو التاجر");
+      }
+      if (tripValueNum > 0) {
+        return toast.error("الدفع المباشر من الوكيل تسوية مالية فقط؛ اترك العدد والسعر فارغين");
+      }
+      const direct = directRows[0];
+      const amount = Number(direct.amount) || 0;
+      const fingerprint = financialOperationFingerprint({
+        type: "agent_company_direct",
+        companyId: form.company_id,
+        agentId: String(direct.agent_id || ""),
+        date: form.date,
+        currency: selectedCurrency,
+        amount,
+        destination: form.destination || null,
+        serviceType: form.service_type || null,
+        statement: form.statement.trim() || null,
+        note: form.note.trim() || null,
+      });
+      const operationId = getOrCreateFinancialOperationId("agent-company-direct", fingerprint);
+      const toastId = financialConfirmationToastId(operationId);
+      setSaving(true);
+      toast.loading(FINANCIAL_CONFIRMING_MESSAGE, { id: toastId });
+
+      const directRes = await postAgentCompanyDirectTransfer({
+        operationId,
+        fingerprint,
+        companyId: form.company_id,
+        agentId: String(direct.agent_id || ""),
+        date: form.date,
+        currency: selectedCurrency,
+        amount,
+        destination: form.destination || null,
+        serviceType: form.service_type || null,
+        statement: form.statement.trim() || null,
+        note: form.note.trim() || null,
+      });
+      if (!directRes.ok) {
+        setSaving(false);
+        toast.error(
+          isLikelyNetworkError(directRes.error)
+            ? "تعذر تأكيد العملية الآن بسبب الاتصال. أعد المحاولة بنفس البيانات."
+            : (directRes.error || "تعذر حفظ التحويل المباشر"),
+          { id: toastId },
+        );
+        return;
+      }
+
+      try { await logCreate("company_transactions", directRes.companyTransactionId, directRes.companyRow, "دفع مباشر من وكيل"); } catch { /* non-blocking audit */ }
+      try { await logCreate("transactions", directRes.agentTransactionId, directRes.agentRow, "دفع مباشر للشركة"); } catch { /* non-blocking audit */ }
+
+      confirmFinancialOperation(operationId);
+      setSaving(false);
+      toast.success(FINANCIAL_SUCCESS_MESSAGE, { id: toastId });
+      onDone();
+      return;
+    }
+
     const balanceErr = validateSplitOutflows(validSplits, balances, merchants);
     const merchantDbErr = await assertMerchantOutflowsAllowed(validSplits);
     if (merchantDbErr) return toast.error(merchantDbErr);
@@ -977,7 +1040,7 @@ function CompanyTxnForm({ companies, merchants, onDone }: { companies: IssuingCo
 
       </div>
 
-      <PaymentSplits splits={splits} merchants={merchants} onChange={setSplits} />
+      <PaymentSplits splits={splits} merchants={merchants} agents={agents} allowAgentSource onChange={setSplits} />
 
 
       <div className="form-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>

@@ -67,6 +67,15 @@ export type DatePredicate = (dateISO: string | null) => boolean;
 function txnCurrency(t: Partial<Transaction>): string {
   return normalizeCurrency((t as any).currency);
 }
+
+function agentCollectionAmount(t: Partial<Transaction>): number {
+  const collected = txnCollectedAmount(t);
+  if (collected > 0) return collected;
+  if ((t as any).source_service_type === "agent_direct_to_company") {
+    return Math.round(Number((t as any).total_paid || (t as any).paid || 0));
+  }
+  return collected;
+}
 function collectionCurrency(c: Partial<MerchantCashCollection>): string {
   return normalizeCurrency((c as any).opening_currency ?? (c as any).currency);
 }
@@ -89,7 +98,7 @@ export function computeAgentCollections(
     if (isCancelled(t as unknown as MaybeCancelled)) continue;
     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
     if (!(t as any).agent_id) continue;
-    total += txnCollectedAmount(t);
+    total += agentCollectionAmount(t);
   }
   return total;
 }
@@ -134,7 +143,7 @@ export function computeAgentCollectionsByCurrency(
     if (isCancelled(t as unknown as MaybeCancelled)) continue;
     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
     if (!(t as any).agent_id) continue;
-    const amount = txnCollectedAmount(t);
+    const amount = agentCollectionAmount(t);
     if (!amount) continue;
     map.add(txnCurrency(t), amount);
   }
@@ -193,7 +202,7 @@ export function computeAgentPaymentsByCurrencyPerAgent(
     if (predicate && !predicate(rowAccountingDate(t as any))) continue;
     const aid = (t as any).agent_id as string | null;
     if (!aid) continue;
-    const amount = txnCollectedAmount(t);
+    const amount = agentCollectionAmount(t);
     if (!amount) continue;
     let m = out.get(aid);
     if (!m) { m = new CurrencyMap(); out.set(aid, m); }

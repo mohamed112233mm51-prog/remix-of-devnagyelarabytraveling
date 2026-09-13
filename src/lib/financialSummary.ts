@@ -199,6 +199,15 @@ function txnSaleAndPaid(t: Partial<Transaction>): { sale: number; paid: number }
   };
 }
 
+function companySettlementAmount(t: Partial<CompanyTransaction>): number {
+  const collected = txnCollectedAmount(t);
+  if (collected > 0) return collected;
+  if ((t as any).source_service_type === "agent_direct_to_company") {
+    return Math.round(Number((t as any).total_paid || 0));
+  }
+  return collected;
+}
+
 
 /* ============================================================
  *  AGENTS — ملخص الوكلاء
@@ -1160,7 +1169,7 @@ export function computeDashboardLifetime(input: {
     companyServices +=
       Number((t as any).trip_value || 0) ||
       Number((t as any).count || 0) * Number((t as any).price || 0);
-    companyOutgoingNet += txnCollectedAmount(t);
+    companyOutgoingNet += companySettlementAmount(t);
     merchantOutgoing += Number((t as any).merchant_cash_amount || 0);
   }
   const companyPaid = companyOutgoingNet;
@@ -1314,7 +1323,7 @@ export function buildAgentLedgerRows(
         payment: credit,
         debit: isPayment ? 0 : serviceValue,
         credit,
-        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",
+        paymentMethod: credit > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? "دفع مباشر للشركة" : paymentMethodLabel(t)) : "—",
         note: t.note || "—",
         currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
         raw: t,
@@ -1362,7 +1371,7 @@ export function buildCompanyLedgerRows(
       payment,
       debit: serviceValue,
       credit: payment,
-      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",
+      paymentMethod: payment > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? "دفع مباشر من وكيل" : paymentMethodLabel(t)) : "—",
       note: (t as any).note || "—",
       currency: String(splitCurrencyByTxnId.get(t.id) || (t as any).currency || "EGP"),
       raw: t,

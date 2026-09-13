@@ -66,13 +66,26 @@ async function changeCancelState(args: {
   const userId = userData?.user?.id;
   if (!userId) throw new Error("يجب تسجيل الدخول");
 
-  const { data, error } = await (supabase as any).rpc("set_financial_cancel_state_atomic", {
+  let rpcName = "set_financial_cancel_state_atomic";
+  if (args.table === "transactions" || args.table === "company_transactions") {
+    const { data: sourceRow, error: sourceReadError } = await supabase
+      .from(args.table as any)
+      .select("source_service_type")
+      .eq("id", args.id)
+      .maybeSingle();
+    if (sourceReadError) throw sourceReadError;
+    if ((sourceRow as any)?.source_service_type === "agent_direct_to_company") {
+      rpcName = "set_agent_company_direct_cancel_state_atomic";
+    }
+  }
+
+  const { data, error } = await (supabase as any).rpc(rpcName, {
     p_table: args.table,
     p_id: args.id,
     p_cancel: args.cancel,
     p_reason: trimmed,
   });
-  if (error) throw new Error(mutationErrorMessage(error, "set_financial_cancel_state_atomic"));
+  if (error) throw new Error(mutationErrorMessage(error, rpcName));
   if (!data || data.ok !== true) throw new Error(data?.error || "تعذر تأكيد التغيير المالي");
 
   // Audit is intentionally outside the financial transaction: failure to write
@@ -93,6 +106,23 @@ async function changeCancelState(args: {
         after_value: after as any,
         ...meta,
       } as any);
+
+      if (data.counterpart_before && data.counterpart_table && data.counterpart_id) {
+        const counterpartTable = data.counterpart_table as CancellableTable;
+        const counterpartBefore = data.counterpart_before || {};
+        const counterpartAfter = data.counterpart_after || counterpartBefore;
+        const counterpartMeta = entityFieldsFor(counterpartTable, counterpartBefore);
+        await supabase.from("financial_audit_log").insert({
+          table_name: counterpartTable,
+          record_id: String(data.counterpart_id),
+          action: args.cancel ? "cancel" : "restore",
+          reason: trimmed,
+          performed_by: userId,
+          before_value: counterpartBefore as any,
+          after_value: counterpartAfter as any,
+          ...counterpartMeta,
+        } as any);
+      }
     } catch (auditError) {
       console.warn("[financial-audit] cancel/restore log failed", auditError);
     }

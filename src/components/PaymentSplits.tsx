@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Merchant } from "@/lib/db";
+import type { Agent, Merchant } from "@/lib/db";
 
 /**
  * Reusable multi-row payment widget.
@@ -23,6 +23,7 @@ export type PaymentSplitRow = {
   source: SplitSource;
   currency: SplitCurrency;
   merchant_id: string;
+  agent_id?: string;
   method: string;
   amount: string;
 };
@@ -43,6 +44,7 @@ export const newPaymentSplitRow = (): PaymentSplitRow => ({
   source: "company",
   currency: "EGP",
   merchant_id: "",
+  agent_id: "",
   method: "company_cash",
   amount: "",
 });
@@ -52,6 +54,7 @@ export function methodsForSplit(
   merchants: Merchant[],
 ): { key: string; label: string }[] {
   if (row.source === "company") return SPLIT_COMPANY_METHODS;
+  if (String((row as any).source) === "agent") return [{ key: "agent_direct", label: "دفع مباشر من الوكيل" }];
   const m = merchants.find((x) => x.id === row.merchant_id);
   if (!m) return [];
   const opts: { key: string; label: string }[] = [];
@@ -64,6 +67,8 @@ export function methodsForSplit(
 export function PaymentSplits({
   splits,
   merchants,
+  agents = [],
+  allowAgentSource = false,
   onChange,
   title = "وسيلة الدفع",
   hideSource = false,
@@ -73,6 +78,8 @@ export function PaymentSplits({
   lockMerchantId?: string;
   splits: PaymentSplitRow[];
   merchants: Merchant[];
+  agents?: Agent[];
+  allowAgentSource?: boolean;
   onChange: (next: PaymentSplitRow[]) => void;
   title?: string;
 }) {
@@ -103,14 +110,19 @@ export function PaymentSplits({
                 <div className="form-group"><label>جهة الدفع</label>
                   <select
                     value={row.source}
-                    onChange={(e) => update(row.uid, {
-                      source: e.target.value as SplitSource,
-                      merchant_id: "",
-                      method: e.target.value === "company" ? "company_cash" : "",
-                    })}
+                    onChange={(e) => {
+                      const source = e.target.value as SplitSource | "agent";
+                      update(row.uid, {
+                        source: source as SplitSource,
+                        merchant_id: "",
+                        agent_id: "",
+                        method: source === "company" ? "company_cash" : source === "agent" ? "agent_direct" : "",
+                      });
+                    }}
                   >
                     <option value="company">الشركة</option>
                     <option value="merchant">تاجر</option>
+                    {allowAgentSource && <option value="agent">وكيل</option>}
                   </select>
                 </div>
               )}
@@ -134,8 +146,23 @@ export function PaymentSplits({
                   </select>
                 </div>
               )}
+              {String((row as any).source) === "agent" && (
+                <div className="form-group"><label>الوكيل</label>
+                  <select value={row.agent_id} onChange={(e) => update(row.uid, { agent_id: e.target.value, method: "agent_direct" })}>
+                    <option value="" disabled>اختر...</option>
+                    {agents
+                      .filter((a) => ((a as any).status || "نشط") === "نشط" || a.id === row.agent_id)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                          {((a as any).status || "نشط") !== "نشط" ? " (غير نشط)" : ""}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div className="form-group"><label>وسيلة الدفع</label>
-                <select value={row.method} onChange={(e) => update(row.uid, { method: e.target.value })}>
+                <select value={row.method} onChange={(e) => update(row.uid, { method: e.target.value })} disabled={String((row as any).source) === "agent"}>
                   <option value="" disabled>اختر...</option>
                   {methods.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
@@ -172,6 +199,7 @@ export function validatePaymentSplits(splits: PaymentSplitRow[]): string | null 
   for (const r of valid) {
     if (!r.currency) return "يجب اختيار العملة";
     if (r.source === "merchant" && !r.merchant_id) return "اختر التاجر لكل سطر تاجر";
+    if (String((r as any).source) === "agent" && !r.agent_id) return "اختر الوكيل للدفع المباشر";
     if (!r.method) return "اختر وسيلة الدفع لكل سطر";
   }
   return null;

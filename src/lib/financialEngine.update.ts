@@ -175,6 +175,9 @@ export async function updateFinancialTransaction(args: {
     .maybeSingle();
   if (readErr) throw readErr;
   if (!before) throw new Error("الحركة غير موجودة");
+  if ((table === "transactions" || table === "company_transactions") && (before as any).source_service_type === "agent_direct_to_company") {
+    throw new Error("لا يمكن تعديل التحويل المباشر بين الوكيل والشركة من طرف واحد؛ ألغِ الحركة وأعد تسجيلها");
+  }
   if ((before as any).cancelled_at) throw new Error("لا يمكن تعديل حركة ملغاة — قم بإعادة التفعيل أولاً");
 
   let currentSplits: any[] = [];
