@@ -7,6 +7,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PATCH = ROOT / "scripts" / "agent_company_direct.patch"
+SUMMARY_PATH = ROOT / "src" / "lib" / "financialSummary.ts"
 
 
 def fail(message: str) -> None:
@@ -24,20 +25,76 @@ def run_git_apply(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        fail(f"Architecture preflight failed for {label}: expected exactly one current-architecture match, found {count}")
+    return text.replace(old, new, 1)
+
+
+def patch_current_financial_summary() -> None:
+    text = SUMMARY_PATH.read_text(encoding="utf-8")
+
+    anchor = '''function txnSaleAndPaid(t: Partial<Transaction>): { sale: number; paid: number } {
+  return {
+    sale: tripValue(t as any),
+    paid: txnTotalPaid(t),
+  };
+}
+'''
+    helper = anchor + '''
+function companySettlementAmount(t: Partial<CompanyTransaction>): number {
+  const collected = txnCollectedAmount(t);
+  if (collected > 0) return collected;
+  if ((t as any).source_service_type === "agent_direct_to_company") {
+    return Math.round(Number((t as any).total_paid || 0));
+  }
+  return collected;
+}
+'''
+    text = replace_once(text, anchor, helper, "company settlement source-of-truth helper")
+    text = replace_once(
+        text,
+        "    companyOutgoingNet += txnCollectedAmount(t);",
+        "    companyOutgoingNet += companySettlementAmount(t);",
+        "dashboard company direct settlement",
+    )
+    text = replace_once(
+        text,
+        '        paymentMethod: credit > 0 ? paymentMethodLabel(t) : "—",',
+        '        paymentMethod: credit > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? "دفع مباشر للشركة" : paymentMethodLabel(t)) : "—",',
+        "agent ledger direct-transfer label",
+    )
+    text = replace_once(
+        text,
+        '      paymentMethod: payment > 0 ? paymentMethodLabel(t) : "—",',
+        '      paymentMethod: payment > 0 ? ((t as any).source_service_type === "agent_direct_to_company" ? "دفع مباشر من وكيل" : paymentMethodLabel(t)) : "—",',
+        "company ledger direct-transfer label",
+    )
+
+    SUMMARY_PATH.write_text(text, encoding="utf-8")
+
+
 def apply_reviewed_change() -> None:
     if not PATCH.exists():
         fail(f"Reviewed patch is missing: {PATCH.relative_to(ROOT)}")
 
-    check = run_git_apply("--check")
+    # financialSummary.ts evolved on the main development branch after the client
+    # implementation. Apply all unchanged reviewed hunks normally, then adapt only
+    # the direct-settlement semantics to the newer ledger source-of-truth below.
+    exclude_summary = "--exclude=src/lib/financialSummary.ts"
+    check = run_git_apply("--check", exclude_summary)
     if check.returncode != 0:
         fail(
             "Architecture preflight failed; one or more reviewed hunks no longer match the current devo branch.\n"
             + (check.stderr or check.stdout)
         )
 
-    applied = run_git_apply()
+    applied = run_git_apply(exclude_summary)
     if applied.returncode != 0:
         fail("Reviewed patch could not be applied after preflight.\n" + (applied.stderr or applied.stdout))
+
+    patch_current_financial_summary()
 
 
 def add_regression_test() -> None:
@@ -82,6 +139,7 @@ const summary = read("src/lib/financialSummary.ts");
 has(summary, 'function companySettlementAmount', "company direct-settlement amount fallback missing");
 has(summary, 'دفع مباشر للشركة', "agent ledger label missing");
 has(summary, 'دفع مباشر من وكيل', "company ledger label missing");
+has(summary, 'const payment = Math.round(Number((t as any).total_paid || 0));', "current company ledger total_paid source-of-truth must remain intact");
 
 const dashboardCollections = read("src/lib/dashboardCollections.ts");
 has(dashboardCollections, 'function agentCollectionAmount', "agent collection fallback missing");
@@ -107,7 +165,7 @@ console.log("agent-company direct transfer regression checks passed");
 def main() -> None:
     print("Preflight: checking reviewed hunks against current devo architecture...")
     apply_reviewed_change()
-    print("Reviewed hunks applied without overwriting unrelated branch changes.")
+    print("Reviewed hunks applied; current financialSummary source-of-truth preserved and extended.")
     add_regression_test()
     print("Patch complete. Run npm run test:agent-company-direct, npx tsc --noEmit, and npm run build.")
 
