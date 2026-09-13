@@ -1,0 +1,38 @@
+name: Verify trip reconciliation port
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - 'src/components/ExecutionTripReconciliation*.tsx'
+      - 'src/routes/execution-trip-reconciliation.tsx'
+      - 'src/lib/executionTrip*.ts'
+      - 'src/lib/executionBulkExecution*.ts'
+      - 'src/lib/dataImport/parse.ts'
+      - 'src/routes/executions.tsx'
+      - 'src/hooks/usePerm.tsx'
+      - 'package.json'
+      - 'tests/execution*.test.ts'
+      - '.github/workflows/verify-trip-reconciliation-port.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Trip reconciliation tests
+        run: npm run test:trip-reconciliation
+      - name: Direct transfer regression
+        run: npm run test:agent-company-direct
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npm run build
