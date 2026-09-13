@@ -1,5 +1,6 @@
 -- Direct agent -> issuing-company settlement.
 -- Two linked ledger rows, intentionally without payment_splits/cash-box movement.
+-- Migration pipeline trigger: verified feature commit 6bb1277bacd11994b6ec76f95f34086e86c6a5a0.
 
 DROP POLICY IF EXISTS transactions_perm_insert ON public.transactions;
 CREATE POLICY transactions_perm_insert ON public.transactions
