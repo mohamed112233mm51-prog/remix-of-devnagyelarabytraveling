@@ -1,0 +1,62 @@
+name: Apply merchant company counterpart classification fix
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - scripts/_fix_merchant_company_counterpart_classification.py
+      - .github/workflows/apply-merchant-company-counterpart-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: devo
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply guarded fix
+        run: python3 scripts/_fix_merchant_company_counterpart_classification.py
+
+      - name: Regression assertion
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const s = fs.readFileSync('src/lib/financialSummary.ts', 'utf8');
+          const marker = 'const incomingTxns = txns.filter((t) => {';
+          const start = s.indexOf(marker);
+          const end = s.indexOf('const outgoingAll', start);
+          const block = s.slice(start, end);
+          for (const type of ['merchant_cash_out', 'merchant_cash_out_to_company', 'merchant_cash_out_to_agent']) {
+            if (!block.includes(`t.source_service_type === "${type}"`)) throw new Error(`Missing incoming exclusion: ${type}`);
+          }
+          if (!s.includes('t.source_service_type === "merchant_cash_out_to_company";\n    const toAgent')) throw new Error('Merchant company counterpart render path missing');
+          console.log('Merchant counterpart classification regression check passed');
+          NODE
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit verified fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-merchant-company-counterpart-fix.yml scripts/_fix_merchant_company_counterpart_classification.py
+          git add src/lib/financialSummary.ts
+          git commit -m "Fix merchant-to-company counterpart classification"
+          git pull --rebase origin devo
+          git push origin HEAD:devo
