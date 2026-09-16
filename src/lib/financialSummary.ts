@@ -633,6 +633,15 @@ export function buildMerchantMovementInputs(
   const merchantInstapayByTxnId = buildMerchantInstapayByTransaction(splits);
   const incomingTxns = txns.filter((t) => {
     if (!t.merchant_id) return false;
+    // Merchant counterpart rows are outflows created to mirror a payment to a
+    // company/agent. Their payment_splits can look like merchant-funded incoming
+    // money (especially InstaPay), so they must never enter the "وارد من وكيل"
+    // bucket. They are rendered exactly once through cashMoveTxns below.
+    if (
+      t.source_service_type === "merchant_cash_out" ||
+      t.source_service_type === "merchant_cash_out_to_company" ||
+      t.source_service_type === "merchant_cash_out_to_agent"
+    ) return false;
     const { net } = merchantIncomingAmounts(t, merchantInstapayByTxnId);
     return net > 0;
   });

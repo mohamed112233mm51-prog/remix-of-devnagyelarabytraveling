@@ -20,6 +20,7 @@ import { Route as MerchantsRouteImport } from './routes/merchants'
 import { Route as InvestorsRouteImport } from './routes/investors'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as ExecutionsRouteImport } from './routes/executions'
+import { Route as ExecutionTripReconciliationRouteImport } from './routes/execution-trip-reconciliation'
 import { Route as DataImportRouteImport } from './routes/data-import'
 import { Route as CurrencySuppliersRouteImport } from './routes/currency-suppliers'
 import { Route as CompaniesRouteImport } from './routes/companies'
@@ -86,6 +87,12 @@ const ExecutionsRoute = ExecutionsRouteImport.update({
   path: '/executions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExecutionTripReconciliationRoute =
+  ExecutionTripReconciliationRouteImport.update({
+    id: '/execution-trip-reconciliation',
+    path: '/execution-trip-reconciliation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DataImportRoute = DataImportRouteImport.update({
   id: '/data-import',
   path: '/data-import',
@@ -146,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/companies': typeof CompaniesRoute
   '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
+  '/execution-trip-reconciliation': typeof ExecutionTripReconciliationRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
   '/investors': typeof InvestorsRoute
@@ -169,6 +177,7 @@ export interface FileRoutesByTo {
   '/companies': typeof CompaniesRoute
   '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
+  '/execution-trip-reconciliation': typeof ExecutionTripReconciliationRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
   '/investors': typeof InvestorsRoute
@@ -193,6 +202,7 @@ export interface FileRoutesById {
   '/companies': typeof CompaniesRoute
   '/currency-suppliers': typeof CurrencySuppliersRoute
   '/data-import': typeof DataImportRoute
+  '/execution-trip-reconciliation': typeof ExecutionTripReconciliationRoute
   '/executions': typeof ExecutionsRoute
   '/expenses': typeof ExpensesRoute
   '/investors': typeof InvestorsRoute
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/companies'
     | '/currency-suppliers'
     | '/data-import'
+    | '/execution-trip-reconciliation'
     | '/executions'
     | '/expenses'
     | '/investors'
@@ -241,6 +252,7 @@ export interface FileRouteTypes {
     | '/companies'
     | '/currency-suppliers'
     | '/data-import'
+    | '/execution-trip-reconciliation'
     | '/executions'
     | '/expenses'
     | '/investors'
@@ -264,6 +276,7 @@ export interface FileRouteTypes {
     | '/companies'
     | '/currency-suppliers'
     | '/data-import'
+    | '/execution-trip-reconciliation'
     | '/executions'
     | '/expenses'
     | '/investors'
@@ -288,6 +301,7 @@ export interface RootRouteChildren {
   CompaniesRoute: typeof CompaniesRoute
   CurrencySuppliersRoute: typeof CurrencySuppliersRoute
   DataImportRoute: typeof DataImportRoute
+  ExecutionTripReconciliationRoute: typeof ExecutionTripReconciliationRoute
   ExecutionsRoute: typeof ExecutionsRoute
   ExpensesRoute: typeof ExpensesRoute
   InvestorsRoute: typeof InvestorsRoute
@@ -383,6 +397,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExecutionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/execution-trip-reconciliation': {
+      id: '/execution-trip-reconciliation'
+      path: '/execution-trip-reconciliation'
+      fullPath: '/execution-trip-reconciliation'
+      preLoaderRoute: typeof ExecutionTripReconciliationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/data-import': {
       id: '/data-import'
       path: '/data-import'
@@ -464,6 +485,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompaniesRoute: CompaniesRoute,
   CurrencySuppliersRoute: CurrencySuppliersRoute,
   DataImportRoute: DataImportRoute,
+  ExecutionTripReconciliationRoute: ExecutionTripReconciliationRoute,
   ExecutionsRoute: ExecutionsRoute,
   ExpensesRoute: ExpensesRoute,
   InvestorsRoute: InvestorsRoute,
