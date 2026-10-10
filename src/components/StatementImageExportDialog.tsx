@@ -48,6 +48,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [sourceBlob, setSourceBlob] = useState<Blob | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [selection, setSelection] = useState<ImageSelectionRect | null>(null);
+  const [cropTool, setCropTool] = useState<"select" | "scroll">("select");
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -92,7 +93,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
     return { x: clamp(e.clientX - bounds.left, 0, bounds.width), y: clamp(e.clientY - bounds.top, 0, bounds.height) };
   }
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (!imgRef.current) return;
+    if (!imgRef.current || cropTool === "scroll") return;
     e.preventDefault();
     const point = pointerPosition(e);
     const corner = (e.target as HTMLElement).dataset.cropCorner as Corner | undefined;
@@ -177,11 +178,15 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
           </div>
           {mode === "full" && <p style={{ margin: "12px 0" }}>سيتم تصدير الكشف كاملًا مع العنوان والبيانات الظاهرة في التصدير.</p>}
           {mode === "crop" && <>
-            <p style={{ margin: "8px 0" }}>اسحب لتحديد الجزء المطلوب. اسحب داخل التحديد لتحريكه، أو اسحب زاوية لتغيير حجمه. يمكنك تمرير المعاينة لرؤية بقية الكشف.</p>
+            <p style={{ margin: "8px 0" }}>اسحب لتحديد الجزء المطلوب. اسحب داخله لتحريكه، أو اسحب زاوية لتغيير حجمه. للكشوف الطويلة على الموبايل بدّل إلى وضع التمرير للتحرك داخل المعاينة.</p>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <button type="button" style={cropTool === "select" ? primaryStyle : actionStyle} onClick={() => setCropTool("select")}>✂️ وضع التحديد</button>
+              <button type="button" style={cropTool === "scroll" ? primaryStyle : actionStyle} onClick={() => setCropTool("scroll")}>↕️ وضع التمرير</button>
+            </div>
             {!sourceUrl ? <p role="status">جاري إنشاء معاينة الكشف...</p> : (
               <div style={{ overflow: "auto", maxHeight: "56vh", border: "1px solid #d1d5db", borderRadius: 8, background: "#f1f5f9" }}>
                 <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-                  style={{ position: "relative", width: "100%", touchAction: "none", cursor: "crosshair", userSelect: "none" }}>
+                  style={{ position: "relative", width: "100%", touchAction: cropTool === "scroll" ? "pan-y" : "none", cursor: cropTool === "scroll" ? "grab" : "crosshair", userSelect: "none" }}>
                   <img ref={imgRef} src={sourceUrl} alt="معاينة الكشف للتحديد" draggable={false}
                     style={{ display: "block", width: "100%", height: "auto", pointerEvents: "none" }} />
                   {selection && <div style={{ position: "absolute", left: selection.x, top: selection.y, width: selection.w, height: selection.h, border: "2px dashed #a16207", background: "rgba(234,179,8,.17)", cursor: "move" }}>

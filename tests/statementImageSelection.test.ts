@@ -46,3 +46,13 @@ test("crop maps displayed drag rectangle to native pixels", () => {
   assert.deepEqual(cropRectToPixels({ x: 80, y: 180, w: 100, h: 100 }, 1000, 2000, 100, 200), { x: 800, y: 1800, w: 200, h: 200 });
   assert.equal(cropRectToPixels({ x: 0, y: 0, w: 0, h: 10 }, 100, 100, 100, 100), null);
 });
+
+test("sums decimal strings when raw numeric values are unavailable", () => {
+  const data = {
+    title: "تقرير",
+    columns: [{ header: "مدين", key: "debit" }],
+    rows: [{ debit: "2.5" }, { debit: "1.25" }],
+  };
+  const selected = selectStatementRows(data, [0, 1]);
+  assert.equal(selected.summary?.[1]?.value, "3.75");
+});

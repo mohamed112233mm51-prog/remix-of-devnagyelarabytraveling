@@ -105,7 +105,9 @@ export async function shareStatementImageViaWhatsApp(opts: {
 }): Promise<void> {
   const file = new File([opts.blob], opts.fileName, { type: "image/png" });
   const nav: any = typeof navigator !== "undefined" ? navigator : null;
-  if (nav?.canShare?.({ files: [file] }) && typeof nav.share === "function") {
+  let supportsFileShare = false;
+  try { supportsFileShare = typeof nav?.canShare === "function" && nav.canShare({ files: [file] }); } catch {}
+  if (supportsFileShare && typeof nav.share === "function") {
     try {
       await nav.share({ files: [file] });
       return;

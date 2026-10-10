@@ -11,7 +11,7 @@ const ADDITIVE_KEYS = new Set([
 function numericValue(row: Record<string, string | number>, key: string): number | null {
   const raw = row[key + "__excel"] ?? row[key];
   if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
-  if (typeof raw !== "string" || !/^-?[0-9]+(?:\\.[0-9]+)?$/.test(raw.trim())) return null;
+  if (typeof raw !== "string" || !/^-?[0-9]+(?:\.[0-9]+)?$/.test(raw.trim())) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
