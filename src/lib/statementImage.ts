@@ -92,16 +92,21 @@ export async function generateStatementImage(
   wrapper.setAttribute("data-screenshot-ignore", "true");
   wrapper.style.cssText = [
     "position:fixed",
-    "left:-100000px",
+    "left:0",
     "top:0",
-    "width:1100px",
+    "width:" + Math.max(1100, data.columns.length * 145) + "px",
     "background:#ffffff",
-    "z-index:-1",
+    "z-index:-9999",
     "pointer-events:none",
   ].join(";");
 
   const style = document.createElement("style");
-  style.textContent = STYLE;
+  style.textContent = STYLE
+    .replace("* { box-sizing:", ".root, .root * { box-sizing:")
+    .replace("  table {", "  .root table {")
+    .replace("  th, td {", "  .root th, .root td {")
+    .replace("  th {", "  .root th {")
+    .replace("  tbody tr:nth-child(even) td {", "  .root tbody tr:nth-child(even) td {");
   wrapper.appendChild(style);
 
   const root = document.createElement("div");
@@ -115,15 +120,27 @@ export async function generateStatementImage(
 
   try {
     await waitForFonts();
+    await Promise.all(Array.from(root.querySelectorAll("img")).map((img) => img.decode().catch(() => undefined)));
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    const width = root.scrollWidth;
+    const height = root.scrollHeight;
+    // Cap browser canvas memory while preserving good text sharpness for normal reports.
+    const scale = Math.min(2, Math.sqrt(32_000_000 / (width * height)));
+    if (scale < 0.85 || height * scale > 32_000) {
+      throw new Error("الكشف طويل جدًا لصورة واحدة؛ استخدم تحديد الصفوف لتصدير جزء منه");
+    }
 
     const canvas = await html2canvas(root, {
-      scale: 2,
+      scale,
       backgroundColor: "#ffffff",
       useCORS: true,
       logging: false,
-      windowWidth: root.scrollWidth,
-      windowHeight: root.scrollHeight,
+      width,
+      height,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: Math.max(width, window.innerWidth),
+      windowHeight: Math.max(height, window.innerHeight),
     });
 
     return await new Promise<Blob>((resolve, reject) => {

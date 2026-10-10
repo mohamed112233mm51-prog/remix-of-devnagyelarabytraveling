@@ -24,7 +24,8 @@ import { computeCompanyReport } from "@/lib/sectionAccounting/companiesReport";
 import { logReconciliation } from "@/lib/sectionAccounting/reconciliation";
 import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { useEffect } from "react";
-import { exportStatementToExcel, exportStatementToPDF } from "@/lib/exportStatement";
+import { exportStatementToExcel, exportStatementToPDF, type StatementExportData } from "@/lib/exportStatement";
+import { StatementImageExportDialog } from "@/components/StatementImageExportDialog";
 import { toDisplayDate } from "@/lib/dateFormat";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { TreasuryMovementLedger } from "@/components/TreasuryMovementLedger";
@@ -322,16 +323,24 @@ function ReportsPage() {
 type RangeFn = (d: string | null | undefined) => boolean;
 type SectionProps = { inRange: RangeFn; data: ReportsData };
 
-function ExportBar({ onExcel, onPdf }: { onExcel: () => void; onPdf: () => void }) {
+function ExportBar({ onExcel, onPdf, getData }: { onExcel: () => void; onPdf: () => void; getData: () => StatementExportData }) {
+  const [imageData, setImageData] = useState<StatementExportData | null>(null);
   return (
-    <div className="export-bar">
-      <button className="export-btn export-btn--excel" onClick={onExcel}>
-        <FileSpreadsheet size={15} strokeWidth={2.2} /> تصدير Excel
-      </button>
-      <button className="export-btn" onClick={onPdf}>
-        <FileText size={15} strokeWidth={2.2} /> تصدير PDF
-      </button>
-    </div>
+    <>
+      <div className="export-bar">
+        <button type="button" className="export-btn export-btn--excel" onClick={onExcel}>
+          <FileSpreadsheet size={15} strokeWidth={2.2} /> تصدير Excel
+        </button>
+        <button type="button" className="export-btn" onClick={onPdf}>
+          <FileText size={15} strokeWidth={2.2} /> تصدير PDF
+        </button>
+        <button type="button" className="export-btn" onClick={() => {
+          try { setImageData(getData()); }
+          catch (e) { toast.error("تعذر تجهيز الصورة: " + (e as Error).message); }
+        }}>🖼️ تصدير صورة</button>
+      </div>
+      {imageData && <StatementImageExportDialog data={imageData} onClose={() => setImageData(null)} />}
+    </>
   );
 }
 
@@ -700,6 +709,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
+          getData={() => ({ title: "تقرير الوكلاء", columns: cols, rows, fileName: "تقرير الوكلاء" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير الوكلاء", columns: cols, rows, fileName: "تقرير الوكلاء" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الوكلاء", columns: cols, rows })}
         />
@@ -894,6 +904,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
+          getData={() => ({ title: "تقرير الشركات الصادرة", columns: cols, rows, fileName: "تقرير الشركات الصادرة" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير الشركات الصادرة", columns: cols, rows, fileName: "تقرير الشركات الصادرة" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الشركات الصادرة", columns: cols, rows })}
         />
@@ -1007,6 +1018,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
+          getData={() => ({ title: "تقرير تاجر الكاش", columns: cols, rows, fileName: "تقرير تاجر الكاش" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير تاجر الكاش", columns: cols, rows, fileName: "تقرير تاجر الكاش" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير تاجر الكاش", columns: cols, rows })}
         />
@@ -1116,6 +1128,7 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
+          getData={() => ({ title: "تقرير المستثمرين", columns: cols, rows, fileName: "تقرير المستثمرين" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير المستثمرين", columns: cols, rows, fileName: "تقرير المستثمرين" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير المستثمرين", columns: cols, rows })}
         />
@@ -1185,6 +1198,7 @@ function FlightsReport({ inRange, data: rd }: SectionProps) {
       <div className="card-header"><div className="card-title">✈️ تقرير التنفيذات</div></div>
       <div className="card-body">
         <ExportBar
+          getData={() => ({ title: "تقرير التنفيذات", columns: cols, rows, fileName: "تقرير التنفيذات" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير التنفيذات", columns: cols, rows, fileName: "تقرير التنفيذات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير التنفيذات", columns: cols, rows })}
         />
@@ -1254,6 +1268,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
       <div className="card-header"><div className="card-title">📋 تقرير التقديمات</div></div>
       <div className="card-body">
         <ExportBar
+          getData={() => ({ title: "تقرير التقديمات", columns: cols, rows, fileName: "تقرير التقديمات" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير التقديمات", columns: cols, rows, fileName: "تقرير التقديمات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير التقديمات", columns: cols, rows })}
         />
@@ -1373,6 +1388,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
+          getData={() => ({ title: "تقرير المصروفات", columns: cols, rows, summary, fileName: "تقرير المصروفات" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير المصروفات", columns: cols, rows, summary, fileName: "تقرير المصروفات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير المصروفات", columns: cols, rows, summary })}
         />
@@ -1529,6 +1545,7 @@ function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
         </ChartsGrid>
 
         <ExportBar
+          getData={() => ({ title: "تقرير الخزينة الدولارية", columns: cols, rows, fileName: "تقرير الخزينة الدولارية" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير الخزينة الدولارية", columns: cols, rows, fileName: "تقرير الخزينة الدولارية" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الخزينة الدولارية", columns: cols, rows })}
         />
@@ -1749,6 +1766,7 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
           { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
+          getData={() => ({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows, fileName: "تقرير الخزائن" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows, fileName: "تقرير الخزائن" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows })}
         />
@@ -2181,6 +2199,7 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
       <div className="card-body">
         <KpiRow items={kpiItems} />
         <ExportBar
+          getData={() => ({ title: "تقرير شراء وبيع العملات", columns: cols, rows, fileName: "تقرير شراء وبيع العملات" })}
           onExcel={() => exportStatementToExcel({ title: "تقرير شراء وبيع العملات", columns: cols, rows, fileName: "تقرير شراء وبيع العملات" })}
           onPdf={() => exportStatementToPDF({ title: "تقرير شراء وبيع العملات", columns: cols, rows })}
         />

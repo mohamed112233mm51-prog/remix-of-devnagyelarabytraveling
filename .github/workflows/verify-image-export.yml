@@ -1,0 +1,31 @@
+name: Verify image exports
+
+on:
+  push:
+    branches: [devo]
+    paths:
+      - 'src/components/StatementImageExportDialog.tsx'
+      - 'src/components/ExportButton.tsx'
+      - 'src/lib/statementImage.ts'
+      - 'src/lib/statementImageSelection.ts'
+      - 'src/lib/whatsappShare.ts'
+      - 'src/routes/reports.tsx'
+      - 'tests/statementImageSelection.test.ts'
+      - '.github/workflows/verify-image-export.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Statement image selection regression tests
+        run: node --experimental-strip-types --test tests/statementImageSelection.test.ts
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npm run build

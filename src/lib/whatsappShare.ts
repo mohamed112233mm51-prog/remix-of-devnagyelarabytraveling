@@ -95,3 +95,27 @@ export async function shareStatementViaWhatsApp(opts: {
   if (opts.kind === "excel") await shareExcel(opts.data, phone, message);
   else await sharePdf(opts.data, phone, message);
 }
+
+/** Native file share when supported; otherwise download PNG and open WhatsApp for manual attachment. */
+export async function shareStatementImageViaWhatsApp(opts: {
+  blob: Blob;
+  fileName: string;
+  title: string;
+  phone?: string | null;
+}): Promise<void> {
+  const file = new File([opts.blob], opts.fileName, { type: "image/png" });
+  const nav: any = typeof navigator !== "undefined" ? navigator : null;
+  if (nav?.canShare?.({ files: [file] }) && typeof nav.share === "function") {
+    try {
+      await nav.share({ files: [file] });
+      return;
+    } catch (error) {
+      if ((error as Error)?.name === "AbortError") return; // User declined share sheet.
+    }
+  }
+
+  downloadBlob(opts.blob, opts.fileName);
+  toast.message("تم تنزيل الصورة. افتح المحادثة وأرفق الصورة من الجهاز.");
+  const url = buildWhatsappUrl(normalizeWhatsappPhone(opts.phone), "مرفق صورة " + opts.title);
+  window.open(url, "_blank", "noopener,noreferrer");
+}

@@ -7,6 +7,7 @@ import {
   type StatementExportData,
 } from "@/lib/exportStatement";
 import { shareStatementViaWhatsApp } from "@/lib/whatsappShare";
+import { StatementImageExportDialog } from "@/components/StatementImageExportDialog";
 
 type WhatsappProps = {
   /** Phone number to send to (any format — normalized internally). */
@@ -26,6 +27,7 @@ export function ExportButton({
   whatsapp?: WhatsappProps;
 }) {
   const [open, setOpen] = useState<null | "export" | "whatsapp">(null);
+  const [imageData, setImageData] = useState<StatementExportData | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const waRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -76,6 +78,16 @@ export function ExportButton({
       await shareStatementViaWhatsApp({ kind, data, phone: whatsapp?.phone });
     } catch (e) {
       toast.error("تعذر الإرسال عبر واتساب: " + (e as Error).message);
+    }
+  };
+
+  const handleImageExport = async () => {
+    setOpen(null);
+    try {
+      const data = await getData();
+      setImageData(data);
+    } catch (e) {
+      toast.error("تعذر تجهيز تصدير الصورة: " + (e as Error).message);
     }
   };
 
@@ -148,16 +160,19 @@ export function ExportButton({
             <>
               <button type="button" onClick={() => handleExport("pdf")} style={menuItemStyle}>🧾 PDF</button>
               <button type="button" onClick={() => handleExport("excel")} style={menuItemStyle}>📊 Excel</button>
+              <button type="button" onClick={() => void handleImageExport()} style={menuItemStyle}>🖼️ صورة PNG</button>
             </>
           ) : (
             <>
               <button type="button" onClick={() => handleWhatsapp("pdf")} style={menuItemStyle}>🧾 إرسال PDF عبر واتساب</button>
               <button type="button" onClick={() => handleWhatsapp("excel")} style={menuItemStyle}>📊 إرسال Excel عبر واتساب</button>
+              <button type="button" onClick={() => void handleImageExport()} style={menuItemStyle}>🖼️ إرسال صورة عبر واتساب</button>
             </>
           )}
         </div>,
         document.body,
       )}
+      {imageData && <StatementImageExportDialog data={imageData} phone={whatsapp?.phone} onClose={() => setImageData(null)} />}
     </>
   );
 }
