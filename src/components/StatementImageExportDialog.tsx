@@ -49,6 +49,8 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [selection, setSelection] = useState<ImageSelectionRect | null>(null);
   const [cropTool, setCropTool] = useState<"select" | "scroll">("select");
+  const [cropZoom, setCropZoom] = useState<"fit" | "actual">("fit");
+  const [previewZoom, setPreviewZoom] = useState<"fit" | "actual">("fit");
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -182,13 +184,16 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
             <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
               <button type="button" style={cropTool === "select" ? primaryStyle : actionStyle} onClick={() => setCropTool("select")}>✂️ وضع التحديد</button>
               <button type="button" style={cropTool === "scroll" ? primaryStyle : actionStyle} onClick={() => setCropTool("scroll")}>↕️ وضع التمرير</button>
+              <button type="button" style={actionStyle} onClick={() => { setCropZoom((prev) => prev === "fit" ? "actual" : "fit"); setSelection(null); }}>
+                {cropZoom === "fit" ? "🔎 عرض بالحجم الحقيقي" : "↔️ ملاءمة العرض"}
+              </button>
             </div>
             {!sourceUrl ? <p role="status">جاري إنشاء معاينة الكشف...</p> : (
               <div style={{ overflow: "auto", maxHeight: "56vh", border: "1px solid #d1d5db", borderRadius: 8, background: "#f1f5f9" }}>
                 <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-                  style={{ position: "relative", width: "100%", touchAction: cropTool === "scroll" ? "pan-y" : "none", cursor: cropTool === "scroll" ? "grab" : "crosshair", userSelect: "none" }}>
+                  style={{ position: "relative", width: cropZoom === "fit" ? "100%" : "max-content", touchAction: cropTool === "scroll" ? "pan-x pan-y" : "none", cursor: cropTool === "scroll" ? "grab" : "crosshair", userSelect: "none" }}>
                   <img ref={imgRef} src={sourceUrl} alt="معاينة الكشف للتحديد" draggable={false}
-                    style={{ display: "block", width: "100%", height: "auto", pointerEvents: "none" }} />
+                    style={{ display: "block", width: cropZoom === "fit" ? "100%" : "auto", maxWidth: "none", height: "auto", pointerEvents: "none" }} />
                   {selection && <div style={{ position: "absolute", left: selection.x, top: selection.y, width: selection.w, height: selection.h, border: "2px dashed #a16207", background: "rgba(234,179,8,.17)", cursor: "move" }}>
                     {(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => <span data-crop-corner={corner} key={corner} style={{ position: "absolute",
                       left: corner.includes("w") ? -7 : undefined, right: corner.includes("e") ? -7 : undefined,
@@ -228,9 +233,13 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
             </button>
           </div>
         </> : <>
-          <p style={{ marginTop: 0 }}>راجع الصورة قبل تحميلها أو مشاركتها.</p>
-          <div style={{ textAlign: "center", maxHeight: "62vh", overflow: "auto", background: "#f8fafc" }}>
-            <img src={previewUrl!} alt="معاينة الصورة النهائية" style={{ maxWidth: "100%", height: "auto" }} />
+          <p style={{ marginTop: 0 }}>راجع الصورة قبل تحميلها أو مشاركتها. تكبير المعاينة لا يغيّر جودة الصورة المحفوظة.</p>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <button type="button" style={previewZoom === "fit" ? primaryStyle : actionStyle} onClick={() => setPreviewZoom("fit")}>ملاءمة العرض</button>
+            <button type="button" style={previewZoom === "actual" ? primaryStyle : actionStyle} onClick={() => setPreviewZoom("actual")}>🔎 الحجم الحقيقي 100%</button>
+          </div>
+          <div style={{ textAlign: previewZoom === "fit" ? "center" : "right", maxHeight: "62vh", overflow: "auto", background: "#f8fafc" }}>
+            <img src={previewUrl!} alt="معاينة الصورة النهائية" style={{ maxWidth: previewZoom === "fit" ? "100%" : "none", width: previewZoom === "fit" ? "auto" : undefined, height: "auto" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
             <button type="button" style={actionStyle} disabled={busy} onClick={() => { setPreviewBlob(null); setPreviewUrl(null); }}>تعديل الاختيار</button>

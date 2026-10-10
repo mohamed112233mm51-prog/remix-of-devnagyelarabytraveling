@@ -384,7 +384,7 @@ function thinBorder(argb: string): ExcelJS.Borders {
 }
 
 // ---------- PDF ----------
-async function buildStatementPdfHtml(
+export async function buildStatementPdfHtml(
   data: StatementExportData,
   _opts?: { arabicAsEntities?: boolean },
 ): Promise<{ html: string; landscape: boolean }> {
