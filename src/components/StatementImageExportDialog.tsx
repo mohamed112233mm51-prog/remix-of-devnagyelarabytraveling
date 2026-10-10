@@ -178,10 +178,8 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
                 aria-pressed={mode === key} style={mode === key ? primaryStyle : actionStyle}>{label}</button>
             ))}
           </div>
-          {mode === "full" && <p style={{ margin: "12px 0" }}>سيتم تصدير الكشف كاملًا مع العنوان والبيانات الظاهرة في التصدير.</p>}
           {mode === "crop" && <>
-            <p style={{ margin: "8px 0" }}>اسحب لتحديد الجزء المطلوب. اسحب داخله لتحريكه، أو اسحب زاوية لتغيير حجمه. للكشوف الطويلة على الموبايل بدّل إلى وضع التمرير للتحرك داخل المعاينة.</p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
               <button type="button" style={cropTool === "select" ? primaryStyle : actionStyle} onClick={() => setCropTool("select")}>✂️ وضع التحديد</button>
               <button type="button" style={cropTool === "scroll" ? primaryStyle : actionStyle} onClick={() => setCropTool("scroll")}>↕️ وضع التمرير</button>
               <button type="button" style={actionStyle} onClick={() => { setCropZoom((prev) => prev === "fit" ? "actual" : "fit"); setSelection(null); }}>
@@ -233,7 +231,6 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
             </button>
           </div>
         </> : <>
-          <p style={{ marginTop: 0 }}>راجع الصورة قبل تحميلها أو مشاركتها. تكبير المعاينة لا يغيّر جودة الصورة المحفوظة.</p>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
             <button type="button" style={previewZoom === "fit" ? primaryStyle : actionStyle} onClick={() => setPreviewZoom("fit")}>ملاءمة العرض</button>
             <button type="button" style={previewZoom === "actual" ? primaryStyle : actionStyle} onClick={() => setPreviewZoom("actual")}>🔎 الحجم الحقيقي 100%</button>
