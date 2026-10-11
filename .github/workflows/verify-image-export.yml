@@ -12,10 +12,13 @@ on:
       - 'src/lib/statementImageSelection.ts'
       - 'src/lib/whatsappShare.ts'
       - 'src/lib/imageFileShare.ts'
+      - 'src/lib/standaloneImageShare.ts'
+      - 'public/share-image.html'
       - 'src/routes/reports.tsx'
       - 'tests/statementImageSelection.test.ts'
       - 'tests/statementImageLayout.test.ts'
       - 'tests/imageFileShare.test.ts'
+      - 'tests/standaloneImageShare.test.ts'
       - '.github/workflows/verify-image-export.yml'
   workflow_dispatch:
 
@@ -29,7 +32,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - name: Statement image selection regression tests
-        run: node --experimental-strip-types --test tests/statementImageSelection.test.ts tests/statementImageLayout.test.ts tests/imageFileShare.test.ts
+        run: node --experimental-strip-types --test tests/statementImageSelection.test.ts tests/statementImageLayout.test.ts tests/imageFileShare.test.ts tests/standaloneImageShare.test.ts
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: Production build

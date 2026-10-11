@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مشاركة صورة الكشف</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f6f7f9; font-family: Tahoma, Arial, sans-serif; color: #14213d; }
+    main { width: min(640px, calc(100% - 24px)); margin: 20px auto; padding: 20px; background: white; border-radius: 14px; border: 1px solid #e5e7eb; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    #status { line-height: 1.8; color: #475569; }
+    img { display: none; width: 100%; max-height: 55vh; object-fit: contain; border: 1px solid #e2e8f0; margin: 15px 0; background: #fff; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    button, a.action { border: 0; border-radius: 9px; padding: 12px 15px; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; }
+    #share { background: #25d366; color: #102819; }
+    #download { display: none; background: #e2e8f0; color: #172554; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>مشاركة صورة الكشف</h1>
+    <div id="status" role="status">جاري استلام الصورة من النظام…</div>
+    <img id="preview" alt="صورة الكشف المراد مشاركتها" />
+    <div class="actions">
+      <button id="share" type="button" disabled>مشاركة الصورة على واتساب</button>
+      <a id="download" class="action" href="#">تنزيل الصورة</a>
+    </div>
+  </main>
+  <script>
+    (function () {
+      "use strict";
+      var READY = "statement-image-share:ready";
+      var FILE = "statement-image-share:file";
+      var token = new URLSearchParams(location.hash.slice(1)).get("token");
+      var source = window.opener;
+      var status = document.getElementById("status");
+      var share = document.getElementById("share");
+      var download = document.getElementById("download");
+      var preview = document.getElementById("preview");
+      var file = null;
+      var objectUrl = null;
+
+      if (!source || !token) {
+        status.textContent = "تعذر الربط بنافذة الكشف. ارجع للنظام واضغط مشاركة مرة أخرى.";
+        return;
+      }
+
+      window.addEventListener("message", function (event) {
+        if (file || event.origin !== location.origin || event.source !== source) return;
+        var data = event.data;
+        if (!data || data.type !== FILE || data.token !== token ||
+            !(data.file instanceof File) || data.file.type !== "image/png") return;
+        file = data.file;
+        objectUrl = URL.createObjectURL(file);
+        preview.src = objectUrl;
+        preview.style.display = "block";
+        download.href = objectUrl;
+        download.download = file.name;
+        download.style.display = "inline-block";
+        share.disabled = false;
+        status.textContent = "الصورة جاهزة. اضغط مشاركة، ثم اختر واتساب والمحادثة لإرسال ملف الصورة.";
+        // Retain no link back to the system after accepting the image.
+        window.opener = null;
+      });
+
+      source.postMessage({ type: READY, token: token }, location.origin);
+      setTimeout(function () {
+        if (!file) status.textContent = "لم تصل الصورة. ارجع للكشف واضغط مشاركة مجددًا، أو استخدم تنزيل PNG.";
+      }, 12000);
+
+      share.addEventListener("click", async function () {
+        if (!file) return;
+        // Check on the top-level page: iframe policy is no longer inherited.
+        if (typeof navigator.share !== "function" ||
+            typeof navigator.canShare !== "function" ||
+            !navigator.canShare({ files: [file] })) {
+          status.textContent = "المتصفح لا يدعم مشاركة ملف الصورة من هذه الصفحة. نزّل الصورة وأرفقها في واتساب يدويًا.";
+          return;
+        }
+        try {
+          await navigator.share({ files: [file] });
+          status.textContent = "تم فتح مشاركة الملف. اختر واتساب والمحادثة؛ تأكد من إرسال الصورة داخل واتساب.";
+        } catch (error) {
+          if (error && error.name === "AbortError") {
+            status.textContent = "تم إلغاء المشاركة. اضغط مشاركة للمحاولة مجددًا.";
+          } else {
+            status.textContent = "تعذرت مشاركة الملف. يمكنك إعادة المحاولة أو تنزيل الصورة لإرفاقها يدويًا.";
+          }
+        }
+      });
+
+      window.addEventListener("pagehide", function () {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      });
+    })();
+  </script>
+</body>
+</html>

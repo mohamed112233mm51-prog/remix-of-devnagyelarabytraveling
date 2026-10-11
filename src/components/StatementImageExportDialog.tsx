@@ -5,6 +5,7 @@ import type { StatementExportData } from "@/lib/exportStatement";
 import { generateStatementImage } from "@/lib/statementImage";
 import { cropRectToPixels, selectStatementRows, type ImageSelectionRect } from "@/lib/statementImageSelection";
 import { openWhatsappForManualImageAttachment, shareStatementImageViaWhatsApp } from "@/lib/whatsappShare";
+import { openStandaloneImageShare } from "@/lib/standaloneImageShare";
 
 type Mode = "full" | "crop" | "rows";
 type Point = { x: number; y: number };
@@ -153,6 +154,22 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   }
   async function shareImage() {
     if (!previewBlob || busy) return;
+    const imageFile = new File([previewBlob], fileName, { type: "image/png" });
+    // Lovable Preview runs inside an iframe that may deny web-share.
+    // A top-level tab can ask Android to share this exact PNG file.
+    let canShareHere = false;
+    try {
+      canShareHere = typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [imageFile] });
+    } catch { /* Permissions Policy or browser support limitation */ }
+
+    if (!canShareHere && openStandaloneImageShare(imageFile)) {
+      setManualWhatsappAttachment(false);
+      toast.message("تم فتح صفحة مشاركة الصورة. اضغط مشاركة هناك، ثم اختر واتساب والمحادثة.");
+      return;
+    }
+
     setBusy(true);
     try {
       const outcome = await shareStatementImageViaWhatsApp({ blob: previewBlob, fileName, title: data.title, phone });
@@ -249,10 +266,18 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
           {manualWhatsappAttachment && (
             <div role="status" style={{ marginTop: 12, border: "1px solid #d5ad57", borderRadius: 8, background: "#fff9e9", padding: 12, lineHeight: 1.9 }}>
               <strong>الصورة جاهزة وتم تنزيلها، لكنها لم تُرفق في واتساب تلقائيًا.</strong>
-              <div>المتصفح الحالي لا يدعم مشاركة ملف PNG مباشرة. افتح محادثة واتساب، واضغط على زر المرفقات 📎، ثم اختر الصورة من التنزيلات.</div>
-              <button type="button" style={{ ...actionStyle, marginTop: 8 }} onClick={() => openWhatsappForManualImageAttachment(phone)}>
-                فتح واتساب لإرفاق الصورة يدويًا
-              </button>
+              <div>لم يتمكن المتصفح من مشاركة ملف PNG. يمكنك تجربة صفحة مشاركة مستقلة، أو فتح واتساب وإرفاق الصورة من التنزيلات.</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <button type="button" style={primaryStyle} onClick={() => {
+                  const file = new File([previewBlob], fileName, { type: "image/png" });
+                  if (!openStandaloneImageShare(file)) toast.error("المتصفح منع فتح صفحة المشاركة. افتح الموقع مباشرة خارج Lovable Preview.");
+                }}>
+                  مشاركة الصورة من صفحة مستقلة
+                </button>
+                <button type="button" style={actionStyle} onClick={() => openWhatsappForManualImageAttachment(phone)}>
+                  فتح واتساب لإرفاق الصورة يدويًا
+                </button>
+              </div>
             </div>
           )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
