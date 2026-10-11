@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import type { StatementExportData } from "@/lib/exportStatement";
 import { generateStatementImage } from "@/lib/statementImage";
 import { cropRectToPixels, selectStatementRows, type ImageSelectionRect } from "@/lib/statementImageSelection";
-import { shareStatementImageViaWhatsApp } from "@/lib/whatsappShare";
+import { openWhatsappForManualImageAttachment, shareStatementImageViaWhatsApp } from "@/lib/whatsappShare";
 
 type Mode = "full" | "crop" | "rows";
 type Point = { x: number; y: number };
@@ -53,6 +53,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [previewZoom, setPreviewZoom] = useState<"fit" | "actual">("fit");
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [manualWhatsappAttachment, setManualWhatsappAttachment] = useState(false);
   const [busy, setBusy] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -87,7 +88,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   function setNewMode(next: Mode) {
     if (busy) return;
     setMode(next);
-    setPreviewBlob(null); setPreviewUrl(null);
+    setPreviewBlob(null); setPreviewUrl(null); setManualWhatsappAttachment(false);
   }
 
   function pointerPosition(e: PointerEvent<HTMLDivElement>): Point {
@@ -146,7 +147,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
         next = await cropPng(sourceUrl!, selection!, bounds.width, bounds.height);
       } else next = await generateStatementImage(data);
       const url = blobUrl(next);
-      setPreviewBlob(next); setPreviewUrl(url);
+      setPreviewBlob(next); setPreviewUrl(url); setManualWhatsappAttachment(false);
     } catch (e) { toast.error("تعذر إنشاء الصورة: " + (e as Error).message); }
     finally { setBusy(false); }
   }
@@ -154,7 +155,14 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
     if (!previewBlob || busy) return;
     setBusy(true);
     try {
-      await shareStatementImageViaWhatsApp({ blob: previewBlob, fileName, title: data.title, phone });
+      const outcome = await shareStatementImageViaWhatsApp({ blob: previewBlob, fileName, title: data.title, phone });
+      if (outcome === "manual") {
+        setManualWhatsappAttachment(true);
+      } else if (outcome === "native") {
+        setManualWhatsappAttachment(false);
+        // The system share sheet does not guarantee the user completed sending.
+        toast.message("تم فتح مشاركة الصورة. اختر واتساب والمحادثة لإرسال الملف.");
+      }
     } catch (e) { toast.error("تعذرت المشاركة: " + (e as Error).message); }
     finally { setBusy(false); }
   }
@@ -238,8 +246,17 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
           <div style={{ textAlign: previewZoom === "fit" ? "center" : "right", maxHeight: "62vh", overflow: "auto", background: "#f8fafc" }}>
             <img src={previewUrl!} alt="معاينة الصورة النهائية" style={{ maxWidth: previewZoom === "fit" ? "100%" : "none", width: previewZoom === "fit" ? "auto" : undefined, height: "auto" }} />
           </div>
+          {manualWhatsappAttachment && (
+            <div role="status" style={{ marginTop: 12, border: "1px solid #d5ad57", borderRadius: 8, background: "#fff9e9", padding: 12, lineHeight: 1.9 }}>
+              <strong>الصورة جاهزة وتم تنزيلها، لكنها لم تُرفق في واتساب تلقائيًا.</strong>
+              <div>المتصفح الحالي لا يدعم مشاركة ملف PNG مباشرة. افتح محادثة واتساب، واضغط على زر المرفقات 📎، ثم اختر الصورة من التنزيلات.</div>
+              <button type="button" style={{ ...actionStyle, marginTop: 8 }} onClick={() => openWhatsappForManualImageAttachment(phone)}>
+                فتح واتساب لإرفاق الصورة يدويًا
+              </button>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            <button type="button" style={actionStyle} disabled={busy} onClick={() => { setPreviewBlob(null); setPreviewUrl(null); }}>تعديل الاختيار</button>
+            <button type="button" style={actionStyle} disabled={busy} onClick={() => { setPreviewBlob(null); setPreviewUrl(null); setManualWhatsappAttachment(false); }}>تعديل الاختيار</button>
             <button type="button" style={actionStyle} disabled={busy} onClick={() => downloadImage(previewBlob, fileName)}>⬇️ تحميل PNG</button>
             <button type="button" style={{ ...primaryStyle, background: "#25D366", borderColor: "#16a34a" }} disabled={busy} onClick={() => void shareImage()}>
               🟢 مشاركة على واتساب

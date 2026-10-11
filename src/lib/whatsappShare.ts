@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { tryNativeImageShare, type NativeImageShareResult } from "./imageFileShare";
 import {
   buildStatementExcelBlob,
   buildStatementPdfBlob,
@@ -96,28 +97,33 @@ export async function shareStatementViaWhatsApp(opts: {
   else await sharePdf(opts.data, phone, message);
 }
 
-/** Native file share when supported; otherwise download PNG and open WhatsApp for manual attachment. */
+/**
+ * Share the actual image FILE via the native share sheet, not a WhatsApp
+ * text-only deep link. Browsers without file sharing download PNG for manual
+ * attachment; the UI presents the exact steps. No message is auto-sent.
+ */
 export async function shareStatementImageViaWhatsApp(opts: {
   blob: Blob;
   fileName: string;
   title: string;
   phone?: string | null;
-}): Promise<void> {
+}): Promise<NativeImageShareResult | "manual"> {
   const file = new File([opts.blob], opts.fileName, { type: "image/png" });
-  const nav: any = typeof navigator !== "undefined" ? navigator : null;
-  let supportsFileShare = false;
-  try { supportsFileShare = typeof nav?.canShare === "function" && nav.canShare({ files: [file] }); } catch {}
-  if (supportsFileShare && typeof nav.share === "function") {
-    try {
-      await nav.share({ files: [file] });
-      return;
-    } catch (error) {
-      if ((error as Error)?.name === "AbortError") return; // User declined share sheet.
-    }
-  }
+  const nav = typeof navigator !== "undefined" ? navigator : null;
+  const result = await tryNativeImageShare(file, nav);
+  if (result !== "unsupported") return result;
 
   downloadBlob(opts.blob, opts.fileName);
-  toast.message("تم تنزيل الصورة. افتح المحادثة وأرفق الصورة من الجهاز.");
-  const url = buildWhatsappUrl(normalizeWhatsappPhone(opts.phone), "مرفق صورة " + opts.title);
+  return "manual";
+}
+
+/** Must be called by a separate user click, to avoid popup blockers. */
+export function openWhatsappForManualImageAttachment(phone?: string | null): void {
+  const normalized = normalizeWhatsappPhone(phone);
+  const isMobile = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // Never add ?text=...: a text link is NOT an attached image.
+  const url = normalized
+    ? buildWhatsappUrl(normalized)
+    : (isMobile ? "https://api.whatsapp.com/" : "https://web.whatsapp.com/");
   window.open(url, "_blank", "noopener,noreferrer");
 }
