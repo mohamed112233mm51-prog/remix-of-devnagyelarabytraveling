@@ -14,6 +14,7 @@
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
     button, a.action { border: 0; border-radius: 9px; padding: 12px 15px; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; }
     #share { background: #25d366; color: #102819; }
+    #original { background: #cba551; color: #161100; }
     #download { display: none; background: #e2e8f0; color: #172554; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
@@ -24,7 +25,8 @@
     <div id="status" role="status">جاري استلام الصورة من النظام…</div>
     <img id="preview" alt="صورة الكشف المراد مشاركتها" />
     <div class="actions">
-      <button id="share" type="button" disabled>مشاركة الصورة على واتساب</button>
+      <button id="share" type="button" disabled>مشاركة كصورة (قد يضغطها واتساب)</button>
+      <button id="original" type="button" disabled>📎 الجودة الأصلية (كمستند)</button>
       <a id="download" class="action" href="#">تنزيل الصورة</a>
     </div>
   </main>
@@ -37,6 +39,7 @@
       var source = window.opener;
       var status = document.getElementById("status");
       var share = document.getElementById("share");
+      var original = document.getElementById("original");
       var download = document.getElementById("download");
       var preview = document.getElementById("preview");
       var file = null;
@@ -60,7 +63,8 @@
         download.download = file.name;
         download.style.display = "inline-block";
         share.disabled = false;
-        status.textContent = "الصورة جاهزة. اضغط مشاركة، ثم اختر واتساب والمحادثة لإرسال ملف الصورة.";
+        original.disabled = false;
+        status.textContent = "الصورة جاهزة. الإرسال كصورة قد يضغطها واتساب. للحفاظ على الجودة الأصلية اختر الإرسال كمستند.";
         // Retain no link back to the system after accepting the image.
         window.opener = null;
       });
@@ -69,6 +73,13 @@
       setTimeout(function () {
         if (!file) status.textContent = "لم تصل الصورة. ارجع للكشف واضغط مشاركة مجددًا، أو استخدم تنزيل PNG.";
       }, 12000);
+
+      original.addEventListener("click", function () {
+        if (!file) return;
+        // Download the exact PNG without decoding or re-encoding it.
+        download.click();
+        status.textContent = "تم تنزيل الصورة الأصلية. افتح واتساب > المحادثة > 📎 > مستند / Document > تصفح الملفات > التنزيلات، واختر ملف PNG. لا تختَر معرض الصور حتى لا يضغط واتساب الصورة.";
+      });
 
       share.addEventListener("click", async function () {
         if (!file) return;

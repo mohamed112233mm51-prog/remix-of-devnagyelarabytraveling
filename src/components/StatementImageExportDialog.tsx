@@ -55,6 +55,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [manualWhatsappAttachment, setManualWhatsappAttachment] = useState(false);
+  const [originalQualityRequested, setOriginalQualityRequested] = useState(false);
   const [busy, setBusy] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -89,7 +90,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   function setNewMode(next: Mode) {
     if (busy) return;
     setMode(next);
-    setPreviewBlob(null); setPreviewUrl(null); setManualWhatsappAttachment(false);
+    setPreviewBlob(null); setPreviewUrl(null); setManualWhatsappAttachment(false); setOriginalQualityRequested(false);
   }
 
   function pointerPosition(e: PointerEvent<HTMLDivElement>): Point {
@@ -148,12 +149,23 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
         next = await cropPng(sourceUrl!, selection!, bounds.width, bounds.height);
       } else next = await generateStatementImage(data);
       const url = blobUrl(next);
-      setPreviewBlob(next); setPreviewUrl(url); setManualWhatsappAttachment(false);
+      setPreviewBlob(next); setPreviewUrl(url); setManualWhatsappAttachment(false); setOriginalQualityRequested(false);
     } catch (e) { toast.error("تعذر إنشاء الصورة: " + (e as Error).message); }
     finally { setBusy(false); }
   }
+  function prepareOriginalQualityAttachment() {
+    if (!previewBlob || busy) return;
+    // The PNG blob is exactly the same one used by the high-resolution download.
+    // WhatsApp's photo share path re-encodes media; only "Attach > Document"
+    // inside WhatsApp reliably preserves the original image file.
+    downloadImage(previewBlob, fileName);
+    setOriginalQualityRequested(true);
+    setManualWhatsappAttachment(true);
+  }
+
   async function shareImage() {
     if (!previewBlob || busy) return;
+    setOriginalQualityRequested(false);
     const imageFile = new File([previewBlob], fileName, { type: "image/png" });
     // Lovable Preview runs inside an iframe that may deny web-share.
     // A top-level tab can ask Android to share this exact PNG file.
@@ -265,8 +277,9 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
           </div>
           {manualWhatsappAttachment && (
             <div role="status" style={{ marginTop: 12, border: "1px solid #d5ad57", borderRadius: 8, background: "#fff9e9", padding: 12, lineHeight: 1.9 }}>
-              <strong>الصورة جاهزة وتم تنزيلها، لكنها لم تُرفق في واتساب تلقائيًا.</strong>
-              <div>لم يتمكن المتصفح من مشاركة ملف PNG. يمكنك تجربة صفحة مشاركة مستقلة، أو فتح واتساب وإرفاق الصورة من التنزيلات.</div>
+              <strong>{originalQualityRequested ? "تم تنزيل صورة الكشف بالجودة الأصلية دون تعديل." : "الصورة جاهزة وتم تنزيلها، لكنها لم تُرفق في واتساب تلقائيًا."}</strong>
+              <div>لإرسالها من غير ضغط: افتح واتساب، اختر المحادثة، اضغط 📎 ثم «مستند / Document» (مش معرض الصور)، ومن «تصفح الملفات» اختر صورة الكشف PNG من «التنزيلات / Downloads».</div>
+              <div style={{ fontSize: 12, color: "#7c5d20" }}>مشاركة الصور العادية بتخلي واتساب يضغط الصورة. خيار HD بيحسن الوضوح لكنه مش بيحافظ على النسخة الأصلية بالكامل.</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                 <button type="button" style={primaryStyle} onClick={() => {
                   const file = new File([previewBlob], fileName, { type: "image/png" });
@@ -281,8 +294,11 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
             </div>
           )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            <button type="button" style={actionStyle} disabled={busy} onClick={() => { setPreviewBlob(null); setPreviewUrl(null); setManualWhatsappAttachment(false); }}>تعديل الاختيار</button>
+            <button type="button" style={actionStyle} disabled={busy} onClick={() => { setPreviewBlob(null); setPreviewUrl(null); setManualWhatsappAttachment(false); setOriginalQualityRequested(false); }}>تعديل الاختيار</button>
             <button type="button" style={actionStyle} disabled={busy} onClick={() => downloadImage(previewBlob, fileName)}>⬇️ تحميل PNG</button>
+            <button type="button" style={primaryStyle} disabled={busy} onClick={prepareOriginalQualityAttachment}>
+              📎 جودة أصلية (كمستند)
+            </button>
             <button type="button" style={{ ...primaryStyle, background: "#25D366", borderColor: "#16a34a" }} disabled={busy} onClick={() => void shareImage()}>
               🟢 مشاركة على واتساب
             </button>
