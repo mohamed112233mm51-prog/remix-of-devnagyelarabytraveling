@@ -251,10 +251,10 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
                     style={{ display: "block", width: cropZoom === "fit" ? "100%" : "auto", maxWidth: "none", height: "auto", pointerEvents: "none" }} />
                   {selection && <>
                     {/* Darken only pixels outside the crop, using four small clipped panels. */}
-                    <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: selection.y, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
-                    <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: selection.y + selection.h, bottom: 0, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
-                    <div aria-hidden="true" style={{ position: "absolute", left: 0, top: selection.y, width: selection.x, height: selection.h, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
-                    <div aria-hidden="true" style={{ position: "absolute", right: 0, top: selection.y, width: `calc(100% - ${selection.x + selection.w}px)`, height: selection.h, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: selection.y, background: "rgba(2,6,23,.32)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: selection.y + selection.h, bottom: 0, background: "rgba(2,6,23,.32)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", left: 0, top: selection.y, width: selection.x, height: selection.h, background: "rgba(2,6,23,.32)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", right: 0, top: selection.y, width: `calc(100% - ${selection.x + selection.w}px)`, height: selection.h, background: "rgba(2,6,23,.32)", pointerEvents: "none" }} />
                     <div style={{
                       position: "absolute", left: selection.x, top: selection.y, width: selection.w, height: selection.h,
                       border: "2px solid #fff", borderRadius: 2,
