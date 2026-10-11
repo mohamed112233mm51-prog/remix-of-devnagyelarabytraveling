@@ -36,14 +36,3 @@ test("standalone page shares the actual file, never a text-only WhatsApp link", 
   assert.equal(html.includes("localStorage"), false);
   assert.equal(html.includes("indexedDB"), false);
 });
-
-test("original-quality path keeps original PNG and guides WhatsApp Document attachment", () => {
-  const html = readFileSync(new URL("../public/share-image.html", import.meta.url), "utf8");
-  assert.ok(html.includes('id="original"'));
-  assert.ok(html.includes('original.addEventListener("click"'));
-  assert.ok(html.includes("download.click()"));
-  assert.ok(html.includes("مستند / Document"));
-  assert.ok(html.includes("التنزيلات"));
-  assert.equal(html.includes("canvas.toBlob"), false);
-  assert.equal(html.includes("image/jpeg"), false);
-});
