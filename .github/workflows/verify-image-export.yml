@@ -32,7 +32,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - name: Statement image selection regression tests
-        run: node --experimental-strip-types --test tests/statementImageSelection.test.ts tests/statementImageLayout.test.ts tests/imageFileShare.test.ts tests/standaloneImageShare.test.ts
+        run: node --experimental-strip-types --test tests/statementImageSelection.test.ts tests/statementCropGeometry.test.ts tests/statementImageLayout.test.ts tests/imageFileShare.test.ts tests/standaloneImageShare.test.ts
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: Production build

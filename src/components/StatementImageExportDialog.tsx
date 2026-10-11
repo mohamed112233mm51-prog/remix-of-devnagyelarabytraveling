@@ -6,11 +6,11 @@ import { generateStatementImage } from "@/lib/statementImage";
 import { cropRectToPixels, selectStatementRows, type ImageSelectionRect } from "@/lib/statementImageSelection";
 import { openWhatsappForManualImageAttachment, shareStatementImageViaWhatsApp } from "@/lib/whatsappShare";
 import { openStandaloneImageShare } from "@/lib/standaloneImageShare";
+import { drawCropSelection, moveCropSelection, resizeCropSelection, scaleCropSelection, type CropResizeHandle } from "@/lib/statementCropGeometry";
 
 type Mode = "full" | "crop" | "rows";
 type Point = { x: number; y: number };
-type Corner = "nw" | "ne" | "sw" | "se";
-type Drag = { id: number; kind: "new" | "move" | "resize"; start: Point; initial: ImageSelectionRect; corner?: Corner };
+type Drag = { id: number; kind: "new" | "move" | "resize"; start: Point; initial: ImageSelectionRect; handle?: CropResizeHandle };
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 const actionStyle: CSSProperties = { border: "1px solid #cbd5e1", background: "#fff", color: "#0f172a", padding: "9px 13px", borderRadius: 8, cursor: "pointer", fontWeight: 600 };
 const primaryStyle: CSSProperties = { ...actionStyle, background: "#B8923A", borderColor: "#A8822E", color: "#161100" };
@@ -49,7 +49,6 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [sourceBlob, setSourceBlob] = useState<Blob | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [selection, setSelection] = useState<ImageSelectionRect | null>(null);
-  const [cropTool, setCropTool] = useState<"select" | "scroll">("select");
   const [cropZoom, setCropZoom] = useState<"fit" | "actual">("fit");
   const [previewZoom, setPreviewZoom] = useState<"fit" | "actual">("fit");
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
@@ -58,6 +57,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [busy, setBusy] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const dragRef = useRef<Drag | null>(null);
+  const cropWidthRef = useRef<number>(0);
   const selectedSet = useMemo(() => new Set(selectedRows), [selectedRows]);
   const fileName = (data.fileName || data.title || "كشف").replace(/[\\/:*?"<>|]/g, "-") + " - صورة.png";
 
@@ -86,6 +86,26 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
     return () => { cancelled = true; };
   }, [mode, data, sourceBlob]);
 
+  // Preserve the same region when zooming or rotating a mobile device.
+  // The stored rectangle is in displayed image pixels, so rescale every
+  // coordinate when that image's CSS width changes.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (mode !== "crop" || !sourceUrl || !img) return;
+    cropWidthRef.current = img.getBoundingClientRect().width;
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = img.getBoundingClientRect().width;
+      const oldWidth = cropWidthRef.current;
+      if (oldWidth > 0 && nextWidth > 0 && Math.abs(nextWidth - oldWidth) > 0.5) {
+        setSelection((rect) => rect ? scaleCropSelection(rect, oldWidth, nextWidth) : null);
+        cropWidthRef.current = nextWidth;
+      }
+    });
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, [mode, sourceUrl]);
+
   function setNewMode(next: Mode) {
     if (busy) return;
     setMode(next);
@@ -97,38 +117,51 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
     return { x: clamp(e.clientX - bounds.left, 0, bounds.width), y: clamp(e.clientY - bounds.top, 0, bounds.height) };
   }
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (!imgRef.current || cropTool === "scroll") return;
-    e.preventDefault();
+    if (!imgRef.current || dragRef.current || (e.pointerType === "mouse" && e.button !== 0)) return;
+
     const point = pointerPosition(e);
-    const corner = (e.target as HTMLElement).dataset.cropCorner as Corner | undefined;
-    let kind: Drag["kind"] = "new";
-    if (corner && selection) kind = "resize";
-    else if (selection && point.x >= selection.x && point.x <= selection.x + selection.w && point.y >= selection.y && point.y <= selection.y + selection.h) kind = "move";
-    dragRef.current = { id: e.pointerId, kind, start: point, corner, initial: kind === "new" ? { x: point.x, y: point.y, w: 0, h: 0 } : selection! };
+    const handleElement = (e.target as HTMLElement).closest<HTMLElement>("[data-crop-handle]");
+    const handle = handleElement?.dataset.cropHandle as CropResizeHandle | undefined;
+    const inside = !!selection &&
+      point.x >= selection.x && point.x <= selection.x + selection.w &&
+      point.y >= selection.y && point.y <= selection.y + selection.h;
+
+    // A stray touch outside an existing selection must never erase it.
+    // Start a fresh crop only after pressing "إعادة التحديد".
+    if (selection && !handle && !inside) return;
+    const kind: Drag["kind"] = !selection ? "new" : handle ? "resize" : "move";
+    e.preventDefault();
+    dragRef.current = {
+      id: e.pointerId, kind, start: point, handle,
+      initial: selection ?? { x: point.x, y: point.y, w: 0, h: 0 },
+    };
     if (kind === "new") setSelection({ x: point.x, y: point.y, w: 0, h: 0 });
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current, img = imgRef.current;
     if (!drag || drag.id !== e.pointerId || !img) return;
-    const point = pointerPosition(e), deltaX = point.x - drag.start.x, deltaY = point.y - drag.start.y;
-    const r = drag.initial, width = img.getBoundingClientRect().width, height = img.getBoundingClientRect().height;
+    const point = pointerPosition(e);
+    const dx = point.x - drag.start.x, dy = point.y - drag.start.y;
+    const width = img.getBoundingClientRect().width;
+    const height = img.getBoundingClientRect().height;
+
     if (drag.kind === "new") {
-      setSelection({ x: Math.min(r.x, point.x), y: Math.min(r.y, point.y), w: Math.abs(point.x - r.x), h: Math.abs(point.y - r.y) });
+      setSelection(drawCropSelection(drag.start, point));
     } else if (drag.kind === "move") {
-      setSelection({ ...r, x: clamp(r.x + deltaX, 0, width - r.w), y: clamp(r.y + deltaY, 0, height - r.h) });
-    } else {
-      let left = r.x, top = r.y, right = r.x + r.w, bottom = r.y + r.h;
-      if (drag.corner?.includes("w")) left = clamp(r.x + deltaX, 0, right - 2);
-      if (drag.corner?.includes("e")) right = clamp(right + deltaX, left + 2, width);
-      if (drag.corner?.includes("n")) top = clamp(r.y + deltaY, 0, bottom - 2);
-      if (drag.corner?.includes("s")) bottom = clamp(bottom + deltaY, top + 2, height);
-      setSelection({ x: left, y: top, w: right - left, h: bottom - top });
+      setSelection(moveCropSelection(drag.initial, dx, dy, width, height));
+    } else if (drag.handle) {
+      setSelection(resizeCropSelection(drag.initial, drag.handle, dx, dy, width, height));
     }
   }
   function onPointerUp(e: PointerEvent<HTMLDivElement>) {
-    if (dragRef.current?.id !== e.pointerId) return;
+    const drag = dragRef.current;
+    if (!drag || drag.id !== e.pointerId) return;
     dragRef.current = null;
+    if (drag.kind === "new") {
+      // A tap without a drag should not leave a 0x0 invisible selection.
+      setSelection((rect) => rect && rect.w >= 8 && rect.h >= 8 ? rect : null);
+    }
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
 
@@ -204,29 +237,68 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
             ))}
           </div>
           {mode === "crop" && <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <button type="button" style={cropTool === "select" ? primaryStyle : actionStyle} onClick={() => setCropTool("select")}>✂️ وضع التحديد</button>
-              <button type="button" style={cropTool === "scroll" ? primaryStyle : actionStyle} onClick={() => setCropTool("scroll")}>↕️ وضع التمرير</button>
-              <button type="button" style={actionStyle} onClick={() => { setCropZoom((prev) => prev === "fit" ? "actual" : "fit"); setSelection(null); }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <button type="button" style={actionStyle} onClick={() => setCropZoom((prev) => prev === "fit" ? "actual" : "fit")}>
                 {cropZoom === "fit" ? "🔎 عرض بالحجم الحقيقي" : "↔️ ملاءمة العرض"}
               </button>
+              {selection && <button type="button" style={actionStyle} onClick={() => setSelection(null)}>إعادة التحديد</button>}
             </div>
             {!sourceUrl ? <p role="status">جاري إنشاء معاينة الكشف...</p> : (
               <div style={{ overflow: "auto", maxHeight: "56vh", border: "1px solid #d1d5db", borderRadius: 8, background: "#f1f5f9" }}>
                 <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-                  style={{ position: "relative", width: cropZoom === "fit" ? "100%" : "max-content", touchAction: cropTool === "scroll" ? "pan-x pan-y" : "none", cursor: cropTool === "scroll" ? "grab" : "crosshair", userSelect: "none" }}>
+                  style={{ position: "relative", width: cropZoom === "fit" ? "100%" : "max-content", overflow: "hidden", touchAction: "none", cursor: selection ? "default" : "crosshair", userSelect: "none" }}>
                   <img ref={imgRef} src={sourceUrl} alt="معاينة الكشف للتحديد" draggable={false}
                     style={{ display: "block", width: cropZoom === "fit" ? "100%" : "auto", maxWidth: "none", height: "auto", pointerEvents: "none" }} />
-                  {selection && <div style={{ position: "absolute", left: selection.x, top: selection.y, width: selection.w, height: selection.h, border: "2px dashed #a16207", background: "rgba(234,179,8,.17)", cursor: "move" }}>
-                    {(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => <span data-crop-corner={corner} key={corner} style={{ position: "absolute",
-                      left: corner.includes("w") ? -7 : undefined, right: corner.includes("e") ? -7 : undefined,
-                      top: corner.includes("n") ? -7 : undefined, bottom: corner.includes("s") ? -7 : undefined,
-                      width: 14, height: 14, border: "2px solid white", background: "#a16207", borderRadius: 3, cursor: "nwse-resize" }} />)}
-                  </div>}
+                  {selection && <>
+                    {/* Darken only pixels outside the crop, using four small clipped panels. */}
+                    <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: selection.y, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: selection.y + selection.h, bottom: 0, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", left: 0, top: selection.y, width: selection.x, height: selection.h, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
+                    <div aria-hidden="true" style={{ position: "absolute", right: 0, top: selection.y, width: `calc(100% - ${selection.x + selection.w}px)`, height: selection.h, background: "rgba(2,6,23,.92)", pointerEvents: "none" }} />
+                    <div style={{
+                      position: "absolute", left: selection.x, top: selection.y, width: selection.w, height: selection.h,
+                      border: "2px solid #fff", borderRadius: 2,
+                      boxShadow: "0 0 0 1px #B8923A",
+                      cursor: "move", touchAction: "none",
+                    }}>
+                      {/* Every full-length edge is touchable, not just its midpoint. */}
+                      {(["n", "s", "e", "w"] as const).map((edge) => (
+                        <span key={edge} data-crop-handle={edge} title={"تغيير التحديد من " + ({ n: "الأعلى", s: "الأسفل", e: "اليمين", w: "اليسار" }[edge])}
+                          style={{
+                            position: "absolute", zIndex: 2, touchAction: "none",
+                            cursor: edge === "n" || edge === "s" ? "ns-resize" : "ew-resize",
+                            ...(edge === "n" ? { top: -16, left: 0, right: 0, height: 32 } :
+                                edge === "s" ? { bottom: -16, left: 0, right: 0, height: 32 } :
+                                edge === "e" ? { right: -16, top: 0, bottom: 0, width: 32 } :
+                                               { left: -16, top: 0, bottom: 0, width: 32 }),
+                          }}>
+                          <span style={{
+                            position: "absolute", background: "#fff", border: "1px solid #B8923A",
+                            borderRadius: 5, boxShadow: "0 1px 3px rgba(0,0,0,.45)",
+                            ...(edge === "n" || edge === "s"
+                              ? { width: 32, height: 6, left: "50%", top: "50%", transform: "translate(-50%,-50%)" }
+                              : { width: 6, height: 32, left: "50%", top: "50%", transform: "translate(-50%,-50%)" }),
+                          }} />
+                        </span>
+                      ))}
+                      {(["nw", "ne", "sw", "se"] as const).map((corner) => (
+                        <span key={corner} data-crop-handle={corner} title="تغيير حجم التحديد من الزاوية"
+                          style={{
+                            position: "absolute", zIndex: 3, width: 36, height: 36,
+                            top: corner.includes("n") ? 0 : "100%",
+                            left: corner.includes("w") ? 0 : "100%",
+                            transform: "translate(-50%,-50%)", display: "grid", placeItems: "center",
+                            cursor: corner === "nw" || corner === "se" ? "nwse-resize" : "nesw-resize",
+                            touchAction: "none",
+                          }}>
+                          <span style={{ width: 14, height: 14, background: "#B8923A", border: "2px solid white", borderRadius: 3, boxShadow: "0 1px 4px rgba(0,0,0,.45)" }} />
+                        </span>
+                      ))}
+                    </div>
+                  </>}
                 </div>
               </div>
             )}
-            {selection && <button type="button" style={{ ...actionStyle, marginTop: 8 }} onClick={() => setSelection(null)}>إعادة التحديد</button>}
           </>}
           {mode === "rows" && <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 8 }}>
