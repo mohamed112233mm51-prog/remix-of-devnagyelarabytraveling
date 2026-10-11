@@ -49,7 +49,6 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
   const [sourceBlob, setSourceBlob] = useState<Blob | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [selection, setSelection] = useState<ImageSelectionRect | null>(null);
-  const [cropZoom, setCropZoom] = useState<"fit" | "actual">("fit");
   const [previewZoom, setPreviewZoom] = useState<"fit" | "actual">("fit");
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -237,18 +236,15 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
             ))}
           </div>
           {mode === "crop" && <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <button type="button" style={actionStyle} onClick={() => setCropZoom((prev) => prev === "fit" ? "actual" : "fit")}>
-                {cropZoom === "fit" ? "🔎 عرض بالحجم الحقيقي" : "↔️ ملاءمة العرض"}
-              </button>
-              {selection && <button type="button" style={actionStyle} onClick={() => setSelection(null)}>إعادة التحديد</button>}
-            </div>
+            {selection && <div style={{ marginBottom: 8 }}>
+              <button type="button" style={actionStyle} onClick={() => setSelection(null)}>إعادة التحديد</button>
+            </div>}
             {!sourceUrl ? <p role="status">جاري إنشاء معاينة الكشف...</p> : (
               <div style={{ overflow: "auto", maxHeight: "56vh", border: "1px solid #d1d5db", borderRadius: 8, background: "#f1f5f9" }}>
                 <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-                  style={{ position: "relative", width: cropZoom === "fit" ? "100%" : "max-content", overflow: "hidden", touchAction: "none", cursor: selection ? "default" : "crosshair", userSelect: "none" }}>
+                  style={{ position: "relative", width: "100%", overflow: "hidden", touchAction: "none", cursor: selection ? "default" : "crosshair", userSelect: "none" }}>
                   <img ref={imgRef} src={sourceUrl} alt="معاينة الكشف للتحديد" draggable={false}
-                    style={{ display: "block", width: cropZoom === "fit" ? "100%" : "auto", maxWidth: "none", height: "auto", pointerEvents: "none" }} />
+                    style={{ display: "block", width: "100%", maxWidth: "none", height: "auto", pointerEvents: "none" }} />
                   {selection && <>
                     {/* Darken only pixels outside the crop, using four small clipped panels. */}
                     <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: selection.y, background: "rgba(2,6,23,.32)", pointerEvents: "none" }} />
