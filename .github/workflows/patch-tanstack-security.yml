@@ -8,6 +8,7 @@ on:
     paths:
       - 'package.json'
       - 'scripts/verify-tanstack-security.mjs'
+      - 'src/routes/__root.tsx'
       - '.github/workflows/patch-tanstack-security.yml'
   workflow_dispatch:
 
