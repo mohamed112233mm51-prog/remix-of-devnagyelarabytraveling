@@ -1,0 +1,69 @@
+name: Patch and verify TanStack Start security
+
+# One-shot regeneration whenever a targeted security update is committed on devo.
+# The job commits lockfiles only *after* clean install, vulnerability gate, TS and build.
+on:
+  push:
+    branches: [devo]
+    paths:
+      - 'package.json'
+      - 'scripts/verify-tanstack-security.mjs'
+      - '.github/workflows/patch-tanstack-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tanstack-security-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  upgrade-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.3'
+
+      - name: Regenerate npm lockfile from registry
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Regenerate Bun lockfile from registry
+        run: bun install --lockfile-only --ignore-scripts
+      - name: Clean and reproducible npm install
+        run: npm ci --no-audit --no-fund
+      - name: Security verification of both lockfiles
+        run: node scripts/verify-tanstack-security.mjs
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Statement image regression tests
+        run: node --experimental-strip-types --test tests/statementImageSelection.test.ts tests/statementCropGeometry.test.ts tests/statementImageLayout.test.ts tests/imageFileShare.test.ts tests/standaloneImageShare.test.ts
+      - name: Trip reconciliation regression tests
+        run: npm run test:trip-reconciliation
+      - name: Production build
+        run: npm run build
+      - name: Review lockfile-only changes
+        run: |
+          git status --short
+          git diff --stat
+          if [ -n "$(git diff --name-only | grep -vE '^(package-lock.json|bun.lock)$' || true)" ]; then
+            echo 'Unexpected files changed during lock regeneration' >&2
+            exit 1
+          fi
+      - name: Commit verified lockfiles to devo
+        run: |
+          if ! git diff --quiet -- package-lock.json bun.lock; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- package-lock.json bun.lock
+            git commit -m "chore(security): regenerate verified npm and Bun lockfiles"
+            git push origin HEAD:devo
+          fi
