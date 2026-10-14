@@ -4,6 +4,9 @@ on:
   push:
     branches: [devo]
     paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'bun.lock'
       - 'src/components/StatementImageExportDialog.tsx'
       - 'src/components/ExportButton.tsx'
       - 'src/lib/statementImage.ts'
@@ -30,7 +33,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - name: Clean locked dependency install
+        run: npm ci --no-audit --no-fund
       - name: Statement image selection regression tests
         run: node --experimental-strip-types --test tests/statementImageSelection.test.ts tests/statementCropGeometry.test.ts tests/statementImageLayout.test.ts tests/imageFileShare.test.ts tests/standaloneImageShare.test.ts
       - name: TypeScript check
