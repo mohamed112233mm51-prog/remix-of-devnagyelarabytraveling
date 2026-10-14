@@ -53,6 +53,9 @@ jobs:
         run: npm run build
       - name: Review lockfile-only changes
         run: |
+          # Vite/TanStack regenerates this tracked route index on every build.
+          # Discard only that generated change; never include it in the patch.
+          git restore -- src/routeTree.gen.ts
           git status --short
           git diff --stat
           if [ -n "$(git diff --name-only | grep -vE '^(package-lock.json|bun.lock)$' || true)" ]; then
