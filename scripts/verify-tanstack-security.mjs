@@ -28,8 +28,10 @@ const patched = [
   ["@tanstack/react-start", "1.168.60"],
   ["@tanstack/start-server-core", "1.169.39"],
 ];
+// Matching this core to patched react-router/plugin avoids SSR import failures.
+const lockedPackages = [...patched, ["@tanstack/router-core", "1.171.34"]];
 
-for (const [name, minimum] of patched) {
+for (const [name, minimum] of lockedPackages) {
   const entries = Object.entries(npmLock.packages ?? {}).filter(([path]) =>
     path === "node_modules/" + name || path.endsWith("/node_modules/" + name)
   );
@@ -51,4 +53,7 @@ for (const [name] of patched.slice(0, 1)) {
   assert.ok(atLeast(manifest.dependencies[name], "1.168.60"), "package.json still selects a vulnerable React Start");
 }
 
-console.log("TanStack XSS package and lockfile gate passed.");
+assert.equal(manifest.dependencies["@tanstack/react-router"], "1.170.41", "React Router must match the patched Start release");
+assert.equal(manifest.dependencies["@tanstack/router-plugin"], "1.168.42", "Router plugin must match the patched Start release");
+assert.equal(manifest.overrides?.["@tanstack/router-core"], "1.171.34", "Router core override must match the patched Start release");
+console.log("TanStack security and SSR compatibility lockfile gate passed.");
