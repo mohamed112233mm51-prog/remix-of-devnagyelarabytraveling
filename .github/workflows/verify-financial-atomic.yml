@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: devo
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -19,5 +19,9 @@ jobs:
         run: python3 scripts/_audit_financial_atomic.py
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Test paid expense and currency edit consistency
+        run: npm run test:financial-edit
+      - name: Test trip reconciliation
+        run: npm run test:trip-reconciliation
       - name: Production build
         run: npm run build

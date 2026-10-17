@@ -28,6 +28,7 @@ import { postMovement, type MovementSplit } from "@/lib/financialEngine";
 import { confirmFinancialOperation, deriveFinancialOperationUuid, financialConfirmationToastId, financialOperationFingerprint, getOrCreateFinancialOperationId, FINANCIAL_CONFIRMING_MESSAGE, FINANCIAL_SUCCESS_MESSAGE, isLikelyNetworkError } from "@/lib/financialIdempotency";
 import { atomicRow, buildAtomicPaymentSplitRows, executeFinancialAtomic } from "@/lib/financialAtomic";
 import { logCreate } from "@/lib/financialAudit";
+import { updateFinancialTransaction } from "@/lib/financialEngine.update";
 import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
 import { useExpensesTotals } from "@/lib/financialSummary";
 import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
@@ -121,9 +122,10 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
   const set = (k: string, v: string | boolean) => setForm((p) => ({ ...p, [k]: v }));
 
 
-  // Multi-payment splits (new): only used on insert (edit keeps original record)
+  // New payments are entered on insert; edits preserve the existing funding mix.
   const [splits, setSplits] = useState<PaymentSplitRow[]>([newPaymentSplitRow()]);
   const [saving, setSaving] = useState(false);
+  const [editReason, setEditReason] = useState("");
 
   const totalAmount = Number(form.amount || 0);
   const splitsTotal = useMemo(
@@ -143,28 +145,35 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
     if (!form.expense_name.trim()) return toast.error("اسم المصروف مطلوب");
     if (!totalAmount || totalAmount <= 0) return toast.error("أدخل إجمالي المصروف");
 
-    // Edit mode: only update basic fields; don't touch deductions/collections.
+    if (saving) return;
     if (initial) {
-      const { error } = await supabase
-        .from("expenses")
-        .update({
-          expense_name: form.expense_name,
-          expense_type: form.expense_type,
-          amount: totalAmount,
-          date: form.date,
-          notes: form.notes.trim() ? form.notes.trim() : null,
-          statement: form.statement.trim() ? form.statement.trim() : null,
-
-          auto_deduct_enabled: form.expense_type === "ثابت" ? form.auto_deduct_enabled : false,
-          auto_deduct_day:
-            form.expense_type === "ثابت" && form.auto_deduct_enabled
-              ? Math.max(1, Math.min(28, Number(form.auto_deduct_day) || 1))
-              : null,
-        })
-        .eq("id", initial.id);
-      if (error) return toast.error(error.message);
-      toast.success("تم حفظ التعديلات");
-      onDone?.();
+      if (!editReason.trim()) return toast.error("سبب التعديل مطلوب");
+      setSaving(true);
+      try {
+        await updateFinancialTransaction({
+          table: "expenses",
+          id: initial.id,
+          expectedRow: initial,
+          reason: editReason,
+          patch: {
+            expense_name: form.expense_name.trim(),
+            expense_type: form.expense_type,
+            amount: totalAmount,
+            date: form.date,
+            notes: form.notes.trim() || null,
+            statement: form.statement.trim() || null,
+            auto_deduct_enabled: form.expense_type === "ثابت" && form.auto_deduct_enabled,
+            auto_deduct_day: form.expense_type === "ثابت" && form.auto_deduct_enabled
+              ? Math.max(1, Math.min(28, Number(form.auto_deduct_day) || 1)) : null,
+          },
+        });
+        toast.success("تم تعديل المصروف وتسوية القيود المرتبطة بنجاح");
+        onDone?.();
+      } catch (error: any) {
+        toast.error(error?.message || "تعذر تعديل المصروف");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -408,9 +417,14 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
         </>
       )}
 
+      {initial && <div className="form-group" style={{ margin: 8 }}>
+        <label>سبب التعديل *</label>
+        <input value={editReason} onChange={(e) => setEditReason(e.target.value)} placeholder="سبب تصحيح المصروف" disabled={saving} />
+      </div>}
+
       {initial && (
         <div style={{ padding: "8px 12px", margin: "8px", borderRadius: 8, background: "var(--card, #f7f7f9)", border: "1px solid var(--border, #e5e7eb)", fontSize: 12, color: "var(--muted-foreground, #6b7280)" }}>
-          ملاحظة: لتغيير وسائل الدفع، احذف المصروف وأعد إضافته. التعديل هنا يقتصر على الحقول الأساسية فقط.
+          تعديل المبلغ يوزّع الفرق على وسائل السداد الأصلية بنفس نسبها، مع تحديث القيود المرتبطة. تغيير وسائل الدفع يحتاج إعادة تسجيل المصروف.
         </div>
       )}
 

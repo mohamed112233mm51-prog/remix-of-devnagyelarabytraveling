@@ -9,14 +9,21 @@
 import { supabase } from "@/integrations/supabase/client";
 import { checkOutflowAllowed } from "@/lib/financialEngine";
 import type { CancellableTable } from "@/lib/financialEngine.cancel";
+import { refetchCompleteFinancialTables } from "@/hooks/useCompleteFinancialTables";
+import { refetchLiveTables } from "@/lib/db";
 
-export type EditableTable = CancellableTable;
+export type EditableTable = CancellableTable | "expenses";
 
 export type EditPatch = {
   amount?: number;
   date?: string;
   statement?: string | null;
   note?: string | null;
+  expense_name?: string;
+  expense_type?: string;
+  notes?: string | null;
+  auto_deduct_enabled?: boolean;
+  auto_deduct_day?: number | null;
 };
 
 const PAYMENT_SPLIT_PARENTS: ReadonlySet<EditableTable> = new Set([
@@ -31,6 +38,8 @@ const PAYMENT_SPLIT_PARENTS: ReadonlySet<EditableTable> = new Set([
 function entityFieldsFor(table: EditableTable, row: any) {
   const pick = (k: string) => (row && row[k] != null ? String(row[k]) : null);
   switch (table) {
+    case "expenses":
+      return { entity_type: "expense", entity_id: pick("id"), reference_no: pick("date") };
     case "transactions":
       return { entity_type: "agent", entity_id: pick("agent_id"), reference_no: pick("date") };
     case "company_transactions":
@@ -52,6 +61,9 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
   const oldTotal = pickOldTotal(table, before);
   const ratio = oldTotal > 0 ? newAmount / oldTotal : 0;
   switch (table) {
+    case "expenses":
+    case "currency_supplier_transactions":
+      throw new Error("تعديل المصروف والعملات يجب أن يُحسب داخل المعاملة المالية");
     case "transactions":
     case "company_transactions": {
       const cols = [
@@ -65,12 +77,6 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
         const v = Number((before as any)[c]) || 0;
         if (v > 0) patch[c] = oldTotal > 0 ? Math.round(v * ratio * 100) / 100 : 0;
       }
-      return patch;
-    }
-    case "currency_supplier_transactions": {
-      const patch: Record<string, unknown> = {};
-      if (Number(before.bought_amount) > 0) patch.bought_amount = newAmount;
-      else patch.sold_amount = newAmount;
       return patch;
     }
     case "usd_treasury_transactions": {
@@ -91,6 +97,8 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
 function pickOldTotal(table: EditableTable, row: any): number {
   const n = (v: any) => Number(v) || 0;
   switch (table) {
+    case "expenses":
+      return n(row.amount);
     case "transactions":
     case "company_transactions":
       return (
@@ -159,6 +167,7 @@ export async function updateFinancialTransaction(args: {
   id: string;
   patch: EditPatch;
   reason: string;
+  expectedRow?: object;
 }): Promise<void> {
   const { table, id, patch, reason } = args;
   const trimmedReason = (reason || "").trim();
@@ -180,8 +189,11 @@ export async function updateFinancialTransaction(args: {
   }
   if ((before as any).cancelled_at) throw new Error("لا يمكن تعديل حركة ملغاة — قم بإعادة التفعيل أولاً");
 
+  // Coupled expense/currency edits are planned from LOCKED database rows by
+  // the existing RPC. Never send a client-calculated split rewrite for them.
+  const coupledEdit = table === "expenses" || table === "currency_supplier_transactions";
   let currentSplits: any[] = [];
-  if (PAYMENT_SPLIT_PARENTS.has(table)) {
+  if (!coupledEdit && PAYMENT_SPLIT_PARENTS.has(table)) {
     const { data: sp, error: splitReadError } = await supabase
       .from("payment_splits")
       .select("*")
@@ -192,10 +204,14 @@ export async function updateFinancialTransaction(args: {
     currentSplits = sp || [];
   }
 
-  const oldTotal = pickOldTotal(table, before);
+  const oldTotal = table === "currency_supplier_transactions" && (before as any).tx_type === "بيع عملة"
+    ? Number((before as any).sold_amount) || 0
+    : pickOldTotal(table, before);
   const newAmount = patch.amount !== undefined ? Number(patch.amount) : oldTotal;
   const amountChanged = patch.amount !== undefined && newAmount !== oldTotal;
-  if (amountChanged && !(newAmount > 0)) throw new Error("المبلغ يجب أن يكون أكبر من صفر");
+  if (patch.amount !== undefined && (!Number.isFinite(newAmount) || !(newAmount > 0))) {
+    throw new Error("المبلغ يجب أن يكون رقمًا صالحًا أكبر من صفر");
+  }
 
   // Existing business validation remains before the transaction. The actual
   // parent/split writes themselves are atomic even if validation or network
@@ -212,11 +228,28 @@ export async function updateFinancialTransaction(args: {
     }
   }
 
-  const parentPatch: Record<string, unknown> = table === "payment_splits"
+  let parentPatch: Record<string, unknown> = table === "payment_splits"
     ? {}
     : { ...metaPatchFor(table, patch) };
-  if (amountChanged && table !== "payment_splits") {
+  if (amountChanged && table !== "payment_splits" && !coupledEdit) {
     Object.assign(parentPatch, parentAmountPatch(table, before, newAmount));
+  }
+
+  if (coupledEdit) {
+    parentPatch = {
+      ...metaPatchFor(table, patch),
+      // These reserved keys are consumed before SQL column validation. Old
+      // deployments reject them rather than silently doing an incomplete edit.
+      _expected: args.expectedRow || before,
+      _reason: trimmedReason,
+      ...(patch.amount !== undefined ? { _amount: newAmount } : {}),
+    };
+    if (table === "expenses") {
+      delete parentPatch.note;
+      for (const key of ["expense_name", "expense_type", "notes", "auto_deduct_enabled", "auto_deduct_day"] as const) {
+        if (patch[key] !== undefined) parentPatch[key] = patch[key];
+      }
+    }
   }
 
   let splitPatches: Record<string, unknown>[] = [];
@@ -247,6 +280,19 @@ export async function updateFinancialTransaction(args: {
   });
   if (error) throw new Error(mutationErrorMessage(error));
   if (!data || data.ok !== true) throw new Error(data?.error || "تعذر تأكيد تعديل الحركة المالية");
+
+  // The coupled branch writes its audit record inside the same DB transaction.
+  if (coupledEdit) {
+    try {
+      await Promise.all([
+        refetchCompleteFinancialTables(["expenses", "expense_deductions", "currency_supplier_transactions", "merchant_cash_collections", "payment_splits"]),
+        refetchLiveTables(["cash_boxes"]),
+      ]);
+    } catch (refreshError) {
+      console.warn("[financial-edit] committed; refresh failed", refreshError);
+    }
+    return;
+  }
 
   try {
     const meta = entityFieldsFor(table, data.before || before);

@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "test:financial-edit": "node --test tests/financialEditConsistency.test.mjs tests/financialEditClient.test.mjs",
     "test:agent-company-direct": "node scripts/test-agent-company-direct.mjs",
     "test:trip-reconciliation": "node --experimental-strip-types --test tests/executionTripReconciliation.test.ts tests/executionBulkExecutionCore.test.ts tests/executionTripReconciliationRoute.test.ts"
   },
@@ -77,6 +78,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "2.13.1",
     "@types/node": "^22.16.5",

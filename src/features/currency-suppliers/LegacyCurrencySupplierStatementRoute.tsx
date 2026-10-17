@@ -567,6 +567,9 @@ async function applyTransaction(opts: {
     if (s.source === "merchant" && s.merchant_id) {
       merchantRows.push({
         merchant_id: s.merchant_id,
+        source_service_id: txId,
+        source_service_type: "currency_supplier",
+        opening_currency: "EGP",
         date: txDate,
         amount: isBuy ? amt : -amt,
         note: null,
@@ -1023,6 +1026,9 @@ function CashMovementModal({
       if (r.source === "merchant" && r.merchant_id) {
         merchantRows.push({
           merchant_id: r.merchant_id,
+          source_service_id: txId,
+          source_service_type: "currency_supplier",
+          opening_currency: currency,
           date: txDate,
           amount: isOut ? +amt : -amt,
           note: null,

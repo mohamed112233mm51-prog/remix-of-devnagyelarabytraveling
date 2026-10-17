@@ -20,6 +20,7 @@ const TABLE_LABEL: Record<EditableTable, string> = {
   usd_treasury_transactions: "حركة خزينة",
   merchant_cash_collections: "تحصيل تاجر كاش",
   payment_splits: "تقسيم دفع",
+  expenses: "مصروف",
 };
 
 function pickAmount(table: EditableTable, row: any): number {
@@ -29,7 +30,9 @@ function pickAmount(table: EditableTable, row: any): number {
     case "company_transactions":
       return n(row.total_paid) || n(row.paid);
     case "currency_supplier_transactions":
-      return n(row.bought_amount) || n(row.sold_amount);
+      return row.tx_type === "بيع عملة" ? n(row.sold_amount) : n(row.bought_amount) || n(row.sold_amount);
+    case "expenses":
+      return n(row.amount);
     case "usd_treasury_transactions":
       return n(row.usd_amount) || n(row.egp_amount);
     case "expense_deductions":
@@ -46,7 +49,9 @@ function pickCurrency(table: EditableTable, row: any): string {
     case "company_transactions":
       return row.payment_currency || row.currency || "EGP";
     case "currency_supplier_transactions":
-      return Number(row.bought_amount) > 0 ? row.bought_currency : row.sold_currency;
+      return row.tx_type === "بيع عملة" ? row.sold_currency : Number(row.bought_amount) > 0 ? row.bought_currency : row.sold_currency;
+    case "expenses":
+      return row.currency || "EGP";
     case "usd_treasury_transactions":
       return Number(row.usd_amount) > 0 ? "USD" : "EGP";
     case "expense_deductions":
@@ -130,7 +135,7 @@ export function EditTransactionButton({
   const originalStatement = row ? (row as any).statement || "" : "";
   const originalNote = row ? pickNote(table, row) : "";
 
-  const amountEditable = splitCount <= 1; // multi-split rows: metadata-only
+  const amountEditable = table === "currency_supplier_transactions" || splitCount <= 1;
   const anyChange = useMemo(() => {
     if (!row) return false;
     if (amountEditable && Number(amount) !== originalAmount) return true;
@@ -153,7 +158,7 @@ export function EditTransactionButton({
       if (date !== originalDate) patch.date = date;
       if ((statement || "") !== originalStatement) patch.statement = statement || null;
       if ((note || "") !== originalNote) patch.note = note || null;
-      await updateFinancialTransaction({ table, id, patch, reason });
+      await updateFinancialTransaction({ table, id, patch, reason, expectedRow: row });
       toast.success("تم تعديل الحركة وتحديث جميع الأرصدة");
       setOpen(false);
       setReason("");
@@ -217,6 +222,7 @@ export function EditTransactionButton({
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                 <span>
                   سيتم عكس أثر القيم القديمة على الخزائن والأرصدة وإعادة التسجيل بالقيم الجديدة تلقائياً.
+                  {table === "currency_supplier_transactions" && " تعديل مبلغ الصفقة يحافظ على سعر الصرف ونسبة السداد، ويعدّل المقابل والعمولة ووسائل الدفع بنفس النسبة."}
                   {!amountEditable && " هذه الحركة تحتوي على أكثر من تقسيم دفع — يمكن تعديل البيانات الوصفية فقط. لتغيير المبلغ، ألغِ الحركة وأعد إنشاءها."}
                 </span>
               </div>
