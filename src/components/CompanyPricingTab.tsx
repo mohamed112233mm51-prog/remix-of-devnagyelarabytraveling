@@ -79,7 +79,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
   const [draft, setDraft] = useState<Row | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  // Buffer that persists the in-progress "add new" draft across modal close/reopen.
+  // Buffer that preserves the in-progress new row across cancel/reopen.
   // Only used for new (no id) drafts. Cleared on successful save or explicit reset.
   const [addBuffer, setAddBuffer, clearAddBuffer] = usePersistentState<Row | null>(
     `form:pricing:add:${companyId}`,
@@ -103,10 +103,13 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [companyId]);
 
-  const startNew = () => setDraft(addBuffer ?? EMPTY(companyId, services[0] || "", tiers[0] || "A"));
+  const startNew = () => {
+    if (!perm.create || draft || savingRef.current) return;
+    setDraft({ ...(addBuffer ?? EMPTY(companyId, services[0] || "", tiers[0] || "A")), company_id: companyId });
+  };
   const startEdit = (r: PricingRule) => setDraft({ ...r });
 
-  // Mirror the in-progress new draft into the buffer so closing the modal
+  // Mirror the in-progress new row into the buffer so cancelling the row
   // doesn't lose it. Editing existing rows is not buffered.
   useEffect(() => {
     if (draft && !draft.id) setAddBuffer(draft);
@@ -208,6 +211,25 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
     }
   };
 
+  const renderDraftRow = () => draft ? (
+    <InlinePricingRow
+      key={draft.id || "new-price"}
+      draft={draft}
+      setDraft={setDraft}
+      onCancel={closeDraft}
+      onSave={save}
+      saving={saving}
+      services={services}
+      tiers={tiers.length ? tiers : ["A", "B", "C"]}
+      departures={departures}
+      destinations={destinations}
+      airlines={airlines}
+      statuses={statuses}
+      passengers={passengers}
+      approvalCompanies={approvalCompanies}
+    />
+  ) : null;
+
   if (!perm.view) {
     return <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 24 }}>لا تملك صلاحية عرض ملف التسعير.</div></div>;
   }
@@ -246,7 +268,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
             <button
               type="button"
               className="btn btn-gold"
-              disabled={!!draft || saving}
+              disabled={loading || !!draft || saving}
               onClick={startNew}
               title="إضافة سعر جديد"
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
@@ -302,33 +324,18 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
                 </tr>
               </thead>
               <tbody>
+                {draft && !draft.id && renderDraftRow()}
                 {(() => {
                   const displayRules = filtersActive ? filteredRules : rules;
                   if (displayRules.length === 0) {
+                    if (draft && !draft.id) return null;
                     return (
                       <tr><td colSpan={14} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
                         {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
                       </td></tr>
                     );
                   }
-                  return displayRules.map((r) => draft?.id === r.id ? (
-                    <InlinePricingRow
-                      key={r.id}
-                      draft={draft}
-                      setDraft={setDraft}
-                      onCancel={closeDraft}
-                      onSave={save}
-                      saving={saving}
-                      services={services}
-                      tiers={tiers.length ? tiers : ["A", "B", "C"]}
-                      departures={departures}
-                      destinations={destinations}
-                      airlines={airlines}
-                      statuses={statuses}
-                      passengers={passengers}
-                      approvalCompanies={approvalCompanies}
-                    />
-                  ) : (
+                  return displayRules.map((r) => draft?.id === r.id ? renderDraftRow() : (
                     <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
                       <td style={{ padding: 6 }}>{r.departure_from || "—"}</td>
@@ -395,24 +402,6 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
         )}
       </div>
 
-      {draft && !draft.id && (
-        <DraftEditor
-          draft={draft}
-          setDraft={setDraft}
-          onCancel={closeDraft}
-          
-          onSave={save}
-          saving={saving}
-          services={services}
-          tiers={tiers.length ? tiers : ["A","B","C"]}
-          departures={departures}
-          destinations={destinations}
-          airlines={airlines}
-          statuses={statuses}
-          passengers={passengers}
-          approvalCompanies={approvalCompanies}
-        />
-      )}
 
       {showImport && (
         <ImportFromCompanyModal
@@ -428,7 +417,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
   );
 }
 
-type DraftEditorProps = {
+type InlinePricingRowProps = {
   draft: Row;
   setDraft: (r: Row | null) => void;
   onCancel: () => void;
@@ -445,78 +434,8 @@ type DraftEditorProps = {
   approvalCompanies: IssuingCompany[];
 };
 
-function DraftEditor(props: DraftEditorProps) {
-  const { draft, setDraft } = props;
-  const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
-  const agentPrice = computeAgentPrice(draft);
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10010, padding: 16 }}>
-      <div className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
-        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div className="card-title">{draft.id ? "تعديل سعر" : "إضافة سعر"}</div>
-          <button type="button" className="action-btn icon-only" onClick={props.onCancel} disabled={props.saving} title="إغلاق" aria-label="إغلاق" style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>×</button>
-        </div>
-        <fieldset disabled={props.saving} className="form-grid" style={{ border: 0, margin: 0, minWidth: 0 }}>
-          <div className="form-group"><label>الخدمة *</label>
-            <SearchableSelect disabled={props.saving} value={draft.service_type} onChange={(v) => upd({ service_type: v })} options={props.services as string[]} />
-          </div>
-          <div className="form-group"><label>شريحة الوكيل *</label>
-            <SearchableSelect disabled={props.saving} value={draft.agent_tier} onChange={(v) => upd({ agent_tier: v })} options={props.tiers as string[]} />
-          </div>
-          <div className="form-group"><label>جهة المغادرة</label>
-            <SearchableSelect disabled={props.saving} value={draft.departure_from || ""} onChange={(v) => upd({ departure_from: v || null })} options={["", ...props.departures] as string[]} />
-          </div>
-          <div className="form-group"><label>الوجهة</label>
-            <SearchableSelect disabled={props.saving} value={draft.destination || ""} onChange={(v) => upd({ destination: v || null })} options={["", ...props.destinations] as string[]} />
-          </div>
-          <div className="form-group"><label>الطيران</label>
-            <SearchableSelect disabled={props.saving} value={draft.airline || ""} onChange={(v) => upd({ airline: v || null })} options={["", ...props.airlines] as string[]} />
-          </div>
-          <div className="form-group"><label>جهة الموافقة</label>
-            <select value={draft.approval_company_id || ""} onChange={(e) => upd({ approval_company_id: e.target.value || null })}>
-              <option value="">—</option>
-              {props.approvalCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-            </select>
-          </div>
-          <div className="form-group"><label>الحالة</label>
-            <SearchableSelect disabled={props.saving} value={draft.status || ""} onChange={(v) => upd({ status: v || null })} options={["", ...props.statuses] as string[]} />
-          </div>
-          <div className="form-group"><label>نوع المسافر</label>
-            <SearchableSelect disabled={props.saving} value={draft.passenger_type || ""} onChange={(v) => upd({ passenger_type: v || null })} options={["", ...props.passengers] as string[]} />
-          </div>
-          <div className="form-group"><label>العملة *</label>
-            <select value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })}>
-              {PRICING_CURRENCIES.map((c) => (
-                <option key={c} value={c}>{CURRENCY_LABEL[c] || c}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group"><label>سعر الشركة ({currencyShortLabel(draft.currency)})</label>
-            <NumberInput value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} />
-          </div>
-          <div className="form-group"><label>نوع العمولة</label>
-            <select value={draft.commission_type} onChange={(e) => upd({ commission_type: e.target.value as any })}>
-              <option value="percentage">نسبة %</option>
-              <option value="fixed">مبلغ ثابت</option>
-            </select>
-          </div>
-          <div className="form-group"><label>{draft.commission_type === "fixed" ? `قيمة الربح (${currencyShortLabel(draft.currency)})` : "نسبة الربح %"}</label>
-            <NumberInput value={Number(draft.commission_value) || 0} onChange={(n) => upd({ commission_value: n })} min={0} />
-          </div>
-          <div className="form-group"><label>سعر الوكيل (محسوب)</label>
-            <input value={`${agentPrice} ${currencyShortLabel(draft.currency)}`} disabled readOnly style={{ background: "var(--card)", fontWeight: 700 }} />
-          </div>
-        </fieldset>
-        <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
-          <button type="button" className="btn btn-gold" disabled={props.saving} onClick={props.onSave}>{props.saving ? "جاري الحفظ..." : "💾 حفظ"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Existing prices edit in their table cells; creation keeps the current modal. */
-function InlinePricingRow(props: DraftEditorProps) {
+/** New and existing prices use the same fields, options and save controls. */
+function InlinePricingRow(props: InlinePricingRowProps) {
   const { draft, setDraft, saving } = props;
   const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
   const fieldStyle: CSSProperties = {
@@ -538,7 +457,7 @@ function InlinePricingRow(props: DraftEditorProps) {
   );
   const cellStyle = { padding: 6, verticalAlign: "middle" as const, textAlign: "center" as const };
   return (
-    <tr aria-label="تعديل سعر الخدمة" style={{ borderTop: "1px solid var(--border)", background: "color-mix(in srgb, var(--gold, #b8860b) 8%, var(--card))" }}>
+    <tr aria-label={draft.id ? "تعديل سعر الخدمة" : "إضافة سعر الخدمة"} style={{ borderTop: "1px solid var(--border)", background: "color-mix(in srgb, var(--gold, #b8860b) 8%, var(--card))" }}>
       <td style={cellStyle}>{select("service_type", props.services, true)}</td>
       <td style={cellStyle}>{select("departure_from", props.departures)}</td>
       <td style={cellStyle}>{select("destination", props.destinations)}</td>
@@ -570,8 +489,8 @@ function InlinePricingRow(props: DraftEditorProps) {
       </td>
       <td style={cellStyle}>
         <div style={{ display: "flex", gap: 4, whiteSpace: "nowrap" }}>
-          <button type="button" className="btn btn-gold" disabled={saving} onClick={props.onSave} aria-label="حفظ تعديل السعر" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Check size={14} />{saving ? "جاري الحفظ..." : "حفظ"}</button>
-          <button type="button" className="btn btn-outline" disabled={saving} onClick={props.onCancel} aria-label="إلغاء تعديل السعر" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><X size={14} />إلغاء</button>
+          <button type="button" className="btn btn-gold" disabled={saving} onClick={props.onSave} aria-label={draft.id ? "حفظ تعديل السعر" : "حفظ السعر الجديد"} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Check size={14} />{saving ? "جاري الحفظ..." : "حفظ"}</button>
+          <button type="button" className="btn btn-outline" disabled={saving} onClick={props.onCancel} aria-label={draft.id ? "إلغاء تعديل السعر" : "إلغاء إضافة السعر"} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><X size={14} />إلغاء</button>
         </div>
       </td>
     </tr>
