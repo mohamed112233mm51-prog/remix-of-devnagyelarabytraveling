@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDropdownOptions, useLive, type IssuingCompany } from "@/lib/db";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { PricingRule } from "@/lib/pricingMatch";
 import { currencyShortLabel, PRICING_CURRENCIES } from "@/lib/pricingMatch";
 import { PriceLookup } from "@/components/PriceLookup";
-import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2 } from "lucide-react";
+import { Wallet, Search, Download, Plus, Pencil, CopyPlus, Trash2, Check, X } from "lucide-react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 
 type Row = Omit<PricingRule, "id" | "agent_price"> & { id?: string };
@@ -45,6 +45,10 @@ function computeAgentPrice(r: Pick<Row, "company_price" | "commission_type" | "c
 }
 
 export function CompanyPricingTab({ companyId }: { companyId: string }) {
+  return <CompanyPricingEditor key={companyId} companyId={companyId} />;
+}
+
+function CompanyPricingEditor({ companyId }: { companyId: string }) {
   const { permissions, isAdmin } = useAuth();
   const canManage = checkPerm(permissions, isAdmin, "service_pricing_manage", "view");
   const canSearch = checkPerm(permissions, isAdmin, "service_price_search", "view");
@@ -73,6 +77,8 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   const [filteredRules, setFilteredRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   // Buffer that persists the in-progress "add new" draft across modal close/reopen.
   // Only used for new (no id) drafts. Cleared on successful save or explicit reset.
   const [addBuffer, setAddBuffer, clearAddBuffer] = usePersistentState<Row | null>(
@@ -106,57 +112,68 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
     if (draft && !draft.id) setAddBuffer(draft);
   }, [draft, setAddBuffer]);
 
-  const closeDraft = () => setDraft(null);
+  const closeDraft = () => { if (!savingRef.current) setDraft(null); };
 
 
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || savingRef.current) return;
+    if (draft.id ? !perm.edit : !perm.create) return toast.error("لا تملك صلاحية الحفظ");
     if (!draft.service_type) return toast.error("اختر الخدمة");
     if (!draft.agent_tier) return toast.error("اختر شريحة الوكيل");
-    const payload: any = {
-      ...draft,
-      company_price: Number(draft.company_price) || 0,
-      commission_value: Number(draft.commission_value) || 0,
-      currency: (draft.currency || "EGP").toUpperCase(),
-    };
-    delete payload.id;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const payload: any = {
+        ...draft,
+        company_price: Number(draft.company_price) || 0,
+        commission_value: Number(draft.commission_value) || 0,
+        currency: (draft.currency || "EGP").toUpperCase(),
+      };
+      delete payload.id;
+      delete payload.agent_price;
 
-    // Duplicate check on matching factors (empty matches empty only)
-    const matchFields: (keyof Row)[] = [
-      "service_type","agent_tier","departure_from","destination",
-      "airline","approval_company_id","status","passenger_type",
-    ];
-    const dup = rules.find((r) =>
-      r.id !== draft.id &&
-      matchFields.every((f) => ((r as any)[f] ?? null) === ((draft as any)[f] ?? null))
-    );
-    if (dup) {
-      const newCompanyPrice = Number(payload.company_price) || 0;
-      const newAgentPrice = computeAgentPrice(draft);
-      const oldCompanyPrice = Number(dup.company_price) || 0;
-      const oldAgentPrice = Number(dup.agent_price) || 0;
-      const samePrice = oldCompanyPrice === newCompanyPrice && oldAgentPrice === newAgentPrice;
-      const msg = samePrice
-        ? `تم تسعير هذه الخدمة من قبل.\nسعر الشركة: ${oldCompanyPrice}\nسعر الوكيل: ${oldAgentPrice}\nهذه الخدمة مسجلة مسبقاً بنفس العوامل المؤثرة وبنفس الأسعار.`
-        : `تم العثور على تسعير سابق لهذه الخدمة.\nالسعر السابق للشركة: ${oldCompanyPrice}\nالسعر السابق للوكيل: ${oldAgentPrice}\nالسعر الجديد للشركة: ${newCompanyPrice}\nالسعر الجديد للوكيل: ${newAgentPrice}\nهذه الخدمة مسجلة بنفس العوامل المؤثرة ولكن بأسعار مختلفة.`;
-      const ok = await confirmDialog(msg, { confirmLabel: "متابعة الحفظ", cancelLabel: "إلغاء" });
-      if (!ok) return;
-    }
+      // Duplicate check on matching factors (empty matches empty only)
+      const matchFields: (keyof Row)[] = [
+        "service_type","agent_tier","departure_from","destination",
+        "airline","approval_company_id","status","passenger_type",
+      ];
+      const dup = rules.find((r) =>
+        r.id !== draft.id &&
+        matchFields.every((f) => ((r as any)[f] ?? null) === ((draft as any)[f] ?? null))
+      );
+      if (dup) {
+        const newCompanyPrice = Number(payload.company_price) || 0;
+        const newAgentPrice = computeAgentPrice(draft);
+        const oldCompanyPrice = Number(dup.company_price) || 0;
+        const oldAgentPrice = Number(dup.agent_price) || 0;
+        const samePrice = oldCompanyPrice === newCompanyPrice && oldAgentPrice === newAgentPrice;
+        const msg = samePrice
+          ? `تم تسعير هذه الخدمة من قبل.\nسعر الشركة: ${oldCompanyPrice}\nسعر الوكيل: ${oldAgentPrice}\nهذه الخدمة مسجلة مسبقاً بنفس العوامل المؤثرة وبنفس الأسعار.`
+          : `تم العثور على تسعير سابق لهذه الخدمة.\nالسعر السابق للشركة: ${oldCompanyPrice}\nالسعر السابق للوكيل: ${oldAgentPrice}\nالسعر الجديد للشركة: ${newCompanyPrice}\nالسعر الجديد للوكيل: ${newAgentPrice}\nهذه الخدمة مسجلة بنفس العوامل المؤثرة ولكن بأسعار مختلفة.`;
+        const ok = await confirmDialog(msg, { confirmLabel: "متابعة الحفظ", cancelLabel: "إلغاء" });
+        if (!ok) return;
+      }
 
-    // Trigger recomputes agent_price; we don't send it.
-    if (draft.id) {
-      const { error } = await supabase.from("company_pricing_rules" as any).update(payload).eq("id", draft.id);
-      if (error) return toast.error(error.message);
-    } else {
-      const { error } = await supabase.from("company_pricing_rules" as any).insert(payload);
-      if (error) return toast.error(error.message);
+      // Trigger recomputes agent_price; we don't send it.
+      if (draft.id) {
+        const { error } = await supabase.from("company_pricing_rules" as any).update(payload).eq("id", draft.id);
+        if (error) return toast.error(error.message);
+      } else {
+        const { error } = await supabase.from("company_pricing_rules" as any).insert(payload);
+        if (error) return toast.error(error.message);
+      }
+      const wasNew = !draft.id;
+      setDraft(null);
+      if (wasNew) clearAddBuffer();
+      await load();
+      toast.success("تم حفظ السعر");
+    } catch (error: any) {
+      toast.error(error?.message || "تعذر حفظ السعر");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    const wasNew = !draft.id;
-    setDraft(null);
-    if (wasNew) clearAddBuffer();
-    await load();
-    toast.success("تم حفظ السعر");
   };
 
   const remove = async (id: string) => {
@@ -218,6 +235,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
               type="button"
               className="btn btn-outline"
               onClick={() => setShowImport(true)}
+              disabled={!!draft || saving}
               title="استيراد ملف التسعير من شركة أخرى"
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
@@ -228,6 +246,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
             <button
               type="button"
               className="btn btn-gold"
+              disabled={!!draft || saving}
               onClick={startNew}
               title="إضافة سعر جديد"
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
@@ -292,7 +311,24 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                       </td></tr>
                     );
                   }
-                  return displayRules.map((r) => (
+                  return displayRules.map((r) => draft?.id === r.id ? (
+                    <InlinePricingRow
+                      key={r.id}
+                      draft={draft}
+                      setDraft={setDraft}
+                      onCancel={closeDraft}
+                      onSave={save}
+                      saving={saving}
+                      services={services}
+                      tiers={tiers.length ? tiers : ["A", "B", "C"]}
+                      departures={departures}
+                      destinations={destinations}
+                      airlines={airlines}
+                      statuses={statuses}
+                      passengers={passengers}
+                      approvalCompanies={approvalCompanies}
+                    />
+                  ) : (
                     <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
                       <td style={{ padding: 6 }}>{r.departure_from || "—"}</td>
@@ -313,6 +349,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                             <button
                               type="button"
                               className="action-btn icon-only"
+                              disabled={!!draft || saving}
                               onClick={() => startEdit(r)}
                               title="تعديل"
                               aria-label="تعديل"
@@ -325,6 +362,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                             <button
                               type="button"
                               className="action-btn icon-only"
+                              disabled={!!draft || saving}
                               onClick={() => duplicate(r)}
                               title="تكرار"
                               aria-label="تكرار"
@@ -337,6 +375,7 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
                             <button
                               type="button"
                               className="action-btn icon-only"
+                              disabled={!!draft || saving}
                               onClick={() => remove(r.id)}
                               title="حذف"
                               aria-label="حذف"
@@ -356,13 +395,14 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
         )}
       </div>
 
-      {draft && (
+      {draft && !draft.id && (
         <DraftEditor
           draft={draft}
           setDraft={setDraft}
           onCancel={closeDraft}
           
           onSave={save}
+          saving={saving}
           services={services}
           tiers={tiers.length ? tiers : ["A","B","C"]}
           departures={departures}
@@ -388,12 +428,13 @@ export function CompanyPricingTab({ companyId }: { companyId: string }) {
   );
 }
 
-function DraftEditor(props: {
+type DraftEditorProps = {
   draft: Row;
   setDraft: (r: Row | null) => void;
   onCancel: () => void;
   
   onSave: () => void;
+  saving: boolean;
   services: readonly string[];
   tiers: readonly string[];
   departures: readonly string[];
@@ -402,7 +443,9 @@ function DraftEditor(props: {
   statuses: readonly string[];
   passengers: readonly string[];
   approvalCompanies: IssuingCompany[];
-}) {
+};
+
+function DraftEditor(props: DraftEditorProps) {
   const { draft, setDraft } = props;
   const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
   const agentPrice = computeAgentPrice(draft);
@@ -411,23 +454,23 @@ function DraftEditor(props: {
       <div className="card" style={{ width: "100%", maxWidth: 720, maxHeight: "90vh", overflow: "auto", margin: 0 }}>
         <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div className="card-title">{draft.id ? "تعديل سعر" : "إضافة سعر"}</div>
-          <button type="button" className="action-btn icon-only" onClick={props.onCancel} title="إغلاق" aria-label="إغلاق" style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>×</button>
+          <button type="button" className="action-btn icon-only" onClick={props.onCancel} disabled={props.saving} title="إغلاق" aria-label="إغلاق" style={{ width: 28, height: 28, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>×</button>
         </div>
-        <div className="form-grid">
+        <fieldset disabled={props.saving} className="form-grid" style={{ border: 0, margin: 0, minWidth: 0 }}>
           <div className="form-group"><label>الخدمة *</label>
-            <SearchableSelect value={draft.service_type} onChange={(v) => upd({ service_type: v })} options={props.services as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.service_type} onChange={(v) => upd({ service_type: v })} options={props.services as string[]} />
           </div>
           <div className="form-group"><label>شريحة الوكيل *</label>
-            <SearchableSelect value={draft.agent_tier} onChange={(v) => upd({ agent_tier: v })} options={props.tiers as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.agent_tier} onChange={(v) => upd({ agent_tier: v })} options={props.tiers as string[]} />
           </div>
           <div className="form-group"><label>جهة المغادرة</label>
-            <SearchableSelect value={draft.departure_from || ""} onChange={(v) => upd({ departure_from: v || null })} options={["", ...props.departures] as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.departure_from || ""} onChange={(v) => upd({ departure_from: v || null })} options={["", ...props.departures] as string[]} />
           </div>
           <div className="form-group"><label>الوجهة</label>
-            <SearchableSelect value={draft.destination || ""} onChange={(v) => upd({ destination: v || null })} options={["", ...props.destinations] as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.destination || ""} onChange={(v) => upd({ destination: v || null })} options={["", ...props.destinations] as string[]} />
           </div>
           <div className="form-group"><label>الطيران</label>
-            <SearchableSelect value={draft.airline || ""} onChange={(v) => upd({ airline: v || null })} options={["", ...props.airlines] as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.airline || ""} onChange={(v) => upd({ airline: v || null })} options={["", ...props.airlines] as string[]} />
           </div>
           <div className="form-group"><label>جهة الموافقة</label>
             <select value={draft.approval_company_id || ""} onChange={(e) => upd({ approval_company_id: e.target.value || null })}>
@@ -436,10 +479,10 @@ function DraftEditor(props: {
             </select>
           </div>
           <div className="form-group"><label>الحالة</label>
-            <SearchableSelect value={draft.status || ""} onChange={(v) => upd({ status: v || null })} options={["", ...props.statuses] as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.status || ""} onChange={(v) => upd({ status: v || null })} options={["", ...props.statuses] as string[]} />
           </div>
           <div className="form-group"><label>نوع المسافر</label>
-            <SearchableSelect value={draft.passenger_type || ""} onChange={(v) => upd({ passenger_type: v || null })} options={["", ...props.passengers] as string[]} />
+            <SearchableSelect disabled={props.saving} value={draft.passenger_type || ""} onChange={(v) => upd({ passenger_type: v || null })} options={["", ...props.passengers] as string[]} />
           </div>
           <div className="form-group"><label>العملة *</label>
             <select value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })}>
@@ -463,12 +506,68 @@ function DraftEditor(props: {
           <div className="form-group"><label>سعر الوكيل (محسوب)</label>
             <input value={`${agentPrice} ${currencyShortLabel(draft.currency)}`} disabled readOnly style={{ background: "var(--card)", fontWeight: 700 }} />
           </div>
-        </div>
+        </fieldset>
         <div className="form-footer" style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12 }}>
-          <button type="button" className="btn btn-gold" onClick={props.onSave}>💾 حفظ</button>
+          <button type="button" className="btn btn-gold" disabled={props.saving} onClick={props.onSave}>{props.saving ? "جاري الحفظ..." : "💾 حفظ"}</button>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Existing prices edit in their table cells; creation keeps the current modal. */
+function InlinePricingRow(props: DraftEditorProps) {
+  const { draft, setDraft, saving } = props;
+  const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
+  const select = (field: "service_type" | "agent_tier" | "departure_from" | "destination" | "airline" | "status" | "passenger_type", options: readonly string[], required = false) => (
+    <SearchableSelect
+      value={draft[field] || ""}
+      onChange={(v) => upd({ [field]: required ? v : v || null })}
+      options={options}
+      placeholder={draft[field] || "— اختر —"}
+      disabled={saving}
+      style={{ minWidth: 130 }}
+    />
+  );
+  const cellStyle = { padding: 6, verticalAlign: "top" as const };
+  return (
+    <tr aria-label="تعديل سعر الخدمة" style={{ borderTop: "1px solid var(--border)", background: "color-mix(in srgb, var(--gold, #b8860b) 8%, var(--card))" }}>
+      <td style={cellStyle}>{select("service_type", props.services, true)}</td>
+      <td style={cellStyle}>{select("departure_from", props.departures)}</td>
+      <td style={cellStyle}>{select("destination", props.destinations)}</td>
+      <td style={cellStyle}>{select("airline", props.airlines)}</td>
+      <td style={cellStyle}>
+        <select aria-label="جهة الموافقة" disabled={saving} value={draft.approval_company_id || ""} onChange={(e) => upd({ approval_company_id: e.target.value || null })} style={{ minWidth: 130, height: 38 }}>
+          <option value="">—</option>
+          {props.approvalCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+        </select>
+      </td>
+      <td style={cellStyle}>{select("status", props.statuses)}</td>
+      <td style={cellStyle}>{select("passenger_type", props.passengers)}</td>
+      <td style={cellStyle}><NumberInput ariaLabel="سعر الشركة" disabled={saving} value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} style={{ minWidth: 110 }} /></td>
+      <td style={cellStyle}>{select("agent_tier", props.tiers, true)}</td>
+      <td style={cellStyle}>
+        <select aria-label="نوع العمولة" disabled={saving} value={draft.commission_type} onChange={(e) => upd({ commission_type: e.target.value as Row["commission_type"] })} style={{ minWidth: 100, height: 38 }}>
+          <option value="percentage">نسبة %</option>
+          <option value="fixed">مبلغ ثابت</option>
+        </select>
+      </td>
+      <td style={cellStyle}><NumberInput ariaLabel="قيمة الربح" disabled={saving} value={Number(draft.commission_value) || 0} onChange={(n) => upd({ commission_value: n })} min={0} style={{ minWidth: 100 }} /></td>
+      <td style={{ ...cellStyle, fontWeight: 700, color: "var(--gold, #b8860b)", whiteSpace: "nowrap" }}>
+        <output aria-label="سعر الوكيل المحسوب">{computeAgentPrice(draft).toFixed(2)} {currencyShortLabel(draft.currency)}</output>
+      </td>
+      <td style={cellStyle}>
+        <select aria-label="العملة" disabled={saving} value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })} style={{ minWidth: 100, height: 38 }}>
+          {PRICING_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL[c] || c}</option>)}
+        </select>
+      </td>
+      <td style={cellStyle}>
+        <div style={{ display: "flex", gap: 4, whiteSpace: "nowrap" }}>
+          <button type="button" className="btn btn-gold" disabled={saving} onClick={props.onSave} aria-label="حفظ تعديل السعر" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Check size={14} />{saving ? "جاري الحفظ..." : "حفظ"}</button>
+          <button type="button" className="btn btn-outline" disabled={saving} onClick={props.onCancel} aria-label="إلغاء تعديل السعر" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><X size={14} />إلغاء</button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
