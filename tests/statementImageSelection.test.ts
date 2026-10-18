@@ -33,7 +33,7 @@ test("nonconsecutive selected rows retain all original account cards and running
   assert.deepEqual(selected.columns, before.columns);
   assert.deepEqual(fixture, before);
   assert.ok(selected.subtitle?.includes("أكتوبر 2026"));
-  assert.ok(selected.subtitle?.includes("الإجماليات تخص الكشف الأصلي بالكامل"));
+  assert.ok(selected.subtitle?.includes("صفوف مختاره من كشف حساب الوكيل ،الاجماليات تخص كشف حساب الوكيل بالكامل"));
   assert.equal(selected.fileName, "كشف حساب الوكيل - صفوف محددة");
 });
 

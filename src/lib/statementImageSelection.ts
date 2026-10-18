@@ -8,7 +8,7 @@ export function selectStatementRows(data: StatementExportData, indices: number[]
   return {
     ...data,
     rows,
-    subtitle: [data.subtitle, "صفوف مختارة من الكشف الأصلي", "الإجماليات تخص الكشف الأصلي بالكامل"].filter(Boolean).join(" • "),
+    subtitle: [data.subtitle, "صفوف مختاره من كشف حساب الوكيل ،الاجماليات تخص كشف حساب الوكيل بالكامل"].filter(Boolean).join(" • "),
     fileName: (data.fileName || data.title) + " - صفوف محددة",
   };
 }
