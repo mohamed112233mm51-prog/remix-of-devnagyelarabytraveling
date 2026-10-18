@@ -2,6 +2,8 @@ import { createContext, useContext, useCallback, useEffect, useRef, useState, ty
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateCompleteFinancialTables } from "@/hooks/useCompleteFinancialTables";
 import { hasPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, normalizePermissionsForLoad } from "@/lib/permissionKeys";
 
 type Role = "admin" | "manager" | "user";
@@ -40,6 +42,7 @@ function withStartupTimeout<T>(promise: PromiseLike<T>, label: string): Promise<
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -50,14 +53,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [blocked, setBlocked] = useState<null | "not_invited" | "disabled">(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const profileLoadInFlight = useRef<Map<string, Promise<void>>>(new Map());
+  const currentUserId = useRef<string | null>(null);
+  const authGeneration = useRef(0);
+  const authorization = useRef<string | null>(null);
+  const currentRoles = useRef<Role[]>([]);
 
   const safeLoadProfile = useCallback(async (uid: string, loader: (uid: string) => Promise<void>) => {
+    if (currentUserId.current !== uid) return;
+    const generation = authGeneration.current;
     try { setProfileError(null); await loader(uid); }
-    catch (e: any) { setProfileError(e?.message || "تعذر تحميل صلاحيات المستخدم"); }
+    catch (e: any) {
+      if (generation === authGeneration.current && currentUserId.current === uid) setProfileError(e?.message || "تعذر تحميل صلاحيات المستخدم");
+    }
   }, []);
 
   const applyPermissions = useCallback((uid: string, nextPerms: Record<string, any>, nextIsSuperAdmin: boolean) => {
     const effectivePerms = normalizePermissionsForLoad(nextPerms);
+    const signature = JSON.stringify({ uid, permissions: effectivePerms, owner: nextIsSuperAdmin, roles: currentRoles.current });
+    if (authorization.current !== null && authorization.current !== signature) {
+      invalidateCompleteFinancialTables();
+      void queryClient.resetQueries();
+    }
+    authorization.current = signature;
     setPermissions((prev) =>
       JSON.stringify(prev) === JSON.stringify(effectivePerms) ? prev : effectivePerms,
     );
@@ -70,11 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasProfitSummaryPermission: nextIsSuperAdmin || hasPermission(effectivePerms, PROFIT_SUMMARY_PERMISSION_KEY),
       });
     }
-  }, []);
+  }, [queryClient]);
 
   const loadProfile = useCallback((uid: string): Promise<void> => {
     const existing = profileLoadInFlight.current.get(uid);
     if (existing) return existing;
+    const generation = authGeneration.current;
 
     console.info("[startup] Profile/Permissions loading start");
     const task = (async () => {
@@ -91,7 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (roleError || profileError) {
           throw new Error(roleError?.message || profileError?.message || "تعذر تحميل صلاحيات المستخدم");
         }
-        const nextRoles = (roleRows ?? []).map((r: any) => r.role);
+        const nextRoles = (roleRows ?? []).map((r: any) => r.role).sort();
+        if (generation !== authGeneration.current || currentUserId.current !== uid) return;
+        currentRoles.current = nextRoles;
         const nextPerms = (((profile as any)?.permissions as Record<string, any>) ?? {});
         const nextIsSuperAdmin = !!(profile as any)?.is_super_admin;
         setRoles(nextRoles);
@@ -130,9 +150,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     console.info("[startup] Auth bootstrap start");
+    let disposed = false;
+    let authEventObserved = false;
+    const acceptSession = (next: Session | null) => {
+      const uid = next?.user?.id ?? null;
+      const changed = currentUserId.current !== uid;
+      if (changed) {
+        currentUserId.current = uid;
+        authGeneration.current += 1;
+        authorization.current = null;
+        currentRoles.current = [];
+        profileLoadInFlight.current.clear();
+        setProfileLoaded(false);
+        setProfileError(null);
+        setRoles([]);
+        setPermissions({});
+        setIsSuperAdmin(false);
+        setBlocked(null);
+        setNeedsPassword(false);
+        invalidateCompleteFinancialTables(uid !== null);
+        queryClient.clear();
+      }
+      setSession(next);
+      return changed;
+    };
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      authEventObserved = true;
       console.info("[startup] Auth state change", event, !!s?.user);
-      setSession(s);
+      const identityChanged = acceptSession(s);
       if (
         event === "PASSWORD_RECOVERY" ||
         (s?.user && (s.user as any).recovery_sent_at && !s.user.last_sign_in_at)
@@ -143,8 +188,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (s?.user) {
         const u: any = s.user;
         if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
-        setProfileLoaded(false);
-        setTimeout(() => safeLoadProfile(s.user.id, loadProfile), 0);
+        // Refreshing the same user's JWT must not unmount every data consumer.
+        // Profile/role subscriptions still reconcile permissions independently.
+        if (event !== "TOKEN_REFRESHED" || identityChanged) {
+          const generation = authGeneration.current;
+          setTimeout(() => {
+            if (!disposed && generation === authGeneration.current) void safeLoadProfile(s.user.id, loadProfile);
+          }, 0);
+        }
       } else {
         setRoles([]);
         setPermissions({});
@@ -157,21 +208,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     withStartupTimeout(supabase.auth.getSession(), "Auth")
       .then(({ data }) => {
         console.info("[startup] Auth bootstrap complete", !!data.session?.user);
-        setSession(data.session);
+        if (disposed || authEventObserved) return;
+        acceptSession(data.session);
         if (data.session?.user) {
           const u: any = data.session.user;
           if (u.invited_at && !u.last_sign_in_at) setNeedsPassword(true);
-          setProfileLoaded(false);
           safeLoadProfile(data.session.user.id, loadProfile);
         }
       })
       .catch((error) => {
         console.warn("[startup] Auth bootstrap failed or timed out", error);
-        setSession(null);
+        if (!disposed && !authEventObserved) acceptSession(null);
       })
-      .finally(() => setLoading(false));
-    return () => sub.subscription.unsubscribe();
-  }, [loadProfile, safeLoadProfile]);
+      .finally(() => { if (!disposed) setLoading(false); });
+    return () => {
+      disposed = true;
+      authGeneration.current += 1;
+      profileLoadInFlight.current.clear();
+      sub.subscription.unsubscribe();
+    };
+  }, [loadProfile, safeLoadProfile, queryClient]);
 
   // Realtime: subscribe to current user's profile + roles; sign out if disabled.
   // No fixed-interval polling: reconciliation happens only after a real
@@ -221,6 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         { event: "*", schema: "public", table: "profiles", filter: `id=eq.${uid}` },
         (payload: any) => {
+          if (currentUserId.current !== uid) return;
           const next: any = (payload as any).new;
           if (payload.eventType === "DELETE") {
             handleDisabled();

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { LiveTable } from "@/lib/db";
+import { readAllRows } from "@/lib/readAllRows";
 
-const PAGE_SIZE = 1000;
 const SUBSCRIBE_FALLBACK_MS = 2000;
+const IDLE_RELEASE_MS = 30_000;
 
 type CompleteStore = {
   rows: any[];
@@ -20,6 +22,9 @@ type CompleteStore = {
   fallbackTimer: ReturnType<typeof setTimeout> | null;
   startedWithoutRealtime: boolean;
   generation: number;
+  releaseTimer: ReturnType<typeof setTimeout> | null;
+  refreshPromise: Promise<void> | null;
+  refreshVersion: number;
 };
 
 const stores = new Map<LiveTable, CompleteStore>();
@@ -42,6 +47,9 @@ function getStore(table: LiveTable): CompleteStore {
       fallbackTimer: null,
       startedWithoutRealtime: false,
       generation: 0,
+      releaseTimer: null,
+      refreshPromise: null,
+      refreshVersion: 0,
     };
     stores.set(table, store);
   }
@@ -59,31 +67,12 @@ function rowCreatedAt(row: any): string {
 function sortRows(rows: any[]): any[] {
   return rows.sort((a, b) => {
     const byCreatedAt = rowCreatedAt(b).localeCompare(rowCreatedAt(a));
-    return byCreatedAt;
+    return byCreatedAt || String(b?.id || "").localeCompare(String(a?.id || ""));
   });
 }
 
 async function fetchAllRows<T>(table: LiveTable): Promise<T[]> {
-  const rows: T[] = [];
-  let from = 0;
-
-  while (true) {
-    const to = from + PAGE_SIZE - 1;
-    const { data, error } = await supabase
-      .from(table)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .range(from, to);
-
-    if (error) throw error;
-
-    const page = (Array.isArray(data) ? data : []) as T[];
-    rows.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
-  }
-
-  return rows;
+  return readAllRows<T>(supabase, table);
 }
 
 function applyEvent(store: CompleteStore, payload: any, shouldNotify = true) {
@@ -116,7 +105,6 @@ function applyEvent(store: CompleteStore, payload: any, shouldNotify = true) {
     store.rows = current.filter((row) => row?.id !== oldRow.id);
   }
 
-  store.error = null;
   if (shouldNotify) notify(store);
 }
 
@@ -152,9 +140,17 @@ async function reconcileStore(table: LiveTable, store: CompleteStore): Promise<v
       }
     } catch (err: any) {
       if (generation !== store.generation) return;
-      store.rows = [];
-      store.loaded = false;
+      // Keep the last complete snapshot on a temporary refresh failure.
+      // loading/error still tell consumers that reconciliation did not finish.
+      if (store.loaded) {
+        const queued = store.pendingEvents;
+        store.pendingEvents = [];
+        for (const payload of queued) applyEvent(store, payload, false);
+      }
       store.error = err?.message || "تعذر تحميل البيانات كاملة";
+      // Preserve the ordinary screens' existing failure notification, once per
+      // shared read rather than once per mounted consumer.
+      toast.error(store.error);
     } finally {
       if (generation === store.generation) {
         store.fetchPromise = null;
@@ -179,7 +175,6 @@ function reconcileAfterCurrent(table: LiveTable, store: CompleteStore) {
   void current.finally(() => {
     if (
       generation === store.generation &&
-      store.refCount > 0 &&
       store.channel
     ) {
       void reconcileStore(table, store);
@@ -191,6 +186,7 @@ function startStore(table: LiveTable, store: CompleteStore) {
   if (store.channel) return;
 
   store.generation += 1;
+  const generation = store.generation;
   store.fetchPromise = null;
   store.loading = true;
   store.error = null;
@@ -202,16 +198,19 @@ function startStore(table: LiveTable, store: CompleteStore) {
   notify(store);
 
   const channel = supabase
-    .channel(`complete-shared-${table}`)
+    .channel(`complete-shared-${table}-${generation}`)
     .on(
       "postgres_changes" as any,
       { event: "*", schema: "public", table },
-      (payload: any) => queueOrApplyEvent(store, payload),
+      (payload: any) => {
+        if (generation === store.generation) queueOrApplyEvent(store, payload);
+      },
     );
 
   store.channel = channel;
 
   channel.subscribe((status: string) => {
+    if (generation !== store.generation) return;
     if (status === "SUBSCRIBED") {
       if (store.fallbackTimer) {
         clearTimeout(store.fallbackTimer);
@@ -260,6 +259,8 @@ function startStore(table: LiveTable, store: CompleteStore) {
 
 function stopStore(store: CompleteStore) {
   store.generation += 1;
+  if (store.releaseTimer) clearTimeout(store.releaseTimer);
+  store.releaseTimer = null;
   if (store.fallbackTimer) {
     clearTimeout(store.fallbackTimer);
     store.fallbackTimer = null;
@@ -280,22 +281,35 @@ function stopStore(store: CompleteStore) {
   store.needsReconcileOnSubscribe = false;
   store.startedWithoutRealtime = false;
   store.fetchPromise = null;
+  store.refreshPromise = null;
 }
 
 function subscribe(table: LiveTable, callback: () => void): () => void {
   const store = getStore(table);
   store.subscribers.add(callback);
   store.refCount += 1;
+  if (store.releaseTimer) clearTimeout(store.releaseTimer);
+  store.releaseTimer = null;
 
-  if (store.refCount === 1) {
+  if (!store.channel) {
     startStore(table, store);
+  } else if (store.error && !store.fetchPromise) {
+    void reconcileStore(table, store);
   }
+  // Close the render-to-effect gap when reusing a warm subscription: an event
+  // may have arrived after this component rendered but before it subscribed.
+  callback();
 
   return () => {
     store.subscribers.delete(callback);
     store.refCount = Math.max(0, store.refCount - 1);
     if (store.refCount === 0) {
-      stopStore(store);
+      // Retain the LIVE subscription during navigation, not a disconnected TTL
+      // snapshot. Once released, the next screen must do a fresh complete read.
+      store.releaseTimer = setTimeout(() => {
+        store.releaseTimer = null;
+        if (store.refCount === 0) stopStore(store);
+      }, IDLE_RELEASE_MS);
     }
   };
 }
@@ -309,17 +323,76 @@ export async function refetchCompleteFinancialTables(
 
   await Promise.all(
     targets.map(async (table) => {
-      const store = getStore(table);
-      // Manual reconciliation is useful even if no component is subscribed.
-      // If there are no subscribers, do not keep the snapshot as a stale cache.
-      await reconcileStore(table, store);
+      const store = stores.get(table);
+      // An unobserved table will be read when opened. Reading it only to throw
+      // the result away wastes egress after every financial write.
+      if (!store?.channel) return;
       if (store.refCount === 0) {
-        store.rows = [];
-        store.loading = true;
-        store.loaded = false;
+        stopStore(store);
+        return;
       }
+      store.refreshVersion += 1;
+      if (store.refreshPromise) return store.refreshPromise;
+      const generation = store.generation;
+      const current = store.fetchPromise;
+      const refresh = (async () => {
+        if (current) await current;
+        // A write may finish during the previous read. One trailing read is
+        // required so an older in-flight snapshot cannot count as its refresh.
+        while (generation === store.generation) {
+          const version = store.refreshVersion;
+          await reconcileStore(table, store);
+          if (version === store.refreshVersion) break;
+        }
+      })();
+      store.refreshPromise = refresh;
+      try { await refresh; }
+      finally { if (store.refreshPromise === refresh) store.refreshPromise = null; }
     }),
   );
+}
+
+/** Forget data immediately at an identity/permission boundary, including late reads. */
+export function invalidateCompleteFinancialTables(restartActive = true) {
+  for (const [table, store] of stores) {
+    stopStore(store);
+    notify(store);
+    if (restartActive && store.refCount > 0) startStore(table, store);
+  }
+}
+
+/** Existing destructive reset semantics, now shared by both table consumers. */
+export function resetCompleteFinancialTables(tables?: readonly LiveTable[]) {
+  const targets = tables?.length ? tables : Array.from(stores.keys());
+  for (const table of targets) {
+    const store = getStore(table);
+    const active = store.refCount > 0;
+    stopStore(store);
+    if (active) startStore(table, store);
+    else {
+      store.loading = false;
+      store.loaded = true;
+    }
+    notify(store);
+  }
+}
+
+/** Keep the existing optimistic UI/rollback helpers on the same shared store. */
+export function patchCompleteFinancialTable(
+  table: LiveTable,
+  change: { type: "insert" | "update" | "delete"; row: any },
+) {
+  const store = stores.get(table);
+  if (!store?.channel) return;
+  const payload = change.type === "delete"
+    ? { eventType: "DELETE", old: change.row }
+    : { eventType: change.type === "insert" ? "INSERT" : "UPDATE", new: change.row };
+  if (store.fetchPromise) store.pendingEvents.push(payload);
+  applyEvent(store, payload);
+}
+
+export function getCompleteFinancialRow(table: LiveTable, id: string): any | undefined {
+  return stores.get(table)?.rows.find((row) => row?.id === id);
 }
 
 export function useCompleteFinancialTable<T>(table: LiveTable) {

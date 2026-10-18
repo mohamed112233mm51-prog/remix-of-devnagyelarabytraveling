@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useCompleteFinancialTable, refetchCompleteFinancialTables, resetCompleteFinancialTables, patchCompleteFinancialTable, getCompleteFinancialRow } from "@/hooks/useCompleteFinancialTables";
 
 export type Agent = {
   id: string;
@@ -447,141 +448,21 @@ export type LiveTable =
   | "currency_supplier_transactions" | "currency_suppliers";
 
 
-type LiveStore = {
-  rows: any[];
-  loading: boolean;
-  error: string | null;
-  subscribers: Set<() => void>;
-  refCount: number;
-  channel: any;
-  loaded: boolean;
-};
+// One complete, paginated store and one Realtime subscription per table for
+// ordinary screens AND financial summaries. Never cache two copies of a table.
+export const useLive = useCompleteFinancialTable;
+export const refetchLiveTables = refetchCompleteFinancialTables;
+export const resetLiveTables = resetCompleteFinancialTables;
 
-// Module-level shared cache: one fetch + one realtime channel per table,
-// shared across every component instance. Realtime payloads are applied
-// in-memory (no refetch), so updates are O(1) and propagate to all
-// subscribers instantly.
-const liveStores: Map<LiveTable, LiveStore> = new Map();
-
-function getStore(table: LiveTable): LiveStore {
-  let s = liveStores.get(table);
-  if (!s) {
-    s = { rows: [], loading: true, error: null, subscribers: new Set(), refCount: 0, channel: null, loaded: false };
-    liveStores.set(table, s);
-  }
-  return s;
-}
-
-function notify(store: LiveStore) {
-  store.subscribers.forEach((fn) => fn());
-}
-
-async function loadStore(table: LiveTable, store: LiveStore) {
-  try {
-    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
-    if (error) {
-      store.rows = [];
-      store.error = error.message;
-      toast.error(error.message || "تعذر تحميل البيانات");
-    } else {
-      store.rows = Array.isArray(data) ? data : [];
-      store.error = null;
-    }
-  } catch (err: any) {
-    store.rows = [];
-    store.error = err?.message || "تعذر تحميل البيانات";
-    toast.error(store.error!);
-  } finally {
-    store.loading = false;
-    store.loaded = true;
-    notify(store);
-  }
-}
-
-function applyChange(store: LiveStore, payload: any) {
-  const { eventType, new: newRow, old: oldRow } = payload;
-  const rows = Array.isArray(store.rows) ? store.rows : [];
-  if (eventType === "INSERT" && newRow) {
-    if (!rows.some((r) => r?.id === newRow.id)) {
-      store.rows = [newRow, ...rows];
-    }
-  } else if (eventType === "UPDATE" && newRow) {
-    store.rows = rows.map((r) => (r?.id === newRow.id ? { ...r, ...newRow } : r));
-  } else if (eventType === "DELETE" && oldRow) {
-    store.rows = rows.filter((r) => r?.id !== oldRow.id);
-  }
-  notify(store);
-}
-
-function subscribe(table: LiveTable, cb: () => void): () => void {
-  const store = getStore(table);
-  store.subscribers.add(cb);
-  store.refCount += 1;
-  if (store.refCount === 1) {
-    loadStore(table, store);
-    const channel = supabase
-      .channel(`live-${table}`)
-      .on("postgres_changes" as any, { event: "*", schema: "public", table }, (payload: any) => applyChange(store, payload))
-      .subscribe();
-    store.channel = channel;
-  }
-  return () => {
-    store.subscribers.delete(cb);
-    store.refCount -= 1;
-    if (store.refCount === 0 && store.channel) {
-      supabase.removeChannel(store.channel);
-      store.channel = null;
-      store.loaded = false;
-      store.loading = true;
-    }
-  };
-}
-
-export function useLive<T>(table: LiveTable) {
-  const [, force] = useState(0);
-  useEffect(() => subscribe(table, () => force((n) => n + 1)), [table]);
-  const store = getStore(table);
-  return { rows: (Array.isArray(store.rows) ? store.rows : []) as T[], loading: store.loading, error: store.error };
-}
-
-/** Force a fresh read from the database and replace any shared in-memory live cache. */
-export async function refetchLiveTables(tables?: readonly LiveTable[]) {
-  const targets = tables?.length ? tables : Array.from(liveStores.keys());
-  await Promise.all(targets.map(async (table) => {
-    const store = getStore(table);
-    store.loading = true;
-    notify(store);
-    await loadStore(table, store);
-  }));
-}
-
-/** Replace shared realtime caches with an empty state after destructive server-side resets. */
-export function resetLiveTables(tables?: readonly LiveTable[]) {
-  const targets = tables?.length ? tables : Array.from(liveStores.keys());
-  targets.forEach((table) => {
-    const store = getStore(table);
-    store.rows = [];
-    store.loading = false;
-    store.error = null;
-    store.loaded = true;
-    notify(store);
-  });
-}
 
 /** Optimistic helper: mutate the local cache for a table immediately. */
 export function patchLive(table: LiveTable, change: { type: "insert" | "update" | "delete"; row: any }) {
-  const store = liveStores.get(table);
-  if (!store) return;
-  if (change.type === "insert") applyChange(store, { eventType: "INSERT", new: change.row });
-  else if (change.type === "update") applyChange(store, { eventType: "UPDATE", new: change.row });
-  else applyChange(store, { eventType: "DELETE", old: change.row });
+  patchCompleteFinancialTable(table, change);
 }
 
 /** Read a row snapshot from the live cache (for optimistic rollback). */
 export function getLiveRow(table: LiveTable, id: string): any | undefined {
-  const store = liveStores.get(table);
-  const rows = Array.isArray(store?.rows) ? store.rows : [];
-  return rows.find((r) => r?.id === id);
+  return getCompleteFinancialRow(table, id);
 }
 
 /**
