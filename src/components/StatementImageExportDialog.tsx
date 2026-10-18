@@ -302,7 +302,7 @@ export function StatementImageExportDialog({ data, phone, onClose }: {
               <button type="button" style={actionStyle} onClick={() => setSelectedRows(data.rows.map((_, i) => i))}>تحديد الكل</button>
               <button type="button" style={actionStyle} onClick={() => setSelectedRows([])}>إلغاء التحديد</button>
             </div>
-            <p style={{ margin: "8px 0", fontSize: 13 }}>الإجماليات ستُحسب للصفوف المختارة فقط (عند توفر قيم رقمية وعملة واحدة). الأرصدة المرحّلة كما هي في الكشف الأصلي.</p>
+            <p style={{ margin: "8px 0", fontSize: 13 }}>ستظهر الصفوف المختارة فقط، مع نفس كروت الإجماليات والأرصدة وقيمها في الكشف الأصلي بالكامل.</p>
             <div style={{ maxHeight: "52vh", overflow: "auto", border: "1px solid #d1d5db", borderRadius: 8 }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: Math.max(540, data.columns.length * 110), fontSize: 13 }}>
                 <thead style={{ position: "sticky", top: 0, background: "#e2e8f0", zIndex: 1 }}>
