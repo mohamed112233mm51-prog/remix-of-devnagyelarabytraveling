@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { postExecutionFinancials, deleteExecutionLinkedRows } from "@/lib/executionPosting";
+import { postExecutionFinancials } from "@/lib/executionPosting";
 import { splitExecutionServiceNames } from "./executionImportConfig";
 
 export type ExecutionImportResult = { insertedIds: string[]; failed: number };
@@ -120,7 +120,6 @@ export async function importExecutionRows(
 
   for (let i = 0; i < entries.length; i++) {
     const [, groupRows] = entries[i];
-    let executionId: string | null = null;
     try {
       const first = groupRows[0];
       const identity = `${first.passenger_name || ""}|${first.passport || ""}|${first.national_id || ""}|${first.agent_id || ""}`;
@@ -136,27 +135,9 @@ export async function importExecutionRows(
       const services = dedupeServices([...legacyServices, ...compactServices]);
       const payload = executionCore(first, services);
 
-      const { data, error } = await supabase.from("executions").insert(payload as any).select("id").single();
-      if (error || !data?.id) throw new Error(error?.message || "تعذر إنشاء التنفيذ");
-      executionId = String(data.id);
+      const { executionId } = await postExecutionFinancials({ executionPatch: payload, refresh: false });
 
-      // Compact service cells contain names only. Keep them on the execution,
-      // but never fabricate an agent/company financial value. Legacy priced
-      // service rows keep their existing posting behavior.
-      const postingServices = legacyServices;
-      await postExecutionFinancials({
-        executionId,
-        operationStatus: payload.operation_status,
-        agentId: payload.agent_id,
-        date: payload.travel_date,
-        destination: payload.destination,
-        airline: payload.airline,
-        passengerName: payload.passenger_name,
-        executionNotes: payload.notes,
-        services: postingServices as any,
-      });
-
-      if (payload.operation_status === "منفذ" && postingServices.length > 0) {
+      if (payload.operation_status === "منفذ" && services.length > 0) {
         try {
           const { data: exRow } = await supabase
             .from("executions")
@@ -173,10 +154,7 @@ export async function importExecutionRows(
       insertedIds.push(executionId);
     } catch {
       failed++;
-      if (executionId) {
-        try { await deleteExecutionLinkedRows(executionId); } catch {}
-        try { await supabase.from("executions").delete().eq("id", executionId); } catch {}
-      }
+      // The RPC rolled back the execution and all its debts together.
     }
     onProgress(i + 1, entries.length);
     await new Promise((resolve) => setTimeout(resolve, 0));

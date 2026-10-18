@@ -6,8 +6,7 @@ test("already executed row is idempotent and causes no writes", async () => {
   const calls: string[] = [];
   const result = await executeExistingExecutionCore("e1", {
     loadExecution: async () => ({ id: "e1", operation_status: "منفذ" }),
-    setOperationStatus: async () => { calls.push("set"); return { id: "e1", operation_status: "منفذ" }; },
-    postFinancials: async () => { calls.push("post"); },
+    saveWithFinancials: async () => { calls.push("atomic"); return { id: "e1", operation_status: "منفذ" }; },
   });
   assert.equal(result.status, "already_executed");
   assert.deepEqual(calls, []);
@@ -17,48 +16,41 @@ test("cancelled row is rejected before any financial mutation", async () => {
   const calls: string[] = [];
   await assert.rejects(() => executeExistingExecutionCore("e1", {
     loadExecution: async () => ({ id: "e1", operation_status: "ملغي" }),
-    setOperationStatus: async () => { calls.push("set"); return { id: "e1", operation_status: "منفذ" }; },
-    postFinancials: async () => { calls.push("post"); },
+    saveWithFinancials: async () => { calls.push("atomic"); return { id: "e1", operation_status: "منفذ" }; },
   }), /ملغية/);
   assert.deepEqual(calls, []);
 });
 
-test("normal execution sets status then uses canonical posting then FX lock", async () => {
+test("normal execution uses one canonical atomic save then FX lock", async () => {
   const calls: string[] = [];
   const result = await executeExistingExecutionCore("e1", {
     loadExecution: async () => ({ id: "e1", operation_status: "قيد التنفيذ" }),
-    setOperationStatus: async (_id, next, expected) => {
-      calls.push(`set:${expected}->${next}`);
-      return { id: "e1", operation_status: next };
+    saveWithFinancials: async (current) => {
+      calls.push(`atomic:${current.operation_status}->منفذ`);
+      return { id: "e1", operation_status: "منفذ" };
     },
-    postFinancials: async () => { calls.push("post"); },
     lockFxBestEffort: async () => { calls.push("fx"); },
   });
   assert.equal(result.status, "executed");
-  assert.deepEqual(calls, ["set:قيد التنفيذ->منفذ", "post", "fx"]);
+  assert.deepEqual(calls, ["atomic:قيد التنفيذ->منفذ", "fx"]);
 });
 
-test("financial posting failure rolls operation status back", async () => {
+test("failed atomic save does not attempt a second compensating request", async () => {
   const calls: string[] = [];
   await assert.rejects(() => executeExistingExecutionCore("e1", {
     loadExecution: async () => ({ id: "e1", operation_status: "جاهز للتنفيذ" }),
-    setOperationStatus: async (_id, next, expected) => {
-      calls.push(`set:${expected}->${next}`);
-      return { id: "e1", operation_status: next };
-    },
-    postFinancials: async () => { calls.push("post"); throw new Error("posting failed"); },
+    saveWithFinancials: async () => { calls.push("atomic"); throw new Error("posting failed"); },
   }), /posting failed/);
-  assert.deepEqual(calls, ["set:جاهز للتنفيذ->منفذ", "post", "set:منفذ->جاهز للتنفيذ"]);
+  assert.deepEqual(calls, ["atomic"]);
 });
 
 test("FX locking failure does not undo a successful execution", async () => {
   const calls: string[] = [];
   const result = await executeExistingExecutionCore("e1", {
     loadExecution: async () => ({ id: "e1", operation_status: "قيد التنفيذ" }),
-    setOperationStatus: async (_id, next) => { calls.push(`set:${next}`); return { id: "e1", operation_status: next }; },
-    postFinancials: async () => { calls.push("post"); },
+    saveWithFinancials: async () => { calls.push("atomic"); return { id: "e1", operation_status: "منفذ" }; },
     lockFxBestEffort: async () => { calls.push("fx"); throw new Error("missing rate"); },
   });
   assert.equal(result.status, "executed");
-  assert.deepEqual(calls, ["set:منفذ", "post", "fx"]);
+  assert.deepEqual(calls, ["atomic", "fx"]);
 });

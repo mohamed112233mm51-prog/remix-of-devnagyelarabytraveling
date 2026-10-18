@@ -10,12 +10,7 @@ export type BulkExecutionCoreResult = {
 
 export type BulkExecutionCoreDeps<TExecution extends BulkExecutionSnapshot> = {
   loadExecution: (executionId: string) => Promise<TExecution | null>;
-  setOperationStatus: (
-    executionId: string,
-    nextStatus: string,
-    expectedCurrentStatus: string | null,
-  ) => Promise<TExecution>;
-  postFinancials: (execution: TExecution) => Promise<void>;
+  saveWithFinancials: (execution: TExecution) => Promise<TExecution>;
   lockFxBestEffort?: (execution: TExecution) => Promise<void>;
 };
 
@@ -36,21 +31,8 @@ export async function executeExistingExecutionCore<TExecution extends BulkExecut
     throw new Error("لا يمكن تنفيذ عملية ملغية من شاشة المطابقة");
   }
 
-  let updated: TExecution | null = null;
-  try {
-    updated = await deps.setOperationStatus(executionId, "منفذ", current.operation_status ?? null);
-    await deps.postFinancials(updated);
-  } catch (error) {
-    if (updated) {
-      try {
-        await deps.setOperationStatus(executionId, current.operation_status || "", "منفذ");
-      } catch {
-        // Preserve the original posting error. The adapter uses a guarded
-        // compare-and-set rollback so a concurrent change is never overwritten.
-      }
-    }
-    throw error;
-  }
+  // Status and generated debts commit together in the canonical save RPC.
+  const updated = await deps.saveWithFinancials(current);
 
   if (deps.lockFxBestEffort) {
     try {

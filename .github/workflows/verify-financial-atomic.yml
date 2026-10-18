@@ -21,6 +21,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Test paid expense and currency edit consistency
         run: npm run test:financial-edit
+      - name: Test execution saves and linked debts in one transaction
+        run: npm run test:execution-save
       - name: Test trip reconciliation
         run: npm run test:trip-reconciliation
       - name: Production build

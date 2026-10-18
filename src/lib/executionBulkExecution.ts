@@ -23,54 +23,19 @@ async function loadExecution(executionId: string): Promise<ExecutionSnapshot | n
   return (data || null) as ExecutionSnapshot | null;
 }
 
-async function setOperationStatus(
-  executionId: string,
-  nextStatus: string,
-  expectedCurrentStatus: string | null,
-): Promise<ExecutionSnapshot> {
-  let query = (supabase as any)
-    .from("executions")
-    .update({ operation_status: nextStatus })
-    .eq("id", executionId);
-
-  query = expectedCurrentStatus == null
-    ? query.is("operation_status", null)
-    : query.eq("operation_status", expectedCurrentStatus);
-
-  const { data, error } = await query.select("*").maybeSingle();
-  if (error) throw new Error(error.message || "تعذر تحديث حالة التنفيذ");
-  if (!data) throw new Error("تم تعديل حالة هذا التنفيذ بواسطة مستخدم آخر؛ أعد المطابقة ثم حاول مرة أخرى");
-  return data as ExecutionSnapshot;
-}
-
-async function postCanonicalFinancials(execution: ExecutionSnapshot): Promise<void> {
-  await postExecutionFinancials({
-    executionId: execution.id,
-    operationStatus: execution.operation_status || "",
-    agentId: execution.agent_id || null,
-    date: execution.travel_date || null,
-    destination: execution.destination || null,
-    airline: execution.airline || null,
-    passengerName: execution.passenger_name || null,
-    executionNotes: execution.notes || null,
-    services: Array.isArray(execution.services) ? execution.services : [],
-  });
-}
-
-/**
- * Bulk reconciliation adapter for ONE existing execution.
- *
- * It deliberately does not reproduce any accounting rules. The status change
- * is guarded against concurrent edits, and all money posting goes through the
- * existing `postExecutionFinancials` function / atomic RPC. If that canonical
- * posting fails, the operation status is compare-and-set back to its prior
- * value so the UI cannot leave a "منفذ" row without its financial effect.
- */
+/** Bulk reconciliation uses the same atomic execution save as the main form. */
 export async function executeExistingExecution(executionId: string) {
   return executeExistingExecutionCore<ExecutionSnapshot>(executionId, {
     loadExecution,
-    setOperationStatus,
-    postFinancials: postCanonicalFinancials,
+    saveWithFinancials: async (current) => {
+      const saved = await postExecutionFinancials({
+        executionId: current.id,
+        expectedExecution: current,
+        executionPatch: { operation_status: "منفذ" },
+        refresh: false,
+      });
+      return saved.execution as ExecutionSnapshot;
+    },
     lockFxBestEffort: async (execution) => {
       await ensureExecutionFxLocks(supabase as any, execution as any);
     },

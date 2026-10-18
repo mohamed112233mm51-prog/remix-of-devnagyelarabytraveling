@@ -8,7 +8,7 @@ import {
   useLive, useDropdownOptions, withSelected,
   type Agent, type Execution, type ExecutionServiceItem, type IssuingCompany, type Merchant,
 } from "@/lib/db";
-import { postExecutionFinancials, deleteExecutionLinkedRows } from "@/lib/executionPosting";
+import { postExecutionFinancials, deleteExecutionWithFinancials } from "@/lib/executionPosting";
 import { usePerm } from "@/hooks/usePerm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagination } from "@/hooks/usePagination";
@@ -307,9 +307,7 @@ function ExecutionsPage() {
     const ok = await confirmDialog(`سيتم حذف التنفيذ "${row.passenger_name}" وإلغاء كل الحركات المالية المرتبطة. هل تريد المتابعة؟`, { confirmLabel: "حذف" });
     if (!ok) return;
     try {
-      await deleteExecutionLinkedRows(row.id);
-      const { error } = await supabase.from("executions").delete().eq("id", row.id);
-      if (error) throw error;
+      await deleteExecutionWithFinancials(row.id, row);
       toast.success("تم الحذف وإلغاء الحركات المالية");
     } catch (e: any) {
       toast.error(e?.message || "حدث خطأ");
@@ -745,6 +743,7 @@ function ExecutionForm({
         }
       } catch { /* if check fails, don't block save */ }
     }
+    if (saving) return;
     setSaving(true);
     const payload = {
       passenger_name: form.passenger_name.trim(),
@@ -768,34 +767,10 @@ function ExecutionForm({
       submission_id: form.submission_id,
     };
     try {
-      let executionId = editing?.id || "";
-      if (editing && editing.id) {
-        const { error } = await supabase.from("executions").update(payload).eq("id", editing.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from("executions").insert(payload).select("id").single();
-        if (error) throw error;
-        executionId = data!.id as string;
-        // Mark linked submission as executed
-        if (form.submission_id) {
-          await supabase.from("submissions").update({
-            execution_id: executionId,
-            executed_at: new Date().toISOString(),
-            operation_status: "تم التحويل للتنفيذ",
-          }).eq("id", form.submission_id);
-        }
-      }
-      // Post / unpost financials based on حالة العملية
-      await postExecutionFinancials({
-        executionId,
-        operationStatus: form.operation_status,
-        agentId: form.agent_id || null,
-        date: form.travel_date || null,
-        destination: form.destination || null,
-        airline: form.airline || null,
-        passengerName: form.passenger_name,
-        executionNotes: form.notes || null,
-        services,
+      const { executionId } = await postExecutionFinancials({
+        executionId: editing?.id || undefined,
+        executionPatch: payload,
+        expectedExecution: editing?.id ? editing : undefined,
       });
       // Try to lock FX rates for this execution (once, on first success).
       // If no buy rate exists yet for a currency, the execution stays "pending"

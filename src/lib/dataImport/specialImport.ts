@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { postMovement, type MovementSplit } from "@/lib/financialEngine";
-import { postExecutionFinancials, deleteExecutionLinkedRows } from "@/lib/executionPosting";
+import { postExecutionFinancials } from "@/lib/executionPosting";
 import { logCreate } from "@/lib/financialAudit";
 import { confirmFinancialOperation, deriveFinancialOperationUuid, financialOperationFingerprint, getOrCreateFinancialOperationId } from "@/lib/financialIdempotency";
 import { atomicRow, executeFinancialAtomic } from "@/lib/financialAtomic";
@@ -277,7 +277,6 @@ export async function importExecutionRows(
 
   for (let i = 0; i < entries.length; i++) {
     const [, groupRows] = entries[i];
-    let executionId: string | null = null;
     try {
       const first = groupRows[0];
       const identity = `${first.passenger_name || ""}|${first.passport || ""}|${first.national_id || ""}|${first.agent_id || ""}`;
@@ -288,21 +287,7 @@ export async function importExecutionRows(
 
       const services = groupRows.map(serviceFromRow).filter((service): service is NonNullable<typeof service> => service !== null);
       const payload = executionCore(first, services);
-      const { data, error } = await supabase.from("executions").insert(payload as any).select("id").single();
-      if (error || !data?.id) throw new Error(error?.message || "تعذر إنشاء التنفيذ");
-      executionId = String(data.id);
-
-      await postExecutionFinancials({
-        executionId,
-        operationStatus: payload.operation_status,
-        agentId: payload.agent_id,
-        date: payload.travel_date,
-        destination: payload.destination,
-        airline: payload.airline,
-        passengerName: payload.passenger_name,
-        executionNotes: payload.notes,
-        services: services as any,
-      });
+      const { executionId } = await postExecutionFinancials({ executionPatch: payload, refresh: false });
 
       if (payload.operation_status === "منفذ" && services.length > 0) {
         try {
@@ -321,10 +306,7 @@ export async function importExecutionRows(
       insertedIds.push(executionId);
     } catch {
       failed++;
-      if (executionId) {
-        try { await deleteExecutionLinkedRows(executionId); } catch {}
-        try { await supabase.from("executions").delete().eq("id", executionId); } catch {}
-      }
+      // The RPC rolled back the execution and all its debts together.
     }
     onProgress(i + 1, entries.length);
     await new Promise((r) => setTimeout(r, 0));

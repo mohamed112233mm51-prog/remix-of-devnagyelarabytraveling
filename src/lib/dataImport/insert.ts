@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { patchLive } from "@/lib/db";
 import { voidAllForSource } from "@/lib/financialEngine";
-import { deleteExecutionLinkedRows } from "@/lib/executionPosting";
+import { deleteExecutionWithFinancials } from "@/lib/executionPosting";
 import { importFinancialRows } from "./specialImport";
 import { importExecutionRows } from "./executionImport";
 
@@ -72,8 +72,7 @@ export async function undoBatch(batchId: string, table: string, ids: string[]) {
     // company ledger rows exactly like the normal execution delete flow.
     if (table === "executions") {
       for (const id of ids) {
-        await deleteExecutionLinkedRows(id);
-        await supabase.from("executions").delete().eq("id", id);
+        await deleteExecutionWithFinancials(id, undefined, { refresh: false });
         patchLive("executions", { type: "delete", row: { id } });
       }
     } else if (table === "transactions" || table === "company_transactions") {
