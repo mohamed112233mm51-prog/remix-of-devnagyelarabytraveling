@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, X, Search } from "lucide-react";
+import { searchableSelectLayout } from "./searchableSelectLayout";
 
 export type SearchableSelectOption = { value: string; label: string };
 
@@ -21,6 +22,7 @@ export function SearchableSelect({
   allowClear = true,
   style,
   emptyLabel = "لا توجد نتائج",
+  menuMinWidth = 0,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -30,6 +32,8 @@ export function SearchableSelect({
   allowClear?: boolean;
   style?: CSSProperties;
   emptyLabel?: string;
+  /** Optional wider menu for compact table cells; still clamped to the viewport. */
+  menuMinWidth?: number;
 }) {
   const normalized: SearchableSelectOption[] = useMemo(() => {
     const arr = Array.isArray(options) ? options : [];
@@ -49,7 +53,7 @@ export function SearchableSelect({
   const [active, setActive] = useState(0);
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [rect, setRect] = useState<ReturnType<typeof searchableSelectLayout> | null>(null);
 
   const selectedLabel = normalized.find((o) => o.value === value)?.label || "";
 
@@ -73,7 +77,14 @@ export function SearchableSelect({
     const onScrollOrResize = () => {
       if (triggerRef.current) {
         const r = triggerRef.current.getBoundingClientRect();
-        setRect({ top: r.bottom + 4, left: r.left, width: r.width });
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        if (r.right <= 0 || r.left >= viewportWidth || r.bottom <= 0 || r.top >= viewportHeight) {
+          setOpen(false);
+          return;
+        }
+        const direction = getComputedStyle(triggerRef.current).direction === "rtl" ? "rtl" : "ltr";
+        setRect(searchableSelectLayout(r, viewportWidth, viewportHeight, direction, menuMinWidth));
       }
     };
     document.addEventListener("mousedown", onDoc);
@@ -85,7 +96,7 @@ export function SearchableSelect({
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
-  }, [open]);
+  }, [open, menuMinWidth]);
 
   const openMenu = () => {
     if (disabled) return;
@@ -116,7 +127,7 @@ export function SearchableSelect({
   const baseStyle: CSSProperties = {
     height: 38, padding: "0 12px", borderRadius: 10, border: "1px solid #e2e8f0",
     background: disabled ? "#f8fafc" : "#fff", fontSize: 13, color: "#0f172a",
-    width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+    width: "100%", boxSizing: "border-box", lineHeight: "24px", display: "flex", alignItems: "center", justifyContent: "space-between",
     gap: 8, cursor: disabled ? "not-allowed" : "pointer", userSelect: "none",
     ...style,
   };
@@ -138,10 +149,10 @@ export function SearchableSelect({
           }
         }}
       >
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: selectedLabel ? "#0f172a" : "#94a3b8" }}>
+        <span title={selectedLabel || placeholder} style={{ flex: 1, minWidth: 0, display: "block", lineHeight: "24px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: selectedLabel ? "#0f172a" : "#94a3b8" }}>
           {selectedLabel || placeholder}
         </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
           {allowClear && value && !disabled && (
             <button
               type="button"
@@ -160,24 +171,25 @@ export function SearchableSelect({
         <div
           id="searchable-select-menu"
           style={{
-            position: "fixed", top: rect.top, left: rect.left, width: rect.width,
+            position: "fixed", top: rect.top, left: rect.left, width: rect.width, transform: rect.transform,
+            maxHeight: rect.maxHeight, boxSizing: "border-box", direction: rect.direction, textAlign: "start",
             zIndex: 100001, background: "#fff", border: "1px solid #e2e8f0",
             borderRadius: 10, boxShadow: "0 12px 32px rgba(15,23,42,.18)",
             overflow: "hidden", display: "flex", flexDirection: "column",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderBottom: "1px solid #f1f5f9" }}>
-            <Search size={14} color="#94a3b8" />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", flexShrink: 0, borderBottom: "1px solid #f1f5f9" }}>
+            <Search size={14} color="#94a3b8" style={{ flexShrink: 0 }} />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKey}
               placeholder="بحث..."
-              style={{ flex: 1, border: 0, outline: "none", fontSize: 13, background: "transparent", color: "#0f172a" }}
+              style={{ flex: 1, minWidth: 0, width: "100%", height: 34, padding: "0 4px", boxSizing: "border-box", lineHeight: "24px", direction: "inherit", textAlign: "start", border: 0, outline: "none", fontSize: 13, background: "transparent", color: "#0f172a" }}
             />
           </div>
-          <div style={{ maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ flex: "1 1 auto", minHeight: 0, maxHeight: 260, overflowY: "auto", overscrollBehavior: "contain" }}>
             {filtered.length === 0 ? (
               <div style={{ padding: 14, textAlign: "center", color: "#94a3b8", fontSize: 12.5 }}>{emptyLabel}</div>
             ) : filtered.map((o, i) => (
@@ -186,7 +198,7 @@ export function SearchableSelect({
                 onMouseDown={(e) => { e.preventDefault(); pick(o.value); }}
                 onMouseEnter={() => setActive(i)}
                 style={{
-                  padding: "8px 12px", fontSize: 13, cursor: "pointer",
+                  padding: "8px 12px", fontSize: 13, lineHeight: "24px", whiteSpace: "normal", overflowWrap: "anywhere", cursor: "pointer",
                   background: i === active ? "#eff6ff" : (o.value === value ? "#f8fafc" : "#fff"),
                   color: "#0f172a", fontWeight: o.value === value ? 700 : 400,
                   borderInlineStart: o.value === value ? "3px solid #1e3a8a" : "3px solid transparent",

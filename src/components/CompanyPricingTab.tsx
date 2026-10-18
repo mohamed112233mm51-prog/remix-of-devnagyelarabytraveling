@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDropdownOptions, useLive, type IssuingCompany } from "@/lib/db";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -519,6 +519,12 @@ function DraftEditor(props: DraftEditorProps) {
 function InlinePricingRow(props: DraftEditorProps) {
   const { draft, setDraft, saving } = props;
   const upd = (patch: Partial<Row>) => setDraft({ ...draft, ...patch });
+  const fieldStyle: CSSProperties = {
+    width: "100%", height: 40, boxSizing: "border-box", padding: "0 10px",
+    lineHeight: "24px", fontSize: 13, fontFamily: "inherit", textAlign: "center",
+  };
+  const nativeSelectStyle: CSSProperties = { ...fieldStyle, textAlignLast: "center", minWidth: 150 };
+  const fieldWidths = { service_type: 200, departure_from: 190, destination: 160, airline: 160, status: 140, passenger_type: 170, agent_tier: 100 };
   const select = (field: "service_type" | "agent_tier" | "departure_from" | "destination" | "airline" | "status" | "passenger_type", options: readonly string[], required = false) => (
     <SearchableSelect
       value={draft[field] || ""}
@@ -526,10 +532,11 @@ function InlinePricingRow(props: DraftEditorProps) {
       options={options}
       placeholder={draft[field] || "— اختر —"}
       disabled={saving}
-      style={{ minWidth: 130 }}
+      menuMinWidth={260}
+      style={{ ...fieldStyle, minWidth: fieldWidths[field] }}
     />
   );
-  const cellStyle = { padding: 6, verticalAlign: "top" as const };
+  const cellStyle = { padding: 6, verticalAlign: "middle" as const, textAlign: "center" as const };
   return (
     <tr aria-label="تعديل سعر الخدمة" style={{ borderTop: "1px solid var(--border)", background: "color-mix(in srgb, var(--gold, #b8860b) 8%, var(--card))" }}>
       <td style={cellStyle}>{select("service_type", props.services, true)}</td>
@@ -537,27 +544,27 @@ function InlinePricingRow(props: DraftEditorProps) {
       <td style={cellStyle}>{select("destination", props.destinations)}</td>
       <td style={cellStyle}>{select("airline", props.airlines)}</td>
       <td style={cellStyle}>
-        <select aria-label="جهة الموافقة" disabled={saving} value={draft.approval_company_id || ""} onChange={(e) => upd({ approval_company_id: e.target.value || null })} style={{ minWidth: 130, height: 38 }}>
+        <select aria-label="جهة الموافقة" disabled={saving} value={draft.approval_company_id || ""} onChange={(e) => upd({ approval_company_id: e.target.value || null })} style={{ ...nativeSelectStyle, minWidth: 190 }}>
           <option value="">—</option>
           {props.approvalCompanies.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}
         </select>
       </td>
       <td style={cellStyle}>{select("status", props.statuses)}</td>
       <td style={cellStyle}>{select("passenger_type", props.passengers)}</td>
-      <td style={cellStyle}><NumberInput ariaLabel="سعر الشركة" disabled={saving} value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} style={{ minWidth: 110 }} /></td>
+      <td style={cellStyle}><NumberInput ariaLabel="سعر الشركة" disabled={saving} value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} style={{ ...fieldStyle, minWidth: 130 }} /></td>
       <td style={cellStyle}>{select("agent_tier", props.tiers, true)}</td>
       <td style={cellStyle}>
-        <select aria-label="نوع العمولة" disabled={saving} value={draft.commission_type} onChange={(e) => upd({ commission_type: e.target.value as Row["commission_type"] })} style={{ minWidth: 100, height: 38 }}>
+        <select aria-label="نوع العمولة" disabled={saving} value={draft.commission_type} onChange={(e) => upd({ commission_type: e.target.value as Row["commission_type"] })} style={nativeSelectStyle}>
           <option value="percentage">نسبة %</option>
           <option value="fixed">مبلغ ثابت</option>
         </select>
       </td>
-      <td style={cellStyle}><NumberInput ariaLabel="قيمة الربح" disabled={saving} value={Number(draft.commission_value) || 0} onChange={(n) => upd({ commission_value: n })} min={0} style={{ minWidth: 100 }} /></td>
+      <td style={cellStyle}><NumberInput ariaLabel="قيمة الربح" disabled={saving} value={Number(draft.commission_value) || 0} onChange={(n) => upd({ commission_value: n })} min={0} style={{ ...fieldStyle, minWidth: 120 }} /></td>
       <td style={{ ...cellStyle, fontWeight: 700, color: "var(--gold, #b8860b)", whiteSpace: "nowrap" }}>
         <output aria-label="سعر الوكيل المحسوب">{computeAgentPrice(draft).toFixed(2)} {currencyShortLabel(draft.currency)}</output>
       </td>
       <td style={cellStyle}>
-        <select aria-label="العملة" disabled={saving} value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })} style={{ minWidth: 100, height: 38 }}>
+        <select aria-label="العملة" disabled={saving} value={draft.currency || "EGP"} onChange={(e) => upd({ currency: e.target.value })} style={{ ...nativeSelectStyle, minWidth: 180 }}>
           {PRICING_CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_LABEL[c] || c}</option>)}
         </select>
       </td>
