@@ -30,7 +30,11 @@ import { atomicRow, buildAtomicPaymentSplitRows, executeFinancialAtomic } from "
 import { logCreate } from "@/lib/financialAudit";
 import { updateFinancialTransaction } from "@/lib/financialEngine.update";
 import { resolveCompanyCashBoxForSplit, useSourceBalances, validateSplitOutflows } from "@/lib/balanceGuard";
-import { useExpensesTotals } from "@/lib/financialSummary";
+import { useExpensesTotals, summarizeExpenses } from "@/lib/financialSummary";
+import { usePagination } from "@/hooks/usePagination";
+import { cairoToday } from "@/lib/approvalFines";
+import { monthLabel } from "@/components/MonthPeriodPicker";
+import { buildExpenseArchiveView, type ExpenseArchiveScope } from "@/lib/expenseArchive";
 import { assertMerchantOutflowsAllowed } from "@/lib/merchantBalanceGuard";
 
 export const Route = createFileRoute("/expenses")({
@@ -53,7 +57,8 @@ const legacySourceLabel = (v?: string | null) =>
 type Tab = "add" | "history";
 
 function ExpensesPage() {
-  const { rows: expenses } = useLive<Expense>("expenses");
+  // useLive already aliases the shared, paginated financial store.
+  const { rows: expenses, loading, error } = useLive<Expense>("expenses");
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
   const [tab, setTab] = useState<Tab>("history");
 
@@ -98,7 +103,7 @@ function ExpensesPage() {
       </div>
 
       {tab === "add" && <ExpenseForm onDone={() => setTab("history")} />}
-      {tab === "history" && <ExpensesHistory expenses={expenses} />}
+      {tab === "history" && <ExpensesHistory expenses={expenses} loading={loading} error={error} />}
     </div>
   );
 }
@@ -436,11 +441,26 @@ function ExpenseForm({ initial, onDone }: { initial?: Expense; onDone?: () => vo
   );
 }
 
-function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
+function ExpensesHistory({ expenses, loading, error }: { expenses: Expense[]; loading: boolean; error: string | null }) {
   const { rows: merchants } = useLive<Merchant>("merchants");
   const { rows: deductions } = useLive<ExpenseDeduction>("expense_deductions");
   const { rows: collections } = useLive<MerchantCashCollection>("merchant_cash_collections");
   const [edit, setEdit] = useState<Expense | null>(null);
+  const [scope, setScope] = useState<ExpenseArchiveScope>("current");
+  const [archiveMonth, setArchiveMonth] = useState("");
+  const today = cairoToday();
+  const archive = useMemo(
+    () => buildExpenseArchiveView(expenses, today, scope, archiveMonth),
+    [expenses, today, scope, archiveMonth],
+  );
+  const { pageRows, Controls, setPage, page, pageSize } = usePagination(archive.visible, 50);
+  // Reuse the existing financial summary engine; organizational scoping never
+  // changes the all-time/dashboard totals or expense accounting records.
+  const selectedTotals = useMemo(() => summarizeExpenses(archive.visible), [archive.visible]);
+
+  const changeScope = (next: ExpenseArchiveScope) => { setScope(next); setArchiveMonth(""); setPage(0); };
+  const scopeLabel = scope === "archive" ? (archiveMonth ? monthLabel(archiveMonth) : "كل الشهور السابقة")
+    : scope === "upcoming" ? "المصروفات المستقبلية" : scope === "undated" ? "مصروفات بلا تاريخ صالح" : monthLabel(today.slice(0, 7));
 
   const merchantName = (id: string | null | undefined) =>
     id ? merchants.find((m) => m.id === id)?.merchant_name || "تاجر" : "—";
@@ -492,17 +512,48 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
 
   return (
     <div className="card">
-      <div className="card-header"><div className="card-title">📜 سجل المصروفات</div></div>
+      <div className="card-header" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="card-title">📜 {scope === "archive" ? "أرشيف المصروفات الشهرية" : "سجل المصروفات"}</div>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <span style={{ color: "var(--muted-foreground, #64748b)", fontSize: 12 }}>
+            {archive.visible.length} سجل — {scopeLabel}
+          </span>
+          <button type="button" className="action-btn" aria-pressed={scope === "current"}
+            onClick={() => changeScope("current")}>الشهر الحالي ({archive.currentCount})</button>
+          <button type="button" className="action-btn" aria-pressed={scope === "archive"}
+            onClick={() => changeScope("archive")}>الأرشيف ({archive.archivedCount})</button>
+          {(archive.upcomingCount > 0 || scope === "upcoming") && <button type="button" className="action-btn" aria-pressed={scope === "upcoming"}
+            onClick={() => changeScope("upcoming")}>المستقبلية ({archive.upcomingCount})</button>}
+          {(archive.undatedCount > 0 || scope === "undated") && <button type="button" className="action-btn" aria-pressed={scope === "undated"}
+            onClick={() => changeScope("undated")}>بلا تاريخ صالح ({archive.undatedCount})</button>}
+          {scope === "archive" && (
+            <select className="month-select-readable" aria-label="اختيار شهر أرشيف المصروفات"
+              value={archiveMonth}
+              onChange={(event) => { setArchiveMonth(event.target.value); setPage(0); }}
+              style={{ width: 195, maxWidth: "100%", minHeight: 38 }}>
+              <option value="">كل الأرشيف</option>
+              {archive.months.map((month) => <option key={month} value={month}>{monthLabel(month)}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+      {loading && <div role="status" style={{ padding: "10px 16px" }}>جارٍ تحميل المصروفات…</div>}
+      {error && <div role="alert" style={{ padding: "10px 16px", color: "var(--red, #dc2626)" }}>{error}</div>}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "10px 16px", color: "var(--muted-foreground, #64748b)", fontSize: 12, borderBottom: "1px solid var(--border, #e5e7eb)" }}>
+        <span>إجمالي الفترة: <strong>{fmtDL(selectedTotals.total)}</strong></span>
+        <span>ثابتة: <strong>{fmtDL(selectedTotals.fixed)}</strong></span>
+        <span>متغيرة: <strong>{fmtDL(selectedTotals.variable)}</strong></span>
+      </div>
       <div className="card-body">
         <div className="table-wrap">
           <table className="mobile-cards">
             <thead><tr><th>#</th><th>اسم المصروف</th><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>وسائل الدفع</th><th>البيان</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
             <tbody>
-              {expenses.length === 0 ? (
-                <tr><td colSpan={9}><div className="empty"><div className="empty-text">لا توجد مصروفات</div></div></td></tr>
-              ) : expenses.map((e, i) => (
+              {archive.visible.length === 0 ? (
+                <tr><td colSpan={9}><div className="empty"><div className="empty-text">{loading ? "جارٍ تحميل المصروفات…" : error ? "تعذر تحميل المصروفات كاملة" : `لا توجد مصروفات في ${scopeLabel}`}</div></div></td></tr>
+              ) : pageRows.map((e, i) => (
                 <tr key={e.id}>
-                  <td data-label="#">{i + 1}</td>
+                  <td data-label="#">{page * pageSize + i + 1}</td>
                   <td className="bold" data-label="اسم المصروف">{e.expense_name}</td>
                   <td data-label="النوع">{e.expense_type}{e.auto_deduct_enabled ? ` (يوم ${e.auto_deduct_day})` : ""}</td>
                   <td data-label="المبلغ">
@@ -527,6 +578,7 @@ function ExpensesHistory({ expenses }: { expenses: Expense[] }) {
             </tbody>
           </table>
         </div>
+        <Controls />
       </div>
     </div>
   );
