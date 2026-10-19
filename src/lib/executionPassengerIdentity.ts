@@ -28,8 +28,8 @@ export function deriveDobIsoFromEgyptianNationalId(value: unknown): string | nul
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-export function passengerCategoryFor(age: number, gender: "female" | "male"): "infant" | "child" | "young" | "female" | "male" {
-  return age < 2 ? "infant" : age < 8 ? "child" : age < 18 ? "young" : gender;
+export function passengerCategoryFor(age: number, gender: "female" | "male"): "infant" | "child" | "child_under_12" | "young" | "female" | "male" {
+  return age < 2 ? "infant" : age < 8 ? "child" : age < 12 ? "child_under_12" : age < 18 ? "young" : gender;
 }
 
 export function passengerToday(): string {

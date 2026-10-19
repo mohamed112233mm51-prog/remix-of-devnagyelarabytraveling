@@ -22,7 +22,7 @@ function dobFormula(row: number) {
 export function passengerTypeFormula(row: number, context: PassengerContext) {
   const value = (category: Parameters<typeof mappedPassengerValue>[1]) => (mappedPassengerValue(context, category) || "").replace(/"/g, '""');
   const age = `DATEDIF(C${row},IF(M${row}="",TODAY(),M${row}),"Y")`;
-  return `IFERROR(IF(C${row}="","",IF(${age}<2,"${value("infant")}",IF(${age}<8,"${value("child")}",IF(${age}<18,"${value("young")}",IF(MOD(VALUE(MID(B${row},13,1)),2)=1,"${value("male")}","${value("female")}"))))),"")`;
+  return `IFERROR(IF(C${row}="","",IF(${age}<2,"${value("infant")}",IF(${age}<8,"${value("child")}",IF(${age}<12,"${value("child_under_12")}",IF(${age}<18,"${value("young")}",IF(MOD(VALUE(MID(B${row},13,1)),2)=1,"${value("male")}","${value("female")}")))))),"")`;
 }
 
 async function downloadExecutionTemplate(spec: ImportSpec, context: PassengerContext) {
@@ -112,7 +112,7 @@ async function downloadExecutionTemplate(spec: ImportSpec, context: PassengerCon
       {
         type: "expression",
         priority: 1,
-        formulae: [`AND(D2<>"",D2="${(mappedPassengerValue(context, "young") || "").replace(/"/g, '""')}")`],
+        formulae: [`AND(D2<>"",OR(D2="${(mappedPassengerValue(context, "child_under_12") || "").replace(/"/g, '""')}",D2="${(mappedPassengerValue(context, "young") || "").replace(/"/g, '""')}"))`],
         style: {
           fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDEBF7" } },
           font: { color: { argb: "FF1F4E78" } },

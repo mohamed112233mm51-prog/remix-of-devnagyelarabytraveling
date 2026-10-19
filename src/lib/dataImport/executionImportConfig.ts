@@ -5,6 +5,7 @@ export const EXECUTION_PASSENGER_TYPES = [
   "سيدات بالغ",
   "طفل تحت ٢",
   "طفل تحت ٨",
+  "طفل تحت12",
   "طفل تحت18",
 ] as const;
 
@@ -20,7 +21,7 @@ export function deriveEgyptianPassengerData(value: unknown, referenceDate?: stri
 } | null {
   const identity = deriveEgyptianNationalIdData(value, referenceDate);
   if (!identity) return null;
-  const labels = { infant: "طفل تحت ٢", child: "طفل تحت ٨", young: "طفل تحت18", male: "ذكر بالغ", female: "سيدات بالغ" } as const;
+  const labels = { infant: "طفل تحت ٢", child: "طفل تحت ٨", child_under_12: "طفل تحت12", young: "طفل تحت18", male: "ذكر بالغ", female: "سيدات بالغ" } as const;
   return { dob: identity.dob, passengerType: labels[passengerCategoryFor(identity.age, identity.gender)] };
 }
 

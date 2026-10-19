@@ -74,7 +74,7 @@ function setup(kind, editing) {
   const props = { editing, agents: [], companies: [], activeCompanies: [], merchants: [], approvalStatuses: [], operationStatuses: [], departures: [], destinations: [], airlines: [], serviceKinds: [], passengerTypes: config.options.map(o => o.value), onDone: () => calls.push({ method: "done" }) };
   function render() { cursor = 0; dirty = false; tree = component(props); while (effects.length) effects.shift()(); }
   async function settle() { for (let i = 0; i < 12; i++) { await flush(); if (dirty) render(); } }
-  function nodes(node = tree) { if (Array.isArray(node)) return node.flatMap(nodes); if (!node || typeof node !== "object") return []; return [node, ...nodes(node.props.children ?? null)]; }
+  function nodes(node = null) { if (arguments.length === 0) node = tree; if (Array.isArray(node)) return node.flatMap(nodes); if (!node || typeof node !== "object") return []; return [node, ...nodes(node.props.children ?? null)]; }
   const field = label => nodes().find(n => n.type === "field" && n.props.label === label);
   const control = label => nodes(field(label)).find(n => ["input", "searchable", "date"].includes(n.type));
   const change = async (label, value) => { const c = control(label); assert.ok(c, label); c.props.onChange(c.type === "input" ? { target: { value } } : value); await settle(); };
@@ -99,6 +99,36 @@ test("settings refuses an option disabled after editing and preserves draft on f
 test("settings permission loss blocks both controls and the save handler", async () => {
   const h = setup("settings"); await h.settle(); h.deny(); await h.settle();
   assert.ok(h.nodes().filter(n => n.type === "select").every(n => n.props.disabled)); await h.save(); assert.equal(h.calls.length, 0);
+});
+test("settings adds a sixth selector, preserving all five saved IDs until explicitly linking and saving the new category", async () => {
+  const h = setup("settings"); const old = structuredClone(h.config); delete old.mapping.child_under_12;
+  h.config = old; await h.settle();
+  assert.equal(h.nodes().filter(n => n.type === "select").length, 6);
+  const label = core.PASSENGER_CATEGORIES.find(c => c.key === "child_under_12").label;
+  const selector = h.nodes().find(n => n.type === "select" && n.props["aria-label"] === label);
+  assert.equal(selector.props.value, ""); assert.equal(h.calls.length, 0);
+  selector.props.onChange({ target: { value: "child_under_12" } }); await h.settle(); await h.save();
+  assert.equal(h.calls.length, 1); assert.equal(h.calls[0].table, "app_settings");
+  assert.equal(h.calls[0].payload.value.v.version, 1);
+  assert.deepEqual(h.calls[0].payload.value.v.mapping, { ...old.mapping, child_under_12: "child_under_12" });
+});
+test("actual execution form crosses 8 and 12 using the same saved labels and financial gateway", async () => {
+  const h = setup("execution"); await h.settle();
+  await h.change("الاسم", "مسافر اختبار"); await h.change("تاريخ المغادرة", "2026-10-18");
+  await h.change("الرقم القومي", "31810190100010"); assert.equal(h.control("نوع المسافر").props.value, "معتمد child");
+  await h.change("تاريخ المغادرة", "2026-10-19"); assert.equal(h.control("نوع المسافر").props.value, "معتمد child_under_12");
+  await h.change("الرقم القومي", "31410190100010"); await h.change("تاريخ المغادرة", "2026-10-18");
+  assert.equal(h.control("نوع المسافر").props.value, "معتمد child_under_12");
+  await h.change("تاريخ المغادرة", "2026-10-19"); assert.equal(h.control("نوع المسافر").props.value, "معتمد young");
+  await h.change("تاريخ المغادرة", "2026-10-18"); await h.save();
+  const write = h.calls.find(c => c.method === "postExecutionFinancials"); assert.ok(write);
+  assert.equal(write.args.executionPatch.passenger_type, "معتمد child_under_12");
+  assert.equal("passenger_type_auto" in write.args.executionPatch, false);
+});
+test("unchanged historical under-18 label stays intact for an under-12 execution", async () => {
+  const h = setup("execution", { id: "history-under12", passenger_name: "مسافر قديم", national_id: "31601010100010", travel_date: "2026-10-19", passenger_type: "طفل تحت18" });
+  await h.settle(); assert.equal(h.control("نوع المسافر").props.value, "طفل تحت18"); await h.save();
+  assert.equal(h.calls.find(c => c.method === "postExecutionFinancials")?.args.executionPatch.passenger_type, "طفل تحت18");
 });
 test("actual execution form classifies ID using departure date and posts the selected exact label through the existing gateway", async () => {
   const h = setup("execution"); await h.settle();

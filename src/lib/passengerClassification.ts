@@ -5,7 +5,8 @@ export const PASSENGER_MAPPING_KEY = "passenger_type_mapping_v1";
 export const PASSENGER_CATEGORIES = [
   { key: "infant", label: "أقل من سنتين" },
   { key: "child", label: "من سنتين إلى أقل من 8 سنوات" },
-  { key: "young", label: "من 8 إلى أقل من 18 سنة" },
+  { key: "child_under_12", label: "من 8 إلى أقل من 12 سنة" },
+  { key: "young", label: "من 12 إلى أقل من 18 سنة" },
   { key: "male", label: "ذكر عمره 18 سنة فأكثر" },
   { key: "female", label: "أنثى عمرها 18 سنة فأكثر" },
 ] as const;
@@ -28,7 +29,8 @@ export function normalizePassengerLabel(value: unknown): string {
 }
 
 const aliases: Record<PassengerCategory, string[]> = {
-  infant: ["طفل تحت 2", "رضع", "رضيع"], child: ["طفل تحت 8"], young: ["طفل تحت 18"],
+  infant: ["طفل تحت 2", "رضع", "رضيع"], child: ["طفل تحت 8"],
+  child_under_12: ["طفل تحت 12", "طفل أقل من 12 سنة", "طفل أقل من 12 سنوات"], young: ["طفل تحت 18"],
   male: ["ذكر بالغ"], female: ["سيدات بالغ", "سيدات"],
 };
 export function legacyPassengerCategory(value: unknown): PassengerCategory | null {
