@@ -1,3 +1,5 @@
+import { usePassengerClassification } from "@/hooks/usePassengerClassification";
+import { withPassengerClassificationSpec } from "@/lib/dataImport/passengerImportSpec";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, FileSpreadsheet, Download, Check, AlertTriangle, Undo2, ArrowRight, ArrowLeft, Trash2 } from "lucide-react";
@@ -27,6 +29,7 @@ const norm = (s: any) =>
     .replace(/\s+/g, " ").trim().toLowerCase();
 
 function DataImportPage() {
+  const classification = usePassengerClassification();
   const { isAdmin, user } = useAuth();
   const { view: canView, create: canImport, delete: canUndo } = usePerm("data_import");
   const allowed = isAdmin || canView;
@@ -44,7 +47,7 @@ function DataImportPage() {
   const [importing, setImporting] = useState(false);
   const [batches, setBatches] = useState<any[]>([]);
 
-  const spec = useMemo(() => (specId ? getSpec(specId) : undefined), [specId]);
+  const spec = useMemo(() => { const base = specId ? getSpec(specId) : undefined; return base ? withPassengerClassificationSpec(base, classification.data) : undefined; }, [specId, classification.data]);
 
   const lookups: Lookups = useMemo(() => ({
     agent: new Map(agents.map((a) => [norm(a.name), a.id])),
@@ -69,7 +72,7 @@ function DataImportPage() {
         setExistingKeys(s);
       }
     })();
-  }, [spec]);
+  }, [spec?.id]);
 
   const loadBatches = async () => {
     const { data } = await (supabase.from("import_batches" as any) as any)
@@ -125,12 +128,13 @@ function DataImportPage() {
     let failed = 0;
     let createdMsg = "";
     try {
+      const currentSpec = withPassengerClassificationSpec(spec, spec.id === "executions" ? await classification.getCurrent(true) : undefined);
       const { created } = await autoCreateMissingLookups(spec, parsed.rows, mapping, lookups);
       createdMsg = Object.entries(created)
         .map(([k, n]) => `${n} ${k === "agent" ? "وكيل" : k === "company" ? "شركة" : k === "merchant" ? "تاجر" : "مستثمر"}`)
         .join("، ");
 
-      const v2 = validateRows(spec, parsed.rows, mapping, lookups, existingKeys);
+      const v2 = validateRows(currentSpec, parsed.rows, mapping, lookups, existingKeys);
       if (!v2.validRows.length) {
         toast.error("لا توجد صفوف صالحة للاستيراد");
         setImporting(false);
@@ -286,6 +290,7 @@ function Stepper({ step }: { step: number }) {
 }
 
 function TypePicker({ onPick }: { onPick: (id: string) => void }) {
+  const classification = usePassengerClassification();
   return (
     <div className="card" style={{ padding: 16 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16, fontWeight: 800 }}>اختر نوع البيانات</h3>
@@ -313,7 +318,7 @@ function TypePicker({ onPick }: { onPick: (id: string) => void }) {
                 استيراد
               </button>
               <button
-                onClick={() => downloadTemplate(s)}
+                onClick={async () => { try { downloadTemplate(s, s.id === "executions" ? await classification.getCurrent(true) : undefined); } catch (error: any) { toast.error(error?.message || "تعذر تحميل إعدادات نوع المسافر"); } }}
                 title="تحميل النموذج"
                 style={{ padding: "8px 10px", background: "var(--bg3)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", display: "grid", placeItems: "center" }}
               >

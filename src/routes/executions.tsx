@@ -139,6 +139,8 @@ function ExecutionsRouteWithPeriod() {
         notes: null,
         approval_company_id: null,
         passenger_type: data.passenger_type || null,
+        passenger_type_auto: data.passenger_type_auto,
+        sex: data.sex,
         issue_date: null,
         approval_validity_enabled: false,
         services: [],

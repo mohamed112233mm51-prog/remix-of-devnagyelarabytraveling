@@ -1,3 +1,5 @@
+import { usePassengerClassification } from "@/hooks/usePassengerClassification";
+import { passengerDraftPatch, passengerDraftError } from "@/lib/passengerClassification";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { FileText, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +20,8 @@ type PdfRow = {
   national_id: string;
   dob: string;
   passenger_type: string;
+  passenger_type_auto?: boolean;
+  sex?: string | null;
   passport: string;
   birth_place: string;
   warnings: string[];
@@ -64,7 +68,7 @@ function rowFromScan(data: PassportScanData, label: string): PdfRow {
     passenger_name: data.full_name_ar || data.full_name_en || "",
     national_id: data.national_id || "",
     dob: data.date_of_birth || "",
-    passenger_type: data.passenger_type || "",
+    passenger_type: data.passenger_type || "", passenger_type_auto: data.passenger_type_auto, sex: data.sex,
     passport: data.passport_number || "",
     birth_place: data.place_of_birth || "",
     warnings: Array.isArray(data.warnings) ? data.warnings : [],
@@ -138,6 +142,8 @@ async function renderPdfPage(pdf: any, pageNumber: number, sourceName: string): 
 }
 
 export function NativePdfPassportImporter() {
+  const classification = usePassengerClassification();
+  const classificationSaveRef = useRef(false);
   const perm = usePerm("executions");
   const formRef = useRef<HTMLFormElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -165,7 +171,7 @@ export function NativePdfPassportImporter() {
   const selectedRows = rows.filter((row) => row.selected && !row.saved);
 
   const updateRow = (id: string, patch: Partial<PdfRow>) => {
-    setRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setRows((current) => current.map((row) => row.id === id ? { ...row, ...passengerDraftPatch(row, patch, classification.data) } : row));
   };
 
   const getNativeSelectedFile = (): File | null => {
@@ -217,7 +223,7 @@ export function NativePdfPassportImporter() {
         setProgress(`جارِ قراءة صفحة ${pageNumber} من ${pdf.numPages}`);
         try {
           const image = await renderPdfPage(pdf, pageNumber, file.name);
-          const data = await scanPassportFile(image);
+          const data = await scanPassportFile(image, await classification.getCurrent());
           extracted.push(rowFromScan(data, `${file.name} — صفحة ${pageNumber}`));
           setRows([...extracted]);
         } catch (error: any) {
@@ -242,6 +248,9 @@ export function NativePdfPassportImporter() {
   };
 
   const saveSelected = async () => {
+    if (classificationSaveRef.current) return;
+    classificationSaveRef.current = true;
+    try {
     if (processing || saving) return;
     if (!perm.create) {
       toast.error("ليس لديك صلاحية إنشاء تنفيذات");
@@ -262,6 +271,11 @@ export function NativePdfPassportImporter() {
       return;
     }
 
+    try {
+      const context = await classification.getCurrent(true);
+      const issue = selected.map(row => passengerDraftError(row, context)).find(Boolean);
+      if (issue) return toast.error(issue);
+    } catch (error: any) { return toast.error(error?.message || "تعذر التحقق من نوع المسافر"); }
     setSaving(true);
     let savedCount = 0;
     let failedCount = 0;
@@ -303,6 +317,8 @@ export function NativePdfPassportImporter() {
     } finally {
       setSaving(false);
     }
+
+    } finally { classificationSaveRef.current = false; }
   };
 
   const inputStyle: React.CSSProperties = {

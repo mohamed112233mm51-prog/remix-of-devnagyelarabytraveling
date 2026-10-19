@@ -9,6 +9,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { SETTINGS_SUB_KEYS, SETTINGS_SUB_LABELS, checkSettingsPerm, type SettingsSubKey } from "@/hooks/usePerm";
 import { CASH_BOX_SETTLEMENT_PERMISSION_KEY, FINANCIAL_POSITION_PERMISSION_KEY, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY, isDashboardViewPermissionKey, normalizePermissionBranch } from "@/lib/permissionKeys";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { PassengerClassificationSettings } from "@/components/PassengerClassificationSettings";
+import { PASSENGER_MAPPING_KEY } from "@/lib/passengerClassification";
+import { PASSENGER_QUERY_KEY } from "@/hooks/usePassengerClassification";
 import { normalizeDropdownValue, refetchLiveTables, resetLiveTables, VALID_DROPDOWN_CATEGORIES, type DropdownCategory } from "@/lib/db";
 import { invalidateBranding, loadBranding, BRAND_NAVY, BRAND_GOLD, BRAND_TEAL, processLogoFile, applyBrandingCssVars } from "@/lib/branding";
 import { withFaviconVersion } from "@/lib/favicon";
@@ -1131,7 +1134,7 @@ function GeneralTab() {
   useEffect(() => {
     supabase.from("app_settings").select("*").then(({ data }) => {
       const s: Record<string, any> = {};
-      data?.forEach((r: any) => { s[r.key] = r.value?.v ?? ""; });
+      data?.forEach((r: any) => { if (r.key !== PASSENGER_MAPPING_KEY) s[r.key] = r.value?.v ?? ""; });
       setSettings({
         company_name: "", company_phone: "", currency: "EGP", company_logo: "", company_icon: "", favicon_url: "", favicon_updated_at: "",
         brand_primary: BRAND_NAVY, brand_secondary: BRAND_GOLD, brand_accent: BRAND_TEAL,
@@ -1226,7 +1229,7 @@ function GeneralTab() {
       company_icon: settings.favicon_url || settings.company_icon || "",
       favicon_updated_at: settings.favicon_url ? (settings.favicon_updated_at || now) : "",
     };
-    const rows = Object.entries(normalizedSettings).map(([key, v]) => ({ key, value: { v }, updated_at: key === "favicon_url" || key === "company_icon" || key === "favicon_updated_at" ? normalizedSettings.favicon_updated_at || now : now }));
+    const rows = Object.entries(normalizedSettings).filter(([key]) => key !== PASSENGER_MAPPING_KEY).map(([key, v]) => ({ key, value: { v }, updated_at: key === "favicon_url" || key === "company_icon" || key === "favicon_updated_at" ? normalizedSettings.favicon_updated_at || now : now }));
     const { error } = await supabase.from("app_settings").upsert(rows, { onConflict: "key" });
     setSaving(false);
     if (error) { console.error("Settings save error:", error); toast.error("فشل الحفظ"); }
@@ -1439,6 +1442,8 @@ function GeneralTab() {
         </div>
       </div>
 
+      <PassengerClassificationSettings />
+
       {/* Sticky save bar */}
       <div style={{ position: "sticky", bottom: 12, display: "flex", justifyContent: "flex-end", gap: 10, alignItems: "center", padding: 12, borderRadius: 14, background: "rgba(255,255,255,.92)", backdropFilter: "blur(8px)", border: "1px solid #e2e8f0", boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}>
         {dirty ? (
@@ -1496,6 +1501,7 @@ async function countDropdownUsage(category: DropdownCategory, value: string): Pr
 }
 
 function DropdownListManager({ category, title, icon }: { category: DropdownCategory; title: string; icon?: React.ReactNode }) {
+  const passengerQueryClient = useQueryClient();
   const [items, setItems] = useState<{ id: string; value: string; is_active: boolean }[]>([]);
   const [newValue, setNewValue] = useState("");
   const [search, setSearch] = useState("");
@@ -1527,6 +1533,7 @@ function DropdownListManager({ category, title, icon }: { category: DropdownCate
       return setItems([]);
     }
     setItems(Array.isArray(data) ? (data as any) : []);
+    if (category === "passenger_type") void passengerQueryClient.invalidateQueries({ queryKey: PASSENGER_QUERY_KEY });
   };
 
   useEffect(() => {

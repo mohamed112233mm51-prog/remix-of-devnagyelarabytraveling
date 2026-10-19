@@ -1,6 +1,8 @@
+import { usePassengerClassification } from "@/hooks/usePassengerClassification";
+import { resolvePassengerType, passengerDraftError } from "@/lib/passengerClassification";
 import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, X, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,7 +178,7 @@ function ExecutionsPage() {
       try { sessionStorage.removeItem("execution:fromSubmission"); } catch {}
     }, 0);
     return () => clearTimeout(t);
-     
+
   }, []);
 
   // Open existing execution by id (when coming from submission already converted)
@@ -548,6 +550,7 @@ function ExecutionForm({
 }) {
   const { permissions, roles, isSuperAdmin, profileLoaded } = useAuth();
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
+  const classification = usePassengerClassification();
   const draftKey = `draft:execution:${editing?.id || "new"}`;
   const [form, setForm, clearForm] = usePersistentState(`${draftKey}:form`, {
     passenger_name: editing?.passenger_name || "",
@@ -565,10 +568,27 @@ function ExecutionForm({
     notes: editing?.notes || "",
     approval_company_id: (editing as any)?.approval_company_id || "",
     passenger_type: (editing as any)?.passenger_type || "",
+    passenger_type_auto: Boolean((editing as any)?.passenger_type_auto),
+    passenger_type_dirty: false,
+    sex: (editing as any)?.sex || null as string | null,
     issue_date: (editing as any)?.issue_date || "",
     approval_validity_enabled: Boolean((editing as any)?.approval_validity_enabled),
     submission_id: editing?.submission_id || null as string | null,
   });
+  const [passengerWarning, setPassengerWarning] = useState("");
+  function updatePassengerIdentity(patch: Partial<typeof form>) {
+    const next = { ...form, ...patch };
+    const existingDob = deriveDobIsoFromEgyptianNationalId(next.national_id);
+    if (existingDob) next.dob = toDisplayDate(existingDob) || "";
+    if (!classification.data) {
+      setForm({ ...next, passenger_type: "", passenger_type_auto: true, passenger_type_dirty: true });
+      setPassengerWarning("تعذر تحديد النوع قبل تحميل إعدادات الربط؛ اختر النوع من القائمة.");
+      return;
+    }
+    const result = resolvePassengerType({ national_id: next.national_id, dob: parseDisplayDate(next.dob), sex: next.sex, travel_date: next.travel_date }, classification.data);
+    setForm({ ...next, ...(result.identity ? { dob: toDisplayDate(result.identity.dob) || "" } : {}), passenger_type: result.value || "", passenger_type_auto: true, passenger_type_dirty: true });
+    setPassengerWarning(result.warning);
+  }
   const [services, setServices, clearServices] = usePersistentState<ExecutionServiceItem[]>(`${draftKey}:services`, (() => {
     const raw = editing?.services;
     const src: any[] = Array.isArray(raw) ? raw : [];
@@ -710,7 +730,11 @@ function ExecutionForm({
   const addAgentService = () => setServices((s) => [...s, { kind: "agent", service_type: serviceKinds[0] || "تذكرة طيران", count: 1, agent_price: 0 }]);
 
 
+  const saveLock = useRef(false);
   const save = async (skipDupCheck = false) => {
+    if (saveLock.current) return;
+    saveLock.current = true;
+    try {
     if (!form.passenger_name.trim()) { toast.error("الاسم مطلوب"); return; }
     if (services.length === 0) { toast.error("أضف خدمة واحدة على الأقل"); return; }
     if (form.dob && !isValidDisplayDate(form.dob)) {
@@ -745,6 +769,13 @@ function ExecutionForm({
     }
     if (saving) return;
     setSaving(true);
+    if (!editing?.id || form.passenger_type_auto || form.passenger_type_dirty) {
+      try {
+        const context = await classification.getCurrent(true);
+        const message = passengerDraftError({ ...form, dob: parseDisplayDate(form.dob) }, context);
+        if (message) { setSaving(false); toast.error(message); return; }
+      } catch (error: any) { setSaving(false); toast.error(error?.message || "تعذر التحقق من نوع المسافر"); return; }
+    }
     const payload = {
       passenger_name: form.passenger_name.trim(),
       national_id: form.national_id || null,
@@ -800,6 +831,8 @@ function ExecutionForm({
       setSaving(false);
     }
 
+
+    } finally { saveLock.current = false; }
   };
 
   return (
@@ -808,12 +841,8 @@ function ExecutionForm({
 
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
-        <Field label="الرقم القومي"><input value={form.national_id} onChange={(e) => {
-          const nationalId = e.target.value;
-          const derivedDobIso = deriveDobIsoFromEgyptianNationalId(nationalId);
-          setForm({ ...form, national_id: nationalId, ...(derivedDobIso ? { dob: toDisplayDate(derivedDobIso) || form.dob } : {}) });
-        }} style={inputStyle} /></Field>
-        <Field label="تاريخ الميلاد"><DateInput value={parseDisplayDate(form.dob) || ""} onChange={(iso) => setForm({ ...form, dob: toDisplayDate(iso) || "" })} /></Field>
+        <Field label="الرقم القومي"><input value={form.national_id} onChange={e => updatePassengerIdentity({ national_id: e.target.value })} style={inputStyle} /></Field>
+        <Field label="تاريخ الميلاد"><DateInput value={parseDisplayDate(form.dob) || ""} onChange={iso => updatePassengerIdentity({ dob: toDisplayDate(iso) || "" })} /></Field>
         <Field label="رقم الجواز"><input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} style={inputStyle} /></Field>
         <Field label="محل الميلاد"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} style={inputStyle} /></Field>
         <Field label="الوكيل">
@@ -863,7 +892,7 @@ function ExecutionForm({
             options={withSelected(airlines, form.airline)}
           />
         </Field>
-        <Field label="تاريخ المغادرة"><DateInput value={form.travel_date} onChange={(iso) => setForm({ ...form, travel_date: iso })} /></Field>
+        <Field label="تاريخ المغادرة"><DateInput value={form.travel_date} onChange={iso => updatePassengerIdentity({ travel_date: iso })} /></Field>
         <Field label="جهة الموافقة (الشركة الصادرة)">
           <SearchableSelect
             value={form.approval_company_id}
@@ -881,9 +910,10 @@ function ExecutionForm({
         <Field label="نوع المسافر">
           <SearchableSelect
             value={form.passenger_type}
-            onChange={(v) => setForm({ ...form, passenger_type: v })}
+            onChange={(v) => { setForm({ ...form, passenger_type: v, passenger_type_auto: false, passenger_type_dirty: true }); setPassengerWarning(""); }}
             options={withSelected(passengerTypes, form.passenger_type)}
           />
+          {(passengerWarning || (!form.passenger_type && form.passenger_type_auto)) && <small role="status" style={{ color: "#b45309" }}>{passengerWarning || "اختر نوع المسافر من القائمة؛ التصنيف غير مرتبط بخيار نشط."}</small>}
         </Field>
         <Field label="تاريخ الصدور"><DateInput value={form.issue_date} onChange={(iso) => setForm({ ...form, issue_date: iso })} /></Field>
         <Field label="ملاحظات" full><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, height: "auto", padding: 10 }} /></Field>

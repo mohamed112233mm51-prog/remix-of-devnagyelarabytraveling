@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { EXECUTION_PASSENGER_TYPES } from "./executionImportConfig";
+import { mappedPassengerValue, passengerOptionLabel, type PassengerContext } from "../passengerClassification.ts";
 import type { ImportSpec } from "./specs";
 
 const EXECUTION_TEMPLATE_DATA_ROWS = 500;
@@ -19,11 +19,13 @@ function dobFormula(row: number) {
   return `IFERROR(IF(LEN(B${row})<>14,"",IF(OR(LEFT(B${row},1)="2",LEFT(B${row},1)="3"),DATE(IF(LEFT(B${row},1)="2",1900,2000)+VALUE(MID(B${row},2,2)),VALUE(MID(B${row},4,2)),VALUE(MID(B${row},6,2))),"")),"")`;
 }
 
-function passengerTypeFormula(row: number) {
-  return `IFERROR(IF(C${row}="","",IF(DATEDIF(C${row},TODAY(),"Y")<2,"طفل تحت ٢",IF(DATEDIF(C${row},TODAY(),"Y")<8,"طفل تحت ٨",IF(DATEDIF(C${row},TODAY(),"Y")<18,"طفل تحت18",IF(MOD(VALUE(MID(B${row},13,1)),2)=1,"ذكر بالغ","سيدات بالغ"))))),"")`;
+export function passengerTypeFormula(row: number, context: PassengerContext) {
+  const value = (category: Parameters<typeof mappedPassengerValue>[1]) => (mappedPassengerValue(context, category) || "").replace(/"/g, '""');
+  const age = `DATEDIF(C${row},IF(M${row}="",TODAY(),M${row}),"Y")`;
+  return `IFERROR(IF(C${row}="","",IF(${age}<2,"${value("infant")}",IF(${age}<8,"${value("child")}",IF(${age}<18,"${value("young")}",IF(MOD(VALUE(MID(B${row},13,1)),2)=1,"${value("male")}","${value("female")}"))))),"")`;
 }
 
-async function downloadExecutionTemplate(spec: ImportSpec) {
+async function downloadExecutionTemplate(spec: ImportSpec, context: PassengerContext) {
   const { Workbook } = await import("exceljs");
   const workbook = new Workbook();
   workbook.creator = "Nagy El Araby Traveling ERP";
@@ -66,7 +68,11 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
   worksheet.getCell("N1").note = "يمكن إدخال أكثر من خدمة في نفس الخانة باستخدام علامة +، مثال: موافقة أمنية + تذكرة طيران";
   worksheet.getCell("O1").note = "يمكن إدخال أكثر من خدمة في نفس الخانة باستخدام علامة +، مثال: موافقة أمنية + تذكرة طيران";
 
-  const passengerList = `"${EXECUTION_PASSENGER_TYPES.join(",")}"`;
+  const passengerTypes = [...new Set(context.options.filter(o => o.is_active).map(o => passengerOptionLabel(o.value)).filter(Boolean))];
+  const listSheet = workbook.addWorksheet("قائمة الأنواع", { state: "veryHidden" });
+  passengerTypes.forEach(value => listSheet.addRow([value]));
+  workbook.definedNames.add(`'قائمة الأنواع'!$A$1:$A$${Math.max(1, passengerTypes.length)}`, "PassengerTypes");
+  const passengerList = "PassengerTypes";
   const lastRow = EXECUTION_TEMPLATE_DATA_ROWS + 1;
   for (let row = 2; row <= lastRow; row++) {
     const nationalIdCell = worksheet.getCell(row, 2);
@@ -86,7 +92,7 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
     dobCell.numFmt = "dd/mm/yyyy";
 
     const passengerTypeCell = worksheet.getCell(row, 4);
-    passengerTypeCell.value = { formula: passengerTypeFormula(row) };
+    passengerTypeCell.value = { formula: passengerTypeFormula(row, context) };
     passengerTypeCell.dataValidation = {
       type: "list",
       allowBlank: true,
@@ -106,7 +112,7 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
       {
         type: "expression",
         priority: 1,
-        formulae: ['D2="طفل تحت18"'],
+        formulae: [`AND(D2<>"",D2="${(mappedPassengerValue(context, "young") || "").replace(/"/g, '""')}")`],
         style: {
           fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDEBF7" } },
           font: { color: { argb: "FF1F4E78" } },
@@ -121,7 +127,7 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
     "تعليمات نموذج استيراد التنفيذات",
     "1) كل صف يمثل تنفيذًا واحدًا لمسافر واحد.",
     "2) أدخل الرقم القومي المصري 14 رقمًا؛ تاريخ الميلاد ونوع المسافر سيظهران تلقائيًا.",
-    `3) نوع المسافر محصور في: ${EXECUTION_PASSENGER_TYPES.join("، ")}.`,
+    `3) اختر نوع المسافر من قائمة النظام: ${passengerTypes.join("، ")}. الفئة غير المرتبطة في الإعدادات تحتاج اختيارًا يدويًا.`,
     "4) اكتب أكثر من خدمة للوكيل أو للشركة في نفس الخانة مفصولة بعلامة +. ويمكن أيضًا استخدام الفاصلة أو سطر جديد.",
     "5) خدمات الشيت تُحفظ داخل التنفيذ كخدمات منفصلة. لأنها لا تحتوي على سعر أو شركة موردة، لا يتم إنشاء مديونية مالية تلقائيًا منها وقت الاستيراد.",
     "6) بعد الاستيراد يمكن فتح التنفيذ واستكمال التسعير/الشركة للخدمات التي تحتاج قيدًا ماليًا.",
@@ -151,9 +157,13 @@ async function downloadExecutionTemplate(spec: ImportSpec) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function downloadTemplate(spec: ImportSpec) {
+export function downloadTemplate(spec: ImportSpec, passengerContext?: PassengerContext) {
   if (spec.id === "executions") {
-    void downloadExecutionTemplate(spec);
+    if (!passengerContext) throw new Error("انتظر تحميل إعدادات نوع المسافر ثم أعد المحاولة.");
+    void downloadExecutionTemplate(spec, passengerContext).catch(error => {
+      console.error("Cannot generate execution template", error);
+      window.alert("تعذر تنزيل النموذج. حاول مرة أخرى.");
+    });
     return;
   }
 

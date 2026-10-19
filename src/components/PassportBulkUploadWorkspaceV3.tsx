@@ -1,3 +1,5 @@
+import { usePassengerClassification } from "@/hooks/usePassengerClassification";
+import { passengerDraftPatch, passengerDraftError } from "@/lib/passengerClassification";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, FileText, Images, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +31,8 @@ type BatchRow = {
   national_id: string;
   dob: string;
   passenger_type: string;
+  passenger_type_auto?: boolean;
+  sex?: string | null;
   passport: string;
   birth_place: string;
   agent_id: string;
@@ -89,7 +93,7 @@ function scanPatch(data: PassportScanData): Partial<BatchRow> {
     passenger_name: data.full_name_ar || data.full_name_en || "",
     national_id: data.national_id || "",
     dob: data.date_of_birth || "",
-    passenger_type: data.passenger_type || "",
+    passenger_type: data.passenger_type || "", passenger_type_auto: data.passenger_type_auto, sex: data.sex,
     passport: data.passport_number || "",
     birth_place: data.place_of_birth || "",
   };
@@ -191,6 +195,8 @@ function stateLabel(state: RowState) {
 }
 
 export function PassportBulkUploadWorkspaceV3() {
+  const classification = usePassengerClassification();
+  const classificationSaveRef = useRef(false);
   const perm = usePerm("executions");
   const oneInput = useRef<HTMLInputElement | null>(null);
   const multiInput = useRef<HTMLInputElement | null>(null);
@@ -221,7 +227,7 @@ export function PassportBulkUploadWorkspaceV3() {
   const commitRows = (updater: (current: BatchRow[]) => BatchRow[]) => mutateBatchRows(updater);
   const activeAgents = useMemo(() => agents.filter((a) => String(a.status || "نشط") === "نشط"), [agents]);
   const busy = busyMode !== "";
-  const updateRow = (id: string, patch: Partial<BatchRow>) => patchPersistedRow(id, patch);
+  const updateRow = (id: string, patch: Partial<BatchRow>) => { const row = loadBatchRows().find(r => r.id === id); patchPersistedRow(id, row ? passengerDraftPatch(row, patch, classification.data) : patch); };
   const selectedRows = rows.filter((r) => r.selected && r.state !== "saved");
 
   const duplicateIds = useMemo(() => {
@@ -241,7 +247,7 @@ export function PassportBulkUploadWorkspaceV3() {
   const scanIntoExistingRow = async (rowId: string, file: File) => {
     updateRow(rowId, { state: "reading", error: "" });
     try {
-      const data = await scanPassportFile(file);
+      const data = await scanPassportFile(file, await classification.getCurrent());
       updateRow(rowId, scanPatch(data));
       return true;
     } catch (error: any) {
@@ -341,11 +347,14 @@ export function PassportBulkUploadWorkspaceV3() {
     }
   };
 
-  const applyCommon = () => commitRows((current) => current.map((r) => r.selected && r.state !== "saved" ? { ...r, ...common } : r));
+  const applyCommon = () => commitRows((current) => current.map((r) => r.selected && r.state !== "saved" ? { ...r, ...passengerDraftPatch(r, common, classification.data) } : r));
   const removeRow = (id: string) => !busy && commitRows((current) => current.filter((r) => r.id !== id));
   const clearBatch = () => !busy && commitRows(() => []);
 
   const saveSelected = async () => {
+    if (classificationSaveRef.current) return;
+    classificationSaveRef.current = true;
+    try {
     if (busy) return;
     if (!perm.create) return toast.error("ليس لديك صلاحية إنشاء تنفيذات");
     const currentRows = loadBatchRows();
@@ -355,6 +364,11 @@ export function PassportBulkUploadWorkspaceV3() {
     if (selected.some((r) => r.operation_status.trim() === "منفذ")) return toast.error("لا يمكن الحفظ الجماعي بحالة «منفذ» قبل استكمال الخدمات والأسعار");
     if (selected.some((r) => duplicateIds.has(r.id)) && !window.confirm("يوجد رقم جواز أو رقم قومي مكرر. هل تريد الاستمرار؟")) return;
 
+    try {
+      const context = await classification.getCurrent(true);
+      const issue = selected.map(row => passengerDraftError(row, context)).find(Boolean);
+      if (issue) return toast.error(issue);
+    } catch (error: any) { return toast.error(error?.message || "تعذر التحقق من نوع المسافر"); }
     setBusyMode("save"); let ok = 0; let fail = 0;
     try {
       for (const r of selected) {
@@ -373,6 +387,8 @@ export function PassportBulkUploadWorkspaceV3() {
       if (ok) await refetchLiveTables(["executions"]);
       if (ok) toast.success(`تم إنشاء ${ok} تنفيذ${fail ? `، وفشل ${fail}` : ""}`); else toast.error("لم يتم إنشاء أي تنفيذ");
     } finally { setBusyMode(""); }
+
+    } finally { classificationSaveRef.current = false; }
   };
 
   const inputStyle: React.CSSProperties = { width: "100%", minHeight: 38, border: "1px solid #dbe3ee", borderRadius: 8, padding: "7px 8px", background: "#fff", color: "#0f172a", fontSize: 12 };

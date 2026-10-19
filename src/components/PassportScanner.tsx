@@ -3,6 +3,8 @@ import { Camera, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { warnIfPassportPassengerHasPreviousExecution } from "@/lib/passportPreviousExecutionWarning";
+import { resolvePassengerType, type PassengerContext } from "@/lib/passengerClassification";
+import { usePassengerClassification } from "@/hooks/usePassengerClassification";
 
 export type PassportScanData = {
   full_name_ar: string | null;
@@ -12,6 +14,7 @@ export type PassportScanData = {
   place_of_birth: string | null;
   sex: "M" | "F" | null;
   passenger_type: string | null;
+  passenger_type_auto?: boolean;
   passport_number: string | null;
   expiry_date: string | null;
   mrz_verified: boolean;
@@ -154,7 +157,7 @@ async function invokePassportOcr(file: File): Promise<PassportScanData> {
  * by the single-passport UI. The File is streamed directly to the Edge Function;
  * it is never persisted in Storage, DB, localStorage, sessionStorage, or logs.
  */
-export async function scanPassportFile(file: File): Promise<PassportScanData> {
+export async function scanPassportFile(file: File, classification: PassengerContext): Promise<PassportScanData> {
   if (!file || file.size <= 0) throw new Error("اختر صورة للجواز");
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error("حجم الصورة أكبر من 6MB. صوّر صفحة الجواز فقط أو اختر صورة أصغر مع الحفاظ على وضوح البيانات");
@@ -208,7 +211,10 @@ export async function scanPassportFile(file: File): Promise<PassportScanData> {
     || !extracted.sex
   );
 
-  const result = { ...extracted, needs_review: needsReview };
+  const resolved = resolvePassengerType({ national_id: extracted.national_id, dob: extracted.date_of_birth, sex: extracted.sex }, classification);
+  const result = { ...extracted, passenger_type: resolved.value, passenger_type_auto: true,
+    needs_review: needsReview || !!resolved.warning,
+    warnings: [...(extracted.warnings || []), ...(resolved.warning ? ["نوع المسافر: " + resolved.warning] : [])] };
 
   // Bulk passport upload should surface the same previous-execution warning used
   // by the normal execution flow as soon as the passport identity is available.
@@ -225,6 +231,7 @@ export async function scanPassportFile(file: File): Promise<PassportScanData> {
 }
 
 export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportScanData) => void | Promise<void> }) {
+  const classification = usePassengerClassification();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [reading, setReading] = useState(false);
   const [lastResult, setLastResult] = useState<PassportScanData | null>(null);
@@ -234,7 +241,7 @@ export function PassportScanner({ onExtracted }: { onExtracted: (data: PassportS
     setLastResult(null);
 
     try {
-      const extracted = await scanPassportFile(file);
+      const extracted = await scanPassportFile(file, await classification.getCurrent());
       await onExtracted(extracted);
       setLastResult(extracted);
       if (extracted.needs_review) {

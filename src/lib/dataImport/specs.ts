@@ -1,4 +1,4 @@
-import { EXECUTION_PASSENGER_TYPES, deriveEgyptianPassengerData } from "./executionImportConfig";
+import { EXECUTION_PASSENGER_TYPES, deriveEgyptianPassengerData } from "./executionImportConfig.ts";
 
 // Smart import specs: target tables, columns, synonyms (Arabic), validation hints.
 export type FieldType = "string" | "number" | "integer" | "date" | "lookup" | "boolean";

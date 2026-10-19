@@ -1,3 +1,5 @@
+import { usePassengerClassification } from "@/hooks/usePassengerClassification";
+import { passengerDraftPatch, passengerDraftError } from "@/lib/passengerClassification";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileImage, FileText, Loader2, RefreshCw, ShieldCheck, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +27,8 @@ type EditableExecutionFields = {
   national_id: string;
   dob: string;
   passenger_type: string;
+  passenger_type_auto?: boolean;
+  sex?: string | null;
   passport: string;
   birth_place: string;
   agent_id: string;
@@ -90,13 +94,13 @@ function emptyItem(id: string, label: string): BulkItem {
 
 function fieldsFromScan(data: PassportScanData): Pick<
   BulkItem,
-  "passenger_name" | "national_id" | "dob" | "passenger_type" | "passport" | "birth_place" | "warnings" | "mrzVerified"
+  "passenger_name" | "national_id" | "dob" | "passenger_type" | "passenger_type_auto" | "sex" | "passport" | "birth_place" | "warnings" | "mrzVerified"
 > {
   return {
     passenger_name: data.full_name_ar || data.full_name_en || "",
     national_id: data.national_id || "",
     dob: data.date_of_birth || "",
-    passenger_type: data.passenger_type || "",
+    passenger_type: data.passenger_type || "", passenger_type_auto: data.passenger_type_auto, sex: data.sex,
     passport: data.passport_number || "",
     birth_place: data.place_of_birth || "",
     warnings: Array.isArray(data.warnings) ? data.warnings : [],
@@ -204,6 +208,8 @@ function statusStyle(item: BulkItem, duplicate: boolean) {
 }
 
 export function BulkPassportImporter() {
+  const classification = usePassengerClassification();
+  const classificationSaveRef = useRef(false);
   const perm = usePerm("executions");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const sourceRefs = useRef<Map<string, SourceRef>>(new Map());
@@ -228,7 +234,7 @@ export function BulkPassportImporter() {
   );
 
   const updateItem = (id: string, patch: Partial<BulkItem>) => {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+    setItems((current) => current.map((item) => item.id === id ? { ...item, ...passengerDraftPatch(item, patch, classification.data) } : item));
   };
 
   const duplicateIds = useMemo(() => {
@@ -310,7 +316,7 @@ export function BulkPassportImporter() {
       const source = sourceRefs.current.get(item.id);
       if (!source || source.kind !== "image") return;
       try {
-        const data = await scanPassportFile(source.file);
+        const data = await scanPassportFile(source.file, await classification.getCurrent());
         applyScan(item.id, data, token);
       } catch (error) {
         failScan(item.id, error, token);
@@ -350,7 +356,7 @@ export function BulkPassportImporter() {
           updateItem(item.id, { statusCode: "reading", error: "" });
           try {
             const imageFile = await renderPdfPage(pdf, item.pageNumber, file.name);
-            const data = await scanPassportFile(imageFile);
+            const data = await scanPassportFile(imageFile, await classification.getCurrent());
             applyScan(item.id, data, token);
           } catch (error) {
             failScan(item.id, error, token);
@@ -403,7 +409,7 @@ export function BulkPassportImporter() {
     updateItem(id, { statusCode: "reading", error: "" });
     try {
       const file = source.kind === "image" ? source.file : await renderOnePdfSource(source);
-      const data = await scanPassportFile(file);
+      const data = await scanPassportFile(file, await classification.getCurrent());
       applyScan(id, data, token);
     } catch (error) {
       failScan(id, error, token);
@@ -415,11 +421,14 @@ export function BulkPassportImporter() {
   const applyCommonToSelected = () => {
     setItems((current) => current.map((item) => {
       if (!item.selected || item.statusCode === "saved") return item;
-      return { ...item, ...common };
+      return { ...item, ...passengerDraftPatch(item, common, classification.data) };
     }));
   };
 
   const saveSelected = async () => {
+    if (classificationSaveRef.current) return;
+    classificationSaveRef.current = true;
+    try {
     if (processing || saving) return;
     if (!perm.create) {
       toast.error("ليس لديك صلاحية إنشاء تنفيذات. يمكن مراجعة قراءة الجوازات فقط.");
@@ -442,6 +451,11 @@ export function BulkPassportImporter() {
       if (!proceed) return;
     }
 
+    try {
+      const context = await classification.getCurrent(true);
+      const issue = selected.map(row => passengerDraftError(row, context)).find(Boolean);
+      if (issue) return toast.error(issue);
+    } catch (error: any) { return toast.error(error?.message || "تعذر التحقق من نوع المسافر"); }
     setSaving(true);
     let savedCount = 0;
     let failedCount = 0;
@@ -483,6 +497,8 @@ export function BulkPassportImporter() {
     } finally {
       setSaving(false);
     }
+
+    } finally { classificationSaveRef.current = false; }
   };
 
   const inputStyle: React.CSSProperties = {
