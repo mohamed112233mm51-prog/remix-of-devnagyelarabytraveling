@@ -4,7 +4,7 @@ import { loadTsModule, flush, deferred } from "./helpers/loadTsModule.mjs";
 
 const options = { service_type: ["استقبال", "تذكرة"], agent_tier: ["A", "B"], departure_from: ["القاهرة"], destination: ["بنغازي"], airline: ["الأفريقية"], execution_status: ["سريع"], passenger_type: ["بالغ", "سيدات"] };
 const base = { id: "r1", company_id: "c1", service_type: "استقبال", agent_tier: "A", departure_from: null, destination: null, airline: null, approval_company_id: null, status: null, passenger_type: "بالغ", company_price: 100, commission_type: "fixed", commission_value: 10, agent_price: 110, currency: "EGP" };
-function setup(seed = [base]) {
+function setup(seed = [base], page = null) {
   let cells = [], effects = [], cursor = 0, dirty = false, tree, companyId = "c1", admin = true, failure = false, hold = null, confirm = false;
   let rows = structuredClone(seed);
   const calls = [], messages = [], confirmations = [], storage = new Map();
@@ -52,9 +52,11 @@ function setup(seed = [base]) {
     "@/components/PriceLookup": { PriceLookup: "price-lookup" }, "lucide-react": icons,
     "@/hooks/usePersistentState": persistent,
   });
-  function render() { cursor = 0; dirty = false; tree = CompanyPricingTab({ companyId }); while (effects.length) effects.shift()(); }
+  function resetEditor() { cells.forEach(c => c?.cleanup?.()); cells = []; effects = []; dirty = true; }
+  const selectTier = tier => { page = { tier }; resetEditor(); };
+  function render() { cursor = 0; dirty = false; tree = CompanyPricingTab({ companyId, tierPages: page ? { ...page, onSelectTier: selectTier } : undefined }); while (effects.length) effects.shift()(); }
   async function settle() { for (let i = 0; i < 8; i++) { await flush(); if (dirty) render(); } }
-  function nodes(node = tree) { if (Array.isArray(node)) return node.flatMap(nodes); if (!node || typeof node !== "object") return []; return [node, ...nodes(node.props.children ?? null)]; }
+  function nodes(node = tree) { if (Array.isArray(node)) return node.flatMap(child => nodes(child ?? null)); if (!node || typeof node !== "object") return []; return [node, ...nodes(node.props.children ?? null)]; }
   const find = (type, label) => nodes().find(n => n.type === type && (label === undefined || n.props["aria-label"] === label));
   const newRow = () => find("tr", "إضافة سعر الخدمة");
   const add = () => nodes().find(n => n.type === "button" && n.props.title === "إضافة سعر جديد");
@@ -66,6 +68,7 @@ function setup(seed = [base]) {
     pause() { hold = deferred(); return hold; },
     async permission(value) { admin = value; render(); await settle(); },
     async company(value) { cells.forEach(c => c?.cleanup?.()); cells = []; effects = []; companyId = value; render(); await settle(); },
+    async tier(value) { selectTier(value); await settle(); },
   };
 }
 
@@ -156,4 +159,67 @@ test("editing an existing row still uses update for its original id", async () =
   assert.ok(h.find("tr", "تعديل سعر الخدمة")); await h.change("سعر الشركة", 275);
   await h.action(h.find("button", "حفظ تعديل السعر"));
   assert.equal(h.calls[0].method, "update"); assert.deepEqual(h.calls[0].filters, [["id", "r1"]]);
+});
+
+const tierRows = [base, { ...base, id: "r2", agent_tier: "B", service_type: "تذكرة" }, { ...base, id: "r3", agent_tier: "قديمة", service_type: "خدمة قديمة" }];
+
+test("tier landing includes configured empty tiers and tiers from existing prices without displaying the combined table", async () => {
+  const h = setup([base, tierRows[2]], {}); await h.settle();
+  for (const tier of ["A", "B", "قديمة"]) assert.ok(h.find("button", `فتح أسعار الشريحة ${tier}`));
+  assert.equal(h.find("table"), undefined); assert.equal(h.add(), undefined);
+  assert.deepEqual(h.calls, []);
+  await h.action(h.find("button", "فتح أسعار الشريحة A"));
+  assert.ok(h.find("table"));
+});
+
+test("a tier page displays and searches only its own prices, and return opens the tier landing", async () => {
+  const h = setup(tierRows, { tier: "B" }); await h.settle();
+  const text = h.nodes().filter(n => n.type === "td").map(n => n.props.children);
+  assert.ok(text.includes("تذكرة")); assert.ok(!text.includes("استقبال")); assert.ok(!text.includes("خدمة قديمة"));
+  await h.action(h.nodes().find(n => n.type === "button" && n.props.title === "بحث داخل ملف التسعير"));
+  assert.deepEqual(h.find("price-lookup").props.rules.map(r => r.id), ["r2"]);
+  assert.equal(h.find("price-lookup").props.agentTier, "B");
+  await h.action(h.nodes().find(n => n.type === "button" && n.props.children === "العودة إلى الشرائح"));
+  assert.equal(h.find("table"), undefined); assert.ok(h.find("button", "فتح أسعار الشريحة A"));
+  assert.deepEqual(h.calls, []);
+});
+
+test("tier page new prices lock the selected tier and retain the existing writer and calculation", async () => {
+  const h = setup(tierRows, { tier: "B" }); await h.settle(); await h.action(h.add());
+  assert.equal(h.find("span", "شريحة الوكيل").props.children, "B");
+  assert.equal(h.nodes().filter(n => n.type === "searchable-select").length, 6);
+  await h.change("سعر الشركة", 200); await h.change("قيمة الربح", 10);
+  assert.deepEqual(h.find("output").props.children, ["220.00", " ", "ج.م"]);
+  await h.action(h.find("button", "حفظ السعر الجديد"));
+  assert.equal(h.calls.length, 1); assert.equal(h.calls[0].table, "company_pricing_rules");
+  assert.equal(h.calls[0].payload.agent_tier, "B"); assert.equal(h.calls[0].payload.company_id, "c1");
+  assert.equal(h.calls[0].payload.agent_price, undefined);
+});
+
+test("tier drafts are isolated across tiers and companies and restored when returning", async () => {
+  const h = setup(tierRows, { tier: "A" }); await h.settle(); await h.action(h.add()); await h.change("سعر الشركة", 999);
+  await h.tier("B"); assert.equal(h.newRow(), undefined); await h.action(h.add());
+  assert.equal(h.find("number-input").props.value, 0); await h.change("سعر الشركة", 222);
+  await h.tier("A"); await h.action(h.add()); assert.equal(h.find("number-input").props.value, 999);
+  await h.company("c2"); await h.action(h.add()); assert.equal(h.find("number-input").props.value, 0);
+  assert.deepEqual(h.calls, []);
+});
+
+test("tier-specific editing updates only the original row and keeps its tier", async () => {
+  const h = setup(tierRows, { tier: "B" }); await h.settle(); await h.action(h.find("button", "تعديل"));
+  await h.change("سعر الشركة", 275); await h.action(h.find("button", "حفظ تعديل السعر"));
+  assert.equal(h.calls[0].method, "update"); assert.deepEqual(h.calls[0].filters, [["id", "r2"]]);
+  assert.equal(h.calls[0].payload.agent_tier, "B");
+});
+
+test("an empty configured tier is writable but an unknown URL tier cannot create prices", async () => {
+  const h = setup([base], { tier: "B" }); await h.settle(); await h.action(h.add());
+  await h.action(h.find("button", "حفظ السعر الجديد")); assert.equal(h.calls[0].payload.agent_tier, "B");
+  await h.tier("missing"); assert.equal(h.add(), undefined); assert.equal(h.find("table"), undefined);
+});
+
+test("legacy tier pages remain accessible, and search-only permissions still prevent creation", async () => {
+  const h = setup(tierRows, { tier: "قديمة" }); await h.settle();
+  assert.ok(h.find("table")); await h.permission(false); assert.equal(h.add(), undefined);
+  assert.equal(h.find("button", "تعديل"), undefined); assert.deepEqual(h.calls, []);
 });

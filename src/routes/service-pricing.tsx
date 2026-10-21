@@ -10,6 +10,10 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { ShieldAlert, Tag, Search, ChevronLeft } from "lucide-react";
 
 export const Route = createFileRoute("/service-pricing")({
+  validateSearch: (search: Record<string, unknown>): { company?: string; tier?: string } => ({
+    company: typeof search.company === "string" && search.company ? search.company : undefined,
+    tier: typeof search.tier === "string" && search.tier ? search.tier : undefined,
+  }),
   component: () => (
     <AppErrorBoundary>
       <ServicePricingPage />
@@ -89,7 +93,11 @@ function ServicePricingPage() {
 
 function ManagePanel() {
   const { rows: companies } = useLive<IssuingCompany>("issuing_companies");
-  const [companyId, setCompanyId] = useState<string>("");
+  const { company: companyId = "", tier } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const setCompanyId = (company: string) => {
+    void navigate({ search: { company: company || undefined }, hash: "manage" });
+  };
 
   const companyOptions = useMemo(
     () =>
@@ -124,14 +132,15 @@ function ManagePanel() {
       </div>
 
       {companyId ? (
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="card-header">
-            <div className="card-title">ملف التسعير</div>
-          </div>
-          <div className="card-body">
-            <CompanyPricingTab companyId={companyId} />
-          </div>
-        </div>
+        <CompanyPricingTab
+          companyId={companyId}
+          tierPages={{
+            tier,
+            onSelectTier: (nextTier) => {
+              void navigate({ search: { company: companyId, tier: nextTier }, hash: "manage" });
+            },
+          }}
+        />
       ) : (
         <div className="card" style={{ marginTop: 12 }}>
           <div className="card-body">

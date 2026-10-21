@@ -44,11 +44,18 @@ function computeAgentPrice(r: Pick<Row, "company_price" | "commission_type" | "c
   return Math.round((cp * (1 + cv / 100)) * 100) / 100;
 }
 
-export function CompanyPricingTab({ companyId }: { companyId: string }) {
-  return <CompanyPricingEditor key={companyId} companyId={companyId} />;
+type CompanyPricingProps = {
+  companyId: string;
+  /** Optional presentation used by the service-pricing route; other callers keep the full file. */
+  tierPages?: { tier?: string; onSelectTier: (tier: string | undefined) => void };
+};
+
+export function CompanyPricingTab({ companyId, tierPages }: CompanyPricingProps) {
+  return <CompanyPricingEditor key={JSON.stringify([companyId, !!tierPages, tierPages?.tier])} companyId={companyId} tierPages={tierPages} />;
 }
 
-function CompanyPricingEditor({ companyId }: { companyId: string }) {
+function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
+  const selectedTier = tierPages?.tier;
   const { permissions, isAdmin } = useAuth();
   const canManage = checkPerm(permissions, isAdmin, "service_pricing_manage", "view");
   const canSearch = checkPerm(permissions, isAdmin, "service_price_search", "view");
@@ -74,6 +81,17 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
   );
 
   const [rules, setRules] = useState<PricingRule[]>([]);
+  const tierOptions = useMemo(
+    () => Array.from(new Set([
+      ...(tiers.length ? tiers : ["A", "B", "C"]),
+      ...rules.map((rule) => rule.agent_tier).filter(Boolean),
+    ])),
+    [tiers, rules],
+  );
+  const pageRules = useMemo(
+    () => selectedTier ? rules.filter((rule) => rule.agent_tier === selectedTier) : rules,
+    [rules, selectedTier],
+  );
   const [filteredRules, setFilteredRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<Row | null>(null);
@@ -82,7 +100,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
   // Buffer that preserves the in-progress new row across cancel/reopen.
   // Only used for new (no id) drafts. Cleared on successful save or explicit reset.
   const [addBuffer, setAddBuffer, clearAddBuffer] = usePersistentState<Row | null>(
-    `form:pricing:add:${companyId}`,
+    selectedTier ? `form:pricing:add:${JSON.stringify([companyId, selectedTier])}` : `form:pricing:add:${companyId}`,
     null,
   );
   const [showImport, setShowImport] = useState(false);
@@ -105,7 +123,11 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
 
   const startNew = () => {
     if (!perm.create || draft || savingRef.current) return;
-    setDraft({ ...(addBuffer ?? EMPTY(companyId, services[0] || "", tiers[0] || "A")), company_id: companyId });
+    setDraft({
+      ...(addBuffer ?? EMPTY(companyId, services[0] || "", selectedTier || tiers[0] || "A")),
+      company_id: companyId,
+      ...(selectedTier ? { agent_tier: selectedTier } : {}),
+    });
   };
   const startEdit = (r: PricingRule) => setDraft({ ...r });
 
@@ -221,6 +243,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
       saving={saving}
       services={services}
       tiers={tiers.length ? tiers : ["A", "B", "C"]}
+      lockedTier={selectedTier}
       departures={departures}
       destinations={destinations}
       airlines={airlines}
@@ -234,13 +257,46 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
     return <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 24 }}>لا تملك صلاحية عرض ملف التسعير.</div></div>;
   }
 
+  // Only the service-pricing route opts into tier pages. The same loaded rules,
+  // editor and database writers remain the source for both presentations.
+  if (tierPages && (!selectedTier || !tierOptions.includes(selectedTier))) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card-header" style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between" }}>
+          <h2 className="card-title">شرائح تسعير الخدمات</h2>
+          {perm.create && !selectedTier && <button type="button" className="btn btn-outline" disabled={loading} onClick={() => setShowImport(true)}>استيراد من شركة أخرى</button>}
+        </div>
+        <div className="card-body">
+          {loading ? <div role="status">جاري تحميل الشرائح...</div> : selectedTier ? (
+            <div>
+              <p>الشريحة المطلوبة غير موجودة في إعدادات الشرائح أو الأسعار المسجلة.</p>
+              <button type="button" className="btn btn-outline" onClick={() => tierPages.onSelectTier(undefined)}>العودة إلى الشرائح</button>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 12 }}>
+              {tierOptions.map((tier) => (
+                <button key={tier} type="button" className="card" onClick={() => tierPages.onSelectTier(tier)} aria-label={`فتح أسعار الشريحة ${tier}`} style={{ margin: 0, padding: 20, textAlign: "start", cursor: "pointer", fontFamily: "inherit", color: "var(--text)", display: "grid", gap: 10 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800 }}>الشريحة {tier}</span>
+                  <span style={{ color: "var(--muted)", fontSize: 13 }}>{rules.filter((rule) => rule.agent_tier === tier).length} سعر مسجل</span>
+                  <span style={{ color: "var(--gold)", fontSize: 13 }}>عرض أسعار الشريحة</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {showImport && <ImportFromCompanyModal targetCompanyId={companyId} companies={approvalCompanies} services={services} onClose={() => setShowImport(false)} onDone={async () => { setShowImport(false); await load(); }} />}
+      </div>
+    );
+  }
+
   return (
     <div className="card" style={{ marginTop: 12, boxShadow: "none", border: "1px solid var(--border)" }}>
       <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Wallet size={16} strokeWidth={2.2} /> ملف التسعير
+          <Wallet size={16} strokeWidth={2.2} /> {selectedTier ? `أسعار الشريحة ${selectedTier}` : "ملف التسعير"}
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+          {tierPages && <button type="button" className="btn btn-outline" disabled={saving} onClick={() => tierPages.onSelectTier(undefined)}>العودة إلى الشرائح</button>}
           {perm.search && (
             <button
               type="button"
@@ -252,7 +308,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
               <Search size={14} strokeWidth={2} /> بحث سعر خدمة
             </button>
           )}
-          {perm.create && (
+          {perm.create && !tierPages && (
             <button
               type="button"
               className="btn btn-outline"
@@ -284,7 +340,8 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
             <PriceLookup
               mode="company"
               companyId={companyId}
-              rules={rules}
+              agentTier={selectedTier}
+              rules={pageRules}
               onFilteredChange={setFilteredRules}
               onActiveChange={setFiltersActive}
               resetKey={resetKey}
@@ -295,7 +352,7 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
 
         {filtersActive && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", marginBottom: 8, background: "color-mix(in srgb, var(--gold, #b8860b) 10%, transparent)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}>
-            <span>تم تطبيق فلترة على الأسعار ({filteredRules.length} / {rules.length})</span>
+            <span>تم تطبيق فلترة على الأسعار ({filteredRules.length} / {pageRules.length})</span>
             <button type="button" className="action-btn" onClick={() => setResetKey((k) => k + 1)}>مسح الفلاتر</button>
           </div>
         )}
@@ -326,12 +383,12 @@ function CompanyPricingEditor({ companyId }: { companyId: string }) {
               <tbody>
                 {draft && !draft.id && renderDraftRow()}
                 {(() => {
-                  const displayRules = filtersActive ? filteredRules : rules;
+                  const displayRules = filtersActive ? filteredRules : pageRules;
                   if (displayRules.length === 0) {
                     if (draft && !draft.id) return null;
                     return (
                       <tr><td colSpan={14} style={{ padding: 12, textAlign: "center", color: "var(--muted)" }}>
-                        {rules.length === 0 ? "لا توجد قواعد تسعير بعد" : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
+                        {pageRules.length === 0 ? (selectedTier ? "لا توجد أسعار لهذه الشريحة بعد" : "لا توجد قواعد تسعير بعد") : "هذه الخدمة لم تُسعّر من قبل حسب الخانات المختارة"}
                       </td></tr>
                     );
                   }
@@ -426,6 +483,7 @@ type InlinePricingRowProps = {
   saving: boolean;
   services: readonly string[];
   tiers: readonly string[];
+  lockedTier?: string;
   departures: readonly string[];
   destinations: readonly string[];
   airlines: readonly string[];
@@ -471,7 +529,7 @@ function InlinePricingRow(props: InlinePricingRowProps) {
       <td style={cellStyle}>{select("status", props.statuses)}</td>
       <td style={cellStyle}>{select("passenger_type", props.passengers)}</td>
       <td style={cellStyle}><NumberInput ariaLabel="سعر الشركة" disabled={saving} value={Number(draft.company_price) || 0} onChange={(n) => upd({ company_price: n })} min={0} style={{ ...fieldStyle, minWidth: 130 }} /></td>
-      <td style={cellStyle}>{select("agent_tier", props.tiers, true)}</td>
+      <td style={cellStyle}>{props.lockedTier ? <span aria-label="شريحة الوكيل">{props.lockedTier}</span> : select("agent_tier", props.tiers, true)}</td>
       <td style={cellStyle}>
         <select aria-label="نوع العمولة" disabled={saving} value={draft.commission_type} onChange={(e) => upd({ commission_type: e.target.value as Row["commission_type"] })} style={nativeSelectStyle}>
           <option value="percentage">نسبة %</option>
