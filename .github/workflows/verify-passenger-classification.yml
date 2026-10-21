@@ -22,8 +22,8 @@ jobs:
           node-version: 22
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
-      - name: Mapping, execution form, OCR and real Excel regression tests
-        run: node --experimental-strip-types --test tests/passengerClassification.test.ts tests/passengerClassificationFlows.test.mjs tests/passengerClassificationIO.test.mjs
+      - name: Mapping, automatic pricing, execution form, OCR and Excel regression tests
+        run: node --experimental-strip-types --test tests/passengerClassification.test.ts tests/passengerClassificationFlows.test.mjs tests/passengerClassificationIO.test.mjs tests/executionServicePricing.test.mjs
       - name: Type check
         run: npx tsc --noEmit
       - name: Production build

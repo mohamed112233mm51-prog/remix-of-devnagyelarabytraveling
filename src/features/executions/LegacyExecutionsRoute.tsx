@@ -28,7 +28,8 @@ import { isAbsentStatus, ABSENT_FIELD_STYLE, ABSENT_ROW_STYLE } from "@/lib/abse
 import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
-import { resolveAgentPrice, currencyShortLabel } from "@/lib/pricingMatch";
+import { currencyShortLabel } from "@/lib/pricingMatch";
+import { useExecutionServicePricing } from "@/hooks/useExecutionServicePricing";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -589,7 +590,7 @@ function ExecutionForm({
     setForm({ ...next, ...(result.identity ? { dob: toDisplayDate(result.identity.dob) || "" } : {}), passenger_type: result.value || "", passenger_type_auto: true, passenger_type_dirty: true });
     setPassengerWarning(result.warning);
   }
-  const [services, setServices, clearServices] = usePersistentState<ExecutionServiceItem[]>(`${draftKey}:services`, (() => {
+  const initialServices = useMemo(() => {
     const raw = editing?.services;
     const src: any[] = Array.isArray(raw) ? raw : [];
     // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع — مع حماية ضد القيم الفاسدة.
@@ -616,7 +617,24 @@ function ExecutionForm({
     }
 
     return out;
-  })());
+  }, [editing, serviceKinds]);
+  const [services, setServices, clearServices] = usePersistentState<ExecutionServiceItem[]>(`${draftKey}:services`, initialServices);
+  const preserveInitialPrice = (service: ExecutionServiceItem, index: number) => {
+    if (!editing?.id) return false;
+    const original = initialServices[index];
+    if (!original || original.kind !== service.kind || original.service_type !== service.service_type || (original.company_id || "") !== (service.company_id || "")) return false;
+    const fields = ["agent_id", "approval_company_id", "departure_from", "destination", "airline", "status", "passenger_type"] as const;
+    const saved = editing as unknown as Record<string, unknown>;
+    return fields.every((field) => form[field] === (saved[field] || ""));
+  };
+  const pricing = useExecutionServicePricing(form, services, agents, setServices, preserveInitialPrice);
+  const priceHint = (index: number) => {
+    const status = pricing.statuses[index];
+    if (!status || status.state === "saved" || status.state === "matched") return null;
+    return <div role="status" style={{ marginTop: 4, fontSize: 11, color: status.state === "loading" ? "#475569" : "#b45309" }}>
+      {status.state === "loading" ? "جاري تحديث السعر تلقائيًا..." : status.message}
+    </div>;
+  };
   const [saving, setSaving] = useState(false);
   const [dupWarning, setDupWarning] = useState<{ matches: any[] } | null>(null);
 
@@ -732,6 +750,7 @@ function ExecutionForm({
 
   const saveLock = useRef(false);
   const save = async (skipDupCheck = false) => {
+    if (pricing.pending) { toast.error("انتظر اكتمال تحديث أسعار الخدمات"); return; }
     if (saveLock.current) return;
     saveLock.current = true;
     try {
@@ -963,35 +982,8 @@ function ExecutionForm({
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
                   <Field label={`سعر الشركة (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <NumberInput value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} />
-                      <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
-                        onClick={async () => {
-                          const companyId = s.company_id || form.approval_company_id;
-                          if (!companyId) return toast.error("اختر الشركة الصادرة أولاً");
-                          const agent = agents.find((a) => a.id === form.agent_id);
-                          const tier = (agent as any)?.tier || "A";
-                          const res = await resolveAgentPrice({
-                            company_id: companyId,
-                            service_type: s.service_type,
-                            agent_tier: tier,
-                            departure_from: form.departure_from || null,
-                            destination: form.destination || null,
-                            airline: form.airline || null,
-                            approval_company_id: form.approval_company_id || null,
-                            status: form.status || null,
-                            passenger_type: form.passenger_type || null,
-                          });
-                          const cp = res.rule ? Number(res.rule.company_price) : null;
-                          if (cp == null) return toast.error(res.reason || "لا يوجد سعر مطابق");
-                          const cur = res.rule?.currency || "EGP";
-                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: cp, currency: cur } : x));
-                          toast.success(`تم جلب السعر: ${cp.toFixed(2)} (${cur})`);
-
-                        }}
-                        style={{ padding: "4px 8px", fontSize: 11 }}
-                      >🔄</button>
-                    </div>
+                    <NumberInput disabled={saving || pricing.statuses[i]?.state === "loading"} value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} />
+                    {priceHint(i)}
                   </Field>
                   <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
@@ -1032,34 +1024,8 @@ function ExecutionForm({
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
                   <Field label={`سعر البيع للوكيل (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <NumberInput value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} />
-                      <button type="button" className="btn" title="جلب السعر من ملف تسعير الشركة"
-                        onClick={async () => {
-                          const agent = agents.find((a) => a.id === form.agent_id);
-                          if (!form.approval_company_id) return toast.error("اختر جهة الموافقة (الشركة) أولاً");
-                          if (!agent) return toast.error("اختر الوكيل أولاً");
-                          const tier = (agent as any).tier || "A";
-                          const res = await resolveAgentPrice({
-                            company_id: form.approval_company_id,
-                            service_type: s.service_type,
-                            agent_tier: tier,
-                            departure_from: form.departure_from || null,
-                            destination: form.destination || null,
-                            airline: form.airline || null,
-                            approval_company_id: form.approval_company_id || null,
-                            status: form.status || null,
-                            passenger_type: form.passenger_type || null,
-                          });
-                          if (res.agentPrice == null) return toast.error(res.reason || "لا يوجد سعر مطابق");
-                          const cur = res.rule?.currency || "EGP";
-                          setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: res.agentPrice as number, currency: cur } : x));
-                          toast.success(`تم جلب السعر: ${(res.agentPrice as number).toFixed(2)} (${cur})`);
-
-                        }}
-                        style={{ padding: "4px 8px", fontSize: 11 }}
-                      >🔄</button>
-                    </div>
+                    <NumberInput disabled={saving || pricing.statuses[i]?.state === "loading"} value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} />
+                    {priceHint(i)}
                   </Field>
                   <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
                   <Field label="ملاحظات"><input value={s.note || ""} onChange={(e) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, note: e.target.value || null } : x))} style={inputStyle} /></Field>
@@ -1147,7 +1113,7 @@ function ExecutionForm({
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
         <button className="btn" onClick={onDone} disabled={saving}>إلغاء</button>
-        <button data-confirm-save={editing?.id ? "تأكيد حفظ تعديل التنفيذ" : "تأكيد حفظ التنفيذ"} onClick={() => save()} disabled={saving} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : "حفظ"}</button>
+        <button data-confirm-save={editing?.id ? "تأكيد حفظ تعديل التنفيذ" : "تأكيد حفظ التنفيذ"} onClick={() => save()} disabled={saving || pricing.pending} style={{ height: 38, padding: "0 18px", borderRadius: 10, background: "linear-gradient(135deg, #d4af37, #e0b65c)", color: "#0f1b3d", border: 0, fontWeight: 800, fontSize: 13, cursor: saving || pricing.pending ? "not-allowed" : "pointer", boxShadow: "0 6px 16px #d4af374d", opacity: saving || pricing.pending ? 0.7 : 1 }}>{saving ? "جارٍ الحفظ..." : pricing.pending ? "جارٍ تحديث الأسعار..." : "حفظ"}</button>
       </div>
 
       <Modal
