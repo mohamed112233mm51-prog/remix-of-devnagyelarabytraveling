@@ -5,9 +5,9 @@ import { loadTsModule, flush, deferred } from "./helpers/loadTsModule.mjs";
 const options = { service_type: ["استقبال", "تذكرة"], agent_tier: ["A", "B"], departure_from: ["القاهرة"], destination: ["بنغازي"], airline: ["الأفريقية"], execution_status: ["سريع"], passenger_type: ["بالغ", "سيدات"] };
 const base = { id: "r1", company_id: "c1", service_type: "استقبال", agent_tier: "A", departure_from: null, destination: null, airline: null, approval_company_id: null, status: null, passenger_type: "بالغ", company_price: 100, commission_type: "fixed", commission_value: 10, agent_price: 110, currency: "EGP" };
 function setup(seed = [base], page = null) {
-  let cells = [], effects = [], cursor = 0, dirty = false, tree, companyId = "c1", admin = true, failure = false, hold = null, confirm = false;
+  let cells = [], effects = [], cursor = 0, dirty = false, tree, companyId = "c1", admin = true, failure = false, hold = null, confirm = false, beforeLayout = null;
   let rows = structuredClone(seed);
-  const calls = [], messages = [], confirmations = [], storage = new Map();
+  const calls = [], reads = [], renders = [], messages = [], confirmations = [], storage = new Map();
   const depsChanged = (a, b) => !a || b.some((v, i) => !Object.is(v, a[i]));
   const react = {
     useState(initial) {
@@ -20,21 +20,30 @@ function setup(seed = [base], page = null) {
     useCallback(fn, deps) { return react.useMemo(() => fn, deps); },
     useEffect(fn, deps) { const i = cursor++; if (!cells[i] || depsChanged(cells[i].deps, deps)) effects.push(() => { cells[i]?.cleanup?.(); cells[i] = { deps, cleanup: fn() }; }); },
   };
+  react.useLayoutEffect = react.useEffect;
   const window = { sessionStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } };
   const persistent = loadTsModule("src/hooks/usePersistentState.ts", { react }, { window });
   const supabase = { from(table) {
-    let method = "select", payload, filters = [];
-    const q = { select() { return q; }, order() { return q; }, eq(key, value) { filters.push([key, value]); return q; },
+    let method = "select", payload, filters = [], orders = [], single = false;
+    const q = { select() { return q; }, order(key) { orders.push(key); return q; }, single() { single = true; return q; }, eq(key, value) { filters.push([key, value]); return q; },
       insert(value) { method = "insert"; payload = value; return q; }, update(value) { method = "update"; payload = value; return q; },
       async then(resolve) {
-        if (method === "select") return resolve({ data: rows.filter(r => filters.every(([k, v]) => r[k] === v)), error: null });
+        if (method === "select") {
+          reads.push({ table, filters, orders });
+          const data = rows.filter(r => filters.every(([k, v]) => r[k] === v)).sort((a, b) => {
+            for (const key of orders) { const diff = String(a[key] ?? "").localeCompare(String(b[key] ?? "")); if (diff) return diff; }
+            return 0;
+          });
+          return resolve({ data, error: null });
+        }
         calls.push({ method, table, payload, filters });
         if (hold) { const wait = hold; hold = null; await wait.promise; }
         if (failure) return resolve({ error: { message: "save failed" } });
         const price = r => ({ ...r, agent_price: r.commission_type === "fixed" ? r.company_price + r.commission_value : r.company_price * (1 + r.commission_value / 100) });
-        if (method === "insert") rows.push(price({ ...payload, id: "new-id" }));
-        else rows = rows.map(r => filters.every(([k, v]) => r[k] === v) ? price({ ...r, ...payload }) : r);
-        return resolve({ error: null });
+        let saved;
+        if (method === "insert") { saved = price({ ...payload, id: `new-${calls.length}` }); rows.push(saved); }
+        else rows = rows.map(r => filters.every(([k, v]) => r[k] === v) ? (saved = price({ ...r, ...payload })) : r);
+        return resolve({ data: single ? saved : [saved], error: null });
       } };
     return q;
   } };
@@ -54,7 +63,7 @@ function setup(seed = [base], page = null) {
   });
   function resetEditor() { cells.forEach(c => c?.cleanup?.()); cells = []; effects = []; dirty = true; }
   const selectTier = tier => { page = { tier }; resetEditor(); };
-  function render() { cursor = 0; dirty = false; tree = CompanyPricingTab({ companyId, tierPages: page ? { ...page, onSelectTier: selectTier } : undefined }); while (effects.length) effects.shift()(); }
+  function render() { cursor = 0; dirty = false; tree = CompanyPricingTab({ companyId, tierPages: page ? { ...page, onSelectTier: selectTier } : undefined }); renders.push({ table: !!find("table"), ids: nodes().filter(n => n.props["data-pricing-row-id"]).map(n => n.props["data-pricing-row-id"]) }); if (beforeLayout) { const callback = beforeLayout; beforeLayout = null; callback(); } while (effects.length) effects.shift()(); }
   async function settle() { for (let i = 0; i < 8; i++) { await flush(); if (dirty) render(); } }
   function nodes(node = tree) { if (Array.isArray(node)) return node.flatMap(child => nodes(child ?? null)); if (!node || typeof node !== "object") return []; return [node, ...nodes(node.props.children ?? null)]; }
   const find = (type, label) => nodes().find(n => n.type === type && (label === undefined || n.props["aria-label"] === label));
@@ -63,9 +72,10 @@ function setup(seed = [base], page = null) {
   const action = async node => { assert.ok(node); node.props.onClick(); await settle(); };
   const change = async (label, value) => { const field = nodes().find(n => n.props.ariaLabel === label || n.props["aria-label"] === label); assert.ok(field); field.props.onChange(field.type === "select" ? { target: { value } } : value); await settle(); };
   render();
-  return { settle, nodes, find, newRow, add, action, change, calls, messages, confirmations, storage,
+  return { settle, nodes, find, newRow, add, action, change, calls, reads, renders, messages, confirmations, storage,
     fail(value = true) { failure = value; }, allowDuplicate(value = true) { confirm = value; },
     pause() { hold = deferred(); return hold; },
+    beforeNextLayout(callback) { beforeLayout = callback; },
     async permission(value) { admin = value; render(); await settle(); },
     async company(value) { cells.forEach(c => c?.cleanup?.()); cells = []; effects = []; companyId = value; render(); await settle(); },
     async tier(value) { selectTier(value); await settle(); },
@@ -159,6 +169,89 @@ test("editing an existing row still uses update for its original id", async () =
   assert.ok(h.find("tr", "تعديل سعر الخدمة")); await h.change("سعر الشركة", 275);
   await h.action(h.find("button", "حفظ تعديل السعر"));
   assert.equal(h.calls[0].method, "update"); assert.deepEqual(h.calls[0].filters, [["id", "r1"]]);
+});
+
+const visibleIds = h => h.nodes().filter(n => n.props["data-pricing-row-id"]).map(n => n.props["data-pricing-row-id"]);
+const orderedRows = [base, { ...base, id: "r2", passenger_type: "سيدات" }, { ...base, id: "r3", passenger_type: null }];
+
+test("saving a middle row keeps the table mounted, its index and neighbors, without a full read", async () => {
+  const h = setup(orderedRows, { tier: "A" }); await h.settle();
+  const initialReads = h.reads.length, initialRender = h.renders.length;
+  await h.action(h.nodes().filter(n => n.type === "button" && n.props["aria-label"] === "تعديل")[1]);
+  await h.change("سعر الشركة", 250); await h.change("قيمة الربح", 35);
+  const pending = h.pause(); await h.action(h.find("button", "حفظ تعديل السعر"));
+  assert.ok(h.find("table")); assert.ok(h.find("tr", "تعديل سعر الخدمة"));
+  pending.resolve(); await h.settle();
+  assert.deepEqual(visibleIds(h), ["r1", "r2", "r3"]);
+  const row = h.nodes().find(n => n.props["data-pricing-row-id"] === "r2");
+  assert.equal(row.props.children[7].props.children[0], "250.00");
+  assert.equal(row.props.children[11].props.children[0], "285.00");
+  assert.equal(h.reads.length, initialReads);
+  assert.ok(h.renders.slice(initialRender).every(r => r.table));
+});
+
+test("changing the service itself does not re-sort the edited row on save", async () => {
+  const h = setup(orderedRows); await h.settle();
+  await h.action(h.nodes().filter(n => n.type === "button" && n.props["aria-label"] === "تعديل")[1]);
+  h.find("searchable-select").props.onChange("تذكرة"); await h.settle();
+  await h.action(h.find("button", "حفظ تعديل السعر"));
+  assert.deepEqual(visibleIds(h), ["r1", "r2", "r3"]);
+  assert.equal(h.nodes().find(n => n.props["data-pricing-row-id"] === "r2").props.children[0].props.children, "تذكرة");
+});
+
+test("newly saved rows replace the first-row draft without moving existing rows or reloading", async () => {
+  const h = setup(orderedRows); await h.settle(); const reads = h.reads.length;
+  await h.action(h.add()); await h.change("سعر الشركة", 250); await h.change("قيمة الربح", 10);
+  h.find("searchable-select").props.onChange("تذكرة"); await h.settle();
+  await h.action(h.find("button", "حفظ السعر الجديد"));
+  assert.deepEqual(visibleIds(h), ["new-1", "r1", "r2", "r3"]);
+  assert.equal(h.reads.length, reads);
+  const saved = h.nodes().find(n => n.props["data-pricing-row-id"] === "new-1");
+  assert.equal(saved.props.children[11].props.children[0], "275.00");
+});
+
+test("filter changes after saving clear the retained row, while source updates keep its latest server values", async () => {
+  const h = setup(); await h.settle();
+  await h.action(h.nodes().find(n => n.type === "button" && n.props.title === "بحث داخل ملف التسعير"));
+  h.find("price-lookup").props.onFilteredChange([base]); h.find("price-lookup").props.onActiveChange(true); await h.settle();
+  await h.action(h.find("button", "تعديل")); await h.change("سعر الشركة", 275);
+  await h.action(h.find("button", "حفظ تعديل السعر"));
+  assert.equal(h.nodes().find(n => n.props["data-pricing-row-id"] === "r1").props.children[7].props.children[0], "275.00");
+  h.find("price-lookup").props.onFilteredChange([]); await h.settle();
+  assert.deepEqual(visibleIds(h), ["r1"]);
+  h.find("price-lookup").props.onFiltersChange(); await h.settle();
+  assert.deepEqual(visibleIds(h), []);
+});
+
+test("a new price remains visible in its draft position even under a nonmatching filter", async () => {
+  const h = setup(); await h.settle();
+  await h.action(h.nodes().find(n => n.type === "button" && n.props.title === "بحث داخل ملف التسعير"));
+  h.find("price-lookup").props.onFilteredChange([]); h.find("price-lookup").props.onActiveChange(true); await h.settle();
+  await h.action(h.add()); await h.action(h.find("button", "حفظ السعر الجديد"));
+  assert.deepEqual(visibleIds(h), ["new-1"]);
+});
+
+test("save restores nested vertical positions and RTL horizontal scrolling before paint", async () => {
+  const h = setup(orderedRows); await h.settle(); await h.action(h.find("button", "تعديل"));
+  const outer = { scrollTop: 720, scrollLeft: 0, parentElement: null };
+  const container = { scrollTop: 0, scrollLeft: -600, scrollWidth: 2200, parentElement: outer };
+  h.nodes().find(n => n.props.ref && n.type === "div").props.ref.current = container;
+  const pending = h.pause(); await h.action(h.find("button", "حفظ تعديل السعر"));
+  // The user is allowed to scroll further while the save request is pending.
+  outer.scrollTop = 810; container.scrollLeft = -700;
+  h.beforeNextLayout(() => { outer.scrollTop = 0; container.scrollLeft = 0; });
+  pending.resolve(); await h.settle();
+  assert.equal(outer.scrollTop, 810); assert.equal(container.scrollLeft, -700);
+  assert.equal(h.find("table").props.style.minWidth, 2200);
+});
+
+test("duplicating a row opens the copy next to its source without reloading neighbors", async () => {
+  const h = setup(orderedRows); await h.settle(); const reads = h.reads.length;
+  await h.action(h.nodes().filter(n => n.type === "button" && n.props["aria-label"] === "تكرار")[1]);
+  assert.ok(h.find("tr", "تعديل سعر الخدمة"));
+  await h.action(h.find("button", "إلغاء تعديل السعر"));
+  assert.deepEqual(visibleIds(h), ["r1", "r2", "new-1", "r3"]);
+  assert.equal(h.reads.length, reads);
 });
 
 const tierRows = [base, { ...base, id: "r2", agent_tier: "B", service_type: "تذكرة" }, { ...base, id: "r3", agent_tier: "قديمة", service_type: "خدمة قديمة" }];

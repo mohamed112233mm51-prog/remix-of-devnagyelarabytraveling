@@ -17,7 +17,7 @@ company clears the selected tier. A missing tier opens the tier directory, and a
 unknown tier shows a return action instead of a pricing editor.
 
 The route opts into `CompanyPricingTab.tierPages`. Other callers retain the existing
-full-company presentation. Both presentations use the same loader and unchanged
+full-company presentation. Both presentations use the same loader and shared
 save, duplicate, delete and import handlers. Only the displayed/searchable rule
 subset changes. A tier page fixes new/edit draft tier selection and namespaces
 resumable drafts by company and tier. Remounting the editor on selection changes

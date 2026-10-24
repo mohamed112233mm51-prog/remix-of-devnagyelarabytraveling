@@ -46,6 +46,8 @@ export function PriceLookup(props: {
   onFilteredChange?: (rules: PricingRule[]) => void;
   /** Notify parent when any filter is active. */
   onActiveChange?: (active: boolean) => void;
+  /** Explicit user filter changes, rather than updates to the source rules. */
+  onFiltersChange?: () => void;
   /** When changed, clears all filters. */
   resetKey?: number;
   /** Hide outer card chrome (when embedded in a Modal). */
@@ -98,8 +100,10 @@ export function PriceLookup(props: {
   // (tier handling moved to source-rule filtering above)
 
 
-  const setFilter = (k: FilterKey, v: string) =>
+  const setFilter = (k: FilterKey, v: string) => {
+    props.onFiltersChange?.();
     setFilters((f) => ({ ...f, [k]: v }));
+  };
 
   const matches = (r: PricingRule, exclude?: FilterKey) =>
     FIELDS.every((k) => {
@@ -122,6 +126,7 @@ export function PriceLookup(props: {
 
   useEffect(() => {
     if (resetKey === undefined) return;
+    props.onFiltersChange?.();
     setFilters(emptyFilters());
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,6 +171,7 @@ export function PriceLookup(props: {
   };
 
   const clearFilters = () => {
+    props.onFiltersChange?.();
     clearStoredFilters();
     if (!fixedCompanyId) clearStoredCompanyId();
   };

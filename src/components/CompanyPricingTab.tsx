@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDropdownOptions, useLive, type IssuingCompany } from "@/lib/db";
 import { NumberInput } from "@/components/inputs/NumberInput";
@@ -107,6 +107,42 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
   const [showLookup, setShowLookup] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+  const [savedRowId, setSavedRowId] = useState<string | null>(null);
+  const clearSavedRow = useCallback(() => setSavedRowId(null), []);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [tableMinWidth, setTableMinWidth] = useState<number>();
+  const pendingScroll = useRef<{ element: HTMLElement; top: number; left: number }[] | null>(null);
+
+  // Capture at completion, so scrolling while the request is pending is respected.
+  const preserveViewport = () => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+    const positions = [];
+    for (let element: HTMLElement | null = container; element; element = element.parentElement) {
+      positions.push({ element, top: element.scrollTop, left: element.scrollLeft });
+    }
+    pendingScroll.current = positions;
+    // Inline inputs can be wider than display cells. Keep enough width to avoid
+    // the browser clamping horizontal scroll when the editor closes (also RTL).
+    if (container.scrollLeft !== 0) setTableMinWidth(container.scrollWidth);
+  };
+  useLayoutEffect(() => {
+    const positions = pendingScroll.current;
+    if (!positions) return;
+    pendingScroll.current = null;
+    for (const { element, top, left } of positions) {
+      element.scrollTop = top;
+      element.scrollLeft = left;
+    }
+  });
+
+  const displayRules = useMemo(() => {
+    if (!filtersActive) return pageRules;
+    const matchingIds = new Set(filteredRules.map((rule) => rule.id));
+    // Keep a just-saved row visible even if its edited factors no longer match.
+    // The next explicit filter change restores the ordinary filtered view.
+    return pageRules.filter((rule) => matchingIds.has(rule.id) || rule.id === savedRowId);
+  }, [pageRules, filtersActive, filteredRules, savedRowId]);
 
   const load = async () => {
     setLoading(true);
@@ -114,7 +150,9 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
       .from("company_pricing_rules" as any)
       .select("*")
       .eq("company_id", companyId)
-      .order("service_type", { ascending: true });
+      .order("service_type", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
     setRules((data || []) as unknown as PricingRule[]);
@@ -181,17 +219,20 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
       }
 
       // Trigger recomputes agent_price; we don't send it.
-      if (draft.id) {
-        const { error } = await supabase.from("company_pricing_rules" as any).update(payload).eq("id", draft.id);
-        if (error) return toast.error(error.message);
-      } else {
-        const { error } = await supabase.from("company_pricing_rules" as any).insert(payload);
-        if (error) return toast.error(error.message);
-      }
+      const query = draft.id
+        ? supabase.from("company_pricing_rules" as any).update(payload).eq("id", draft.id)
+        : supabase.from("company_pricing_rules" as any).insert(payload);
+      const { data, error } = await query.select("*").single();
+      if (error) return toast.error(error.message);
+      const saved = data as unknown as PricingRule;
       const wasNew = !draft.id;
+      preserveViewport();
+      // Replace in place; a new price occupies the draft's first-row position.
+      // The returned row includes the database trigger's canonical agent_price.
+      setRules((current) => wasNew ? [saved, ...current] : current.map((rule) => rule.id === saved.id ? saved : rule));
+      setSavedRowId(saved.id);
       setDraft(null);
       if (wasNew) clearAddBuffer();
-      await load();
       toast.success("تم حفظ السعر");
     } catch (error: any) {
       toast.error(error?.message || "تعذر حفظ السعر");
@@ -224,7 +265,14 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
         .select()
         .single();
       if (error) throw error;
-      await load();
+      preserveViewport();
+      const copied = data as unknown as PricingRule;
+      setRules((current) => {
+        const next = [...current];
+        next.splice(current.findIndex((rule) => rule.id === r.id) + 1, 0, copied);
+        return next;
+      });
+      setSavedRowId(copied.id);
       toast.success("تم تكرار سطر التسعير بنجاح");
       if (data) setDraft(data as any);
     } catch (e) {
@@ -344,6 +392,7 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
               rules={pageRules}
               onFilteredChange={setFilteredRules}
               onActiveChange={setFiltersActive}
+              onFiltersChange={clearSavedRow}
               resetKey={resetKey}
               bare
             />
@@ -360,8 +409,8 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
         {loading ? (
           <div style={{ textAlign: "center", padding: 16 }}>جاري التحميل...</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <div ref={tableContainerRef} style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: tableMinWidth, borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "var(--card)" }}>
                   <th style={{ padding: 6 }}>الخدمة</th>
@@ -383,7 +432,6 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
               <tbody>
                 {draft && !draft.id && renderDraftRow()}
                 {(() => {
-                  const displayRules = filtersActive ? filteredRules : pageRules;
                   if (displayRules.length === 0) {
                     if (draft && !draft.id) return null;
                     return (
@@ -393,7 +441,7 @@ function CompanyPricingEditor({ companyId, tierPages }: CompanyPricingProps) {
                     );
                   }
                   return displayRules.map((r) => draft?.id === r.id ? renderDraftRow() : (
-                    <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <tr key={r.id} data-pricing-row-id={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: 6, fontWeight: 700 }}>{r.service_type}</td>
                       <td style={{ padding: 6 }}>{r.departure_from || "—"}</td>
                       <td style={{ padding: 6 }}>{r.destination || "—"}</td>
