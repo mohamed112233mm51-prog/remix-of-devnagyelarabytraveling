@@ -29,7 +29,7 @@ import { SearchableSelect } from "@/components/inputs/SearchableSelect";
 import { NumberInput } from "@/components/inputs/NumberInput";
 import { DateInput } from "@/components/inputs/DateInput";
 import { currencyShortLabel } from "@/lib/pricingMatch";
-import { useExecutionServicePricing } from "@/hooks/useExecutionServicePricing";
+import { useExecutionServicePricing, executionServicesForSave, type ExecutionServiceDraft } from "@/hooks/useExecutionServicePricing";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY } from "@/lib/permissionKeys";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -557,6 +557,7 @@ function ExecutionForm({
     passenger_name: editing?.passenger_name || "",
     national_id: editing?.national_id || "",
     dob: toDisplayDate(editing?.dob) || "",
+    dob_source: (editing?.id && editing?.dob ? "manual" : "auto") as "manual" | "auto",
     passport: editing?.passport || "",
     birth_place: editing?.birth_place || "",
     agent_id: editing?.agent_id || "",
@@ -577,24 +578,40 @@ function ExecutionForm({
     submission_id: editing?.submission_id || null as string | null,
   });
   const [passengerWarning, setPassengerWarning] = useState("");
+  const dobSource = form.dob_source ?? (form.dob ? "manual" : "auto");
+  const nationalDob = deriveDobIsoFromEgyptianNationalId(form.national_id);
+  const dobMismatch = dobSource === "manual" && !!form.dob && !!nationalDob && parseDisplayDate(form.dob) !== nationalDob;
   function updatePassengerIdentity(patch: Partial<typeof form>) {
-    const next = { ...form, ...patch };
+    const next = { ...form, dob_source: dobSource, ...patch,
+      ...("dob" in patch ? { dob_source: "manual" as const } : {}) };
     const existingDob = deriveDobIsoFromEgyptianNationalId(next.national_id);
-    if (existingDob) next.dob = toDisplayDate(existingDob) || "";
+    if (existingDob && next.dob_source !== "manual") next.dob = toDisplayDate(existingDob) || "";
     if (!classification.data) {
       setForm({ ...next, passenger_type: "", passenger_type_auto: true, passenger_type_dirty: true });
       setPassengerWarning("تعذر تحديد النوع قبل تحميل إعدادات الربط؛ اختر النوع من القائمة.");
       return;
     }
-    const result = resolvePassengerType({ national_id: next.national_id, dob: parseDisplayDate(next.dob), sex: next.sex, travel_date: next.travel_date }, classification.data);
+    const result = resolvePassengerType({ national_id: next.national_id, dob: parseDisplayDate(next.dob), dob_source: next.dob_source, sex: next.sex, travel_date: next.travel_date }, classification.data);
     setForm({ ...next, ...(result.identity ? { dob: toDisplayDate(result.identity.dob) || "" } : {}), passenger_type: result.value || "", passenger_type_auto: true, passenger_type_dirty: true });
     setPassengerWarning(result.warning);
   }
+  useEffect(() => {
+    if (!classification.data || !form.passenger_type_auto || form.passenger_type) return;
+    const result = resolvePassengerType({ ...form, dob_source: dobSource, dob: parseDisplayDate(form.dob) }, classification.data);
+    if (!result.value) return;
+    setForm(current => current.passenger_type || !current.passenger_type_auto ||
+      current.national_id !== form.national_id || current.dob !== form.dob ||
+      current.dob_source !== form.dob_source || current.travel_date !== form.travel_date ? current : {
+        ...current, dob_source: dobSource, dob: toDisplayDate(result.identity?.dob) || current.dob,
+        passenger_type: result.value!, passenger_type_dirty: true,
+      });
+    setPassengerWarning(result.warning);
+  }, [classification.data, form.passenger_type_auto, form.passenger_type, form.national_id, form.dob, dobSource, form.sex, form.travel_date]);
   const initialServices = useMemo(() => {
     const raw = editing?.services;
     const src: any[] = Array.isArray(raw) ? raw : [];
     // ترقية بيانات قديمة (بدون kind) إلى نموذج الشراء/البيع — مع حماية ضد القيم الفاسدة.
-    const out: ExecutionServiceItem[] = [];
+    const out: ExecutionServiceDraft[] = [];
     for (const s of src) {
       if (!s || typeof s !== "object") continue;
       const service_type = (s.service_type as string) || (serviceKinds[0] || "تذكرة طيران");
@@ -618,16 +635,8 @@ function ExecutionForm({
 
     return out;
   }, [editing, serviceKinds]);
-  const [services, setServices, clearServices] = usePersistentState<ExecutionServiceItem[]>(`${draftKey}:services`, initialServices);
-  const preserveInitialPrice = (service: ExecutionServiceItem, index: number) => {
-    if (!editing?.id) return false;
-    const original = initialServices[index];
-    if (!original || original.kind !== service.kind || original.service_type !== service.service_type || (original.company_id || "") !== (service.company_id || "")) return false;
-    const fields = ["agent_id", "approval_company_id", "departure_from", "destination", "airline", "status", "passenger_type"] as const;
-    const saved = editing as unknown as Record<string, unknown>;
-    return fields.every((field) => form[field] === (saved[field] || ""));
-  };
-  const pricing = useExecutionServicePricing(form, services, agents, setServices, preserveInitialPrice);
+  const [services, setServices, clearServices] = usePersistentState<ExecutionServiceDraft[]>(`${draftKey}:services`, initialServices);
+  const pricing = useExecutionServicePricing(form, services, agents, setServices, Boolean(editing?.id));
   const priceHint = (index: number) => {
     const status = pricing.statuses[index];
     if (!status || status.state === "saved" || status.state === "matched") return null;
@@ -791,7 +800,7 @@ function ExecutionForm({
     if (!editing?.id || form.passenger_type_auto || form.passenger_type_dirty) {
       try {
         const context = await classification.getCurrent(true);
-        const message = passengerDraftError({ ...form, dob: parseDisplayDate(form.dob) }, context);
+        const message = passengerDraftError({ ...form, dob_source: dobSource, dob: parseDisplayDate(form.dob) }, context);
         if (message) { setSaving(false); toast.error(message); return; }
       } catch (error: any) { setSaving(false); toast.error(error?.message || "تعذر التحقق من نوع المسافر"); return; }
     }
@@ -813,7 +822,7 @@ function ExecutionForm({
       passenger_type: form.passenger_type || null,
       issue_date: form.issue_date || null,
       approval_validity_enabled: !!form.approval_validity_enabled,
-      services: services as any,
+      services: executionServicesForSave(services),
       submission_id: form.submission_id,
     };
     try {
@@ -861,7 +870,10 @@ function ExecutionForm({
       <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         <Field label="الاسم"><input value={form.passenger_name} onChange={(e) => setForm({ ...form, passenger_name: e.target.value })} style={inputStyle} /></Field>
         <Field label="الرقم القومي"><input value={form.national_id} onChange={e => updatePassengerIdentity({ national_id: e.target.value })} style={inputStyle} /></Field>
-        <Field label="تاريخ الميلاد"><DateInput value={parseDisplayDate(form.dob) || ""} onChange={iso => updatePassengerIdentity({ dob: toDisplayDate(iso) || "" })} /></Field>
+        <Field label="تاريخ الميلاد">
+          <DateInput value={parseDisplayDate(form.dob) || ""} onChange={iso => updatePassengerIdentity({ dob: toDisplayDate(iso) || "" })} />
+          {dobMismatch && <small role="status" style={{ color: "#b45309" }}>تاريخ الميلاد المدخل مختلف عن الرقم القومي ({toDisplayDate(nationalDob!)}). سيُعتمد التاريخ المدخل في الحفظ وحساب العمر.</small>}
+        </Field>
         <Field label="رقم الجواز"><input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} style={inputStyle} /></Field>
         <Field label="محل الميلاد"><input value={form.birth_place} onChange={(e) => setForm({ ...form, birth_place: e.target.value })} style={inputStyle} /></Field>
         <Field label="الوكيل">
@@ -968,21 +980,24 @@ function ExecutionForm({
                   <Field label="الشركة الصادرة">
                     <SearchableSelect
                       value={s.company_id || ""}
-                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_id: v || null } : x))}
+                      onChange={(v) => pricing.changeService(i, { company_id: v || null })}
                       options={activeOptions(companies, s.company_id, (c) => c.company_name)}
                     />
                   </Field>
                   <Field label="نوع الخدمة">
                     <SearchableSelect
                       value={s.service_type}
-                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: v } : x))}
+                      onChange={(v) => pricing.changeService(i, { service_type: v })}
                       options={withSelected(serviceKinds, s.service_type)}
                       allowClear={false}
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
                   <Field label={`سعر الشركة (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
-                    <NumberInput disabled={saving || pricing.statuses[i]?.state === "loading"} value={Number(s.company_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, company_price: n } : x))} min={0} />
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <NumberInput disabled={saving} value={Number(s.company_price) || 0} onChange={(n) => pricing.setManualPrice(i, n)} min={0} />
+                      <button type="button" className="btn" title="جلب سعر الشركة من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>🔄</button>
+                    </div>
                     {priceHint(i)}
                   </Field>
                   <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>
@@ -1017,14 +1032,17 @@ function ExecutionForm({
                   <Field label="نوع الخدمة المباعة">
                     <SearchableSelect
                       value={s.service_type}
-                      onChange={(v) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, service_type: v } : x))}
+                      onChange={(v) => pricing.changeService(i, { service_type: v })}
                       options={withSelected(serviceKinds, s.service_type)}
                       allowClear={false}
                     />
                   </Field>
                   <Field label="العدد"><NumberInput value={Number(s.count) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, count: n || 1 } : x))} min={1} /></Field>
                   <Field label={`سعر البيع للوكيل (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
-                    <NumberInput disabled={saving || pricing.statuses[i]?.state === "loading"} value={Number(s.agent_price) || 0} onChange={(n) => setServices((arr) => arr.map((x, k) => k === i ? { ...x, agent_price: n } : x))} min={0} />
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <NumberInput disabled={saving} value={Number(s.agent_price) || 0} onChange={(n) => pricing.setManualPrice(i, n)} min={0} />
+                      <button type="button" className="btn" title="جلب سعر البيع من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>🔄</button>
+                    </div>
                     {priceHint(i)}
                   </Field>
                   <Field label="الإجمالي"><input value={`${total.toLocaleString("ar")} ${currencyShortLabel((s as any).currency || "EGP")}`} readOnly style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 700 }} /></Field>

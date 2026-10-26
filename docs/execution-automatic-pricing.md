@@ -17,33 +17,45 @@ rules, dependencies or lockfiles change.
 
 ## Behavior
 
-- New rows fetch automatically when their required source fields are available;
-  the two manual fetch buttons are removed.
+- New-execution rows fetch automatically when their required source fields are
+  available. Each row also has an explicit fetch button using this same hook,
+  resolver and read-only pricing table.
 - Agent/tier, service, purchase company, approval company, departure, destination,
   airline, approval status and passenger type are the lookup inputs. Identity or
   travel-date edits that change automatic passenger classification therefore
   trigger pricing with the resulting exact configured passenger-type label.
 - Unit price, currency and totals update together. Repricing a purchase row clears
   its legacy explicit `company_value`, so the total follows current price/count.
-- Count, notes, operation status, unrelated fields and manual price edits do not
-  trigger new reads. Manual prices stay editable after the lookup settles, until
-  a pricing input changes again.
-- Changing pricing inputs clears the previous amount/currency. Missing matches,
+- Count, notes, operation status and unrelated fields do not trigger new reads.
+  Manual price edits mark that service row as manual, including zero or a value
+  equal to the list price. Subsequent pricing-input changes cannot replace it.
+  Row-local provenance survives the existing session draft, additions/removals,
+  failed saves and restoration. Untagged older drafts preserve existing amounts.
+- Changing pricing inputs clears the previous automatic amount/currency. Missing matches,
   incomplete inputs and network errors show a row-level message and allow manual
   entry. Saving waits while automatic pricing is pending, including the brief
   interval before an invalid context's old price is cleared. Other existing save
   validation policies remain unchanged.
-- Opening an unchanged saved execution preserves historical amounts, currencies
-  and explicit totals. Hydrating its initially unavailable agent list also
-  preserves them. Changing a pricing input reprices the affected rows; adding or
-  removing a row does not reprice unchanged historical neighbors.
-- Restored editing drafts are compared with the saved execution's pricing
-  inputs and normalized service rows. Changed draft contexts and newly added
-  rows fetch automatically instead of being treated as unchanged history.
+- Saved executions and their restored drafts retain amounts, currencies and
+  explicit totals through context changes and agent-list hydration. The explicit
+  fetch button replaces only its selected row. Newly added editing rows also use
+  explicit fetch; changing the service or purchase issuer resets only that row.
+  A missing or failed explicit fetch preserves the current amount and shows feedback.
 - Row reconciliation, context checks and cancellation prevent late results from
-  updating a newer context, deleted row or unmounted form. Identical buy/sell
-  requests share one in-flight read per update batch. No persistent row IDs or
-  pricing metadata are added to saved services.
+  updating a newer context, manual edit, explicit fetch, deleted row or unmounted
+  form. Identical buy/sell requests share one in-flight read per update batch.
+  Draft-only `_priceSource` is removed by `executionServicesForSave` before the
+  existing atomic save gateway. No persistent row IDs, tables or financial
+  metadata are added to saved services.
+
+## Manual birth dates
+
+The existing national-ID parser initially supplies DOB. A manual edit becomes
+authoritative for the displayed date, saved date and age classification, using
+the same passenger-classification module and ID-derived gender when needed.
+An ID mismatch produces a visible Arabic warning rather than overwriting DOB.
+The draft-only `dob_source` survives session restoration and is excluded from
+the canonical execution patch. Existing saved DOBs remain authoritative on edit.
 
 ## Verification
 
@@ -59,6 +71,8 @@ the new automatic-pricing suite. Tests use local fixtures/mocks; no company data
 or real financial movements are created. No live authenticated browser check is
 claimed.
 
-Validated locally: 264 regression tests pass, including 34 pricing/form checks;
-TypeScript and financial atomicity hard guards pass. The canonical save handler
-is byte-for-byte unchanged apart from its pending-price guard.
+The regression suite exercises the actual hook and form controls, draft
+restoration, manual/automatic prices, historical records, explicit-fetch errors,
+late-response races, manual DOB age boundaries and canonical payload stripping.
+TypeScript, production build and financial atomicity checks are required before
+publication. The financial adapter, ledger builder and RPC remain unchanged.

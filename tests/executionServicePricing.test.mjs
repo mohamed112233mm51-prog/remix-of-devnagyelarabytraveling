@@ -34,6 +34,9 @@ function setup({ rows = [company, sale], form = initialForm, editing = false, ag
     calls, settle, get rows() { return services; }, get status() { return output; },
     async form(patch) { inputs = { ...inputs, ...patch }; render(); await settle(); },
     async update(index, patch) { services = services.map((row, i) => i === index ? { ...row, ...patch } : row); render(); await settle(); },
+    async manual(index, price) { output.setManualPrice(index, price); render(); await settle(); },
+    async fetch(index) { output.fetchPrice(index); render(); await settle(); },
+    async changeService(index, patch) { output.changeService(index, patch); render(); await settle(); },
     async remove(index) { services = services.filter((_, i) => i !== index); render(); await settle(); },
     async add(row) { services = [...services, { ...row }]; render(); await settle(); },
     async agents(value) { agentRows = value; render(); await settle(); },
@@ -73,10 +76,10 @@ test("row company and service changes refresh only that row and preserve buy-com
 
 test("quantity, note and manual price edits do not fetch or overwrite a settled manual override", async () => {
   const h = setup(); await h.settle();
-  await h.update(0, { company_price: 777, count: 4, note: "ملاحظة" }); await h.update(1, { agent_price: 888 });
+  await h.update(0, { count: 4, note: "ملاحظة" }); await h.manual(0, 777); await h.manual(1, 888);
   await h.form({ notes: "ملاحظة تنفيذ", operation_status: "منفذ", travel_date: "2026-10-21" });
   assert.equal(h.calls.length, 1); assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[1].agent_price, 888);
-  await h.form({ destination: "مصراتة" }); assert.equal(h.rows[0].company_price, 100); assert.equal(h.rows[0].count, 4);
+  await h.form({ destination: "مصراتة" }); assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[0].count, 4);
 });
 
 test("new agent with the same tier still triggers the requested context refresh", async () => {
@@ -148,15 +151,16 @@ test("a response arriving between removal render and effect follows its row rath
 test("unchanged historical prices and explicit totals survive open, unrelated edits, row additions and removals", async () => {
   const h = setup({ editing: true, rows: [{ ...company, company_price: 13, company_value: 26, currency: "LYD" }, { ...sale, agent_price: 17 }] }); await h.settle();
   assert.equal(h.calls.length, 0); await h.update(0, { note: "unchanged price" }); await h.add({ ...sale, service_type: "جديد" });
-  assert.equal(h.calls.length, 1); assert.equal(h.rows[0].company_price, 13); assert.equal(h.rows[0].company_value, 26);
-  await h.remove(0); assert.equal(h.rows[0].agent_price, 17); assert.equal(h.calls.length, 1); assert.equal(h.status.pending, false);
-  await h.form({ passenger_type: "طفل" }); assert.equal(h.rows[0].agent_price, 120);
+  assert.equal(h.calls.length, 0); assert.equal(h.rows[0].company_price, 13); assert.equal(h.rows[0].company_value, 26);
+  await h.remove(0); assert.equal(h.rows[0].agent_price, 17); assert.equal(h.calls.length, 0); assert.equal(h.status.pending, false);
+  await h.form({ passenger_type: "طفل" }); assert.equal(h.rows[0].agent_price, 17);
 });
 
-test("historical agent-list hydration preserves saved prices, then real tier changes reprice normally", async () => {
+test("historical agent hydration and tier changes preserve saved prices until an explicit fetch", async () => {
   const h = setup({ editing: true, agents: [], rows: [{ ...sale, agent_price: 55 }] }); await h.settle();
   await h.agents([{ id: "a1", tier: "B" }]); assert.equal(h.calls.length, 0); assert.equal(h.rows[0].agent_price, 55);
-  await h.agents([{ id: "a1", tier: "C" }]); assert.equal(h.calls.length, 1); assert.equal(h.rows[0].agent_price, 120);
+  await h.agents([{ id: "a1", tier: "C" }]); assert.equal(h.calls.length, 0); assert.equal(h.rows[0].agent_price, 55);
+  await h.fetch(0); assert.equal(h.calls.length, 1); assert.equal(h.rows[0].agent_price, 120);
 });
 
 test("strict effect replay restarts pending reads without repricing saved historical rows", async () => {
@@ -183,4 +187,11 @@ test("automatic prices reuse the real most-specific pricing resolver and its exi
   const h = setup({ resolve: resolveAgentPrice }); await h.settle(); assert.equal(h.rows[1].agent_price, 120);
   await h.form({ passenger_type: "طفل" }); assert.equal(h.rows[0].company_price, 70); assert.equal(h.rows[1].agent_price, 85); assert.equal(h.rows[0].currency, "LYD");
   assert.equal(reads.length, 2);
+});
+
+test("reselecting the same service or equivalent empty issuer never clears a manual price", async () => {
+  const h = setup({ rows: [{ ...company, company_id: undefined }] }); await h.settle();
+  await h.manual(0, 777); await h.changeService(0, { service_type: company.service_type });
+  await h.changeService(0, { company_id: null });
+  assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[0]._priceSource, "manual");
 });

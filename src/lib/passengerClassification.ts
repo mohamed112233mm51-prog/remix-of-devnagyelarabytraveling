@@ -14,7 +14,7 @@ export type PassengerCategory = typeof PASSENGER_CATEGORIES[number]["key"];
 export type PassengerMapping = Partial<Record<PassengerCategory, string>>;
 export type PassengerOption = { id: string; value: string; is_active: boolean; category?: string };
 export type PassengerContext = { options: PassengerOption[]; mapping: PassengerMapping; configured: boolean };
-export type PassengerInput = { national_id?: string | null; dob?: string | null; sex?: string | null; travel_date?: string | null };
+export type PassengerInput = { national_id?: string | null; dob?: string | null; dob_source?: "manual" | "auto"; sex?: string | null; travel_date?: string | null };
 
 // Match useDropdownOptions / normalizeDropdownValue without importing the database layer.
 export function passengerOptionLabel(value: unknown): string {
@@ -64,9 +64,9 @@ function dateParts(value: string): [number, number, number] | null {
 }
 export function classifyPassenger(input: PassengerInput, referenceDate = input.travel_date || passengerToday()) {
   const nid = deriveEgyptianNationalIdData(input.national_id, referenceDate);
-  if (nid) return { ...nid, category: passengerCategoryFor(nid.age, nid.gender) };
+  if (nid && input.dob_source !== "manual") return { ...nid, category: passengerCategoryFor(nid.age, nid.gender) };
   const birth = dateParts(input.dob || ""), ref = dateParts(referenceDate);
-  const gender = input.sex === "M" || input.sex === "male" ? "male" : input.sex === "F" || input.sex === "female" ? "female" : null;
+  const gender = input.sex === "M" || input.sex === "male" ? "male" : input.sex === "F" || input.sex === "female" ? "female" : nid?.gender ?? null;
   if (!birth || !ref || (input.dob || "") > referenceDate) return null;
   const age = ref[0] - birth[0] - (ref[1] < birth[1] || (ref[1] === birth[1] && ref[2] < birth[2]) ? 1 : 0);
   if (age >= 18 && !gender) return null;

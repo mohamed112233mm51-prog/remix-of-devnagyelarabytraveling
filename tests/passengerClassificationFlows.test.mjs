@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import ts from "typescript";
 import { readFileSync } from "node:fs";
-import { loadTsModule, flush } from "./helpers/loadTsModule.mjs";
+import { loadTsModule, flush, deferred } from "./helpers/loadTsModule.mjs";
 
 const identity = loadTsModule("src/lib/executionPassengerIdentity.ts");
 const core = loadTsModule("src/lib/passengerClassification.ts", { "./executionPassengerIdentity.ts": identity });
@@ -14,7 +14,7 @@ function setup(kind, editing, pricingOptions = {}) {
   for (const [key, value] of Object.entries(pricingOptions.storage || {})) storage.set(key, JSON.stringify(value));
   const changed = (a, b) => !a || b.some((v, i) => !Object.is(v, a[i]));
   const react = {
-    useState(initial) { const i = cursor++; cells[i] ??= { value: typeof initial === "function" ? initial() : initial }; return [cells[i].value, v => { const next = typeof v === "function" ? v(cells[i].value) : v; if (!Object.is(next, cells[i].value)) { cells[i].value = next; dirty = true; } }]; },
+    useState(initial) { const i = cursor++; cells[i] ??= { value: typeof initial === "function" ? initial() : initial }; cells[i].setter ??= v => { const next = typeof v === "function" ? v(cells[i].value) : v; if (!Object.is(next, cells[i].value)) { cells[i].value = next; dirty = true; } }; return [cells[i].value, cells[i].setter]; },
     useRef(value) { return cells[cursor++] ??= { current: value }; },
     useMemo(fn, deps) { const i = cursor++; if (!cells[i] || changed(cells[i].deps, deps)) cells[i] = { deps, value: fn() }; return cells[i].value; },
     useCallback(fn, deps) { return react.useMemo(fn ? () => fn : fn, deps); },
@@ -56,7 +56,7 @@ function setup(kind, editing, pricingOptions = {}) {
     "@/lib/executionProfit": { loadCurrencyBuyRows: async () => [], aggregateExecutionByCurrency: () => ({ salesByCur: {}, costByCur: {}, profitByCur: {} }), computeExecutionProfitEGP: () => ({ status: "ready", profitEGP: 0, missingCurrencies: [] }) },
     "@/lib/pricingMatch": { currencyShortLabel: () => "ج.م", resolveAgentPrice: async ctx => { priceCalls.push(ctx); return pricingOptions.resolve ? pricingOptions.resolve(ctx) : { rule: null, agentPrice: null }; } },
     "@/lib/executionCompanyPricing": { buildExecutionCompanyPricingContext: () => ({ context: null }), buildExecutionCompanyPurchasePricingContext: () => ({ context: null }) },
-    "@/lib/executionPosting": { postExecutionFinancials: async args => { calls.push({ method: "postExecutionFinancials", args }); return { executionId: "saved" }; } },
+    "@/lib/executionPosting": { postExecutionFinancials: async args => { calls.push({ method: "postExecutionFinancials", args }); if (pricingOptions.saveFails) throw Error("فشل الحفظ التجريبي"); return { executionId: "saved" }; } },
     "@/lib/dateFormat": loadTsModule("src/lib/dateFormat.ts"),
   };
   deps["@/hooks/useExecutionServicePricing"] = loadTsModule("src/hooks/useExecutionServicePricing.ts", { react, "@/lib/pricingMatch": deps["@/lib/pricingMatch"] });
@@ -77,12 +77,14 @@ function setup(kind, editing, pricingOptions = {}) {
   function render() { cursor = 0; dirty = false; tree = component(props); while (effects.length) effects.shift()(); }
   async function settle() { for (let i = 0; i < 12; i++) { await flush(); if (dirty) render(); } }
   function nodes(node = null) { if (arguments.length === 0) node = tree; if (Array.isArray(node)) return node.flatMap(nodes); if (!node || typeof node !== "object") return []; return [node, ...nodes(node.props.children ?? null)]; }
-  const field = label => nodes().find(n => n.type === "field" && n.props.label === label);
-  const control = label => nodes(field(label)).find(n => ["input", "searchable", "date"].includes(n.type));
-  const change = async (label, value) => { const c = control(label); assert.ok(c, label); c.props.onChange(c.type === "input" ? { target: { value } } : value); await settle(); };
+  const field = (label, index = 0) => nodes().filter(n => n.type === "field" && n.props.label === label)[index];
+  const control = (label, index = 0) => nodes(field(label, index)).find(n => ["input", "textarea", "searchable", "date", "number"].includes(n.type));
+  const change = async (label, value, index = 0) => { const c = control(label, index); assert.ok(c, label); c.props.onChange(["input", "textarea"].includes(c.type) ? { target: { value } } : value); await settle(); };
+  const fetchPrice = async prefix => { const f = nodes().find(n => n.type === "field" && n.props.label.startsWith(prefix)); const b = nodes(f).find(n => n.type === "button"); assert.ok(b, prefix); b.props.onClick(); await settle(); };
+  const click = async (text, index = 0) => { const b = nodes().filter(n => n.type === "button" && (Array.isArray(n.props.children) ? n.props.children.filter(c => typeof c === "string").join("") : String(n.props.children)).includes(text))[index]; assert.ok(b, text); b.props.onClick(); await settle(); };
   const save = async () => { const b = nodes().find(n => n.type === "button" && (n.props["data-confirm-save"] || n.props.children === "حفظ ربط نوع المسافر")); assert.ok(b); await b.props.onClick(); await settle(); };
   render();
-  return { settle, nodes, control, change, save, calls, messages, priceCalls, storage, get config() { return config; }, set config(value) { config = value; dirty = true; }, deny() { allowed = false; dirty = true; }, fail() { failed = true; }, refresh() { dirty = true; } };
+  return { settle, nodes, control, change, save, fetchPrice, click, calls, messages, priceCalls, storage, get config() { return config; }, set config(value) { config = value; dirty = true; }, deny() { allowed = false; dirty = true; }, fail() { failed = true; }, refresh() { dirty = true; } };
 }
 
 test("settings saves IDs under the existing app_settings key, not labels or financial rows", async () => {
@@ -217,18 +219,20 @@ test("actual save button and handler block posting while automatic prices are pe
   const wait = new Promise(resolve => { release = resolve; });
   const h = setup("execution", null, { agents: pricingAgents, resolve: () => wait }); await preparePricedForm(h);
   const save = h.nodes().find(n => n.type === "button" && n.props["data-confirm-save"]);
-  assert.equal(save.props.disabled, true); assert.equal(priceNumber(h, "سعر الشركة").props.disabled, true);
+  assert.equal(save.props.disabled, true); assert.equal(priceNumber(h, "سعر الشركة").props.disabled, false);
   await h.save(); assert.equal(h.calls.length, 0); assert.ok(h.messages.includes("انتظر اكتمال تحديث أسعار الخدمات"));
   release(priceResult({})); await h.settle();
   assert.equal(h.nodes().find(n => n.props["data-confirm-save"]).props.disabled, false);
   await h.save(); assert.equal(h.calls.filter(c => c.method === "postExecutionFinancials").length, 1);
 });
 
-test("actual historical form retains prices on open, then recomputes price and explicit total after a pricing change", async () => {
+test("actual historical form preserves prices through dimension edits and explicitly refreshes only the selected row", async () => {
   const editing = { id: "history-prices", passenger_name: "مسافر", agent_id: "a1", approval_company_id: "c1", passenger_type: "معتمد male", services: [{ kind: "company", service_type: "تذكرة", company_id: "c1", count: 2, company_price: 7, company_value: 15, currency: "LYD" }, { kind: "agent", service_type: "تذكرة", agent_price: 9, count: 2 }] };
   const h = setup("execution", editing, { agents: pricingAgents, resolve: priceResult }); await h.settle();
   assert.equal(h.priceCalls.length, 0); assert.equal(priceNumber(h, "سعر الشركة").props.value, 7);
-  await h.change("الوجهة", "طرابلس"); assert.equal(priceNumber(h, "سعر الشركة").props.value, 100);
+  await h.change("الوجهة", "طرابلس"); assert.equal(priceNumber(h, "سعر الشركة").props.value, 7);
+  assert.equal(h.priceCalls.length, 0); await h.fetchPrice("سعر الشركة");
+  assert.equal(priceNumber(h, "سعر الشركة").props.value, 100); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 9);
   const totals = h.nodes().filter(n => n.type === "field" && n.props.label === "الإجمالي");
   assert.ok(h.nodes(totals[0]).find(n => n.type === "input").props.value.includes((200).toLocaleString("ar")));
   await h.save(); const saved = h.calls.find(c => c.method === "postExecutionFinancials");
@@ -237,17 +241,142 @@ test("actual historical form retains prices on open, then recomputes price and e
 });
 
 
-test("restored historical drafts with changed pricing inputs reprice, while new draft rows do not reprice unchanged saved neighbors", async () => {
+test("restored historical drafts preserve prices even after context changes; new rows require an explicit fetch", async () => {
   const editing = { id: "restore-pricing", passenger_name: "مسافر", agent_id: "a1", approval_company_id: "c1", passenger_type: "معتمد male", services: [{ kind: "company", service_type: "تذكرة", company_id: "c1", count: 2, company_price: 7, company_value: 14 }] };
   const original = setup("execution", editing, { agents: pricingAgents, resolve: priceResult }); await original.settle();
   const form = JSON.parse(original.storage.get("draft:execution:restore-pricing:form"));
   const changed = setup("execution", editing, { agents: pricingAgents, resolve: priceResult, storage: {
     "draft:execution:restore-pricing:form": { ...form, destination: "طرابلس" },
     "draft:execution:restore-pricing:services": editing.services,
-  } }); await changed.settle(); assert.equal(priceNumber(changed, "سعر الشركة").props.value, 100);
+  } }); await changed.settle(); assert.equal(priceNumber(changed, "سعر الشركة").props.value, 7); assert.equal(changed.priceCalls.length, 0);
   const added = setup("execution", editing, { agents: pricingAgents, resolve: priceResult, storage: {
     "draft:execution:restore-pricing:form": form,
     "draft:execution:restore-pricing:services": [...editing.services, { kind: "agent", service_type: "تذكرة", count: 1, agent_price: 0 }],
   } }); await added.settle();
-  assert.equal(priceNumber(added, "سعر الشركة").props.value, 7); assert.equal(priceNumber(added, "سعر البيع للوكيل").props.value, 120);
+  assert.equal(priceNumber(added, "سعر الشركة").props.value, 7); assert.equal(priceNumber(added, "سعر البيع للوكيل").props.value, 0);
+  await added.fetchPrice("سعر البيع للوكيل"); assert.equal(priceNumber(added, "سعر البيع للوكيل").props.value, 120);
+});
+
+test("manual DOB governs display, age classification and financial-save payload with a visible ID mismatch warning", async () => {
+  const h = setup("execution"); await h.settle();
+  await h.change("الاسم", "تاريخ يدوي"); await h.change("تاريخ المغادرة", "2026-10-19");
+  await h.change("الرقم القومي", "30810200100010"); assert.equal(h.control("تاريخ الميلاد").props.value, "2008-10-20");
+  await h.change("تاريخ الميلاد", "2018-10-20");
+  assert.equal(h.control("تاريخ الميلاد").props.value, "2018-10-20"); assert.equal(h.control("نوع المسافر").props.value, "معتمد child");
+  assert.ok(h.nodes().some(n => n.type === "small" && JSON.stringify(n.props.children).includes("مختلف عن الرقم القومي")));
+  await h.change("تاريخ المغادرة", "2026-10-20"); assert.equal(h.control("نوع المسافر").props.value, "معتمد child_under_12");
+  await h.save(); const patch = h.calls.find(c => c.method === "postExecutionFinancials").args.executionPatch;
+  assert.equal(patch.dob, "2018-10-20"); assert.equal(patch.passenger_type, "معتمد child_under_12"); assert.equal("dob_source" in patch, false);
+});
+
+const draftStorage = h => Object.fromEntries([...h.storage].map(([key, value]) => [key, JSON.parse(value)]));
+test("manual DOB survives delayed settings and restoration; a later ID edit cannot replace it", async () => {
+  const h = setup("execution"); await h.settle(); h.config = undefined; await h.settle();
+  await h.change("تاريخ المغادرة", "2026-10-20"); await h.change("الرقم القومي", "30810200100010");
+  await h.change("تاريخ الميلاد", "2018-10-20"); h.config = context(); await h.settle();
+  assert.equal(h.control("نوع المسافر").props.value, "معتمد child_under_12");
+  const reopened = setup("execution", null, { storage: draftStorage(h) }); await reopened.settle();
+  await reopened.change("الرقم القومي", "29001010100010");
+  assert.equal(reopened.control("تاريخ الميلاد").props.value, "2018-10-20");
+  assert.equal(reopened.control("نوع المسافر").props.value, "معتمد child_under_12");
+});
+
+test("saved DOB differing from national ID remains authoritative after editing the departure date and saving", async () => {
+  const h = setup("execution", { id: "manual-date", passenger_name: "تاريخ محفوظ", national_id: "30810200100010", dob: "2018-10-20", travel_date: "2026-10-20", passenger_type: "معتمد child_under_12", services: [{ kind: "agent", service_type: "تذكرة", count: 1, agent_price: 1350 }] });
+  await h.settle(); await h.change("تاريخ المغادرة", "2026-10-19");
+  assert.equal(h.control("نوع المسافر").props.value, "معتمد child"); await h.save();
+  assert.equal(h.calls.find(c => c.method === "postExecutionFinancials").args.executionPatch.dob, "2018-10-20");
+});
+
+const saleLabel = "سعر البيع للوكيل (للوحدة) — ج.م", costLabel = "سعر الشركة (للوحدة) — ج.م";
+async function newPricedExecution(options = {}) {
+  const h = setup("execution", null, { agents: pricingAgents, resolve: priceResult, ...options }); await preparePricedForm(h); return h;
+}
+const savedExecution = () => ({ id: "saved-prices", passenger_name: "مسافر محفوظ", agent_id: "a1", approval_company_id: "c1", passenger_type: "معتمد male", services: [
+  { kind: "company", company_id: "c1", service_type: "تذكرة", count: 2, company_price: 700, company_value: 1400 },
+  { kind: "agent", service_type: "تذكرة", count: 2, agent_price: 1350 },
+] });
+
+test("manual buy/sell prices survive all pricing dimensions, failed save and draft restore; draft metadata never reaches the financial gateway", async () => {
+  const h = await newPricedExecution({ saveFails: true });
+  await h.change(saleLabel, 1350); await h.change(costLabel, 850);
+  for (const [label, value] of [["الوجهة", "طرابلس"], ["جهة المغادرة", "القاهرة"], ["حالة الموافقة", "سريع"], ["الاسم", "اسم معدل"], ["ملاحظات", "ملاحظة معدلة"]]) await h.change(label, value);
+  assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(costLabel).props.value, 850);
+  await h.save(); const services = h.calls.find(c => c.method === "postExecutionFinancials").args.executionPatch.services;
+  assert.equal(services[0].company_price, 850); assert.equal(services[1].agent_price, 1350);
+  assert.ok(services.every(s => !("_priceSource" in s)));
+  const reopened = setup("execution", null, { agents: pricingAgents, resolve: priceResult, storage: draftStorage(h) }); await reopened.settle();
+  assert.equal(reopened.control(saleLabel).props.value, 1350); assert.equal(reopened.control(costLabel).props.value, 850);
+});
+
+test("manual zero and a manual value equal to the list price survive later matches and restored drafts", async () => {
+  const h = await newPricedExecution(); await h.change(costLabel, 0); await h.change(saleLabel, 120);
+  await h.change("الوجهة", "طرابلس");
+  const reopened = setup("execution", null, { agents: pricingAgents, resolve: () => ({ rule: { company_price: 500, currency: "USD" }, agentPrice: 650 }), storage: draftStorage(h) }); await reopened.settle();
+  assert.equal(reopened.control(costLabel).props.value, 0); assert.equal(reopened.control(saleLabel).props.value, 120);
+});
+
+test("a manually priced unmatched service stays manual when a matching price later becomes available", async () => {
+  let available = false;
+  const h = await newPricedExecution({ resolve: ctx => available ? priceResult(ctx) : { rule: null, agentPrice: null } });
+  await h.change(saleLabel, 850); available = true; await h.change("الوجهة", "بنغازي");
+  assert.equal(h.control(saleLabel).props.value, 850); assert.equal(h.control(costLabel).props.value, 100);
+});
+
+test("legacy untagged drafts preserve positive prices, while tagged automatic drafts still refresh", async () => {
+  const existing = savedExecution(); const initial = setup("execution", existing); await initial.settle();
+  const form = JSON.parse(initial.storage.get("draft:execution:saved-prices:form"));
+  const oldDraft = setup("execution", null, { agents: pricingAgents, resolve: priceResult, storage: {
+    "draft:execution:new:form": form, "draft:execution:new:services": existing.services,
+  } }); await oldDraft.settle(); assert.equal(oldDraft.priceCalls.length, 0); assert.equal(oldDraft.control(saleLabel).props.value, 1350);
+  const automatic = await newPricedExecution();
+  const missing = setup("execution", null, { agents: pricingAgents, resolve: () => ({ rule: null, agentPrice: null }), storage: draftStorage(automatic) }); await missing.settle();
+  assert.equal(missing.control(saleLabel).props.value, 0); assert.equal(missing.control(costLabel).props.value, 0);
+});
+
+test("changing a saved service or issuer resets only that row; explicit fetch replaces the selected price", async () => {
+  const h = setup("execution", savedExecution(), { agents: pricingAgents, resolve: priceResult }); await h.settle();
+  await h.change("نوع الخدمة المباعة", "موافقة أمنية");
+  assert.equal(h.control(saleLabel).props.value, 0); assert.equal(h.control(costLabel).props.value, 700);
+  await h.change(saleLabel, 900); await h.change("الشركة الصادرة", "c2");
+  assert.equal(h.control(costLabel).props.value, 0); assert.equal(h.control(saleLabel).props.value, 900); assert.equal(h.priceCalls.length, 0);
+  await h.fetchPrice("سعر الشركة"); assert.equal(h.control(costLabel).props.value, 100); assert.equal(h.control(saleLabel).props.value, 900);
+  await h.change("الوجهة", "طرابلس"); assert.equal(h.control(saleLabel).props.value, 900);
+});
+
+test("row removal and addition preserve the manual provenance of the remaining rows", async () => {
+  const h = await newPricedExecution(); await h.change(saleLabel, 1350); await h.click("إضافة خدمة وكيل");
+  await h.change(saleLabel, 1500, 1); await h.click("إزالة", 0); await h.change("الوجهة", "طرابلس");
+  assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(saleLabel, 1).props.value, 1500);
+});
+
+test("manual input during a pending automatic request wins while the other row still fills", async () => {
+  const response = deferred(); const h = await newPricedExecution({ resolve: () => response.promise });
+  await h.change(saleLabel, 1350); response.resolve(priceResult({})); await h.settle();
+  assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(costLabel).props.value, 100);
+});
+
+test("newer manual input cancels an explicit fetch without disturbing its original value during loading", async () => {
+  const response = deferred(); const h = setup("execution", savedExecution(), { agents: pricingAgents, resolve: () => response.promise }); await h.settle();
+  await h.fetchPrice("سعر البيع للوكيل"); assert.equal(h.control(saleLabel).props.value, 1350);
+  await h.change(saleLabel, 1450); response.resolve(priceResult({})); await h.settle();
+  assert.equal(h.control(saleLabel).props.value, 1450);
+});
+
+test("an old automatic response cannot undo a newer explicit fetch on that row", async () => {
+  const old = deferred(); let requests = 0;
+  const h = await newPricedExecution({ resolve: () => ++requests === 1 ? old.promise : { ...priceResult({}), agentPrice: 1500 } });
+  await h.fetchPrice("سعر البيع للوكيل"); assert.equal(h.control(saleLabel).props.value, 1500);
+  old.resolve(priceResult({})); await h.settle();
+  assert.equal(h.control(saleLabel).props.value, 1500); assert.equal(h.control(costLabel).props.value, 100);
+});
+
+test("failed and unmatched explicit fetches preserve manual amounts and show feedback", async () => {
+  let mode = "match";
+  const h = await newPricedExecution({ resolve: ctx => mode === "match" ? priceResult(ctx) : mode === "missing" ? { rule: null, agentPrice: null, reason: "لا يوجد سعر مطابق" } : Promise.reject(Error("offline")) });
+  await h.change(saleLabel, 1350); mode = "missing"; await h.fetchPrice("سعر البيع للوكيل");
+  assert.equal(h.control(saleLabel).props.value, 1350);
+  assert.ok(h.nodes().some(n => n.props.role === "status" && JSON.stringify(n.props.children).includes("لا يوجد سعر مطابق")));
+  mode = "error"; await h.fetchPrice("سعر البيع للوكيل"); assert.equal(h.control(saleLabel).props.value, 1350);
+  await h.change("الوجهة", "بنغازي"); assert.equal(h.control(saleLabel).props.value, 1350);
 });

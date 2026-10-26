@@ -13,6 +13,26 @@ type PricingForm = {
 };
 type PriceStatus = { state: "saved" | "loading" | "matched" | "missing"; message?: string };
 
+/** Session draft metadata only; never persisted to execution/financial records. */
+export type ExecutionServiceDraft = ExecutionServiceItem & { _priceSource?: "manual" | "auto" };
+
+function manualPrice(service: ExecutionServiceDraft) {
+  if (service._priceSource) return service._priceSource === "manual";
+  // Old drafts cannot reveal how an existing value was entered. Preserve it.
+  return Number(service.kind === "company" ? service.company_price : service.agent_price) > 0 ||
+    Number(service.company_value || 0) > 0;
+}
+
+function samePrice(a: ExecutionServiceDraft, b: ExecutionServiceDraft) {
+  return Number((a.kind === "company" ? a.company_price : a.agent_price) || 0) === Number((b.kind === "company" ? b.company_price : b.agent_price) || 0) &&
+    Number(a.company_value || 0) === Number(b.company_value || 0) &&
+    (a.currency || "EGP") === (b.currency || "EGP") && a._priceSource === b._priceSource;
+}
+
+export function executionServicesForSave(services: readonly ExecutionServiceDraft[]): ExecutionServiceItem[] {
+  return services.map(({ _priceSource, ...service }) => service);
+}
+
 /** Mirrors the existing buy/sell lookup contexts; matching stays in pricingMatch. */
 function planFor(service: ExecutionServiceItem, form: PricingForm, agents: Agent[]) {
   const agent = agents.find((item) => item.id === form.agent_id);
@@ -48,27 +68,28 @@ function planFor(service: ExecutionServiceItem, form: PricingForm, agents: Agent
 }
 
 type Entry = {
-  service: ExecutionServiceItem;
+  service: ExecutionServiceDraft;
   key: string;
   inputKey: string;
   awaitingAgent: boolean;
   cancelled: boolean;
   status: PriceStatus;
+  explicit: boolean;
 };
 
 /** Form-only price preview. Never writes executions, debts or pricing rules. */
 export function useExecutionServicePricing(
   form: PricingForm,
-  services: ExecutionServiceItem[],
+  services: ExecutionServiceDraft[],
   agents: Agent[],
-  setServices: Dispatch<SetStateAction<ExecutionServiceItem[]>>,
+  setServices: Dispatch<SetStateAction<ExecutionServiceDraft[]>>,
   preserveInitialPrices: boolean | ((service: ExecutionServiceItem, index: number) => boolean),
 ) {
   const entries = useRef<Entry[]>([]);
-  const initialized = useRef(false);
   const latest = useRef({ form, agents });
+  const requested = useRef(new Set<ExecutionServiceDraft>());
   latest.current = { form, agents };
-  const [, refresh] = useState(0);
+  const [revision, refresh] = useState(0);
   const shouldPreserve = (service: ExecutionServiceItem, index: number) =>
     typeof preserveInitialPrices === "function"
       ? preserveInitialPrices(service, index)
@@ -91,6 +112,8 @@ export function useExecutionServicePricing(
     const pending: { entry: Entry; plan: ReturnType<typeof planFor> }[] = [];
     entries.current = services.map((service, index) => {
       const plan = planFor(service, form, agents);
+      const forced = requested.current.delete(service);
+      const manual = manualPrice(service);
       // Retain row state after removals, as well as immutable edits to count,
       // note or manual price. No row IDs are added to the persisted services.
       const atIndex = previous[index];
@@ -106,18 +129,20 @@ export function useExecutionServicePricing(
         old.key = plan.key;
         old.awaitingAgent = !plan.agentReady;
       }
-      if (old && old.key === plan.key && !old.cancelled) {
+      const preserve = !forced && (manual || shouldPreserve(service, index));
+      if (old && old.key === plan.key && !old.cancelled && !forced &&
+          (!preserve || old.status.state === "saved" || (old.explicit && samePrice(old.service, service)))) {
         old.service = service;
         return old;
       }
       if (old) old.cancelled = true;
-      const preserve = !initialized.current && shouldPreserve(service, index);
       const entry: Entry = {
         service,
         key: plan.key,
         inputKey: plan.inputKey,
         awaitingAgent: preserve && !plan.agentReady,
         cancelled: false,
+        explicit: forced,
         status: preserve
           ? { state: "saved" }
           : plan.message
@@ -127,7 +152,7 @@ export function useExecutionServicePricing(
       if (!preserve) pending.push({ entry, plan });
       return entry;
     });
-    initialized.current = true;
+    requested.current.clear();
     for (const entry of previous) if (!entries.current.includes(entry)) entry.cancelled = true;
     if (!pending.length) {
       // Reordering/removal can move a settled row's status to a new index.
@@ -141,7 +166,7 @@ export function useExecutionServicePricing(
       return;
     }
 
-    const update = (entry: Entry, patch: Partial<ExecutionServiceItem>) => {
+    const update = (entry: Entry, patch: Partial<ExecutionServiceDraft>, allowManual = false) => {
       if (entry.cancelled) return;
       setServices((rows) => {
         if (entry.cancelled) return rows;
@@ -154,6 +179,7 @@ export function useExecutionServicePricing(
             return rows;
         }
         if (index < 0 || !rows[index]) return rows;
+        if (manualPrice(rows[index]) && (!allowManual || !samePrice(entry.service, rows[index]))) return rows;
         const { form: currentForm, agents: currentAgents } = latest.current;
         if (planFor(rows[index], currentForm, currentAgents).key !== entry.key) return rows;
         return rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
@@ -163,11 +189,11 @@ export function useExecutionServicePricing(
     const requests = new Map<string, ReturnType<typeof resolveAgentPrice>>();
     for (const { entry, plan } of pending) {
       // Clear the previous context's price and legacy explicit total immediately.
-      update(
+      if (!entry.explicit) update(
         entry,
         entry.service.kind === "company"
-          ? { company_price: 0, company_value: 0, currency: "EGP" }
-          : { agent_price: 0, currency: "EGP" },
+          ? { company_price: 0, company_value: 0, currency: "EGP", _priceSource: "auto" }
+          : { agent_price: 0, currency: "EGP", _priceSource: "auto" },
       );
       if (plan.message) continue;
       const requestKey = JSON.stringify(plan.context);
@@ -198,8 +224,10 @@ export function useExecutionServicePricing(
                     company_price: price,
                     company_value: 0,
                     currency: result.rule?.currency || "EGP",
+                    _priceSource: "auto",
                   }
-                : { agent_price: price, currency: result.rule?.currency || "EGP" },
+                : { agent_price: price, currency: result.rule?.currency || "EGP", _priceSource: "auto" },
+              entry.explicit,
             );
             entry.status = { state: "matched" };
           }
@@ -215,21 +243,48 @@ export function useExecutionServicePricing(
         });
     }
     refresh((value) => value + 1);
-  }, [services, form, agents, setServices, preserveInitialPrices]);
+  }, [services, form, agents, setServices, preserveInitialPrices, revision]);
+
+  const setManualPrice = (index: number, price: number) => {
+    if (entries.current[index]) entries.current[index].cancelled = true;
+    setServices(rows => rows.map((row, i) => i !== index ? row : {
+      ...row, ...(row.kind === "company" ? { company_price: price, company_value: 0 } : { agent_price: price }),
+      _priceSource: "manual",
+    }));
+  };
+  const changeService = (index: number, patch: Partial<Pick<ExecutionServiceItem, "service_type" | "company_id">>) => {
+    const service = services[index];
+    if (!service || ((patch.service_type === undefined || patch.service_type === service.service_type) &&
+        (!("company_id" in patch) || (patch.company_id || "") === (service.company_id || "")))) return;
+    if (entries.current[index]) entries.current[index].cancelled = true;
+    setServices(rows => rows.map((row, i) => i !== index ? row : {
+      ...row, ...patch, ...(row.kind === "company" ? { company_price: 0, company_value: 0 } : { agent_price: 0 }),
+      currency: "EGP", _priceSource: "auto",
+    }));
+  };
+  const fetchPrice = (index: number) => {
+    if (!services[index]) return;
+    if (entries.current[index]) entries.current[index].cancelled = true;
+    requested.current.add(services[index]);
+    refresh(value => value + 1);
+  };
 
   const statuses: PriceStatus[] = services.map((service, index) => {
     const plan = planFor(service, form, agents);
     const entry = entries.current[index];
+    const forced = requested.current.has(service);
+    if (manualPrice(service) && !forced && !(entry?.explicit && !entry.cancelled && entry.key === plan.key && samePrice(entry.service, service)))
+      return { state: "saved" };
     if (
       entry &&
-      !entry.cancelled &&
+      !entry.cancelled && !forced &&
       (entry.key === plan.key || (entry.awaitingAgent && entry.inputKey === plan.inputKey))
     )
       return entry.status;
-    if (!initialized.current && shouldPreserve(service, index)) return { state: "saved" };
+    if (!forced && shouldPreserve(service, index)) return { state: "saved" };
     // Also block save until an invalid/incomplete new context has cleared the
     // previous amount, even when no database request will be needed.
     return { state: "loading" };
   });
-  return { statuses, pending: statuses.some((status) => status.state === "loading") };
+  return { statuses, pending: statuses.some((status) => status.state === "loading"), setManualPrice, changeService, fetchPrice };
 }
