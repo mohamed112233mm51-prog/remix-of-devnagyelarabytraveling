@@ -327,8 +327,9 @@ export function AgentLedger({ lockedAgentId, initialAgentId = "", showAgentProfi
         n: i + 1, date: e.date, description: e.description, service: e.service, destination: e.destination,
         count: e.count, count__excel: e.count, price: fmtNum(e.price), price__excel: e.price,
         sv: fmtCurrency(e.serviceValue, e.currency), sv__excel: e.serviceValue,
-        debit: e.debit > 0 ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
-        credit: e.credit > 0 ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
+        // Match the ledger cells: signed cash-out/adjustment amounts are visible too.
+        debit: e.debit ? fmtCurrency(e.debit, e.currency) : "—", debit__excel: e.debit,
+        credit: e.credit ? fmtCurrency(e.credit, e.currency) : "—", credit__excel: e.credit,
         balance: fmtCurrency(e.balance, e.currency), balance__excel: e.balance,
         method: e.methodLabel, note: e.note, departureDate: e.departureDate,
       })),
