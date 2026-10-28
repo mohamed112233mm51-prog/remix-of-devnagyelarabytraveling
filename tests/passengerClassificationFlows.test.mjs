@@ -194,7 +194,7 @@ test("actual execution buttons fetch only on click and save through the unchange
   const h = setup("execution", null, { agents: pricingAgents, resolve: priceResult }); await preparePricedForm(h);
   assert.equal(h.priceCalls.length, 0);
   assert.equal(priceNumber(h, "سعر الشركة").props.value, 0); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 0);
-  assert.equal(h.nodes().filter(n => n.type === "button" && n.props.children === "جلب السعر").length, 2);
+  assert.equal(h.nodes().filter(n => n.type === "button" && ["جلب سعر الشركة", "جلب سعر البيع"].includes(n.props["aria-label"])).length, 2);
   await h.fetchPrice("سعر الشركة"); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 0);
   await h.fetchPrice("سعر البيع للوكيل");
   assert.equal(priceNumber(h, "سعر الشركة").props.value, 100);

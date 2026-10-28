@@ -4,7 +4,7 @@ import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Search, X, CheckCircle2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, CheckCircle2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useLive, useDropdownOptions, withSelected,
@@ -996,7 +996,7 @@ function ExecutionForm({
                   <Field label={`سعر الشركة (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput disabled={saving} value={Number(s.company_price) || 0} onChange={(n) => pricing.setManualPrice(i, n)} min={0} />
-                      <button type="button" className="btn" title="جلب سعر الشركة من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>جلب السعر</button>
+                      <button type="button" className="btn" title="جلب سعر الشركة من ملف التسعير" aria-label="جلب سعر الشركة" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", alignSelf: "center", width: 32, height: 32, padding: 0, flexShrink: 0, borderRadius: 6, background: "#0284c7", borderColor: "#0284c7", color: "#fff" }}><RefreshCw size={16} aria-hidden="true" /></button>
                     </div>
                     {priceHint(i)}
                   </Field>
@@ -1041,7 +1041,7 @@ function ExecutionForm({
                   <Field label={`سعر البيع للوكيل (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput disabled={saving} value={Number(s.agent_price) || 0} onChange={(n) => pricing.setManualPrice(i, n)} min={0} />
-                      <button type="button" className="btn" title="جلب سعر البيع من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>جلب السعر</button>
+                      <button type="button" className="btn" title="جلب سعر البيع من ملف التسعير" aria-label="جلب سعر البيع" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", alignSelf: "center", width: 32, height: 32, padding: 0, flexShrink: 0, borderRadius: 6, background: "#0284c7", borderColor: "#0284c7", color: "#fff" }}><RefreshCw size={16} aria-hidden="true" /></button>
                     </div>
                     {priceHint(i)}
                   </Field>
