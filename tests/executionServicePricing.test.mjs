@@ -7,7 +7,7 @@ const company = { kind: "company", service_type: "تذكرة", company_id: "c1",
 const sale = { kind: "agent", service_type: "تذكرة", count: 3, agent_price: 0 };
 const result = (price = 100, currency = "USD") => ({ rule: { company_price: price, currency }, agentPrice: price + 20 });
 
-function setup({ rows = [company, sale], form = initialForm, editing = false, agents = [{ id: "a1", tier: "A" }, { id: "a2", tier: "B" }], resolve = () => result() } = {}) {
+function setup({ rows = [company, sale], form = initialForm, agents = [{ id: "a1", tier: "A" }, { id: "a2", tier: "B" }], resolve = () => result() } = {}) {
   let services = structuredClone(rows), inputs = { ...form }, agentRows = structuredClone(agents);
   let cells = [], cursor = 0, effects = [], dirty = false, output, unmounted = false;
   const calls = [];
@@ -27,7 +27,7 @@ function setup({ rows = [company, sale], form = initialForm, editing = false, ag
   const pricing = { resolveAgentPrice: async context => { calls.push(context); return resolve(context, calls.length); } };
   const { useExecutionServicePricing } = loadTsModule("src/hooks/useExecutionServicePricing.ts", { react, "@/lib/pricingMatch": pricing });
   const setServices = update => { assert.equal(unmounted, false, "late requests must not set state after unmount"); services = typeof update === "function" ? update(services) : update; dirty = true; };
-  function render(runEffects = true) { cursor = 0; dirty = false; output = useExecutionServicePricing(inputs, services, agentRows, setServices, editing); if (runEffects) while (effects.length) effects.shift()(); }
+  function render(runEffects = true) { cursor = 0; dirty = false; output = useExecutionServicePricing(inputs, services, agentRows, setServices); if (runEffects) while (effects.length) effects.shift()(); }
   async function settle() { for (let i = 0; i < 15; i++) { await flush(); if (dirty) render(); } assert.equal(dirty, false); }
   render();
   return {
@@ -36,6 +36,7 @@ function setup({ rows = [company, sale], form = initialForm, editing = false, ag
     async update(index, patch) { services = services.map((row, i) => i === index ? { ...row, ...patch } : row); render(); await settle(); },
     async manual(index, price) { output.setManualPrice(index, price); render(); await settle(); },
     async fetch(index) { output.fetchPrice(index); render(); await settle(); },
+    async fetchMany(indices) { indices.forEach(index => output.fetchPrice(index)); render(); await settle(); },
     async changeService(index, patch) { output.changeService(index, patch); render(); await settle(); },
     async remove(index) { services = services.filter((_, i) => i !== index); render(); await settle(); },
     async add(row) { services = [...services, { ...row }]; render(); await settle(); },
@@ -47,134 +48,137 @@ function setup({ rows = [company, sale], form = initialForm, editing = false, ag
   };
 }
 
-test("initial buy/sell prices load automatically through one shared read, retaining quantities and currency", async () => {
-  const h = setup(); assert.equal(h.status.pending, true); await h.settle();
-  assert.equal(h.calls.length, 1); assert.equal(h.rows[0].company_price, 100); assert.equal(h.rows[1].agent_price, 120);
-  assert.equal(h.rows[0].count, 2); assert.equal(h.rows[1].count, 3);
-  assert.equal(h.rows[0].currency, "USD"); assert.equal(h.rows[1].currency, "USD");
-  assert.equal(h.status.pending, false); assert.ok(h.status.statuses.every(s => s.state === "matched"));
+test("opening a new form and adding rows never reads or clears prices", async () => {
+  const h = setup(); assert.equal(h.status.pending, false); await h.settle();
+  assert.equal(h.calls.length, 0); assert.equal(h.rows[0].company_price, 0);
+  await h.add({ ...sale, agent_price: 777, currency: "LYD", _priceSource: "auto" });
+  assert.equal(h.calls.length, 0); assert.equal(h.rows[2].agent_price, 777); assert.equal(h.rows[2].currency, "LYD");
 });
 
-test("every form pricing factor, selected agent and agent tier triggers a fresh exact context", async () => {
-  const h = setup({ resolve: (_ctx, n) => result(100 + n) }); await h.settle();
-  for (const [field, value] of Object.entries({ departure_from: "طرابلس", destination: "القاهرة", airline: "برنيق", approval_company_id: "c2", status: "عادي", passenger_type: "طفل", agent_id: "a2" })) {
-    const before = h.calls.length; await h.form({ [field]: value }); assert.ok(h.calls.length > before, field);
-    if (field !== "agent_id") assert.equal(h.calls.at(-1)[field], value, field);
-    else assert.equal(h.calls.at(-1).agent_tier, "B");
+test("explicit buy/sell buttons update only their own row using current quantities and currency", async () => {
+  const h = setup({ rows: [{ ...company, company_price: 7, company_value: 25 }, { ...sale, agent_price: 9 }] }); await h.settle();
+  await h.fetch(0); assert.equal(h.calls.length, 1); assert.equal(h.rows[0].company_price, 100);
+  assert.equal(h.rows[0].company_value, 0); assert.equal(h.rows[0].currency, "USD"); assert.equal(h.rows[0].count, 2);
+  assert.equal(h.rows[1].agent_price, 9);
+  await h.fetch(1); assert.equal(h.calls.length, 2); assert.equal(h.rows[1].agent_price, 120); assert.equal(h.rows[1].count, 3);
+  assert.equal(h.status.pending, false);
+});
+
+test("all pricing dimensions, agent/tier hydration and unrelated form edits retain fetched prices until another click", async () => {
+  const h = setup(); await h.fetchMany([0, 1]); const before = structuredClone(h.rows), reads = h.calls.length;
+  for (const [field, value] of Object.entries({ departure_from: "طرابلس", destination: "القاهرة", airline: "برنيق", approval_company_id: "c2", status: "عادي", passenger_type: "طفل", agent_id: "a2", notes: "ملاحظة", travel_date: "2026-10-21", dob: "2018-10-20", operation_status: "منفذ" })) {
+    await h.form({ [field]: value }); assert.deepEqual(h.rows, before, field); assert.equal(h.calls.length, reads, field);
+    assert.equal(h.status.pending, false);
   }
-  const before = h.calls.length; await h.agents([{ id: "a2", tier: "C" }]);
-  assert.ok(h.calls.length > before); assert.equal(h.calls.at(-1).agent_tier, "C");
+  await h.agents([{ id: "a2", tier: "C" }]); assert.deepEqual(h.rows, before); assert.equal(h.calls.length, reads);
+  await h.fetch(1); assert.equal(h.calls.length, reads + 1);
+  assert.equal(h.calls.at(-1).agent_tier, "C"); assert.equal(h.calls.at(-1).company_id, "c2");
+  assert.equal(h.calls.at(-1).passenger_type, "طفل"); assert.equal(h.calls.at(-1).destination, "القاهرة");
 });
 
-test("row company and service changes refresh only that row and preserve buy-company versus sale-company selection", async () => {
-  const h = setup(); await h.settle();
-  await h.update(0, { company_id: "c3" }); assert.equal(h.calls.length, 2); assert.equal(h.calls.at(-1).company_id, "c3");
-  assert.equal(h.rows[1].agent_price, 120);
-  await h.update(1, { service_type: "موافقة" }); assert.equal(h.calls.length, 3);
-  assert.equal(h.calls.at(-1).company_id, "c1"); assert.equal(h.calls.at(-1).service_type, "موافقة");
+test("changing a row's service and purchase issuer keeps unit price, explicit total and currency", async () => {
+  const h = setup({ rows: [{ ...company, company_price: 777, company_value: 1554, currency: "LYD" }, { ...sale, agent_price: 888, currency: "USD" }] }); await h.settle();
+  await h.changeService(0, { company_id: "c3", service_type: "موافقة" }); await h.changeService(1, { service_type: "استقبال" });
+  assert.equal(h.calls.length, 0); assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[0].company_value, 1554); assert.equal(h.rows[0].currency, "LYD");
+  assert.equal(h.rows[1].agent_price, 888); assert.equal(h.rows[1].currency, "USD");
+  await h.fetch(0); assert.equal(h.calls[0].company_id, "c3"); assert.equal(h.calls[0].service_type, "موافقة");
+  await h.fetch(1); assert.equal(h.calls[1].company_id, "c1"); assert.equal(h.calls[1].service_type, "استقبال");
 });
 
-test("quantity, note and manual price edits do not fetch or overwrite a settled manual override", async () => {
-  const h = setup(); await h.settle();
-  await h.update(0, { count: 4, note: "ملاحظة" }); await h.manual(0, 777); await h.manual(1, 888);
-  await h.form({ notes: "ملاحظة تنفيذ", operation_status: "منفذ", travel_date: "2026-10-21" });
-  assert.equal(h.calls.length, 1); assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[1].agent_price, 888);
-  await h.form({ destination: "مصراتة" }); assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[0].count, 4);
+test("missing company, agent or service only shows feedback on click, without clearing saved prices", async () => {
+  for (const [rows, form, expected] of [
+    [[{ ...sale, agent_price: 88 }], { ...initialForm, approval_company_id: "" }, /الشركة/],
+    [[{ ...sale, agent_price: 88 }], { ...initialForm, agent_id: "" }, /الوكيل/],
+    [[{ ...sale, service_type: "", agent_price: 88 }], initialForm, /نوع الخدمة/],
+  ]) {
+    const h = setup({ rows, form }); await h.settle(); assert.equal(h.status.statuses[0].state, "saved");
+    await h.fetch(0); assert.equal(h.calls.length, 0); assert.match(h.status.statuses[0].message, expected);
+    assert.equal(h.rows[0].agent_price, 88); assert.equal(h.status.pending, false);
+  }
 });
 
-test("new agent with the same tier still triggers the requested context refresh", async () => {
-  const h = setup({ agents: [{ id: "a1", tier: "A" }, { id: "other", tier: "A" }] }); await h.settle();
-  await h.form({ agent_id: "other" }); assert.equal(h.calls.length, 2);
+test("unmatched and failed explicit reads preserve the existing prices, currency and explicit total", async () => {
+  for (const resolve of [() => ({ rule: null, agentPrice: null, reason: "لا يوجد سعر مطابق" }), () => { throw Error("offline"); }]) {
+    const h = setup({ rows: [{ ...company, company_price: 777, company_value: 1554, currency: "LYD" }, { ...sale, agent_price: 888, currency: "USD" }], resolve });
+    const before = structuredClone(h.rows); await h.fetchMany([0, 1]);
+    assert.deepEqual(h.rows, before); assert.equal(h.status.pending, false);
+    assert.ok(h.status.statuses.every(status => status.state === "missing" && status.message));
+  }
 });
 
-test("missing source or agent clears the stale amount and legacy total and performs no invalid read", async () => {
-  const h = setup({ rows: [{ ...company, company_id: null }, sale] }); await h.settle();
-  await h.form({ approval_company_id: "" }); assert.equal(h.calls.length, 1);
-  assert.equal(h.rows[0].company_price, 0); assert.equal(h.rows[0].company_value, 0); assert.equal(h.rows[1].agent_price, 0);
-  assert.ok(h.status.statuses.every(s => s.state === "missing"));
-  const other = setup(); await other.settle(); await other.form({ agent_id: "" });
-  assert.equal(other.rows[1].agent_price, 0); assert.match(other.status.statuses[1].message, /الوكيل/);
-  assert.equal(other.calls.at(-1).agent_tier, "A"); // existing purchase fallback
+test("context changes during a pending lookup cancel its result without starting another read", async () => {
+  const old = deferred(); const h = setup({ rows: [{ ...sale, agent_price: 55, currency: "LYD" }], resolve: (_ctx, n) => n === 1 ? old.promise : result(400) });
+  await h.fetch(0); assert.equal(h.status.pending, true); assert.equal(h.rows[0].agent_price, 55);
+  await h.form({ destination: "طرابلس" }); assert.equal(h.status.pending, false); assert.equal(h.calls.length, 1);
+  old.resolve(result(900)); await h.settle(); assert.equal(h.rows[0].agent_price, 55); assert.equal(h.rows[0].currency, "LYD");
+  await h.fetch(0); assert.equal(h.rows[0].agent_price, 420); assert.equal(h.calls[1].destination, "طرابلس");
 });
 
-test("no matching rule and network failure expose a warning, clear stale price/currency and allow manual entry", async () => {
-  let fail = false;
-  const h = setup({ resolve: () => fail ? { rule: null, agentPrice: null, reason: "لا يوجد سعر مطابق" } : result() }); await h.settle();
-  fail = true; await h.form({ destination: "خارج القائمة" });
-  assert.equal(h.rows[0].company_price, 0); assert.equal(h.rows[1].agent_price, 0); assert.equal(h.rows[1].currency, "EGP");
-  assert.equal(h.status.pending, false); assert.match(h.status.statuses[1].message, /لا يوجد سعر مطابق/);
-  await h.update(1, { agent_price: 45 }); assert.equal(h.rows[1].agent_price, 45);
-  const network = setup({ resolve: () => { throw Error("offline"); } }); await network.settle();
-  assert.equal(network.status.pending, false); assert.match(network.status.statuses[0].message, /تعذر جلب/);
+test("a stale response arriving after a context render but before its effect cannot apply", async () => {
+  const wait = deferred(); const h = setup({ rows: [{ ...sale, agent_price: 55 }], resolve: () => wait.promise });
+  await h.fetch(0); h.beforeEffects({ passenger_type: "طفل" }); assert.equal(h.status.pending, false);
+  wait.resolve(result(900)); await h.settle(); assert.equal(h.rows[0].agent_price, 55); assert.equal(h.calls.length, 1);
 });
 
-test("out-of-order responses cannot replace newer prices or currencies", async () => {
+test("newer explicit requests win over older responses, including currency", async () => {
   const old = deferred(), fresh = deferred();
-  const h = setup({ resolve: (_ctx, n) => n === 1 ? old.promise : fresh.promise }); await h.settle();
-  await h.form({ destination: "طرابلس" }); assert.equal(h.status.pending, true);
-  fresh.resolve(result(400, "LYD")); await h.settle();
-  old.resolve(result(100, "USD")); await h.settle();
-  assert.equal(h.rows[0].company_price, 400); assert.equal(h.rows[1].agent_price, 420); assert.equal(h.rows[1].currency, "LYD");
+  const h = setup({ rows: [sale], resolve: (_ctx, n) => n === 1 ? old.promise : fresh.promise });
+  await h.fetch(0); await h.fetch(0); fresh.resolve(result(400, "LYD")); await h.settle();
+  old.resolve(result(100, "USD")); await h.settle(); assert.equal(h.rows[0].agent_price, 420); assert.equal(h.rows[0].currency, "LYD");
 });
 
-test("a response arriving after render but before the changed context's effect cannot apply its stale price", async () => {
-  const old = deferred(), fresh = deferred();
-  const h = setup({ resolve: (_ctx, n) => n === 1 ? old.promise : fresh.promise }); await h.settle();
-  h.beforeEffects({ passenger_type: "طفل" }); assert.equal(h.status.pending, true);
-  old.resolve(result(900)); await h.settle();
-  assert.equal(h.rows[1].agent_price, 0); assert.equal(h.status.pending, true);
-  fresh.resolve(result(25)); await h.settle(); assert.equal(h.rows[1].agent_price, 45);
-});
-
-test("deleting a pending row does not apply its response to the shifted next row", async () => {
+test("deleting a pending row cannot update its shifted neighbor; the neighbor's own request still completes", async () => {
   const first = deferred(), second = deferred();
-  const h = setup({ rows: [company, { ...sale, service_type: "موافقة" }], resolve: ctx => ctx.service_type === "تذكرة" ? first.promise : second.promise }); await h.settle();
-  await h.remove(0); first.resolve(result(999)); await h.settle(); assert.equal(h.rows[0].agent_price, 0);
-  second.resolve(result(50)); await h.settle(); assert.equal(h.rows.length, 1); assert.equal(h.rows[0].agent_price, 70);
+  const h = setup({ rows: [company, { ...sale, service_type: "موافقة" }], resolve: ctx => ctx.service_type === "تذكرة" ? first.promise : second.promise });
+  await h.fetchMany([0, 1]); await h.remove(0); first.resolve(result(999)); await h.settle(); assert.equal(h.rows[0].agent_price, 0);
+  second.resolve(result(50)); await h.settle(); assert.equal(h.rows[0].agent_price, 70); assert.equal(h.calls.length, 2);
 });
 
-test("count and note changes during lookup retain the request and use the latest row values", async () => {
-  const pending = deferred(); const h = setup({ resolve: () => pending.promise }); await h.settle();
-  await h.update(0, { count: 7, note: "latest" }); assert.equal(h.calls.length, 1);
-  pending.resolve(result()); await h.settle();
-  assert.equal(h.rows[0].company_price, 100); assert.equal(h.rows[0].count, 7); assert.equal(h.rows[0].note, "latest");
+test("count and note changes during a requested lookup use the latest row without extra reads", async () => {
+  const wait = deferred(); const h = setup({ rows: [company], resolve: () => wait.promise }); await h.fetch(0);
+  h.beforeServiceEffects(rows => rows.map(row => ({ ...row, count: 7, note: "latest" }))); assert.equal(h.status.pending, true);
+  wait.resolve(result()); await h.settle(); assert.equal(h.calls.length, 1); assert.equal(h.rows[0].company_price, 100);
+  assert.equal(h.rows[0].count, 7); assert.equal(h.rows[0].note, "latest");
 });
 
-test("a response arriving between removal render and effect follows its row rather than its previous index", async () => {
+test("a response between removal render and effect follows its row, never its old index", async () => {
   const first = deferred(), second = deferred();
-  const h = setup({ rows: [company, { ...sale, service_type: "موافقة" }], resolve: ctx => ctx.service_type === "تذكرة" ? first.promise : second.promise }); await h.settle();
-  h.beforeServiceEffects(rows => rows.slice(1));
+  const h = setup({ rows: [company, { ...sale, service_type: "موافقة" }], resolve: ctx => ctx.service_type === "تذكرة" ? first.promise : second.promise });
+  await h.fetchMany([0, 1]); h.beforeServiceEffects(rows => rows.slice(1)); assert.equal(h.status.pending, true);
   first.resolve(result(999)); second.resolve(result(50)); await h.settle();
   assert.equal(h.rows.length, 1); assert.equal(h.rows[0].agent_price, 70); assert.equal(h.status.pending, false);
 });
 
-test("unchanged historical prices and explicit totals survive open, unrelated edits, row additions and removals", async () => {
-  const h = setup({ editing: true, rows: [{ ...company, company_price: 13, company_value: 26, currency: "LYD" }, { ...sale, agent_price: 17 }] }); await h.settle();
-  assert.equal(h.calls.length, 0); await h.update(0, { note: "unchanged price" }); await h.add({ ...sale, service_type: "جديد" });
-  assert.equal(h.calls.length, 0); assert.equal(h.rows[0].company_price, 13); assert.equal(h.rows[0].company_value, 26);
-  await h.remove(0); assert.equal(h.rows[0].agent_price, 17); assert.equal(h.calls.length, 0); assert.equal(h.status.pending, false);
-  await h.form({ passenger_type: "طفل" }); assert.equal(h.rows[0].agent_price, 17);
+test("manual input, including zero or the original price, cancels a pending explicit result", async () => {
+  for (const price of [0, 55, 777]) {
+    const wait = deferred(); const h = setup({ rows: [{ ...sale, agent_price: 55 }], resolve: () => wait.promise });
+    await h.fetch(0); await h.manual(0, price); wait.resolve(result(900)); await h.settle();
+    assert.equal(h.rows[0].agent_price, price); assert.equal(h.rows[0]._priceSource, "manual"); assert.equal(h.status.pending, false);
+  }
 });
 
-test("historical agent hydration and tier changes preserve saved prices until an explicit fetch", async () => {
-  const h = setup({ editing: true, agents: [], rows: [{ ...sale, agent_price: 55 }] }); await h.settle();
-  await h.agents([{ id: "a1", tier: "B" }]); assert.equal(h.calls.length, 0); assert.equal(h.rows[0].agent_price, 55);
-  await h.agents([{ id: "a1", tier: "C" }]); assert.equal(h.calls.length, 0); assert.equal(h.rows[0].agent_price, 55);
-  await h.fetch(0); assert.equal(h.calls.length, 1); assert.equal(h.rows[0].agent_price, 120);
+test("manual currency changes also invalidate a pending explicit lookup", async () => {
+  const wait = deferred(); const h = setup({ rows: [sale], resolve: () => wait.promise });
+  await h.fetch(0); h.beforeServiceEffects(rows => rows.map(row => ({ ...row, currency: "LYD" })));
+  wait.resolve(result(900)); await h.settle(); assert.equal(h.rows[0].agent_price, 0); assert.equal(h.rows[0].currency, "LYD");
 });
 
-test("strict effect replay restarts pending reads without repricing saved historical rows", async () => {
-  const wait = deferred(); const h = setup({ resolve: () => wait.promise }); await h.settle(); h.strictReplay(); await h.settle();
-  wait.resolve(result()); await h.settle(); assert.equal(h.rows[1].agent_price, 120); assert.equal(h.status.pending, false);
-  const history = setup({ editing: true }); await history.settle(); history.strictReplay(); await history.settle(); assert.equal(history.calls.length, 0);
+test("saved and restored manual/automatic/untagged rows all preserve their prices through edits and hydration", async () => {
+  for (const source of [undefined, "manual", "auto"]) {
+    const h = setup({ agents: [], rows: [{ ...sale, agent_price: 55, currency: "LYD", _priceSource: source }] }); await h.settle();
+    await h.agents([{ id: "a1", tier: "B" }]); await h.form({ passenger_type: "طفل" });
+    assert.equal(h.calls.length, 0); assert.equal(h.rows[0].agent_price, 55); assert.equal(h.rows[0].currency, "LYD");
+    await h.fetch(0); assert.equal(h.calls.length, 1); assert.equal(h.calls[0].agent_tier, "B");
+  }
 });
 
-test("unmounted forms ignore late lookup results", async () => {
-  const wait = deferred(); const h = setup({ resolve: () => wait.promise }); await h.settle(); h.unmount();
-  wait.resolve(result()); await flush(); assert.equal(h.rows[0].company_price, 0);
+test("strict effect replay never initiates a lookup and unmount ignores pending results", async () => {
+  const h = setup(); await h.settle(); h.strictReplay(); await h.settle(); assert.equal(h.calls.length, 0);
+  const wait = deferred(), pending = setup({ resolve: () => wait.promise }); await pending.fetch(0); pending.unmount();
+  wait.resolve(result()); await flush(); assert.equal(pending.rows[0].company_price, 0);
 });
 
-test("automatic prices reuse the real most-specific pricing resolver and its existing read-only table", async () => {
+test("manual buttons use the existing most-specific resolver and read-only pricing table", async () => {
   const reads = [];
   const rules = [
     { company_id: "c1", service_type: "تذكرة", agent_tier: "A", company_price: 100, agent_price: 120, currency: "EGP" },
@@ -184,14 +188,14 @@ test("automatic prices reuse the real most-specific pricing resolver and its exi
     assert.equal(table, "company_pricing_rules"); const filters = [];
     const q = { select() { return q; }, eq(k, v) { filters.push([k, v]); return q; }, then(resolve) { reads.push(filters); return Promise.resolve({ data: rules.filter(r => filters.every(([k, v]) => r[k] === v)) }).then(resolve); } }; return q;
   } } } });
-  const h = setup({ resolve: resolveAgentPrice }); await h.settle(); assert.equal(h.rows[1].agent_price, 120);
-  await h.form({ passenger_type: "طفل" }); assert.equal(h.rows[0].company_price, 70); assert.equal(h.rows[1].agent_price, 85); assert.equal(h.rows[0].currency, "LYD");
-  assert.equal(reads.length, 2);
+  const h = setup({ resolve: resolveAgentPrice }); await h.settle(); assert.equal(reads.length, 0);
+  await h.fetchMany([0, 1]); assert.equal(h.rows[0].company_price, 100); assert.equal(h.rows[1].agent_price, 120); assert.equal(reads.length, 1);
+  await h.form({ passenger_type: "طفل" }); assert.equal(h.rows[1].agent_price, 120); assert.equal(reads.length, 1);
+  await h.fetchMany([0, 1]); assert.equal(h.rows[0].company_price, 70); assert.equal(h.rows[1].agent_price, 85); assert.equal(h.rows[0].currency, "LYD"); assert.equal(reads.length, 2);
 });
 
-test("reselecting the same service or equivalent empty issuer never clears a manual price", async () => {
-  const h = setup({ rows: [{ ...company, company_id: undefined }] }); await h.settle();
-  await h.manual(0, 777); await h.changeService(0, { service_type: company.service_type });
-  await h.changeService(0, { company_id: null });
-  assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[0]._priceSource, "manual");
+test("reselecting the same service or equivalent empty issuer never clears a price", async () => {
+  const h = setup({ rows: [{ ...company, company_id: undefined, company_price: 777, currency: "LYD" }] }); await h.settle();
+  await h.changeService(0, { service_type: company.service_type }); await h.changeService(0, { company_id: null });
+  assert.equal(h.rows[0].company_price, 777); assert.equal(h.rows[0].currency, "LYD"); assert.equal(h.calls.length, 0);
 });

@@ -190,11 +190,15 @@ async function preparePricedForm(h) {
   await h.change("جهة الموافقة (الشركة الصادرة)", "c1");
 }
 
-test("actual execution controls fetch both prices without a button and save through the unchanged financial gateway", async () => {
+test("actual execution buttons fetch only on click and save through the unchanged financial gateway", async () => {
   const h = setup("execution", null, { agents: pricingAgents, resolve: priceResult }); await preparePricedForm(h);
+  assert.equal(h.priceCalls.length, 0);
+  assert.equal(priceNumber(h, "سعر الشركة").props.value, 0); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 0);
+  assert.equal(h.nodes().filter(n => n.type === "button" && n.props.children === "جلب السعر").length, 2);
+  await h.fetchPrice("سعر الشركة"); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 0);
+  await h.fetchPrice("سعر البيع للوكيل");
   assert.equal(priceNumber(h, "سعر الشركة").props.value, 100);
   assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 120);
-  assert.equal(h.nodes().find(n => n.props.title === "جلب السعر من ملف تسعير الشركة"), undefined);
   assert.ok(h.priceCalls.length > 0); assert.equal(h.calls.length, 0);
   await h.save();
   const saved = h.calls.find(c => c.method === "postExecutionFinancials"); assert.ok(saved);
@@ -204,20 +208,27 @@ test("actual execution controls fetch both prices without a button and save thro
   assert.ok(saved.args.executionPatch.services.every(s => !Object.keys(s).some(k => /pricing|request|status/i.test(k))));
 });
 
-test("national-ID classification and travel-date changes update the actual service price automatically", async () => {
+test("national-ID classification and travel-date changes preserve prices until explicit fetch", async () => {
   const h = setup("execution", null, { agents: pricingAgents, resolve: priceResult }); await preparePricedForm(h);
+  await h.fetchPrice("سعر الشركة"); await h.fetchPrice("سعر البيع للوكيل"); const reads = h.priceCalls.length;
   await h.change("تاريخ المغادرة", "2026-10-18"); await h.change("الرقم القومي", "31410190100010");
   assert.equal(h.control("نوع المسافر").props.value, "معتمد child_under_12");
+  assert.equal(priceNumber(h, "سعر الشركة").props.value, 100); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 120);
+  assert.equal(h.priceCalls.length, reads);
+  await h.fetchPrice("سعر الشركة"); await h.fetchPrice("سعر البيع للوكيل");
   assert.equal(priceNumber(h, "سعر الشركة").props.value, 50); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 65);
   await h.change("تاريخ المغادرة", "2026-10-19");
   assert.equal(h.control("نوع المسافر").props.value, "معتمد young");
-  assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 120);
+  assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 65);
+  await h.fetchPrice("سعر البيع للوكيل"); assert.equal(priceNumber(h, "سعر البيع للوكيل").props.value, 120);
 });
 
-test("actual save button and handler block posting while automatic prices are pending", async () => {
+test("actual save button and handler block posting only while an explicit price request is pending", async () => {
   let release;
   const wait = new Promise(resolve => { release = resolve; });
   const h = setup("execution", null, { agents: pricingAgents, resolve: () => wait }); await preparePricedForm(h);
+  assert.equal(h.nodes().find(n => n.props["data-confirm-save"]).props.disabled, false);
+  await h.fetchPrice("سعر الشركة"); await h.fetchPrice("سعر البيع للوكيل");
   const save = h.nodes().find(n => n.type === "button" && n.props["data-confirm-save"]);
   assert.equal(save.props.disabled, true); assert.equal(priceNumber(h, "سعر الشركة").props.disabled, false);
   await h.save(); assert.equal(h.calls.length, 0); assert.ok(h.messages.includes("انتظر اكتمال تحديث أسعار الخدمات"));
@@ -289,7 +300,7 @@ test("saved DOB differing from national ID remains authoritative after editing t
 });
 
 const saleLabel = "سعر البيع للوكيل (للوحدة) — ج.م", costLabel = "سعر الشركة (للوحدة) — ج.م";
-async function newPricedExecution(options = {}) {
+async function newExecutionForm(options = {}) {
   const h = setup("execution", null, { agents: pricingAgents, resolve: priceResult, ...options }); await preparePricedForm(h); return h;
 }
 const savedExecution = () => ({ id: "saved-prices", passenger_name: "مسافر محفوظ", agent_id: "a1", approval_company_id: "c1", passenger_type: "معتمد male", services: [
@@ -298,7 +309,7 @@ const savedExecution = () => ({ id: "saved-prices", passenger_name: "مسافر 
 ] });
 
 test("manual buy/sell prices survive all pricing dimensions, failed save and draft restore; draft metadata never reaches the financial gateway", async () => {
-  const h = await newPricedExecution({ saveFails: true });
+  const h = await newExecutionForm({ saveFails: true });
   await h.change(saleLabel, 1350); await h.change(costLabel, 850);
   for (const [label, value] of [["الوجهة", "طرابلس"], ["جهة المغادرة", "القاهرة"], ["حالة الموافقة", "سريع"], ["الاسم", "اسم معدل"], ["ملاحظات", "ملاحظة معدلة"]]) await h.change(label, value);
   assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(costLabel).props.value, 850);
@@ -310,7 +321,7 @@ test("manual buy/sell prices survive all pricing dimensions, failed save and dra
 });
 
 test("manual zero and a manual value equal to the list price survive later matches and restored drafts", async () => {
-  const h = await newPricedExecution(); await h.change(costLabel, 0); await h.change(saleLabel, 120);
+  const h = await newExecutionForm(); await h.change(costLabel, 0); await h.change(saleLabel, 120);
   await h.change("الوجهة", "طرابلس");
   const reopened = setup("execution", null, { agents: pricingAgents, resolve: () => ({ rule: { company_price: 500, currency: "USD" }, agentPrice: 650 }), storage: draftStorage(h) }); await reopened.settle();
   assert.equal(reopened.control(costLabel).props.value, 0); assert.equal(reopened.control(saleLabel).props.value, 120);
@@ -318,40 +329,42 @@ test("manual zero and a manual value equal to the list price survive later match
 
 test("a manually priced unmatched service stays manual when a matching price later becomes available", async () => {
   let available = false;
-  const h = await newPricedExecution({ resolve: ctx => available ? priceResult(ctx) : { rule: null, agentPrice: null } });
+  const h = await newExecutionForm({ resolve: ctx => available ? priceResult(ctx) : { rule: null, agentPrice: null } });
   await h.change(saleLabel, 850); available = true; await h.change("الوجهة", "بنغازي");
-  assert.equal(h.control(saleLabel).props.value, 850); assert.equal(h.control(costLabel).props.value, 100);
+  assert.equal(h.control(saleLabel).props.value, 850); assert.equal(h.control(costLabel).props.value, 0);
+  assert.equal(h.priceCalls.length, 0); await h.fetchPrice("سعر الشركة"); assert.equal(h.control(costLabel).props.value, 100);
 });
 
-test("legacy untagged drafts preserve positive prices, while tagged automatic drafts still refresh", async () => {
+test("legacy and previously automatic drafts retain all prices without background refresh", async () => {
   const existing = savedExecution(); const initial = setup("execution", existing); await initial.settle();
   const form = JSON.parse(initial.storage.get("draft:execution:saved-prices:form"));
   const oldDraft = setup("execution", null, { agents: pricingAgents, resolve: priceResult, storage: {
     "draft:execution:new:form": form, "draft:execution:new:services": existing.services,
   } }); await oldDraft.settle(); assert.equal(oldDraft.priceCalls.length, 0); assert.equal(oldDraft.control(saleLabel).props.value, 1350);
-  const automatic = await newPricedExecution();
+  const automatic = await newExecutionForm(); await automatic.fetchPrice("سعر الشركة"); await automatic.fetchPrice("سعر البيع للوكيل");
   const missing = setup("execution", null, { agents: pricingAgents, resolve: () => ({ rule: null, agentPrice: null }), storage: draftStorage(automatic) }); await missing.settle();
-  assert.equal(missing.control(saleLabel).props.value, 0); assert.equal(missing.control(costLabel).props.value, 0);
+  assert.equal(missing.control(saleLabel).props.value, 120); assert.equal(missing.control(costLabel).props.value, 100); assert.equal(missing.priceCalls.length, 0);
 });
 
-test("changing a saved service or issuer resets only that row; explicit fetch replaces the selected price", async () => {
+test("changing a saved service or issuer preserves prices; explicit fetch replaces only the selected price", async () => {
   const h = setup("execution", savedExecution(), { agents: pricingAgents, resolve: priceResult }); await h.settle();
   await h.change("نوع الخدمة المباعة", "موافقة أمنية");
-  assert.equal(h.control(saleLabel).props.value, 0); assert.equal(h.control(costLabel).props.value, 700);
+  assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(costLabel).props.value, 700);
   await h.change(saleLabel, 900); await h.change("الشركة الصادرة", "c2");
-  assert.equal(h.control(costLabel).props.value, 0); assert.equal(h.control(saleLabel).props.value, 900); assert.equal(h.priceCalls.length, 0);
+  assert.equal(h.control(costLabel).props.value, 700); assert.equal(h.control(saleLabel).props.value, 900); assert.equal(h.priceCalls.length, 0);
   await h.fetchPrice("سعر الشركة"); assert.equal(h.control(costLabel).props.value, 100); assert.equal(h.control(saleLabel).props.value, 900);
   await h.change("الوجهة", "طرابلس"); assert.equal(h.control(saleLabel).props.value, 900);
 });
 
 test("row removal and addition preserve the manual provenance of the remaining rows", async () => {
-  const h = await newPricedExecution(); await h.change(saleLabel, 1350); await h.click("إضافة خدمة وكيل");
+  const h = await newExecutionForm(); await h.change(saleLabel, 1350); await h.click("إضافة خدمة وكيل");
   await h.change(saleLabel, 1500, 1); await h.click("إزالة", 0); await h.change("الوجهة", "طرابلس");
   assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(saleLabel, 1).props.value, 1500);
 });
 
-test("manual input during a pending automatic request wins while the other row still fills", async () => {
-  const response = deferred(); const h = await newPricedExecution({ resolve: () => response.promise });
+test("manual input during a pending explicit request wins while the other requested row still fills", async () => {
+  const response = deferred(); const h = await newExecutionForm({ resolve: () => response.promise });
+  await h.fetchPrice("سعر الشركة"); await h.fetchPrice("سعر البيع للوكيل");
   await h.change(saleLabel, 1350); response.resolve(priceResult({})); await h.settle();
   assert.equal(h.control(saleLabel).props.value, 1350); assert.equal(h.control(costLabel).props.value, 100);
 });
@@ -363,17 +376,17 @@ test("newer manual input cancels an explicit fetch without disturbing its origin
   assert.equal(h.control(saleLabel).props.value, 1450);
 });
 
-test("an old automatic response cannot undo a newer explicit fetch on that row", async () => {
+test("an older explicit response cannot undo a newer fetch on the same row", async () => {
   const old = deferred(); let requests = 0;
-  const h = await newPricedExecution({ resolve: () => ++requests === 1 ? old.promise : { ...priceResult({}), agentPrice: 1500 } });
-  await h.fetchPrice("سعر البيع للوكيل"); assert.equal(h.control(saleLabel).props.value, 1500);
+  const h = await newExecutionForm({ resolve: () => ++requests === 1 ? old.promise : { ...priceResult({}), agentPrice: 1500 } });
+  await h.fetchPrice("سعر البيع للوكيل"); await h.fetchPrice("سعر البيع للوكيل"); assert.equal(h.control(saleLabel).props.value, 1500);
   old.resolve(priceResult({})); await h.settle();
-  assert.equal(h.control(saleLabel).props.value, 1500); assert.equal(h.control(costLabel).props.value, 100);
+  assert.equal(h.control(saleLabel).props.value, 1500); assert.equal(h.control(costLabel).props.value, 0);
 });
 
 test("failed and unmatched explicit fetches preserve manual amounts and show feedback", async () => {
   let mode = "match";
-  const h = await newPricedExecution({ resolve: ctx => mode === "match" ? priceResult(ctx) : mode === "missing" ? { rule: null, agentPrice: null, reason: "لا يوجد سعر مطابق" } : Promise.reject(Error("offline")) });
+  const h = await newExecutionForm({ resolve: ctx => mode === "match" ? priceResult(ctx) : mode === "missing" ? { rule: null, agentPrice: null, reason: "لا يوجد سعر مطابق" } : Promise.reject(Error("offline")) });
   await h.change(saleLabel, 1350); mode = "missing"; await h.fetchPrice("سعر البيع للوكيل");
   assert.equal(h.control(saleLabel).props.value, 1350);
   assert.ok(h.nodes().some(n => n.props.role === "status" && JSON.stringify(n.props.children).includes("لا يوجد سعر مطابق")));

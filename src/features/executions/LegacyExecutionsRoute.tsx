@@ -636,12 +636,12 @@ function ExecutionForm({
     return out;
   }, [editing, serviceKinds]);
   const [services, setServices, clearServices] = usePersistentState<ExecutionServiceDraft[]>(`${draftKey}:services`, initialServices);
-  const pricing = useExecutionServicePricing(form, services, agents, setServices, Boolean(editing?.id));
+  const pricing = useExecutionServicePricing(form, services, agents, setServices);
   const priceHint = (index: number) => {
     const status = pricing.statuses[index];
     if (!status || status.state === "saved" || status.state === "matched") return null;
     return <div role="status" style={{ marginTop: 4, fontSize: 11, color: status.state === "loading" ? "#475569" : "#b45309" }}>
-      {status.state === "loading" ? "جاري تحديث السعر تلقائيًا..." : status.message}
+      {status.state === "loading" ? "جاري جلب السعر..." : status.message}
     </div>;
   };
   const [saving, setSaving] = useState(false);
@@ -996,7 +996,7 @@ function ExecutionForm({
                   <Field label={`سعر الشركة (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput disabled={saving} value={Number(s.company_price) || 0} onChange={(n) => pricing.setManualPrice(i, n)} min={0} />
-                      <button type="button" className="btn" title="جلب سعر الشركة من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>🔄</button>
+                      <button type="button" className="btn" title="جلب سعر الشركة من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>جلب السعر</button>
                     </div>
                     {priceHint(i)}
                   </Field>
@@ -1041,7 +1041,7 @@ function ExecutionForm({
                   <Field label={`سعر البيع للوكيل (للوحدة) — ${currencyShortLabel((s as any).currency || "EGP")}`}>
                     <div style={{ display: "flex", gap: 4 }}>
                       <NumberInput disabled={saving} value={Number(s.agent_price) || 0} onChange={(n) => pricing.setManualPrice(i, n)} min={0} />
-                      <button type="button" className="btn" title="جلب سعر البيع من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>🔄</button>
+                      <button type="button" className="btn" title="جلب سعر البيع من ملف التسعير" disabled={saving} onClick={() => pricing.fetchPrice(i)} style={{ padding: "4px 8px", fontSize: 11 }}>جلب السعر</button>
                     </div>
                     {priceHint(i)}
                   </Field>
