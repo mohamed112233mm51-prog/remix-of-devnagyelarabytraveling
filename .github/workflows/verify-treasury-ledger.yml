@@ -7,7 +7,7 @@ on:
       - 'src/hooks/useTreasuryLedgerPage.ts'
       - 'src/lib/treasuryLedger.ts'
       - 'src/routes/reports.tsx'
-      - 'supabase/**treasury*'
+      - 'supabase/migrations/*_treasury_ledger_page.sql'
       - 'tests/treasuryLedger*'
       - '.github/workflows/verify-treasury-ledger.yml'
 permissions:
@@ -21,12 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Generate migration using Supabase CLI
-        run: |
-          npx --yes supabase migration new treasury_ledger_page
-          migration_path=$(find supabase/migrations -name '*_treasury_ledger_page.sql' | sort | tail -1)
-          cp supabase/treasury_ledger_page.sql "$migration_path"
-          echo "TREASURY_MIGRATION_PATH=$migration_path"
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
       - name: Treasury ledger database, paging and UI tests

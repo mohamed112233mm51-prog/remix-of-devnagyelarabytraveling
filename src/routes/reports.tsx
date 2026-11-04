@@ -209,6 +209,19 @@ const chartsCss = `
 function ReportsPage() {
   const expensesPerm = usePerm("expenses");
   const [tab, setTab] = useState<Tab>("agents");
+  const [tabReady, setTabReady] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("reports:last-tab");
+      if (["agents","companies","merchants","expenses","treasuries","currency_suppliers"].includes(saved || "")) setTab(saved as Tab);
+    } catch { /* storage may be unavailable */ }
+    setTabReady(true);
+  }, []);
+  useEffect(() => {
+    if (tabReady) {
+      try { window.localStorage.setItem("reports:last-tab", tab); } catch { /* optional UI preference */ }
+    }
+  }, [tab, tabReady]);
   const today = new Date();
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const def30 = iso(new Date(today.getTime() - 30 * 86400000));
@@ -307,7 +320,7 @@ function ReportsPage() {
 
       </>}
 
-      {tab === "treasuries" ? <TreasuriesReport inRange={inRange} /> : <ReportDataSection tab={tab} inRange={inRange} expensesAllowed={expensesPerm.view} />}
+      {tabReady && (tab === "treasuries" ? <TreasuriesReport inRange={inRange} /> : <ReportDataSection tab={tab} inRange={inRange} expensesAllowed={expensesPerm.view} />)}
       <style>{chartsCss}</style>
     </div>
   );

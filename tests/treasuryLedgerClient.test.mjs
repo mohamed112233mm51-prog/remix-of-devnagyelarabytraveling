@@ -6,7 +6,17 @@ const model=loadTsModule("src/lib/treasuryLedger.ts");
 const request={boxIds:["b","a"],scope:"current",month:"",page:2,boxId:"",direction:"out",search:" اسم ",operations:false,kind:""};
 test("client sends one bounded RPC with server filters and abort signal; no full-table fallback",async()=>{
   const calls=[];const controller=new AbortController();
-  const client={rpc(name,args){calls.push({name,args});return {abortSignal(signal){assert.equal(signal,controller.signal);return Promise.resolve({data:{...model.emptyTreasuryPage,total:1205,page:2},error:null});}}};
+  const client = {
+    rpc(name, args) {
+      calls.push({ name, args });
+      return {
+        abortSignal(signal) {
+          assert.equal(signal, controller.signal);
+          return Promise.resolve({ data: { ...model.emptyTreasuryPage, total: 1205, page: 2 }, error: null });
+        },
+      };
+    },
+  };
   await model.readTreasuryLedgerPage(client,request,controller.signal);
   assert.equal(calls.length,1);assert.equal(calls[0].name,"get_treasury_ledger_page");
   assert.deepEqual(calls[0].args.p_box_ids,["a","b"]);assert.equal(calls[0].args.p_page,2);
