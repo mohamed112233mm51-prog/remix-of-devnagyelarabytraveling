@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
 import { loadTsModule } from "./helpers/loadTsModule.mjs";
 
 const model=loadTsModule("src/lib/treasuryLedger.ts");
@@ -96,4 +98,33 @@ test("archive and month switching reset page without changing any financial rows
 });
 test("a failed page request does not display old rows as a successful empty archive",()=>{
   const h=harness();h.fail();assert.equal(h.rows().length,0);assert.match(h.text(),/فشل الاتصال/);assert.match(h.text(),/إعادة المحاولة/);
+});
+
+test("returning directly to the saved treasury tab does not mount the complete reports store",()=>{
+  const source=readFileSync(new URL("../src/routes/reports.tsx",import.meta.url),"utf8");
+  const ast=ts.createSourceFile("reports.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  const deps=Object.fromEntries(ast.statements.filter(ts.isImportDeclaration).map(n=>[n.moduleSpecifier.text,{}]));
+  let cells=[],cursor=0,effects=[],tree;
+  const react={
+    useState(initial){const i=cursor++;if(!(i in cells))cells[i]=typeof initial==="function"?initial():initial;return [cells[i],v=>{cells[i]=typeof v==="function"?v(cells[i]):v;}];},
+    useEffect(fn){effects.push(fn);},
+  };
+  const jsx=(type,props,key)=>({type,props:props||{},key});
+  Object.assign(deps,{react,"react/jsx-runtime":{jsx,jsxs:jsx},
+    "@tanstack/react-router":{createFileRoute:()=>options=>({options})},
+    "@/hooks/usePerm":{usePerm:()=>({view:true})},
+    "@/lib/reportsData":{useReportsData:()=>{throw Error("Treasury must not subscribe to the complete reports store");}},
+  });
+  const code=ts.transpileModule(source+"\nexport { ReportsPage };",{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  const module={exports:{}};
+  new Function("require","module","exports","window",code)(name=>deps[name],module,module.exports,{
+    localStorage:{getItem:()=>"treasuries",setItem(){}},
+  });
+  const nodes=node=>Array.isArray(node)?node.flatMap(nodes):node&&typeof node==="object"?[node,...nodes(node.props?.children)]:[];
+  const render=()=>{cursor=0;effects=[];tree=module.exports.ReportsPage();};
+  render();
+  assert.equal(nodes(tree).some(n=>n.type?.name==="ReportDataSection"),false);
+  effects.forEach(fn=>fn());render();
+  assert.equal(nodes(tree).some(n=>n.type?.name==="TreasuriesReport"),true);
+  assert.equal(nodes(tree).some(n=>n.type?.name==="ReportDataSection"),false);
 });
