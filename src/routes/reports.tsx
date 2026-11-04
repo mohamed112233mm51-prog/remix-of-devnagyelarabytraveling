@@ -209,6 +209,19 @@ const chartsCss = `
 function ReportsPage() {
   const expensesPerm = usePerm("expenses");
   const [tab, setTab] = useState<Tab>("agents");
+  const [tabReady, setTabReady] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("reports:last-tab");
+      if (["agents","companies","merchants","expenses","treasuries","currency_suppliers"].includes(saved || "")) setTab(saved as Tab);
+    } catch { /* storage may be unavailable */ }
+    setTabReady(true);
+  }, []);
+  useEffect(() => {
+    if (tabReady) {
+      try { window.localStorage.setItem("reports:last-tab", tab); } catch { /* optional UI preference */ }
+    }
+  }, [tab, tabReady]);
   const today = new Date();
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const def30 = iso(new Date(today.getTime() - 30 * 86400000));
@@ -234,12 +247,6 @@ function ReportsPage() {
 
   const inRange = (d: string | null | undefined) =>
     (!from || (d ?? "") >= from) && (!to || (d ?? "") <= to);
-
-  const data = useReportsData();
-
-  if (typeof window !== "undefined") {
-    console.log("[Reports] period:", period, "from:", from, "to:", to, "flights:", data.flights.length, "approvals:", data.approvals.length, "loading:", data.loading);
-  }
 
   const ALL_TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "agents", label: "الوكلاء", icon: <Users size={15} strokeWidth={2} /> },
@@ -279,6 +286,7 @@ function ReportsPage() {
         ))}
       </div>
 
+      {tab !== "treasuries" && <>
       <div className="card filter-toolbar-card">
         <div className="card-body">
           <div className="filter-toolbar">
@@ -310,15 +318,24 @@ function ReportsPage() {
         </div>
       </div>
 
-      {tab === "agents" && <AgentsReport inRange={inRange} data={data} />}
-      {tab === "companies" && <CompaniesReport inRange={inRange} data={data} />}
-      {tab === "merchants" && <MerchantsReport inRange={inRange} data={data} />}
-      {expensesPerm.view && tab === "expenses" && <ExpensesReport inRange={inRange} data={data} />}
-      {tab === "treasuries" && <TreasuriesReport inRange={inRange} />}
-      {tab === "currency_suppliers" && <CurrencySuppliersReport inRange={inRange} />}
+      </>}
+
+      {tabReady && (tab === "treasuries" ? <TreasuriesReport inRange={inRange} /> : <ReportDataSection tab={tab} inRange={inRange} expensesAllowed={expensesPerm.view} />)}
       <style>{chartsCss}</style>
     </div>
   );
+}
+
+
+/** Mount the existing complete reports store only for reports that consume it. */
+function ReportDataSection({ tab, inRange, expensesAllowed }: { tab: Tab; inRange: RangeFn; expensesAllowed: boolean }) {
+  const data = useReportsData();
+  if (tab === "agents") return <AgentsReport inRange={inRange} data={data} />;
+  if (tab === "companies") return <CompaniesReport inRange={inRange} data={data} />;
+  if (tab === "merchants") return <MerchantsReport inRange={inRange} data={data} />;
+  if (tab === "expenses" && expensesAllowed) return <ExpensesReport inRange={inRange} data={data} />;
+  if (tab === "currency_suppliers") return <CurrencySuppliersReport inRange={inRange} />;
+  return null;
 }
 
 type RangeFn = (d: string | null | undefined) => boolean;
@@ -1617,72 +1634,10 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
   const reportPerm = usePerm("reports");
   const settlementPerm = usePerm(CASH_BOX_SETTLEMENT_PERMISSION_KEY);
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: treasurySplits, loading: treasurySplitsLoading } = useLive<TreasuryOperationSplit>("payment_splits");
   const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => activeCashBoxes(boxes), [boxes]);
-  const boxNameById = useMemo(() => new Map(boxes.map((box) => [box.id, box.name])), [boxes]);
-
-
-  const treasuryOperations = useMemo(() => {
-    const operations: TreasuryOperationRow[] = [];
-    const usable = treasurySplits.filter((split) => !split.cancelled_at);
-    // Transfers are stored as two payment_splits rows (out + in) with the same source_id.
-    const transferGroups = new Map<string, TreasuryOperationSplit[]>();
-    for (const split of usable) {
-      if (split.source_table !== "cash_box_transfer") continue;
-      const key = split.source_id || `legacy:${split.id}`;
-      const group = transferGroups.get(key) || [];
-      group.push(split);
-      transferGroups.set(key, group);
-    }
-    for (const [key, group] of transferGroups) {
-      const out = group.find((split) => split.direction === "out") || null;
-      const incoming = group.find((split) => split.direction === "in") || null;
-      const sample = out || incoming || group[0];
-      if (!sample) continue;
-      const dateKey = String(sample.created_at || "").slice(0, 10);
-      if (!inRange(dateKey)) continue;
-      operations.push({
-        id: `transfer:${key}`,
-        performedAt: sample.created_at,
-        kind: "transfer",
-        type: "تحويل بين الخزائن",
-        from: out?.cash_box_id ? (boxNameById.get(out.cash_box_id) || "خزينة غير معروفة") : "—",
-        to: incoming?.cash_box_id ? (boxNameById.get(incoming.cash_box_id) || "خزينة غير معروفة") : "—",
-        fromBoxId: out?.cash_box_id || null,
-        toBoxId: incoming?.cash_box_id || null,
-        amount: Number(out?.amount ?? incoming?.amount ?? 0),
-        currency: String(out?.currency || incoming?.currency || sample.currency || "EGP"),
-        details: String(out?.method || incoming?.method || "تحويل بين الخزائن"),
-      });
-    }
-
-    // Treasury settlements use the treasury source table and a settlement method.
-    for (const split of usable) {
-      if (split.source_table !== "cash_transfers" || !String(split.method || "").startsWith("تسوية")) continue;
-      const dateKey = String(split.created_at || "").slice(0, 10);
-      if (!inRange(dateKey)) continue;
-      const boxName = split.cash_box_id ? (boxNameById.get(split.cash_box_id) || "خزينة غير معروفة") : "—";
-      const isIn = split.direction === "in";
-      operations.push({
-        id: `settlement:${split.id}`,
-        performedAt: split.created_at,
-        kind: isIn ? "settlement_in" : "settlement_out",
-        type: isIn ? "تسوية زيادة خزنة" : "تسوية عجز خزنة",
-        from: isIn ? "تسوية الخزنة" : boxName,
-        to: isIn ? boxName : "تسوية الخزنة",
-        fromBoxId: isIn ? null : split.cash_box_id,
-        toBoxId: isIn ? split.cash_box_id : null,
-        amount: Math.abs(Number(split.amount || 0)),
-        currency: String(split.currency || "EGP"),
-        details: String(split.method || (isIn ? "تسوية زيادة خزنة" : "تسوية عجز خزنة")),
-      });
-    }
-
-    return operations.sort((a, b) => String(b.performedAt).localeCompare(String(a.performedAt)));
-  }, [treasurySplits, boxNameById, inRange]);
   // كل حسابات الخزائن وأسعار الصرف من المحرك الموحد في src/lib/financialSummary.ts.
   const summary = useMemo(
     () => computeTreasurySummary(active, (cTxns || []) as any),
@@ -1717,27 +1672,6 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
     balance: fmtBalance(Number(b.balance || 0)),
     balance__excel: Number(b.balance || 0),
   }));
-
-  const [historyType, setHistoryType] = useState("");
-  const [historyBox, setHistoryBox] = useState("");
-  const [historySearch, setHistorySearch] = useState("");
-  const filteredTreasuryOperations = useMemo(() => {
-    const search = historySearch.trim().toLowerCase();
-    return treasuryOperations.filter((op) => {
-      if (historyType && op.kind !== historyType) return false;
-      if (historyBox && op.fromBoxId !== historyBox && op.toBoxId !== historyBox) return false;
-      if (search) {
-        const haystack = [op.type, op.from, op.to, op.details, op.currency, String(op.amount)].join(" ").toLowerCase();
-        if (!haystack.includes(search)) return false;
-      }
-      return true;
-    });
-  }, [treasuryOperations, historyType, historyBox, historySearch]);
-  const clearTreasuryHistoryFilters = () => {
-    setHistoryType("");
-    setHistoryBox("");
-    setHistorySearch("");
-  };
 
   const [editBox, setEditBox] = useState<CashBoxRow | null>(null);
   const [reconcileBox, setReconcileBox] = useState<CashBoxRow | null>(null);
@@ -1795,71 +1729,8 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
           </table>
         </div>
 
-        <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">📜 سجل تسويات وتحويلات الخزائن — {filteredTreasuryOperations.length} من {treasuryOperations.length} عملية</div>
-          </div>
-          <div className="card-body">
-            <div className="filter-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-              <select className="filter-select" value={historyType} onChange={(e) => setHistoryType(e.target.value)} aria-label="فلتر نوع حركة الخزينة">
-                <option value="">كل أنواع الحركات</option>
-                <option value="transfer">تحويل بين الخزائن</option>
-                <option value="settlement_in">تسوية زيادة خزنة</option>
-                <option value="settlement_out">تسوية عجز خزنة</option>
-              </select>
-              <select className="filter-select" value={historyBox} onChange={(e) => setHistoryBox(e.target.value)} aria-label="فلتر الخزينة">
-                <option value="">كل الخزائن</option>
-                {boxes.map((box) => <option key={box.id} value={box.id}>{box.name}</option>)}
-              </select>
-              <input
-                className="search-input"
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="بحث في السجل..."
-                style={{ minWidth: 220, flex: "1 1 220px" }}
-              />
-              <button type="button" className="action-btn" onClick={clearTreasuryHistoryFilters} disabled={!historyType && !historyBox && !historySearch}>
-                مسح الفلاتر
-              </button>
-            </div>
-            <div className="table-wrap enterprise-table">
-              <table className="mobile-cards">
-                <thead>
-                  <tr>
-                    <th>التاريخ والوقت</th>
-                    <th>نوع الحركة</th>
-                    <th>من</th>
-                    <th>إلى</th>
-                    <th>المبلغ</th>
-                    <th>العملة</th>
-                    <th>التفاصيل</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {treasurySplitsLoading ? (
-                    <EmptyOrLoading loading={true} label="" colSpan={7} />
-                  ) : filteredTreasuryOperations.length === 0 ? (
-                    <EmptyOrLoading loading={false} label="لا توجد تسويات أو تحويلات خزائن مطابقة للفلاتر" colSpan={7} />
-                  ) : filteredTreasuryOperations.map((op) => (
-                    <tr key={op.id}>
-                      <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{new Date(op.performedAt).toLocaleString("ar-EG")}</td>
-                      <td data-label="نوع الحركة">
-                        <span className={`badge pill-badge ${op.kind === "transfer" ? "badge-blue" : op.kind === "settlement_in" ? "badge-green" : "badge-red"}`}>{op.type}</span>
-                      </td>
-                      <td data-label="من">{op.from}</td>
-                      <td data-label="إلى">{op.to}</td>
-                      <td data-label="المبلغ" style={{ fontWeight: 700 }}>{fmtBalance(op.amount)}</td>
-                      <td data-label="العملة">{CURRENCY_LABEL[op.currency] || op.currency}</td>
-                      <td data-label="التفاصيل">{op.details}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <TreasuryMovementLedger boxes={boxes} inRange={inRange} />
+        <TreasuryMovementLedger boxes={boxes} operationsOnly />
+        <TreasuryMovementLedger boxes={boxes} />
 
         {editBox && <CashBoxOpeningModal box={editBox} onClose={() => setEditBox(null)} />}
         {reconcileBox && <CashBoxReconcileModal box={reconcileBox} onClose={() => setReconcileBox(null)} />}

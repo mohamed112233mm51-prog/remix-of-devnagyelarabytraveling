@@ -1,0 +1,36 @@
+name: Verify treasury ledger pagination
+on:
+  push:
+    branches: [devo, verify/treasury-ledger-archive-20261104]
+    paths:
+      - 'src/components/TreasuryMovementLedger.tsx'
+      - 'src/hooks/useTreasuryLedgerPage.ts'
+      - 'src/lib/treasuryLedger.ts'
+      - 'src/routes/reports.tsx'
+      - 'supabase/migrations/*_treasury_ledger_page.sql'
+      - 'tests/treasuryLedger*'
+      - '.github/workflows/verify-treasury-ledger.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Treasury ledger database, paging and UI tests
+        run: node --test tests/treasuryLedger*.test.mjs
+      - name: Existing financial regression tests
+        run: |
+          npm run test:balance-guard
+          npm run test:financial-edit
+          node --test tests/expenseArchiveFlows.test.mjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
