@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import {
   fmtDL,
   fmtNum,
+  fmtBalance,
   fmtUSD,
   formatExchangeRate,
   tripValue,
@@ -1711,9 +1712,9 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
   const rows = active.map((b) => ({
     name: b.name,
     currency: CURRENCY_LABEL[b.currency] || b.currency,
-    opening: fmtNum(Number(b.opening_balance || 0)),
+    opening: fmtBalance(Number(b.opening_balance || 0)),
     opening__excel: Number(b.opening_balance || 0),
-    balance: fmtNum(Number(b.balance || 0)),
+    balance: fmtBalance(Number(b.balance || 0)),
     balance__excel: Number(b.balance || 0),
   }));
 
@@ -1756,14 +1757,14 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
         <KpiRow items={[
           ...totals.map((t) => ({
             label: `إجمالي ${CURRENCY_LABEL[t.currency] || t.currency}`,
-            value: `${fmtNum(t.total)}`,
+            value: `${fmtBalance(t.total)}`,
             tone: (t.currency === "EGP" ? "gold" : t.currency === "USD" ? "green" : "") as any,
           })),
           { label: "سعر شراء الدولار", value: `${formatExchangeRate(usdRate)} ج.م/$`, tone: "" as any },
           { label: "سعر شراء الدينار", value: `${formatExchangeRate(lydRate)} ج.م/د.ل`, tone: "" as any },
           { label: "مصدر سعر الدولار", value: formatRateSource(usdInfo), tone: "" as any },
           { label: "مصدر سعر الدينار", value: formatRateSource(lydInfo), tone: "" as any },
-          { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtNum(totalEgp)} ج.م`, tone: "gold" as any },
+          { label: "إجمالي أرصدة الخزائن (ج.م)", value: `${fmtBalance(totalEgp)} ج.م`, tone: "gold" as any },
         ]} />
         <ExportBar
           getData={() => ({ title: "تقرير الخزائن", columns: cols.filter(c=>c.key!=="actions"), rows, fileName: "تقرير الخزائن" })}
@@ -1780,8 +1781,8 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                 <tr key={b.id}>
                   <td className="bold" data-label="الخزينة">{b.name}</td>
                   <td data-label="العملة">{CURRENCY_LABEL[b.currency] || b.currency}</td>
-                  <td data-label="الرصيد الافتتاحي">{fmtNum(Number(b.opening_balance || 0))}</td>
-                  <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtNum(Number(b.balance || 0))}</td>
+                  <td data-label="الرصيد الافتتاحي">{fmtBalance(Number(b.opening_balance || 0))}</td>
+                  <td data-label="الرصيد" style={{ fontWeight: 700 }}>{fmtBalance(Number(b.balance || 0))}</td>
                   <td data-label="إجراءات">
                     {reportPerm.edit || settlementPerm.view ? (<>
                       {reportPerm.edit && <button type="button" className="action-btn" onClick={() => setEditBox(b)}>رصيد افتتاحي</button>}
@@ -1847,7 +1848,7 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
                       </td>
                       <td data-label="من">{op.from}</td>
                       <td data-label="إلى">{op.to}</td>
-                      <td data-label="المبلغ" style={{ fontWeight: 700 }}>{fmtNum(op.amount)}</td>
+                      <td data-label="المبلغ" style={{ fontWeight: 700 }}>{fmtBalance(op.amount)}</td>
                       <td data-label="العملة">{CURRENCY_LABEL[op.currency] || op.currency}</td>
                       <td data-label="التفاصيل">{op.details}</td>
                     </tr>
@@ -1992,7 +1993,7 @@ function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose
             <label>من خزينة *</label>
             <select value={fromId} onChange={(e) => setFromId(e.target.value)}>
               {supportedBoxes.map((box) => (
-                <option key={box.id} value={box.id}>{box.name} — {fmtNum(Number(box.balance || 0))} {box.currency}</option>
+                <option key={box.id} value={box.id}>{box.name} — {fmtBalance(Number(box.balance || 0))} {box.currency}</option>
               ))}
             </select>
           </div>
@@ -2000,7 +2001,7 @@ function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose
             <label>إلى خزينة *</label>
             <select value={toId} onChange={(e) => setToId(e.target.value)} disabled={!fromBox || destinationOptions.length === 0}>
               {destinationOptions.map((box) => (
-                <option key={box.id} value={box.id}>{box.name} — {fmtNum(Number(box.balance || 0))} {box.currency}</option>
+                <option key={box.id} value={box.id}>{box.name} — {fmtBalance(Number(box.balance || 0))} {box.currency}</option>
               ))}
             </select>
           </div>
@@ -2014,9 +2015,9 @@ function CashBoxTransferModal({ boxes, onClose }: { boxes: CashBoxRow[]; onClose
           {fromBox && toBox && (
             <div className="form-group full">
               <div className="card" style={{ margin: 0, padding: 10, background: "var(--surface, #f8f9fb)" }}>
-                <div><strong>الخزينة المصدر:</strong> {fromBox.name} — الرصيد الحالي {fmtNum(Number(fromBox.balance || 0))} {fromBox.currency}</div>
-                <div><strong>الخزينة المستلمة:</strong> {toBox.name} — الرصيد الحالي {fmtNum(Number(toBox.balance || 0))} {toBox.currency}</div>
-                {validAmount && <div><strong>المبلغ:</strong> {fmtNum(amountNum)} {fromBox.currency}</div>}
+                <div><strong>الخزينة المصدر:</strong> {fromBox.name} — الرصيد الحالي {fmtBalance(Number(fromBox.balance || 0))} {fromBox.currency}</div>
+                <div><strong>الخزينة المستلمة:</strong> {toBox.name} — الرصيد الحالي {fmtBalance(Number(toBox.balance || 0))} {toBox.currency}</div>
+                {validAmount && <div><strong>المبلغ:</strong> {fmtBalance(amountNum)} {fromBox.currency}</div>}
               </div>
             </div>
           )}
@@ -2101,7 +2102,7 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
             <input value={currencyLabel} readOnly />
           </div>
           <div className="form-group"><label>الرصيد الحالي</label>
-            <input value={fmtNum(currentBalance)} readOnly />
+            <input value={fmtBalance(currentBalance)} readOnly />
           </div>
           <div className="form-group"><label>الرصيد الفعلي بعد الجرد *</label>
             <input type="number" value={physical} onChange={(e) => setPhysical(e.target.value)} />
@@ -2116,8 +2117,8 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
             <div className="form-group full">
               <div className="card" style={{ margin: 0, padding: 10, background: "var(--surface, #f8f9fb)" }}>
                 <div><strong>نوع الحركة:</strong> {diffLabel}</div>
-                <div><strong>قيمة الفرق:</strong> {fmtNum(diff)} {box.currency}</div>
-                <div><strong>الرصيد المتوقع بعد التسوية:</strong> {fmtNum(physicalNum)} {box.currency}</div>
+                <div><strong>قيمة الفرق:</strong> {fmtBalance(diff)} {box.currency}</div>
+                <div><strong>الرصيد المتوقع بعد التسوية:</strong> {fmtBalance(physicalNum)} {box.currency}</div>
               </div>
             </div>
           )}

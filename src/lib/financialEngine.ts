@@ -26,7 +26,7 @@
 
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useLive } from "@/lib/db";
+import { fmtBalance, useLive } from "@/lib/db";
 import { financialOperationFingerprint } from "@/lib/financialIdempotency";
 import { atomicRow, buildAtomicPaymentSplitRows, executeFinancialAtomic, type FinancialAtomicRow, type FinancialAtomicTable } from "@/lib/financialAtomic";
 
@@ -600,7 +600,7 @@ export async function fetchCashBoxByName(
  * ============================================================ */
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat("en-US").format(Math.round(n));
+  return fmtBalance(n);
 }
 
 function currencyNameForDebug(currency: string | null | undefined): string {

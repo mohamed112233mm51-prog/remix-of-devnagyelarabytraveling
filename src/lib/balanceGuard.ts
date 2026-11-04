@@ -15,6 +15,7 @@ import { useCompleteFinancialTable } from "@/hooks/useCompleteFinancialTables";
 import { useMemo } from "react";
 import {
   useLive,
+  fmtBalance,
   normalizeCurrency,
   merchantCashNet,
   merchantCompanyOutflowAmount,
@@ -77,8 +78,25 @@ const companySourceKey = (method: string, currency: unknown) =>
 const cashBoxKey = (cashBoxId: string, currency: unknown) =>
   `${cashBoxId}|${normalizeCurrency(String(currency || "EGP"))}`;
 
-const num = (v: unknown) => Math.round(Number(v || 0));
 const num2 = (v: unknown) => Math.round(Number(v || 0) * 100) / 100;
+
+// Sum the decimal values sent in each split (as PostgreSQL numeric does),
+// without creating 0.30000000000000004 from 0.1 + 0.2. This changes only
+// preflight aggregation: no rounding allowance or balance adjustment is made.
+function addAmounts(left: number, right: number): number {
+  const parts = (value: number) => {
+    const [mantissa, exponent = "0"] = String(value).split("e");
+    return {
+      units: BigInt(mantissa.replace(".", "")),
+      scale: (mantissa.split(".")[1]?.length || 0) - Number(exponent),
+    };
+  };
+  const a = parts(left),
+    b = parts(right);
+  const scale = Math.max(a.scale, b.scale);
+  const units = a.units * 10n ** BigInt(scale - a.scale) + b.units * 10n ** BigInt(scale - b.scale);
+  return Number(`${units}e${-scale}`);
+}
 
 /**
  * Resolve which cash_box a payment split should hit.
@@ -193,7 +211,7 @@ export function useSourceBalances(): SourceBalances {
         cashBoxName: box.name,
         currency,
         currencyName: CURRENCY_NAMES[currency] || currency,
-        balance: num2(box.balance),
+        balance: Number(box.balance) || 0,
         calculatedBalance: num2(calculatedByBoxCurrency.get(cashBoxKey(box.id, currency)) || 0),
       };
       cashBoxBalanceByIdCurrency.set(cashBoxKey(box.id, currency), info);
@@ -272,9 +290,9 @@ export function useSourceBalances(): SourceBalances {
     }
 
     return {
-      insta_company: num(insta?.balance),
-      cash_company: num(cash?.balance),
-      usd_treasury: num2(usd?.balance),
+      insta_company: insta?.balance || 0,
+      cash_company: cash?.balance || 0,
+      usd_treasury: usd?.balance || 0,
       companyBalanceByMethodCurrency,
       cashBoxBalanceByIdCurrency,
       merchantBalance,
@@ -294,7 +312,7 @@ function methodSourceLabel(method: string, _merchantName?: string): string {
   }
 }
 
-const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
+const fmt = fmtBalance;
 
 /**
  * Aggregate split rows by funding source, then ensure each source has enough
@@ -303,9 +321,7 @@ const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n));
  * Returns null if all good, otherwise the first Arabic error message:
  *   "رصيد وسيلة الدفع (اسم الوسيلة) غير كافٍ. الرصيد الحالي: X، المبلغ المطلوب: Y"
  *
- * Only EGP outflows are checked here (the current splits widget is EGP-only
- * for the company / merchant funding sources). Pass `currency` filter if the
- * caller wants to restrict.
+ * Company and merchant outflows are grouped by source and currency.
  */
 export function validateSplitOutflows(
   splits: PaymentSplitRow[],
@@ -318,6 +334,7 @@ export function validateSplitOutflows(
 
   for (const r of splits) {
     const a = Number(r.amount) || 0;
+    if (!Number.isFinite(a)) return "المبلغ يجب أن يكون رقمًا صالحًا";
     if (a <= 0) continue;
     if (r.method === "company_instapay" || r.method === "company_cash") {
       const currency = normalizeCurrency(r.currency);
@@ -326,7 +343,7 @@ export function validateSplitOutflows(
       usedCompany.set(key, {
         method: r.method,
         currency,
-        amount: (current?.amount || 0) + a,
+        amount: addAmounts(current?.amount || 0, a),
         row: current?.row || r,
       });
     }
@@ -337,7 +354,7 @@ export function validateSplitOutflows(
       usedMerchant.set(key, {
         merchantId: r.merchant_id,
         currency,
-        amount: (current?.amount || 0) + a,
+        amount: addAmounts(current?.amount || 0, a),
         row: current?.row || r,
       });
     }

@@ -521,6 +521,15 @@ export const fmtNum = (n: number) =>
     maximumFractionDigits: 0,
   }).format(Number(n) || 0);
 
+// Treasury balances and guard messages must not hide a real fractional
+// shortfall by rounding it to whole pounds. Keep the general/count formatter.
+export const fmtBalance = (n: number) =>
+  new Intl.NumberFormat("en-US", {
+    notation: "standard",
+    useGrouping: true,
+    maximumFractionDigits: 20,
+  }).format(Number(n) || 0);
+
 export const CURRENCY = "EGP";
 export const CURRENCY_LABEL = "ج.م";
 export const CURRENCY_NAME = "جنيه مصري";
