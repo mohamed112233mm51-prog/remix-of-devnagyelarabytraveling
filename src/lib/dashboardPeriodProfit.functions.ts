@@ -14,7 +14,13 @@ import {
   type ExpenseRow,
 } from "@/lib/executionProfit";
 import { cairoToday } from "@/lib/approvalFines";
-import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
+import {
+  isDateInSummaryPeriod,
+  summaryPeriodStart,
+  summaryPeriodEndExclusive,
+  type SummaryPeriod,
+} from "@/lib/summaryPeriod";
+import { readAllRows, type ReadAllRowsFilter } from "@/lib/readAllRows";
 
 async function canViewProfitSummary(sb: SupabaseClient<Database>, userId: string): Promise<boolean> {
   const [profileResult, roleResult] = await Promise.all([
@@ -56,28 +62,37 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
     const allowed = await canViewProfitSummary(sb, context.userId);
     if (!allowed) return { canProfitSummary: false, profitSummary: null };
 
-    const [executionResult, expenseResult] = await Promise.all([
-      sb
-        .from("executions")
-        .select("id, created_at, financial_posting_date, operation_status, services, fx_locks, fx_locked_at"),
-      sb
-        .from("expenses")
-        .select("id, created_at, date, amount, currency, exchange_rate, fx_rate, fx_locked_at"),
-    ]);
-    if (executionResult.error) {
-      throw new Error(executionResult.error.message || "تعذر تحميل بيانات التنفيذات للأرباح");
-    }
-    if (expenseResult.error) {
-      throw new Error(expenseResult.error.message || "تعذر تحميل بيانات المصروفات للأرباح");
-    }
-
     const todayISO = cairoToday();
+    const start = summaryPeriodStart(data.period, todayISO);
+    const endExclusive = summaryPeriodEndExclusive(data.period, todayISO);
+    const filterCreatedAt: ReadAllRowsFilter = (query) => {
+      if (!start || !endExclusive) return query;
+      // Match isDateInSummaryPeriod's existing ISO-date comparison. Cairo
+      // chooses the current period; stored created_at dates remain UTC.
+      return query
+        .gte("created_at", `${start}T00:00:00.000Z`)
+        .lt("created_at", `${endExclusive}T00:00:00.000Z`);
+    };
+
+    const [executions, expenseRows] = await Promise.all([
+      readAllRows<ExecutionRow>(sb, "executions",
+        "id, created_at, financial_posting_date, operation_status, services, fx_locks, fx_locked_at",
+        filterCreatedAt),
+      readAllRows<ExpenseRow>(sb, "expenses",
+        "id, created_at, date, amount, currency, exchange_rate, fx_rate, fx_locked_at",
+        filterCreatedAt),
+    ]).catch((error: unknown) => {
+      const message = error && typeof error === "object" && "message" in error
+        ? String(error.message) : "تعذر تحميل بيانات ملخص الأرباح";
+      throw new Error(message);
+    });
+
     let execSales = 0;
     let execCompanyCost = 0;
     let executionProfit = 0;
     let pendingExecutions = 0;
 
-    for (const rawExecution of executionResult.data ?? []) {
+    for (const rawExecution of executions) {
       const execution = rawExecution as unknown as ExecutionRow & {
         financial_posting_date?: string | null;
         created_at?: string | null;
@@ -99,7 +114,7 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
 
     let expenses = 0;
     let pendingExpenses = 0;
-    for (const rawExpense of expenseResult.data ?? []) {
+    for (const rawExpense of expenseRows) {
       const expense = rawExpense as unknown as ExpenseRow & {
         date?: string | null;
         created_at?: string | null;

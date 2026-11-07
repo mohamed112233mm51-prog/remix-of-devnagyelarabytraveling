@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "test:pricing-inline": "node --test tests/companyPricingInline.test.mjs tests/servicePricingRoute.test.mjs",
     "test:data-cache": "node --test tests/financialTableCache.test.mjs tests/authCacheLifecycle.test.mjs",
+    "test:dashboard-profit": "node --test tests/dashboardPeriodProfit.test.mjs",
     "test:execution-pricing": "node --test tests/executionServicePricing.test.mjs tests/passengerClassificationFlows.test.mjs",
     "test:execution-save": "node --experimental-strip-types --test tests/executionSaveConsistency.test.mjs tests/executionSaveClient.test.mjs",
     "test:balance-guard": "node --test tests/balanceGuard.test.mjs tests/expenseBalanceSave.test.mjs",
