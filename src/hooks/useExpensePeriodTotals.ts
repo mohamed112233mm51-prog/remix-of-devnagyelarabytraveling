@@ -4,6 +4,7 @@ import { cairoToday } from "@/lib/approvalFines";
 import type { Expense } from "@/lib/db";
 import { summarizeExpenses } from "@/lib/financialSummary";
 import { isDateInSummaryPeriod, type SummaryPeriod } from "@/lib/summaryPeriod";
+import { expenseAccountingDay } from "@/lib/expenseArchive";
 
 /**
  * إجماليات عرض فقط؛ تستخدم نفس محرك المصروفات الحالي بعد فلترة التاريخ.
@@ -15,7 +16,7 @@ export function useExpensePeriodTotals(period: SummaryPeriod) {
 
   return useMemo(() => {
     const periodRows = expenses.filter((expense) => {
-      const accountingDate = expense.date || (expense as any).created_at || null;
+      const accountingDate = expenseAccountingDay(expense);
       return isDateInSummaryPeriod(accountingDate, period, todayISO);
     });
     return summarizeExpenses(periodRows);

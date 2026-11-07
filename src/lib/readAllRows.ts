@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 interface DateFilterQuery {
   gte(column: string, value: string): this;
   lt(column: string, value: string): this;
+  or(filters: string): this;
 }
 export type ReadAllRowsFilter = <Query extends DateFilterQuery>(query: Query) => Query;
 

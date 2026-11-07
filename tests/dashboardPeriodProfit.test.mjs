@@ -7,6 +7,7 @@ const periods = loadTsModule("src/lib/summaryPeriod.ts");
 const readers = loadTsModule("src/lib/readAllRows.ts");
 const profit = loadTsModule("src/lib/executionProfit.ts");
 const permissions = loadTsModule("src/lib/permissionKeys.ts");
+const expenseDates = loadTsModule("src/lib/expenseArchive.ts");
 const executionColumns = "id, created_at, financial_posting_date, operation_status, services, fx_locks, fx_locked_at";
 
 function execution(id, createdAt = "2026-11-07T12:00:00+00:00", extra = {}) {
@@ -19,7 +20,36 @@ function execution(id, createdAt = "2026-11-07T12:00:00+00:00", extra = {}) {
 }
 
 function expense(id, createdAt = "2026-11-07T12:00:00+00:00", extra = {}) {
-  return { id: String(id).padStart(6, "0"), created_at: createdAt, date: "2020-01-01", amount: 2, currency: "EGP", ...extra };
+  return { id: String(id).padStart(6, "0"), created_at: createdAt, date: createdAt?.slice(0, 10) ?? null, amount: 2, currency: "EGP", ...extra };
+}
+
+function splitFilters(text) {
+  const parts = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "(") depth++;
+    if (text[i] === ")") depth--;
+    if (text[i] === "," && depth === 0) { parts.push(text.slice(start, i)); start = i + 1; }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+// Parse the documented PostgREST boolean grammar, independently of the
+// production date policy. Comparisons model PostgreSQL date/timestamptz fields.
+function matchesFilter(row, filter) {
+  for (const op of ["and", "or"]) {
+    if (filter.startsWith(`${op}(`)) {
+      const children = splitFilters(filter.slice(op.length + 1, -1));
+      return op === "and" ? children.every(child => matchesFilter(row, child))
+        : children.some(child => matchesFilter(row, child));
+    }
+  }
+  const [, field, op, value] = /^(date|created_at)\.(gte|lt|is)\.(.+)$/.exec(filter) || [];
+  assert.ok(field && op, `unsupported filter: ${filter}`);
+  if (op === "is") { assert.equal(value, "null"); return row[field] == null; }
+  if (row[field] == null) return false;
+  return op === "gte" ? Date.parse(row[field]) >= Date.parse(value) : Date.parse(row[field]) < Date.parse(value);
 }
 
 // Exercise the real Supabase/PostgREST client, including its generated HTTP
@@ -47,12 +77,13 @@ function harness({ executions = [], expenses = [], today = "2026-11-07", allowed
         if (table === "has_role") return respond(admin);
         assert.ok(table in tables, `unexpected table read: ${table}`);
         let rows = tables[table].filter(row => row.rls_visible !== false);
-        for (const filter of url.searchParams.getAll("created_at")) {
-          const separator = filter.indexOf(".");
-          const op = filter.slice(0, separator), boundary = Date.parse(filter.slice(separator + 1));
-          assert.ok(op === "gte" || op === "lt");
-          rows = rows.filter(row => row.created_at && (op === "gte"
-            ? Date.parse(row.created_at) >= boundary : Date.parse(row.created_at) < boundary));
+        for (const field of ["date", "created_at"]) {
+          for (const filter of url.searchParams.getAll(field)) {
+            rows = rows.filter(row => matchesFilter(row, `${field}.${filter}`));
+          }
+        }
+        for (const filter of url.searchParams.getAll("or")) {
+          rows = rows.filter(row => matchesFilter(row, `or${filter}`));
         }
         const order = url.searchParams.get("order");
         if (order) {
@@ -79,6 +110,7 @@ function harness({ executions = [], expenses = [], today = "2026-11-07", allowed
     "@/lib/approvalFines": { cairoToday: () => today },
     "@/lib/summaryPeriod": periods,
     "@/lib/readAllRows": readers,
+    "@/lib/expenseArchive": expenseDates,
   });
   return {
     client, calls,
@@ -124,8 +156,13 @@ test("both sources fetch every filtered page with deterministic ties, including 
   });
   assert.deepEqual(h.reads("executions").map(call => [call.offset, call.returned]), [[0, 1000], [1000, 1000], [2000, 505]]);
   assert.deepEqual(h.reads("expenses").map(call => [call.offset, call.returned]), [[0, 1000], [1000, 1000], [2000, 0]]);
-  for (const call of [...h.reads("executions"), ...h.reads("expenses")]) {
+  for (const call of h.reads("executions")) {
     assert.deepEqual(call.params.getAll("created_at"), ["gte.2026-11-01T00:00:00.000Z", "lt.2026-12-01T00:00:00.000Z"]);
+    assert.equal(call.params.get("limit"), "1000");
+  }
+  for (const call of h.reads("expenses")) {
+    assert.equal(call.params.get("or"), "(and(date.gte.2026-11-01,date.lt.2026-12-01),and(date.is.null,created_at.gte.2026-11-01T00:00:00.000Z,created_at.lt.2026-12-01T00:00:00.000Z))");
+    assert.equal(call.params.has("created_at"), false);
     assert.equal(call.params.get("limit"), "1000");
   }
 });
@@ -138,27 +175,89 @@ for (const [period, today, start, end] of [
   ["year", "2026-11-07", "2026-01-01", "2027-01-01"],
   ["all", "2026-11-07", "2026-11-01", "2026-12-01"],
 ]) {
-  test(`${period} (${today}) preserves existing calendar boundaries and created_at accounting dates`, async () => {
+  test(`${period} (${today}) preserves execution boundaries and null expense-date fallback`, async () => {
     const dates = [
       new Date(Date.parse(start) - 1).toISOString(), `${start}T00:00:00.000Z`,
       new Date(Date.parse(end) - 1).toISOString(), `${end}T00:00:00.000Z`, null,
     ];
     const h = harness({ today,
       executions: dates.map((date, i) => execution(i, date)),
-      expenses: dates.map((date, i) => expense(i, date)),
+      expenses: dates.map((date, i) => expense(i, date, { date: null })),
     });
     const count = period === "all" ? 5 : 2;
     assert.deepEqual((await h.run(period)).profitSummary, {
       execSales: count * 100, execCompanyCost: count * 75, expenses: count * 2,
       netProfit: count * 23, pendingExecutions: 0, pendingExpenses: 0,
     });
-    for (const call of [...h.reads("executions"), ...h.reads("expenses")]) {
+    for (const call of h.reads("executions")) {
       assert.deepEqual(call.params.getAll("created_at"), period === "all" ? [] : [
         `gte.${start}T00:00:00.000Z`, `lt.${end}T00:00:00.000Z`,
       ]);
       assert.equal(call.params.has("date"), false);
       assert.equal(call.params.has("financial_posting_date"), false);
     }
+    for (const call of h.reads("expenses")) {
+      assert.equal(call.params.get("or"), period === "all" ? null
+        : `(and(date.gte.${start},date.lt.${end}),and(date.is.null,created_at.gte.${start}T00:00:00.000Z,created_at.lt.${end}T00:00:00.000Z))`);
+      assert.equal(call.params.has("created_at"), false);
+    }
+  });
+}
+
+test("production October expenses entered in November no longer inflate November profit expenses by 15200", async () => {
+  // Anonymized reproduction of the three reported amounts/dates; no production IDs or names.
+  const expenses = [
+    expense("november", "2026-11-05T12:00:00Z", { amount: 31300 }),
+    expense("october-1", "2026-11-01T12:00:00Z", { date: "2026-10-15", amount: 7000 }),
+    expense("october-2", "2026-11-01T12:00:00Z", { date: "2026-10-27", amount: 4700 }),
+    expense("october-3", "2026-11-03T12:00:00Z", { date: "2026-10-27", amount: 3500 }),
+  ];
+  const before = structuredClone(expenses);
+  const november = harness({ expenses });
+  assert.equal((await november.run()).profitSummary.expenses, 31300);
+  assert.deepEqual(november.reads("expenses").map(call => call.returned), [1]);
+  assert.equal((await harness({ expenses, today: "2026-10-27" }).run()).profitSummary.expenses, 15200);
+  assert.equal((await november.run("all")).profitSummary.expenses, 46500);
+  assert.deepEqual(expenses, before);
+});
+
+test("expense date overrides creation month in both directions; only a null date falls back", async () => {
+  const h = harness({ expenses: [
+    expense("current-old-creation", "2026-10-10T12:00:00Z", { date: "2026-11-01", amount: 100 }),
+    expense("past-new-creation", "2026-11-10T12:00:00Z", { date: "2026-10-31", amount: 200 }),
+    expense("future-new-creation", "2026-11-10T12:00:00Z", { date: "2026-12-01", amount: 300 }),
+    expense("null-current", "2026-11-30T23:59:59.999Z", { date: null, amount: 40 }),
+    expense("null-outside", "2026-12-01T00:00:00Z", { date: null, amount: 500 }),
+    expense("missing-both", null, { date: null, amount: 600 }),
+  ] });
+  assert.equal((await h.run()).profitSummary.expenses, 140);
+  assert.deepEqual(h.reads("expenses").map(call => call.returned), [2]);
+  assert.equal((await h.run("all")).profitSummary.expenses, 1740);
+});
+
+test("more than 1000 accounting-dated and null-date expenses are paged in one disjoint result", async () => {
+  const expenses = Array.from({ length: 2505 }, (_, i) => expense(i,
+    i % 2 ? "2026-10-01T12:00:00Z" : "2026-11-05T12:00:00Z",
+    { date: i % 2 ? "2026-11-05" : null, amount: 1 }));
+  expenses.push(expense("excluded", undefined, { date: "2026-10-31", amount: 9999 }));
+  const h = harness({ expenses });
+  assert.equal((await h.run()).profitSummary.expenses, 2505);
+  assert.deepEqual(h.reads("expenses").map(call => [call.offset, call.returned]), [[0, 1000], [1000, 1000], [2000, 505]]);
+});
+
+for (const [period, today, start, end] of [
+  ["today", "2026-11-07", "2026-11-07", "2026-11-08"],
+  ["week", "2026-12-01", "2026-11-29", "2026-12-06"],
+  ["month", "2026-12-31", "2026-12-01", "2027-01-01"],
+  ["year", "2026-11-07", "2026-01-01", "2027-01-01"],
+]) {
+  test(`${period}: accounting dates define the expense window even when creation is outside it`, async () => {
+    const dates = [new Date(Date.parse(start) - 86400000).toISOString().slice(0, 10), start,
+      new Date(Date.parse(end) - 86400000).toISOString().slice(0, 10), end];
+    const expenses = dates.map((date, i) => expense(i, "2020-01-01T00:00:00Z", { date, amount: 10 }));
+    const h = harness({ expenses, today });
+    assert.equal((await h.run(period)).profitSummary.expenses, 20);
+    assert.deepEqual(h.reads("expenses").map(call => call.returned), [2]);
   });
 }
 

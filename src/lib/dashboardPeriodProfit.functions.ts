@@ -21,6 +21,7 @@ import {
   type SummaryPeriod,
 } from "@/lib/summaryPeriod";
 import { readAllRows, type ReadAllRowsFilter } from "@/lib/readAllRows";
+import { expenseAccountingDay } from "@/lib/expenseArchive";
 
 async function canViewProfitSummary(sb: SupabaseClient<Database>, userId: string): Promise<boolean> {
   const [profileResult, roleResult] = await Promise.all([
@@ -51,7 +52,7 @@ async function canViewProfitSummary(sb: SupabaseClient<Database>, userId: string
 /**
  * ملخص أرباح الفترة للعرض فقط.
  * التنفيذات تستخدم created_at كما كان الداشبورد قبل تعديل الفلاتر.
- * المصروفات تستخدم created_at كما كان الداشبورد قبل تعديل الفلاتر.
+ * المصروفات تستخدم تاريخ الحركة date ثم created_at للسجلات القديمة فقط.
  * التحويل إلى EGP يعتمد حصراً على أسعار الصرف التاريخية المقفلة.
  */
 export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POST" })
@@ -73,6 +74,15 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
         .gte("created_at", `${start}T00:00:00.000Z`)
         .lt("created_at", `${endExclusive}T00:00:00.000Z`);
     };
+    const filterExpenseDate: ReadAllRowsFilter = (query) => {
+      if (!start || !endExclusive) return query;
+      // The accounting date is authoritative even when creation belongs to
+      // another month. Only legacy rows without a date use created_at.
+      return query.or([
+        `and(date.gte.${start},date.lt.${endExclusive})`,
+        `and(date.is.null,created_at.gte.${start}T00:00:00.000Z,created_at.lt.${endExclusive}T00:00:00.000Z)`,
+      ].join(","));
+    };
 
     const [executions, expenseRows] = await Promise.all([
       readAllRows<ExecutionRow>(sb, "executions",
@@ -80,7 +90,7 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
         filterCreatedAt),
       readAllRows<ExpenseRow>(sb, "expenses",
         "id, created_at, date, amount, currency, exchange_rate, fx_rate, fx_locked_at",
-        filterCreatedAt),
+        filterExpenseDate),
     ]).catch((error: unknown) => {
       const message = error && typeof error === "object" && "message" in error
         ? String(error.message) : "تعذر تحميل بيانات ملخص الأرباح";
@@ -119,7 +129,7 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
         date?: string | null;
         created_at?: string | null;
       };
-      const accountingDate = expense.created_at || null;
+      const accountingDate = expenseAccountingDay(expense);
       if (!isDateInSummaryPeriod(accountingDate, data.period, todayISO)) continue;
       if (!Number(expense.amount || 0)) continue;
 
