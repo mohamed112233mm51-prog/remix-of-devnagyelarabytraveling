@@ -21,6 +21,7 @@ const TABLE_LABEL: Record<EditableTable, string> = {
   merchant_cash_collections: "تحصيل تاجر كاش",
   payment_splits: "تقسيم دفع",
   expenses: "مصروف",
+  investor_transactions: "حركة مالك / مستثمر",
 };
 
 function pickAmount(table: EditableTable, row: any): number {
@@ -28,9 +29,12 @@ function pickAmount(table: EditableTable, row: any): number {
   switch (table) {
     case "transactions":
     case "company_transactions":
-      return n(row.total_paid) || n(row.paid);
+      return Math.abs(n(row.total_paid) || n(row.paid) ||
+        (table === "transactions" && ["submission_fine", "execution_fine"].includes(row.source_service_type)
+          ? n(row.price) : 0));
     case "currency_supplier_transactions":
       return row.tx_type === "بيع عملة" ? n(row.sold_amount) : n(row.bought_amount) || n(row.sold_amount);
+    case "investor_transactions":
     case "expenses":
       return n(row.amount);
     case "usd_treasury_transactions":
@@ -58,6 +62,7 @@ function pickCurrency(table: EditableTable, row: any): string {
       return row.currency || (Number(row.usd_amount) > 0 ? "USD" : "EGP");
     case "merchant_cash_collections":
       return row.opening_currency || "";
+    case "investor_transactions":
     case "payment_splits":
       return row.currency || "";
   }
@@ -135,15 +140,18 @@ export function EditTransactionButton({
   const originalStatement = row ? (row as any).statement || "" : "";
   const originalNote = row ? pickNote(table, row) : "";
 
-  const amountEditable = table === "currency_supplier_transactions" || splitCount <= 1;
+  const amountEditable = table === "currency_supplier_transactions" || splitCount <= 1 ||
+    (table === "transactions" && row?.source_service_type === "agent_cash_out") ||
+    (table === "company_transactions" && Boolean(row?.merchant_id));
   const anyChange = useMemo(() => {
     if (!row) return false;
     if (amountEditable && Number(amount) !== originalAmount) return true;
+    if (table === "payment_splits") return false;
     if (date !== originalDate) return true;
     if ((statement || "") !== originalStatement) return true;
     if ((note || "") !== originalNote) return true;
     return false;
-  }, [row, amount, date, statement, note, amountEditable, originalAmount, originalDate, originalStatement, originalNote]);
+  }, [row, amount, date, statement, note, amountEditable, originalAmount, originalDate, originalStatement, originalNote, table]);
 
   if (!allowed) return null;
   if (cancelled) return null;
@@ -231,7 +239,7 @@ export function EditTransactionButton({
                 <Field label={`المبلغ (${pickCurrency(table, row) || "—"})`}>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
@@ -244,7 +252,7 @@ export function EditTransactionButton({
                     className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    disabled={busy}
+                    disabled={busy || table === "payment_splits"}
                   />
                 </Field>
               </div>
@@ -255,7 +263,7 @@ export function EditTransactionButton({
                   className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                   value={statement}
                   onChange={(e) => setStatement(e.target.value)}
-                  disabled={busy}
+                  disabled={busy || table === "payment_splits"}
                 />
               </Field>
 
@@ -264,7 +272,7 @@ export function EditTransactionButton({
                   className="w-full rounded-md border px-3 py-2 text-sm min-h-16 focus:outline-none focus:ring-2" style={{ borderColor: "var(--border)", background: "var(--card, #fff)", color: "var(--text)" }}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  disabled={busy}
+                  disabled={busy || table === "payment_splits"}
                 />
               </Field>
 

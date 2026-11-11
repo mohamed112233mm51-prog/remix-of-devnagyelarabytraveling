@@ -41,11 +41,15 @@ function entityFieldsFor(table: EditableTable, row: any) {
     case "expenses":
       return { entity_type: "expense", entity_id: pick("id"), reference_no: pick("date") };
     case "transactions":
-      return { entity_type: "agent", entity_id: pick("agent_id"), reference_no: pick("date") };
+      return pick("merchant_id") && !pick("agent_id")
+        ? { entity_type: "merchant", entity_id: pick("merchant_id"), reference_no: pick("date") }
+        : { entity_type: "agent", entity_id: pick("agent_id"), reference_no: pick("date") };
     case "company_transactions":
       return { entity_type: "company", entity_id: pick("company_id"), reference_no: pick("date") };
     case "currency_supplier_transactions":
       return { entity_type: "currency_supplier", entity_id: pick("supplier_id"), reference_no: pick("tx_date") || pick("date") };
+    case "investor_transactions":
+      return { entity_type: "investor", entity_id: pick("investor_id"), reference_no: pick("date") };
     case "merchant_cash_collections":
       return { entity_type: "merchant", entity_id: pick("merchant_id"), reference_no: pick("date") };
     case "usd_treasury_transactions":
@@ -59,7 +63,7 @@ function entityFieldsFor(table: EditableTable, row: any) {
 
 function parentAmountPatch(table: EditableTable, before: any, newAmount: number): Record<string, unknown> {
   const oldTotal = pickOldTotal(table, before);
-  const ratio = oldTotal > 0 ? newAmount / oldTotal : 0;
+  const ratio = oldTotal !== 0 ? newAmount / Math.abs(oldTotal) : 0;
   switch (table) {
     case "expenses":
     case "currency_supplier_transactions":
@@ -72,10 +76,12 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
         "merchant_cash_amount", "merchant_cash_net_amount", "merchant_cash_physical_amount",
         "usd_amount",
       ];
-      const patch: Record<string, unknown> = { paid: newAmount, total_paid: newAmount };
+      const signed = oldTotal < 0 ? -newAmount : newAmount;
+      const patch: Record<string, unknown> = { total_paid: signed };
+      if (table === "transactions") patch.paid = signed;
       for (const c of cols) {
         const v = Number((before as any)[c]) || 0;
-        if (v > 0) patch[c] = oldTotal > 0 ? Math.round(v * ratio * 100) / 100 : 0;
+        if (v !== 0) patch[c] = Math.sign(v) * Math.round(Math.abs(v) * ratio * 100) / 100;
       }
       return patch;
     }
@@ -87,6 +93,7 @@ function parentAmountPatch(table: EditableTable, before: any, newAmount: number)
     }
     case "expense_deductions":
       return Number(before.amount) > 0 ? { amount: newAmount } : { usd_amount: newAmount };
+    case "investor_transactions":
     case "merchant_cash_collections":
       return { amount: newAmount };
     case "payment_splits":
@@ -113,6 +120,7 @@ function pickOldTotal(table: EditableTable, row: any): number {
       return n(row.usd_amount) || n(row.egp_amount);
     case "expense_deductions":
       return n(row.amount) || n(row.usd_amount);
+    case "investor_transactions":
     case "merchant_cash_collections":
       return n(row.amount);
     case "payment_splits":
@@ -184,14 +192,20 @@ export async function updateFinancialTransaction(args: {
     .maybeSingle();
   if (readErr) throw readErr;
   if (!before) throw new Error("الحركة غير موجودة");
-  if ((table === "transactions" || table === "company_transactions") && (before as any).source_service_type === "agent_direct_to_company") {
-    throw new Error("لا يمكن تعديل التحويل المباشر بين الوكيل والشركة من طرف واحد؛ ألغِ الحركة وأعد تسجيلها");
-  }
   if ((before as any).cancelled_at) throw new Error("لا يمكن تعديل حركة ملغاة — قم بإعادة التفعيل أولاً");
 
   // Coupled expense/currency edits are planned from LOCKED database rows by
   // the existing RPC. Never send a client-calculated split rewrite for them.
-  const coupledEdit = table === "expenses" || table === "currency_supplier_transactions";
+  const sourceType = (before as any).source_service_type;
+  const linkedLedgerEdit = table === "investor_transactions" ||
+    (table === "transactions" || table === "company_transactions") &&
+    (sourceType === "agent_cash_out" ||
+      sourceType === "agent_direct_to_company" ||
+      sourceType === "submission_fine" ||
+      sourceType === "execution_fine" ||
+      (table === "company_transactions" && Boolean((before as any).merchant_id) &&
+        !String(sourceType || "").startsWith("opening_")));
+  const coupledEdit = table === "expenses" || table === "currency_supplier_transactions" || linkedLedgerEdit;
   let currentSplits: any[] = [];
   if (!coupledEdit && PAYMENT_SPLIT_PARENTS.has(table)) {
     const { data: sp, error: splitReadError } = await supabase
@@ -206,7 +220,9 @@ export async function updateFinancialTransaction(args: {
 
   const oldTotal = table === "currency_supplier_transactions" && (before as any).tx_type === "بيع عملة"
     ? Number((before as any).sold_amount) || 0
-    : pickOldTotal(table, before);
+    : table === "transactions" && (sourceType === "submission_fine" || sourceType === "execution_fine")
+      ? Number((before as any).price) || 0
+      : Math.abs(pickOldTotal(table, before));
   const newAmount = patch.amount !== undefined ? Number(patch.amount) : oldTotal;
   const amountChanged = patch.amount !== undefined && newAmount !== oldTotal;
   if (patch.amount !== undefined && (!Number.isFinite(newAmount) || !(newAmount > 0))) {
@@ -229,7 +245,7 @@ export async function updateFinancialTransaction(args: {
   }
 
   let parentPatch: Record<string, unknown> = table === "payment_splits"
-    ? {}
+    ? { _expected: args.expectedRow || before }
     : { ...metaPatchFor(table, patch) };
   if (amountChanged && table !== "payment_splits" && !coupledEdit) {
     Object.assign(parentPatch, parentAmountPatch(table, before, newAmount));
@@ -285,13 +301,15 @@ export async function updateFinancialTransaction(args: {
   if (coupledEdit) {
     try {
       await Promise.all([
-        refetchCompleteFinancialTables(["expenses", "expense_deductions", "currency_supplier_transactions", "merchant_cash_collections", "payment_splits"]),
+        refetchCompleteFinancialTables(linkedLedgerEdit
+          ? ["transactions", "company_transactions", "investor_transactions", "payment_splits"]
+          : ["expenses", "expense_deductions", "currency_supplier_transactions", "merchant_cash_collections", "payment_splits"]),
         refetchLiveTables(["cash_boxes"]),
       ]);
     } catch (refreshError) {
       console.warn("[financial-edit] committed; refresh failed", refreshError);
     }
-    return;
+    if (!linkedLedgerEdit) return;
   }
 
   try {

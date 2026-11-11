@@ -45,8 +45,8 @@ has(agentForm, 'paymentMethod: direct.method', "agent-side method must reach the
 has(agentForm, 'postAgentCompanyDirectTransfer({', "agent-side flow must reuse the same atomic helper");
 
 const update = read("src/lib/financialEngine.update.ts");
-has(update, 'source_service_type === "agent_direct_to_company"', "edit guard missing");
-has(update, 'لا يمكن تعديل التحويل المباشر بين الوكيل والشركة من طرف واحد', "single-leg edit must remain rejected");
+has(update, 'sourceType === "agent_direct_to_company"', "paired edit must use the server-calculated path");
+has(update, "_expected: args.expectedRow || before", "paired edit must send the original snapshot");
 
 const cancel = read("src/lib/financialEngine.cancel.ts");
 has(cancel, 'set_agent_company_direct_cancel_state_atomic', "paired cancel RPC routing missing");

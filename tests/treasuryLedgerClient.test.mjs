@@ -47,7 +47,7 @@ test("query cache is scoped by user, period, source, filters and page",()=>{
   assert.equal(options[0].queryKey[1],"user");assert.equal(options[0].enabled,true);
   assert.equal(options[0].retry,false);assert.equal(options[0].placeholderData,undefined);
 });
-function harness() {
+function harness(operationsOnly = false) {
   let cells=[],cursor=0,effects=[],tree,lastRequest;
   let failure=false;
   const same=(a,b)=>a&&a.length===b.length&&a.every((v,i)=>Object.is(v,b[i]));
@@ -57,7 +57,10 @@ function harness() {
     useEffect(fn,deps){const i=cursor++;if(!cells[i]||!same(cells[i].deps,deps))effects.push(()=>{cells[i]?.cleanup?.();cells[i]={deps,cleanup:fn()};});},
   };
   const jsx=(type,props,key)=>({type,props:props||{},key});
+  const EditTransactionButton=()=>null, CancelTransactionButton=()=>null;
   const component=loadTsModule("src/components/TreasuryMovementLedger.tsx",{
+    "@/components/EditTransactionButton":{EditTransactionButton},
+    "@/components/CancelTransactionButton":{CancelTransactionButton},
     react,"react/jsx-runtime":{jsx,jsxs:jsx},
     "@/lib/db":{normalizeCurrency:v=>v,fmtBalance:v=>String(v)},
     "@/lib/approvalFines":{cairoToday:()=>"2026-11-04"},
@@ -71,6 +74,7 @@ function harness() {
           rows:Array.from({length:Math.min(50,total-r.page*50)},(_,i)=>({
             id:"row-"+(r.page*50+i),cashBoxName:"إنستا",performedAt:"2026-11-04T12:00:00Z",direction:"in",
             directionLabel:"وارد",amount:1,currency:"EGP",type:"وارد",counterparty:"عميل",balanceAfter:100,
+            kind:r.operations && i===0 ? "transfer" : "settlement_in",
           }))},
       };
     }},
@@ -78,12 +82,14 @@ function harness() {
   const boxes=[{id:"insta",name:"خزينة إنستا الشركة",method_key:"company_instapay",currency:"EGP",balance:1205}];
   const nodes=node=>Array.isArray(node)?node.flatMap(nodes):node&&typeof node==="object"?[node,...nodes(node.props?.children)]:[];
   const text=node=>Array.isArray(node)?node.map(text).join(""):node==null||typeof node==="boolean"?"":typeof node==="object"?text(node.props.children):String(node);
-  function render(){cursor=0;tree=component.TreasuryMovementLedger({boxes});while(effects.length)effects.shift()();}
+  function render(){cursor=0;tree=component.TreasuryMovementLedger({boxes,operationsOnly});while(effects.length)effects.shift()();}
   function click(label){const button=nodes(tree).find(n=>n.type==="button"&&text(n).startsWith(label));assert.ok(button,label);button.props.onClick();render();}
   render();render();
   return {click,request:()=>lastRequest,rows:()=>nodes(tree).filter(n=>n.type==="tr"&&String(n.key||"").startsWith("row-")),
     changeMonth(value){nodes(tree).find(n=>n.props["aria-label"]==="اختيار شهر أرشيف الخزائن").props.onChange({target:{value}});render();},
-    fail(){failure=true;render();},text:()=>text(tree)};
+    fail(){failure=true;render();},text:()=>text(tree),
+    financialActions:()=>nodes(tree).filter(n=>[EditTransactionButton,CancelTransactionButton].includes(n.type)).map(n=>[n.props.table,n.props.id]),
+  };
 }
 test("actual ledger defaults to current month, shows 50 rows and pages on the server",()=>{
   const h=harness();assert.equal(h.request().scope,"current");assert.equal(h.rows().length,50);
@@ -98,6 +104,11 @@ test("archive and month switching reset page without changing any financial rows
 });
 test("a failed page request does not display old rows as a successful empty archive",()=>{
   const h=harness();h.fail();assert.equal(h.rows().length,0);assert.match(h.text(),/فشل الاتصال/);assert.match(h.text(),/إعادة المحاولة/);
+});
+
+test("treasury transfer actions target the split and only appear on the transfer operation",()=>{
+  assert.deepEqual(harness(true).financialActions(),[["payment_splits","row-0"],["payment_splits","row-0"]]);
+  assert.deepEqual(harness().financialActions(),[]);
 });
 
 test("returning directly to the saved treasury tab does not mount the complete reports store",()=>{

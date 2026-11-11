@@ -4,7 +4,7 @@
  * ========================================================================
  *
  * هذا الملف هو **المصدر الوحيد** لكل عملية مالية داخل النظام:
- *   - الكتابة  : postMovement / voidMovement
+ *   - الكتابة  : postMovement
  *   - القراءة  : getEntityLedger / getEntityBalance / getCashBoxBalance
  *   - الأدوات  : useEntityBalance / useCashBoxBalance / useEntityLedger
  *
@@ -315,31 +315,6 @@ export async function postCashBoxTransfer(args: {
       },
     ],
   });
-}
-
-/* ============================================================
- *  DELETE / VOID
- * ============================================================ */
-
-/** حذف حركة كاملة — التريجر يعكس الرصيد تلقائياً. */
-export async function voidMovement(splitId: string): Promise<PostMovementResult> {
-  const { error } = await supabase.from("payment_splits").delete().eq("id", splitId);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
-
-/** حذف كل الحركات المرتبطة بعملية أم (transaction/execution/…) */
-export async function voidAllForSource(
-  sourceTable: string,
-  sourceId: string,
-): Promise<PostMovementResult> {
-  const { error } = await supabase
-    .from("payment_splits")
-    .delete()
-    .eq("source_table", sourceTable)
-    .eq("source_id", sourceId);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
 }
 
 /* ============================================================

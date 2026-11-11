@@ -946,6 +946,7 @@ function CompanyTxnForm({ companies, merchants, agents, onDone }: { companies: I
         method: methodLabel,
         currency: r.currency as any,
         cashBoxId,
+        requiresCashBox: r.source === "company",
         amount: a,
         direction: "out",
         grossAmount: a,

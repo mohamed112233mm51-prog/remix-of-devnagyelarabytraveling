@@ -1156,7 +1156,10 @@ function MerchantStatementTab({
                         <td data-label="إجراءات">
                           {!opening && <>
                             <EditTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
-                            <CancelTransactionButton table={m.sourceTable} id={m.sourceId} cancelled={false} />
+                            <CancelTransactionButton
+                              table={m.sourceTable} id={m.sourceId} cancelled={false}
+                              permissionTable={m.sourceTable === "transactions" ? "merchant_cash_collections" : m.sourceTable}
+                            />
                           </>}
                         </td>
                       )}

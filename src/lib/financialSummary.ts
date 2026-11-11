@@ -1007,11 +1007,12 @@ const emptyInvestorSummary = (): InvestorSummary => ({
 export function summarizeInvestor(rows: InvestorTransaction[]): InvestorSummary {
   const s = emptyInvestorSummary();
   for (const t of rows) {
+    if (t.cancelled_at) continue;
+    s.count++;
     const amt = Number(t.amount || 0);
     if (t.transaction_type === "توريد نقدية") s.deposit += amt;
     else if (t.transaction_type === "صرف نقدية") s.withdraw += amt;
   }
-  s.count = rows.length;
   s.balance = s.deposit - s.withdraw;
   return s;
 }
@@ -1878,7 +1879,7 @@ export function summarizeInvestorReport(input: {
   const byInv = new Map<string, { deposit: number; withdraw: number }>();
   const filteredTxns: InvestorTransaction[] = [];
   for (const t of investorTransactions) {
-    if (!inRange(t.date)) continue;
+    if (t.cancelled_at || !inRange(t.date)) continue;
     filteredTxns.push(t);
     const id = t.investor_id;
     if (!id) continue;
@@ -2125,35 +2126,35 @@ export function computeUsdConversionSourceBalance(input: {
   if (!sourceType) return 0;
   let conv = 0;
   for (const r of usdRows) {
-    if (r.type !== "conversion") continue;
+    if (r.type !== "conversion" || r.cancelled_at) continue;
     if ((r as any).source_type !== sourceType) continue;
     if (merchantId && (r as any).merchant_id !== merchantId) continue;
     conv += Number((r as any).egp_amount || 0);
   }
   if (sourceType === "insta_company") {
     let inn = 0, out = 0;
-    for (const t of agentTxns) inn += Number((t as any).instapay_amount || 0);
-    for (const t of companyTxns) out += Number((t as any).instapay_amount || 0);
+    for (const t of agentTxns) if (!t.cancelled_at) inn += Number((t as any).instapay_amount || 0);
+    for (const t of companyTxns) if (!t.cancelled_at) out += Number((t as any).instapay_amount || 0);
     return Math.round(inn - out - conv);
   }
   if (sourceType === "cash_company") {
     let inn = 0, out = 0;
-    for (const t of agentTxns) inn += Number((t as any).cash_amount || 0);
-    for (const t of companyTxns) out += Number((t as any).cash_amount || 0);
+    for (const t of agentTxns) if (!t.cancelled_at) inn += Number((t as any).cash_amount || 0);
+    for (const t of companyTxns) if (!t.cancelled_at) out += Number((t as any).cash_amount || 0);
     return Math.round(inn - out - conv);
   }
   if (!merchantId) return 0;
   if (sourceType === "merchant_wallet") {
     let inn = 0, out = 0, col = 0;
-    for (const t of agentTxns) if ((t as any).merchant_id === merchantId) inn += merchantCashNet(t);
-    for (const t of companyTxns) if ((t as any).merchant_id === merchantId) out += merchantCashNet(t as any);
-    for (const c of collections) if (c.merchant_id === merchantId) col += Number(c.amount || 0);
+    for (const t of agentTxns) if (!t.cancelled_at) if ((t as any).merchant_id === merchantId) inn += merchantCashNet(t);
+    for (const t of companyTxns) if (!t.cancelled_at) if ((t as any).merchant_id === merchantId) out += merchantCashNet(t as any);
+    for (const c of collections) if (!c.cancelled_at && c.merchant_id === merchantId) col += Number(c.amount || 0);
     return Math.round(inn - out - col - conv);
   }
   // merchant_physical
   let inn = 0, out = 0;
-  for (const t of agentTxns) if ((t as any).merchant_id === merchantId) inn += Number((t as any).merchant_cash_physical_amount || 0);
-  for (const t of companyTxns) if ((t as any).merchant_id === merchantId) out += Number((t as any).merchant_cash_physical_amount || 0);
+  for (const t of agentTxns) if (!t.cancelled_at) if ((t as any).merchant_id === merchantId) inn += Number((t as any).merchant_cash_physical_amount || 0);
+  for (const t of companyTxns) if (!t.cancelled_at) if ((t as any).merchant_id === merchantId) out += Number((t as any).merchant_cash_physical_amount || 0);
   return Math.round(inn - out - conv);
 }
 

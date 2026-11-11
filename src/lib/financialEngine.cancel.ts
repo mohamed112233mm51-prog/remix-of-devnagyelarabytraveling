@@ -7,6 +7,8 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { refetchCompleteFinancialTables } from "@/hooks/useCompleteFinancialTables";
+import { refetchLiveTables } from "@/lib/db";
 
 export type CancellableTable =
   | "transactions"
@@ -15,13 +17,16 @@ export type CancellableTable =
   | "expense_deductions"
   | "usd_treasury_transactions"
   | "merchant_cash_collections"
-  | "payment_splits";
+  | "payment_splits"
+  | "investor_transactions";
 
 function entityFieldsFor(table: CancellableTable, row: any) {
   const pick = (k: string) => (row && row[k] != null ? String(row[k]) : null);
   switch (table) {
     case "transactions":
-      return { entity_type: "agent", entity_id: pick("agent_id"), reference_no: pick("date") };
+      return pick("merchant_id") && !pick("agent_id")
+        ? { entity_type: "merchant", entity_id: pick("merchant_id"), reference_no: pick("date") }
+        : { entity_type: "agent", entity_id: pick("agent_id"), reference_no: pick("date") };
     case "company_transactions":
       return { entity_type: "company", entity_id: pick("company_id"), reference_no: pick("date") };
     case "currency_supplier_transactions":
@@ -30,6 +35,8 @@ function entityFieldsFor(table: CancellableTable, row: any) {
         entity_id: pick("supplier_id"),
         reference_no: pick("tx_date") || pick("date"),
       };
+    case "investor_transactions":
+      return { entity_type: "investor", entity_id: pick("investor_id"), reference_no: pick("date") };
     case "merchant_cash_collections":
       return { entity_type: "merchant", entity_id: pick("merchant_id"), reference_no: pick("date") };
     case "usd_treasury_transactions":
@@ -107,6 +114,20 @@ async function changeCancelState(args: {
         ...meta,
       } as any);
 
+      for (const change of data.linked_changes || []) {
+        if (change.member_table === args.table && change.member_id === args.id) continue;
+        await supabase.from("financial_audit_log").insert({
+          table_name: change.member_table,
+          record_id: change.member_id,
+          action: args.cancel ? "cancel" : "restore",
+          reason: trimmed,
+          performed_by: userId,
+          before_value: change.before,
+          after_value: change.after,
+          ...entityFieldsFor(change.member_table, change.before),
+        } as any);
+      }
+
       if (data.counterpart_before && data.counterpart_table && data.counterpart_id) {
         const counterpartTable = data.counterpart_table as CancellableTable;
         const counterpartBefore = data.counterpart_before || {};
@@ -126,6 +147,17 @@ async function changeCancelState(args: {
     } catch (auditError) {
       console.warn("[financial-audit] cancel/restore log failed", auditError);
     }
+  }
+  try {
+    const related = (data.linked_changes || []).map((change: { member_table: CancellableTable }) => change.member_table);
+    await Promise.all([
+      refetchCompleteFinancialTables([...new Set<CancellableTable>([
+        args.table, "payment_splits", ...related, ...(data.counterpart_table ? [data.counterpart_table] : []),
+      ])]),
+      refetchLiveTables(["cash_boxes"]),
+    ]);
+  } catch (refreshError) {
+    console.warn("[financial-cancel] committed; refresh failed", refreshError);
   }
 }
 

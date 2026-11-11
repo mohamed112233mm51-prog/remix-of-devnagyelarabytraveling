@@ -840,6 +840,9 @@ export type Database = {
       }
       investor_transactions: {
         Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           amount: number
           created_at: string
           date: string
@@ -852,6 +855,9 @@ export type Database = {
           transaction_type: string
         }
         Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           amount?: number
           created_at?: string
           date?: string
@@ -864,6 +870,9 @@ export type Database = {
           transaction_type: string
         }
         Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           amount?: number
           created_at?: string
           date?: string

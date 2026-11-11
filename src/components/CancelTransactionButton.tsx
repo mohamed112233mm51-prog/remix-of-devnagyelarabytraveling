@@ -22,6 +22,7 @@ const TABLE_LABEL: Record<CancellableTable, string> = {
   usd_treasury_transactions: "حركة خزينة",
   merchant_cash_collections: "تحصيل تاجر كاش",
   payment_splits: "تقسيم دفع",
+  investor_transactions: "حركة مالك / مستثمر",
 };
 
 function pickAmountAndCurrency(
@@ -62,6 +63,7 @@ function pickAmountAndCurrency(
         amount: n(row.amount) || n(row.usd_amount) || null,
         currency: row.currency || (n(row.usd_amount) ? "USD" : ""),
       };
+    case "investor_transactions":
     case "merchant_cash_collections":
       return { amount: n(row.amount) || null, currency: row.opening_currency || "" };
     case "payment_splits":
@@ -83,16 +85,20 @@ export function CancelTransactionButton({
   id,
   cancelled,
   compact = true,
+  permissionTable = table,
+  allowRestore = false,
   onDone,
 }: {
   table: CancellableTable;
   id: string;
   cancelled: boolean;
   compact?: boolean;
+  permissionTable?: CancellableTable;
+  allowRestore?: boolean;
   onDone?: () => void;
 }) {
   const { permissions, isAdmin, isSuperAdmin } = useAuth();
-  const allowed = checkFinancialActionPerm(permissions, isAdmin, isSuperAdmin, table, "delete");
+  const allowed = checkFinancialActionPerm(permissions, isAdmin, isSuperAdmin, permissionTable, "delete");
 
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -150,7 +156,7 @@ export function CancelTransactionButton({
   const date = pickDate(row);
   const counterparty = pickCounterparty(row);
 
-  if (cancelled) {
+  if (cancelled && !allowRestore) {
     return (
       <button
         type="button"
@@ -169,8 +175,8 @@ export function CancelTransactionButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="إلغاء الحركة المالية"
-        aria-label="إلغاء الحركة المالية"
+        title={cancelled ? "إعادة تفعيل الحركة المالية" : "إلغاء الحركة المالية"}
+        aria-label={cancelled ? "إعادة تفعيل الحركة المالية" : "إلغاء الحركة المالية"}
         className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground transition-all duration-150 hover:scale-110 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
       >
         <CircleSlash size={16} />

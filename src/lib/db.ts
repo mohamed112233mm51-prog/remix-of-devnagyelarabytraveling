@@ -49,6 +49,7 @@ export type Transaction = {
   source_service_id?: string | null;
   source_service_type?: string | null;
   created_at: string;
+  cancelled_at?: string | null;
 };
 
 export const merchantCashGross = (t: Partial<Transaction> & Partial<CompanyTransaction>) =>
@@ -272,6 +273,7 @@ export type CompanyTransaction = {
   payment_currency?: string | null;
   currency?: string | null;
   created_at: string;
+  cancelled_at?: string | null;
 };
 
 export type Merchant = {
@@ -295,6 +297,7 @@ export type MerchantCashCollection = {
   statement?: string | null;
   expense_id?: string | null;
   created_at: string;
+  cancelled_at?: string | null;
 };
 
 export type Investor = {
@@ -315,6 +318,7 @@ export type InvestorTransaction = {
   note: string | null;
   statement?: string | null;
   created_at: string;
+  cancelled_at?: string | null;
 };
 
 export type Expense = {
@@ -364,6 +368,7 @@ export type UsdTreasuryTransaction = {
   source_type: string | null; // 'insta_company' | 'cash_company' | 'merchant_wallet' | 'merchant_physical'
   merchant_id: string | null;
   created_at: string;
+  cancelled_at?: string | null;
 };
 
 export type ExecutionServiceItem = {
@@ -616,20 +621,21 @@ export function useTreasuryBalances() {
       0,
     );
     const investorIn = investorTxns
-      .filter((t) => t.transaction_type === "توريد نقدية")
+      .filter((t) => t.transaction_type === "توريد نقدية" && !t.cancelled_at)
       .reduce((s, t) => s + Number(t.amount || 0), 0);
     const investorOut = investorTxns
-      .filter((t) => t.transaction_type === "صرف نقدية")
+      .filter((t) => t.transaction_type === "صرف نقدية" && !t.cancelled_at)
       .reduce((s, t) => s + Number(t.amount || 0), 0);
     const companyOut = companyTxns.reduce((s, t) => s + Number(t.total_paid || 0), 0);
     const expensesOut = deductions.reduce((s, d) => s + Number(d.amount || 0), 0);
     const usdConversionsEgp = usdRows
-      .filter((r) => r.type === "conversion")
+      .filter((r) => r.type === "conversion" && !r.cancelled_at)
       .reduce((s, r) => s + Number(r.egp_amount || 0), 0);
 
     const egp = Math.round(egpIn + investorIn - investorOut - companyOut - expensesOut - usdConversionsEgp);
 
     const usd = usdRows.reduce((s, r) => {
+      if (r.cancelled_at) return s;
       const amt = Number(r.usd_amount || 0);
       return r.type === "company_payment" ? s - amt : s + amt;
     }, 0);

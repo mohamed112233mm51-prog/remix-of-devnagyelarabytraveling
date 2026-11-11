@@ -35,8 +35,7 @@ export const SECTION_KEYS = [
  * governs edit/cancel actions on its rows. Used by EditTransactionButton and
  * CancelTransactionButton so that a section manager (e.g. agents_manage,
  * companies_manage) can maintain their own section's ledger without needing
- * a blanket Admin role. Returns null for tables that have no single owning
- * section (e.g. payment_splits, which is derived from a parent row).
+ * a blanket Admin role. Standalone treasury rows use the reports section.
  */
 export function sectionForFinancialTable(table: string): string | null {
   switch (table) {
@@ -52,6 +51,7 @@ export function sectionForFinancialTable(table: string): string | null {
       return "investors";
     case "expense_deductions":
       return "expenses";
+    case "payment_splits":
     case "usd_treasury_transactions":
       return "reports";
     default:

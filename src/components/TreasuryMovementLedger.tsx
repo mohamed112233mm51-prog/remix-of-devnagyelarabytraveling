@@ -1,3 +1,5 @@
+import { EditTransactionButton } from "@/components/EditTransactionButton";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { useEffect, useMemo, useState } from "react";
 import { normalizeCurrency, fmtBalance } from "@/lib/db";
 import { cairoToday } from "@/lib/approvalFines";
@@ -116,11 +118,11 @@ export function TreasuryMovementLedger({ boxes, operationsOnly = false }: {
             <thead><tr>
               <th>التاريخ والوقت</th>{!operationsOnly && <th>الخزينة</th>}<th>نوع الحركة</th>
               {operationsOnly ? <><th>من</th><th>إلى</th></> : <><th>الاتجاه</th><th>المصدر / الطرف</th></>}
-              <th>المبلغ</th><th>العملة</th>{!operationsOnly && <th>رصيد الخزينة بعد الحركة</th>}<th>التفاصيل</th>
+              <th>المبلغ</th><th>العملة</th>{!operationsOnly && <th>رصيد الخزينة بعد الحركة</th>}<th>التفاصيل</th>{operationsOnly && <th>إجراءات</th>}
             </tr></thead>
             <tbody>
-              {busy ? <tr><td colSpan={operationsOnly ? 7 : 9}>جارٍ تحميل سجل الخزائن...</td></tr>
-                : result.error ? null : rows.length === 0 ? <tr><td colSpan={operationsOnly ? 7 : 9}>لا توجد حركات خزائن مطابقة للفترة والفلاتر</td></tr>
+              {busy ? <tr><td colSpan={operationsOnly ? 8 : 9}>جارٍ تحميل سجل الخزائن...</td></tr>
+                : result.error ? null : rows.length === 0 ? <tr><td colSpan={operationsOnly ? 8 : 9}>لا توجد حركات خزائن مطابقة للفترة والفلاتر</td></tr>
                 : rows.map(row => <tr key={row.id}>
                   <td data-label="التاريخ والوقت" style={{ whiteSpace: "nowrap" }}>{row.performedAt
                     ? new Date(row.performedAt).toLocaleString("ar-EG-u-nu-latn", { timeZone: "Africa/Cairo" }) : "—"}</td>
@@ -134,6 +136,10 @@ export function TreasuryMovementLedger({ boxes, operationsOnly = false }: {
                   <td data-label="العملة">{CURRENCY_LABEL[row.currency] || row.currency}</td>
                   {!operationsOnly && <td data-label="الرصيد بعد الحركة" style={{ fontWeight: 800 }}>{fmtBalance(Number(row.balanceAfter))}</td>}
                   <td data-label="التفاصيل">{row.details}</td>
+                  {operationsOnly && <td data-label="إجراءات">{row.kind === "transfer" && <>
+                    <EditTransactionButton table="payment_splits" id={row.id} cancelled={false} onDone={refresh} />
+                    <CancelTransactionButton table="payment_splits" id={row.id} cancelled={false} onDone={refresh} />
+                  </>}</td>}
                 </tr>)}
             </tbody>
           </table>

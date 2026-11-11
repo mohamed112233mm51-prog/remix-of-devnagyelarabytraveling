@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { patchLive } from "@/lib/db";
-import { voidAllForSource } from "@/lib/financialEngine";
+import { cancelFinancialTransaction } from "@/lib/financialEngine.cancel";
 import { deleteExecutionWithFinancials } from "@/lib/executionPosting";
 import { importFinancialRows } from "./specialImport";
 import { importExecutionRows } from "./executionImport";
@@ -67,9 +67,8 @@ export async function recordBatch(opts: {
 
 export async function undoBatch(batchId: string, table: string, ids: string[]) {
   if (ids.length) {
-    // Financial imports must reverse their linked cash movements before the
-    // parent rows are removed. Execution imports must remove generated agent/
-    // company ledger rows exactly like the normal execution delete flow.
+    // Each imported financial operation is reversed by its existing mutation
+    // RPC. Retrying the batch can safely revisit an already cancelled row.
     if (table === "executions") {
       for (const id of ids) {
         await deleteExecutionWithFinancials(id, undefined, { refresh: false });
@@ -77,10 +76,7 @@ export async function undoBatch(batchId: string, table: string, ids: string[]) {
       }
     } else if (table === "transactions" || table === "company_transactions") {
       for (const id of ids) {
-        const res = await voidAllForSource(table, id);
-        if (!res.ok) throw new Error(res.error || "تعذر عكس حركة الخزنة");
-        await (supabase.from(table as any) as any).delete().eq("id", id);
-        patchLive(table as any, { type: "delete", row: { id } });
+        await cancelFinancialTransaction({ table, id, reason: "التراجع عن استيراد البيانات" });
       }
     } else {
       for (let i = 0; i < ids.length; i += 200) {
@@ -90,5 +86,7 @@ export async function undoBatch(batchId: string, table: string, ids: string[]) {
       }
     }
   }
-  await supabase.from("import_batches" as any).update({ undone_at: new Date().toISOString() }).eq("id", batchId);
+  const { error } = await supabase.from("import_batches" as any)
+    .update({ undone_at: new Date().toISOString() }).eq("id", batchId).select("id").single();
+  if (error) throw error;
 }

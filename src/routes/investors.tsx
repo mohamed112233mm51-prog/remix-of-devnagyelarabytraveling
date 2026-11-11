@@ -1,3 +1,5 @@
+import { EditTransactionButton } from "@/components/EditTransactionButton";
+import { CancelTransactionButton } from "@/components/CancelTransactionButton";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -323,10 +325,10 @@ function HistoryTab({ txns, investorName, investors, splits }: { txns: InvestorT
         </div>
         <div className="table-wrap enterprise-table">
           <table className="mobile-cards">
-            <thead><tr><th>#</th><th>التاريخ</th><th>المالك / المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>العملة</th><th>الخزينة</th><th>البيان</th><th>ملاحظات</th></tr></thead>
+            <thead><tr><th>#</th><th>التاريخ</th><th>المالك / المستثمر</th><th>نوع الحركة</th><th className="num-col">المبلغ</th><th>العملة</th><th>الخزينة</th><th>البيان</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية بعد</div></div></td></tr>
+                <tr><td colSpan={10}><div className="empty"><div className="empty-icon">📜</div><div className="empty-text">لا توجد حركات مالية بعد</div></div></td></tr>
               ) : filtered.map((t, i) => {
                 const isDep = t.transaction_type === "توريد نقدية";
                 const currency = investorTransactionCurrency(t.id, splits);
@@ -335,12 +337,16 @@ function HistoryTab({ txns, investorName, investors, splits }: { txns: InvestorT
                     <td data-label="#">{i + 1}</td>
                     <td data-label="التاريخ">{t.date}</td>
                     <td className="bold" data-label="المالك / المستثمر">{investorName(t.investor_id)}</td>
-                    <td data-label="نوع الحركة">{t.transaction_type}</td>
+                    <td data-label="نوع الحركة">{t.transaction_type}{t.cancelled_at ? " (ملغاة)" : ""}</td>
                     <td className="num-col" data-label="المبلغ" style={{ color: isDep ? "#15803D" : "#B91C1C", fontWeight: 700 }}>{fmtCurrency(Number(t.amount || 0), currency)}</td>
                     <td data-label="العملة">{currency}</td>
                     <td data-label="الخزينة">{t.payment_method || "حركة قديمة غير مربوطة"}</td>
                     <td data-label="البيان">{(t as any).statement || ""}</td>
                     <td data-label="ملاحظات">{t.note || "—"}</td>
+                    <td data-label="إجراءات">
+                      <EditTransactionButton table="investor_transactions" id={t.id} cancelled={!!t.cancelled_at} />
+                      <CancelTransactionButton table="investor_transactions" id={t.id} cancelled={!!t.cancelled_at} allowRestore />
+                    </td>
                   </tr>
                 );
               })}
@@ -359,6 +365,7 @@ function StatementTab({ txns, investors, splits, canExport }: { txns: InvestorTr
 
   const investor = investors.find((i) => i.id === investorId);
   const filtered = useMemo(() => txns.filter((t) =>
+    !t.cancelled_at &&
     (!investorId || t.investor_id === investorId) &&
     (!from || t.date >= from) &&
     (!to || t.date <= to)

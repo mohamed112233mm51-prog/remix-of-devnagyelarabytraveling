@@ -98,6 +98,7 @@ export function buildInvestorCapitalSummary(
   let legacyTransactionCount = 0;
 
   for (const txn of transactions) {
+    if (txn.cancelled_at) continue;
     const allLinked = splitMap.get(txn.id) || [];
     if (allLinked.length > 0) {
       linkedTransactionCount += 1;

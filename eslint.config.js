@@ -46,7 +46,7 @@ export default tseslint.config(
           selector:
             "CallExpression[callee.property.name='from'][arguments.0.value='payment_splits']",
           message:
-            "ممنوع الوصول المباشر إلى payment_splits. استخدم postMovement / voidMovement / getEntityLedger من src/lib/financialEngine.ts بدلاً من supabase.from('payment_splits').",
+            "ممنوع الوصول المباشر إلى payment_splits. استخدم postMovement / cancelFinancialTransaction / getEntityLedger من src/lib/financialEngine.ts بدلاً من supabase.from('payment_splits').",
         },
       ],
     },
