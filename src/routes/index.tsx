@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewProfitPermission, NET_PROFIT_PERMISSION_KEY, PROFIT_SUMMARY_PERMISSION_KEY } from "@/lib/permissionKeys";
-import { getDashboardNetProfitData, getDashboardProfitSummaryData, getDashboardExecutionSales } from "@/lib/dashboard.functions";
+import { getDashboardPeriodProfitSummaryData } from "@/lib/dashboardPeriodProfit.functions";
 import {
   fmtDL,
   fmtNum,
@@ -128,7 +128,6 @@ function pctDelta(curr: number, prev: number) {
 
 function Dashboard() {
   const { user, roles, permissions, isSuperAdmin, profileLoaded } = useAuth();
-  const queryClient = useQueryClient();
   const merchantsPerm = usePerm("merchants");
   const expensesPerm = usePerm("expenses");
   const merchantTotals = useMerchantTotals();
@@ -136,9 +135,7 @@ function Dashboard() {
   // Profit cards are strict: super_admin/admin always see them; manager/user require an explicit true value.
   const canViewNetProfit = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, NET_PROFIT_PERMISSION_KEY);
   const canViewProfitSummary = profileLoaded && canViewProfitPermission(permissions, { roles, isSuperAdmin }, PROFIT_SUMMARY_PERMISSION_KEY);
-  const netProfitFn = useServerFn(getDashboardNetProfitData);
-  const profitSummaryFn = useServerFn(getDashboardProfitSummaryData);
-  const executionSalesFn = useServerFn(getDashboardExecutionSales);
+  const periodProfitFn = useServerFn(getDashboardPeriodProfitSummaryData);
   const [period, setPeriod] = useState<Period>("month");
   const profitPermissionSignature = JSON.stringify({
     roles,
@@ -201,70 +198,17 @@ function Dashboard() {
   // Heavy analytics use deferred period so KPI clicks feel instant
   const deferredPeriod = useDeferredValue(period);
 
-  const netProfitQuery = useQuery({
-    queryKey: ["dashboard-net-profit", period, profitPermissionSignature, canViewNetProfit],
-    enabled: canViewNetProfit,
-    staleTime: 0,
-    refetchOnMount: "always",
-    queryFn: () => netProfitFn({ data: { period } }),
+  const profitQuery = useQuery({
+    queryKey: ["dashboard-period-profit-summary", user?.id, period, profitPermissionSignature],
+    enabled: Boolean(user?.id) && (canViewNetProfit || canViewProfitSummary),
+    queryFn: () => periodProfitFn({ data: { period } }),
   });
-  const profitSummaryQuery = useQuery({
-    queryKey: ["dashboard-profit-summary", profitPermissionSignature, canViewProfitSummary],
-    enabled: canViewProfitSummary,
-    staleTime: 0,
-    refetchOnMount: "always",
-    queryFn: () => profitSummaryFn(),
-  });
-  // Unified source for "إجمالي مبيعات الوكلاء" across every card on the
-  // dashboard. Auth-only (no profit permission required) so the hero KPI
-  // stays visible to users without profit_summary_view.
-  const executionSalesQuery = useQuery({
-    queryKey: ["dashboard-execution-sales"],
-    staleTime: 15_000,
-    refetchOnMount: "always",
-    queryFn: () => executionSalesFn(),
-  });
-  const executionAgentSalesEGP = executionSalesQuery.data?.salesEGP ?? 0;
-
-  const effectiveCanViewNetProfit = canViewNetProfit && netProfitQuery.data?.canNetProfit === true;
-  const effectiveCanViewProfitSummary = canViewProfitSummary && profitSummaryQuery.data?.canProfitSummary === true;
-
-  useEffect(() => {
-    if (canViewNetProfit) return;
-    queryClient.removeQueries({ queryKey: ["dashboard-net-profit"] });
-  }, [canViewNetProfit, queryClient]);
-
-  useEffect(() => {
-    if (canViewProfitSummary) return;
-    queryClient.removeQueries({ queryKey: ["dashboard-profit-summary"] });
-  }, [canViewProfitSummary, queryClient]);
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    console.debug("[dashboard:profit-permissions]", {
-      email: user?.email ?? null,
-      userId: user?.id ?? null,
-      role: roles,
-      is_super_admin: isSuperAdmin,
-      profileLoaded,
-      permissions_net_profit_view: permissions?.[NET_PROFIT_PERMISSION_KEY] ?? null,
-      permissions_profit_summary_view: permissions?.[PROFIT_SUMMARY_PERMISSION_KEY] ?? null,
-      decision_can_request_net_profit: canViewNetProfit,
-      decision_can_request_profit_summary: canViewProfitSummary,
-      server_can_net_profit: netProfitQuery.data?.canNetProfit ?? null,
-      server_can_profit_summary: profitSummaryQuery.data?.canProfitSummary ?? null,
-      final_render_net_profit_card: effectiveCanViewNetProfit,
-      final_render_profit_summary_section: effectiveCanViewProfitSummary,
-    });
-  }, [user?.email, user?.id, roles, isSuperAdmin, profileLoaded, permissions, canViewNetProfit, canViewProfitSummary, netProfitQuery.data?.canNetProfit, profitSummaryQuery.data?.canProfitSummary, effectiveCanViewNetProfit, effectiveCanViewProfitSummary]);
-  const netProfitData = effectiveCanViewNetProfit ? netProfitQuery.data?.netProfit : null;
-  const profitSummaryData = effectiveCanViewProfitSummary ? profitSummaryQuery.data?.profitSummary : null;
-  const periodProfit = netProfitData?.periodProfit ?? 0;
-  const previousPeriodProfit = netProfitData?.previousProfit ?? null;
-  // executionNetProfit was removed from "المؤشرات الرئيسية"؛ الحقل السابق كان: netProfitData?.companyProfit ?? profitSummaryData?.companyProfit ?? 0
-  const profitExecSales = profitSummaryData?.execSales ?? 0;
-  const profitExecCompanyCost = profitSummaryData?.execCompanyCost ?? 0;
-  const profitExpensesAll = profitSummaryData?.expensesAll ?? 0;
+  const netProfit = canViewNetProfit && profitQuery.data?.canNetProfit
+    ? profitQuery.data.netProfit
+    : null;
+  const profitSummary = canViewProfitSummary && profitQuery.data?.canProfitSummary
+    ? profitQuery.data.profitSummary
+    : null;
 
   // ===== Lifetime totals — single pass per table =====
   // Financial Summary Engine — إجماليات المصروفات موحّدة عبر المحرك.
@@ -562,16 +506,14 @@ function Dashboard() {
 
       {/* === PRIMARY KPIs (hero) — period-based === */}
       <div className="erp-hero-grid">
-        {effectiveCanViewNetProfit && (
+        {netProfit !== null && (
         <HeroKpi
           label={`صافي الأرباح — ${periodLabel}`}
-          value={periodProfit}
+          value={netProfit}
           format={fmtDL}
           icon={<TrendingUp size={18} />}
           tone="primary"
-          delta={previousPeriodProfit !== null ? `${pctDelta(periodProfit, previousPeriodProfit) >= 0 ? "+" : ""}${pctDelta(periodProfit, previousPeriodProfit)}%` : undefined}
-          deltaPositive={previousPeriodProfit !== null ? pctDelta(periodProfit, previousPeriodProfit) >= 0 : undefined}
-          sub={previousPeriodProfit !== null ? "مقارنة بالفترة السابقة" : "إجمالي النظام"}
+          sub="محسوب بأسعار الصرف التاريخية المقفلة"
         />
         )}
         <HeroKpi
@@ -863,13 +805,18 @@ function Dashboard() {
 
 
 
-        {effectiveCanViewProfitSummary && (
-        <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
-          <Stat label="إجمالي مبيعات الوكلاء" value={fmtDL(executionAgentSalesEGP)} tone="green" />
-          <Stat label="إجمالي تكلفة الشركات" value={fmtDL(profitExecCompanyCost)} tone="red" />
-          {expensesPerm.view && <Stat label="إجمالي المصروفات" value={fmtDL(profitExpensesAll)} tone="red" />}
-          <Stat label="صافي الأرباح" value={fmtDL(profitSummaryData?.companyProfit ?? 0)} highlight />
-        </SectionCard>
+        {profitSummary && (
+          <SectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />} accent="navy">
+            <Stat label={`مبيعات الوكلاء — ${periodLabel}`} value={fmtDL(profitSummary.execSales)} tone="green" />
+            <Stat label={`تكلفة الشركات — ${periodLabel}`} value={fmtDL(profitSummary.execCompanyCost)} tone="red" />
+            <Stat label={`المصروفات — ${periodLabel}`} value={fmtDL(profitSummary.expenses)} tone="red" />
+            <Stat label={`صافي الأرباح — ${periodLabel}`} value={fmtDL(profitSummary.netProfit)} highlight />
+          </SectionCard>
+        )}
+        {profitQuery.isError && (canViewNetProfit || canViewProfitSummary) && (
+          <SectionCard title="الأرباح" icon={<TrendingUp size={16} />} accent="navy">
+            <Stat label="الحالة" value="تعذر تحميل أرباح الفترة" />
+          </SectionCard>
         )}
       </div>
 

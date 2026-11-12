@@ -868,8 +868,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
           ...(current || {}),
           [sectionKey]: result?.section_value ?? next,
         }));
-        qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
-        qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+        qc.removeQueries({ queryKey: ["dashboard-period-profit-summary"] });
         qc.removeQueries({ queryKey: ["dashboard-profit"] });
         if (currentAuthUser?.id === u.id) await refreshProfile();
         toast.success("تم حفظ الصلاحية");
@@ -1002,8 +1001,7 @@ function PermsUserCard({ user: u, agents, isOpen, onToggle, onChanged }: {
                     setDraftSuperAdmin(nextVal);
                     try {
                       await setSuperAdminFn({ data: { id: u.id, is_super_admin: nextVal } });
-                      qc.removeQueries({ queryKey: ["dashboard-net-profit"] });
-                      qc.removeQueries({ queryKey: ["dashboard-profit-summary"] });
+                      qc.removeQueries({ queryKey: ["dashboard-period-profit-summary"] });
                       qc.removeQueries({ queryKey: ["dashboard-profit"] });
                       if (currentAuthUser?.id === u.id) {
                         await refreshProfile();

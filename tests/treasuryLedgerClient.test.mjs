@@ -124,7 +124,8 @@ test("returning directly to the saved treasury tab does not mount the complete r
   Object.assign(deps,{react,"react/jsx-runtime":{jsx,jsxs:jsx},
     "@tanstack/react-router":{createFileRoute:()=>options=>({options})},
     "@/hooks/usePerm":{usePerm:()=>({view:true})},
-    "@/lib/reportsData":{useReportsData:()=>{throw Error("Treasury must not subscribe to the complete reports store");}},
+    "@tanstack/react-query":{useQueryClient:()=>({})},
+    "@/hooks/useReportsData":{useReportsData:()=>{throw Error("Treasury must not request other reports' data");}},
   });
   const code=ts.transpileModule(source+"\nexport { ReportsPage };",{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   const module={exports:{}};

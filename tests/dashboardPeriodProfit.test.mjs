@@ -54,7 +54,7 @@ function matchesFilter(row, filter) {
 
 // Exercise the real Supabase/PostgREST client, including its generated HTTP
 // filters and ranges. This endpoint models the API's 1000-row response cap.
-function harness({ executions = [], expenses = [], today = "2026-11-07", allowed = true, admin = false, fail } = {}) {
+function harness({ executions = [], expenses = [], today = "2026-11-07", allowed = true, netAllowed = false, admin = false, fail } = {}) {
   const calls = [];
   const tables = { executions, expenses };
   const client = createClient("https://profit.test", "test-publishable-key", {
@@ -73,7 +73,7 @@ function harness({ executions = [], expenses = [], today = "2026-11-07", allowed
           status, headers: { "Content-Type": "application/json" },
         });
         if (fail?.(call)) return respond({ message: "page unavailable", code: "TEST_FAILURE" }, 400);
-        if (table === "profiles") return respond([{ permissions: { profit_summary_view: allowed }, is_super_admin: false }]);
+        if (table === "profiles") return respond([{ permissions: { profit_summary_view: allowed, net_profit_view: netAllowed }, is_super_admin: false }]);
         if (table === "has_role") return respond(admin);
         assert.ok(table in tables, `unexpected table read: ${table}`);
         let rows = tables[table].filter(row => row.rls_visible !== false);
@@ -135,7 +135,7 @@ test("1548 history rows no longer hide the 63 November executions behind the API
   assert.equal(oldRead.data.length, 1000);
   assert.equal(oldRead.data.filter(row => row.created_at.startsWith("2026-11")).length, 0);
   h.calls.length = 0;
-  assert.deepEqual(await h.run(), { canProfitSummary: true, profitSummary: {
+  assert.deepEqual(await h.run(), { canNetProfit: false, canProfitSummary: true, netProfit: null, profitSummary: {
     execSales: 1918800, execCompanyCost: 1824952, expenses: 46500,
     netProfit: 47348, pendingExecutions: 0, pendingExpenses: 0,
   } });
@@ -304,7 +304,7 @@ for (const table of ["executions", "expenses"]) {
 
 test("permission denial prevents all financial reads and allowed reads keep the user's RLS scope", async () => {
   const denied = harness({ allowed: false });
-  assert.deepEqual(await denied.run(), { canProfitSummary: false, profitSummary: null });
+  assert.deepEqual(await denied.run(), { canNetProfit: false, canProfitSummary: false, netProfit: null, profitSummary: null });
   assert.equal(denied.reads("executions").length + denied.reads("expenses").length, 0);
   const h = harness({ allowed: false, admin: true,
     executions: [execution(1), execution(2, undefined, { rls_visible: false })],
@@ -321,4 +321,20 @@ test("an empty period returns zero totals", async () => {
     execSales: 0, execCompanyCost: 0, expenses: 0,
     netProfit: 0, pendingExecutions: 0, pendingExpenses: 0,
   });
+});
+
+
+test("the two dashboard permissions use the same read and expose only the permitted fields", async () => {
+  const fixtures = { executions: [execution(1)], expenses: [expense(1)] };
+  const netOnly = harness({ ...fixtures, allowed: false, netAllowed: true });
+  assert.deepEqual(await netOnly.run(), {
+    canNetProfit: true, canProfitSummary: false, netProfit: 23, profitSummary: null,
+  });
+  const both = harness({ ...fixtures, netAllowed: true });
+  const response = await both.run();
+  assert.equal(response.netProfit, 23);
+  assert.equal(response.profitSummary.netProfit, response.netProfit);
+  assert.equal(both.reads("executions").length, 1);
+  assert.equal(both.reads("expenses").length, 1);
+  assert.equal(both.reads("profiles").length, 1);
 });

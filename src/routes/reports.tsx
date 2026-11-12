@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { CASH_BOX_SETTLEMENT_PERMISSION_KEY, usePerm } from "@/hooks/usePerm";
 import { CurrencyLines } from "@/components/CurrencyLines";
 import { CancelTransactionButton } from "@/components/CancelTransactionButton";
@@ -17,13 +18,12 @@ import {
   useLive,
   type UsdTreasuryTransaction,
 } from "@/lib/db";
-import { useReportsData, type ReportsData } from "@/lib/reportsData";
+import { type CurrencySupplierTrade, type ReportsData, type ReportTab, type ScopedReportsData } from "@/lib/reportsData";
+import { REPORT_QUERY_KEY, useReportsData } from "@/hooks/useReportsData";
 import { computeServiceExecutionDistribution, normalizeServiceType } from "@/lib/serviceDistribution";
-import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap, CurrencyMap, useCompaniesSummary } from "@/lib/financialSummary";
+import { summarizeExpenses, summarizeCurrencySupplierTrades, computeTreasurySummary, activeCashBoxes, summarizeMerchantReport, summarizeInvestorReport, summarizeUsdTreasuryPeriod, formatCurrencyMap, CurrencyMap } from "@/lib/financialSummary";
 import { computeAgentReport } from "@/lib/sectionAccounting/agentsReport";
 import { computeCompanyReport } from "@/lib/sectionAccounting/companiesReport";
-import { logReconciliation } from "@/lib/sectionAccounting/reconciliation";
-import { useAgentAccountTotals } from "@/hooks/useAgentAccountTotals";
 import { useEffect } from "react";
 import { exportStatementToExcel, exportStatementToPDF, type StatementExportData } from "@/lib/exportStatement";
 import { StatementImageExportDialog } from "@/components/StatementImageExportDialog";
@@ -62,7 +62,7 @@ export const Route = createFileRoute("/reports")({
   errorComponent: () => <div className="card" style={{ padding: 24 }}>تعذر تحميل التقارير مؤقتًا. <button className="btn btn-gold" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>,
 });
 
-type Tab = "agents" | "companies" | "merchants" | "expenses" | "treasuries" | "currency_suppliers";
+type Tab = ReportTab | "treasuries";
 type Period = "30d" | "1y" | "all" | "custom";
 
 // Professional, soft palette
@@ -144,7 +144,7 @@ function KpiRow({ items }: { items: { label: string; value: React.ReactNode; ton
   );
 }
 
-function EmptyOrLoading({ loading, label, colSpan }: { loading: boolean; label: string; colSpan: number }) {
+function EmptyOrLoading({ loading, label, colSpan }: { loading?: boolean; label: string; colSpan: number }) {
   return (
     <tr><td colSpan={colSpan}><div className="empty"><div className="empty-text">{loading ? "جارٍ التحميل..." : label}</div></div></td></tr>
   );
@@ -207,6 +207,7 @@ const chartsCss = `
 `;
 
 function ReportsPage() {
+  const queryClient = useQueryClient();
   const expensesPerm = usePerm("expenses");
   const [tab, setTab] = useState<Tab>("agents");
   const [tabReady, setTabReady] = useState(false);
@@ -310,7 +311,7 @@ function ReportsPage() {
                 <label>إلى</label>
                 <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPeriod("custom"); }} />
               </div>
-              <button className="action-btn" title="تحديث" onClick={() => { setFrom((f) => f); setTo((t) => t); }}>
+              <button className="action-btn" title="تحديث" onClick={() => void queryClient.refetchQueries({ queryKey: REPORT_QUERY_KEY, type: "active" })}>
                 <RefreshCw size={14} strokeWidth={2.2} /> تحديث
               </button>
             </div>
@@ -320,26 +321,42 @@ function ReportsPage() {
 
       </>}
 
-      {tabReady && (tab === "treasuries" ? <TreasuriesReport inRange={inRange} /> : <ReportDataSection tab={tab} inRange={inRange} expensesAllowed={expensesPerm.view} />)}
+      {tabReady && (tab === "treasuries"
+        ? <TreasuriesReport inRange={inRange} />
+        : (tab !== "expenses" || expensesPerm.view) &&
+          <ReportDataSection tab={tab} from={from} to={to} inRange={inRange} />)}
       <style>{chartsCss}</style>
     </div>
   );
 }
 
 
-/** Mount the existing complete reports store only for reports that consume it. */
-function ReportDataSection({ tab, inRange, expensesAllowed }: { tab: Tab; inRange: RangeFn; expensesAllowed: boolean }) {
-  const data = useReportsData();
-  if (tab === "agents") return <AgentsReport inRange={inRange} data={data} />;
-  if (tab === "companies") return <CompaniesReport inRange={inRange} data={data} />;
-  if (tab === "merchants") return <MerchantsReport inRange={inRange} data={data} />;
-  if (tab === "expenses" && expensesAllowed) return <ExpensesReport inRange={inRange} data={data} />;
-  if (tab === "currency_suppliers") return <CurrencySuppliersReport inRange={inRange} />;
-  return null;
-}
-
 type RangeFn = (d: string | null | undefined) => boolean;
-type SectionProps = { inRange: RangeFn; data: ReportsData };
+type SectionProps = { inRange: RangeFn; data: ScopedReportsData };
+type LegacySectionProps = { inRange: RangeFn; data: ReportsData };
+
+function ReportDataSection({ tab, from, to, inRange }: {
+  tab: ReportTab;
+  from: string;
+  to: string;
+  inRange: RangeFn;
+}) {
+  const { data, isError, refetch } = useReportsData(tab, from, to);
+  if (isError) return (
+    <div className="card" style={{ padding: 24 }}>
+      تعذر تحميل بيانات التقرير. <button className="btn btn-gold" onClick={() => void refetch()}>إعادة المحاولة</button>
+    </div>
+  );
+  if (!data) return <div className="card" style={{ padding: 24 }} role="status">جارٍ تحميل التقرير...</div>;
+
+  switch (tab) {
+    case "agents": return <AgentsReport inRange={inRange} data={data} />;
+    case "companies": return <CompaniesReport inRange={inRange} data={data} />;
+    case "merchants": return <MerchantsReport inRange={inRange} data={data} />;
+    case "expenses": return <ExpensesReport inRange={inRange} data={data} />;
+    case "currency_suppliers": return <CurrencySuppliersReport inRange={inRange} data={data} />;
+  }
+}
 
 function ExportBar({ onExcel, onPdf, getData }: { onExcel: () => void; onPdf: () => void; getData: () => StatementExportData }) {
   const [imageData, setImageData] = useState<StatementExportData | null>(null);
@@ -559,41 +576,19 @@ function SubTabsBar({ tabs, current, onChange }: { tabs: { id: string; label: st
 // Same source of truth as `src/routes/accounts.tsx` KPI cards (لضمان تطابق
 // إجمالي التقرير عند "كل الوقت" مع كروت صفحة حسابات الوكلاء عملة بعملة).
 function AgentsReport({ inRange, data: rd }: SectionProps) {
-  const { agents, transactions: txns, executions, approvals, loading } = rd;
+  const { agents, transactions: txns, executions, approvals, paymentSplits } = rd;
 
-  // Predicate على travel_date/date/created_at (نفس منطق dashboardCollections).
+  // Keep the same accounting dates and split currency as the agent ledger.
   const predicate = inRange;
 
   const rpt = useMemo(
-    () => computeAgentReport({ agents, transactions: txns, executions, approvals, predicate }),
-    [agents, txns, executions, approvals, predicate],
+    () => computeAgentReport({ agents, transactions: txns, executions, approvals, paymentSplits, predicate }),
+    [agents, txns, executions, approvals, paymentSplits, predicate],
   );
   const data = rpt.rows;
   const fTxns = rpt.filteredTxns;
   const fExecs = rpt.filteredExecutions;
   const fApp = rpt.filteredApprovals;
-
-  // Aggregate KPI cards من نفس Hook صفحة القسم — لكن الأرقام هنا مفلترة بالفترة.
-  const agentAllTime = useAgentAccountTotals();
-
-  // Dev-only reconciliation: يقارن كروت الوكلاء "مدى الحياة" بين
-  // صفحة الحسابات والتقرير ويطبع أي فرق لكل عملة.
-  useEffect(() => {
-    const allTime = computeAgentReport({ agents, transactions: txns, executions, approvals });
-    logReconciliation(
-      "agents",
-      {
-        services: agentAllTime.services,
-        payments: agentAllTime.payments,
-        due: agentAllTime.due,
-      },
-      {
-        services: allTime.totals.services,
-        payments: allTime.totals.payments,
-        due: allTime.totals.due,
-      },
-    );
-  }, [agents, txns, executions, approvals, agentAllTime]);
 
   const monthlyCollections = groupByMonth(fTxns, (t) => t.date, (t) => txnCollectedAmount(t));
   const flightsByDestination = groupBy(fExecs as any[], (f: any) => f.destination || "غير محدد");
@@ -736,7 +731,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
             <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
             <tbody>
               {data.length === 0 ? (
-                <EmptyOrLoading loading={loading} label="لا يوجد وكلاء" colSpan={cols.length} />
+                <EmptyOrLoading label="لا يوجد وكلاء" colSpan={cols.length} />
               ) : data.map((r) => (
                 <tr key={r.id}>
                   <td className="bold" data-label="الوكيل">{r.name}</td>
@@ -759,7 +754,7 @@ function AgentsReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- COMPANIES ----------
 function CompaniesReport({ inRange, data: rd }: SectionProps) {
-  const { companies, companyTransactions: cTxns, paymentSplits, approvals, loading } = rd;
+  const { companies, companyTransactions: cTxns, paymentSplits, approvals } = rd;
 
   // Currency-Safe: نفس مصدر صفحة الشركات (summarizeCompany + buildCompanyLedgerRows).
   const predicate = inRange;
@@ -775,28 +770,6 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
   );
   const data = rpt.rows;
   const fCT = rpt.filteredTxns;
-
-  // Reconciliation: كروت "مدى الحياة" في التقرير يجب أن تطابق كروت
-  // صفحة حسابات الشركات بالضبط لكل عملة.
-  const companiesAllTime = useCompaniesSummary();
-  useEffect(() => {
-    const totalDebit = new CurrencyMap();
-    const totalCredit = new CurrencyMap();
-    const totalBalance = new CurrencyMap();
-    for (const [, sum] of companiesAllTime) {
-      totalDebit.merge(sum.totalDebit);
-      totalCredit.merge(sum.totalCredit);
-      totalBalance.merge(sum.balance);
-    }
-    const allTime = computeCompanyReport({
-      companies, companyTransactions: cTxns, paymentSplits, approvals,
-    });
-    logReconciliation(
-      "companies",
-      { services: totalDebit, paid: totalCredit, due: totalBalance },
-      { services: allTime.totals.services, paid: allTime.totals.paid, due: allTime.totals.due },
-    );
-  }, [companies, cTxns, paymentSplits, approvals, companiesAllTime]);
 
   const monthlyPayments = groupByMonth(fCT, (t) => t.date, (t) => txnCollectedAmount(t));
   // ترتيب "أعلى الشركات": بعدد الحركات المميزة ضمن الفترة.
@@ -931,7 +904,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
             <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
             <tbody>
               {data.length === 0 ? (
-                <EmptyOrLoading loading={loading} label="لا توجد شركات" colSpan={cols.length} />
+                <EmptyOrLoading label="لا توجد شركات" colSpan={cols.length} />
               ) : data.map((r) => (
                 <tr key={r.id}>
                   <td className="bold" data-label="الشركة">{r.name}</td>
@@ -954,7 +927,7 @@ function CompaniesReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- MERCHANTS ----------
 function MerchantsReport({ inRange, data: rd }: SectionProps) {
-  const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, usdTreasury, paymentSplits, loading } = rd;
+  const { merchants, transactions: txns, companyTransactions: cTxns, merchantCollections: collections, usdTreasury, paymentSplits } = rd;
 
   const rpt = useMemo(
     () => summarizeMerchantReport({ merchants, transactions: txns, companyTransactions: cTxns, collections, usdRows: usdTreasury, splits: paymentSplits, inRange }),
@@ -1045,7 +1018,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
             <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
             <tbody>
               {data.length === 0 ? (
-                <EmptyOrLoading loading={loading} label="لا يوجد تجار" colSpan={cols.length} />
+                <EmptyOrLoading label="لا يوجد تجار" colSpan={cols.length} />
               ) : data.map((r, i) => (
                 <tr key={i}>
                   <td className="bold" data-label="التاجر">{r.name}</td>
@@ -1066,7 +1039,7 @@ function MerchantsReport({ inRange, data: rd }: SectionProps) {
 
 
 // ---------- INVESTORS ----------
-function InvestorsReport({ inRange, data: rd }: SectionProps) {
+function InvestorsReport({ inRange, data: rd }: LegacySectionProps) {
   const { investors, investorTransactions: invTxns, loading } = rd;
 
   const rpt = useMemo(
@@ -1173,7 +1146,7 @@ function InvestorsReport({ inRange, data: rd }: SectionProps) {
 }
 
 // ---------- FLIGHTS ----------
-function FlightsReport({ inRange, data: rd }: SectionProps) {
+function FlightsReport({ inRange, data: rd }: LegacySectionProps) {
   const { flights, agentName, loading } = rd;
   // Date filter: include the flight if EITHER travel_date OR created_at falls in range.
   // travel_date is often in the future (booking) and would otherwise be excluded by "آخر 30 يوم".
@@ -1247,7 +1220,7 @@ function FlightsReport({ inRange, data: rd }: SectionProps) {
 }
 
 // ---------- APPROVALS ----------
-function ApprovalsReport({ inRange, data: rd }: SectionProps) {
+function ApprovalsReport({ inRange, data: rd }: LegacySectionProps) {
   const { approvals, agentName, companyName, loading } = rd;
   // Date filter: use submit_date when present, otherwise fall back to created_at.
   const approvalDate = (a: typeof approvals[number]) =>
@@ -1319,7 +1292,7 @@ function ApprovalsReport({ inRange, data: rd }: SectionProps) {
 
 // ---------- EXPENSES ----------
 function ExpensesReport({ inRange, data: rd }: SectionProps) {
-  const { expenses, loading } = rd;
+  const { expenses } = rd;
   const data = useMemo(() => expenses.filter((e) => inRange(e.date)), [expenses, inRange]);
   const { total: totalAll, fixed: totalFixed, variable: totalVar } = useMemo(
     () => summarizeExpenses(data),
@@ -1415,7 +1388,7 @@ function ExpensesReport({ inRange, data: rd }: SectionProps) {
             <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
             <tbody>
               {data.length === 0 ? (
-                <EmptyOrLoading loading={loading} label="لا توجد مصروفات" colSpan={cols.length} />
+                <EmptyOrLoading label="لا توجد مصروفات" colSpan={cols.length} />
               ) : data.map((e) => (
                 <tr key={e.id}>
                   <td className="bold" data-label="اسم المصروف">{e.expense_name}</td>
@@ -1453,7 +1426,7 @@ function usdMovementLabel(r: UsdTreasuryTransaction): string {
   return r.type || "—";
 }
 
-function UsdTreasuryReport({ inRange, data: rd }: SectionProps) {
+function UsdTreasuryReport({ inRange, data: rd }: LegacySectionProps) {
   const { usdTreasury, companyName, merchantName, loading } = rd;
 
   const rpt = useMemo(
@@ -1634,7 +1607,7 @@ function TreasuriesReport({ inRange }: { inRange: (d: string | null | undefined)
   const reportPerm = usePerm("reports");
   const settlementPerm = usePerm(CASH_BOX_SETTLEMENT_PERMISSION_KEY);
   const { rows: boxes, loading } = useLive<CashBoxRow>("cash_boxes");
-  const { rows: cTxns } = useLive<CurrencySupplierTx>("currency_supplier_transactions");
+  const { rows: cTxns } = useLive<CurrencySupplierTrade>("currency_supplier_transactions");
   const { rows: cSuppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
   const supplierNameOf = useMemo(() => new Map(cSuppliers.map((s) => [s.id, s.name])), [cSuppliers]);
   const active = useMemo(() => activeCashBoxes(boxes), [boxes]);
@@ -2008,24 +1981,10 @@ function CashBoxReconcileModal({ box, onClose }: { box: CashBoxRow; onClose: () 
 
 
 // ---------- CURRENCY SUPPLIERS (buy / sell currency) ----------
-type CurrencySupplierTx = {
-  id: string;
-  supplier_id: string;
-  tx_date: string;
-  tx_type: "شراء عملة" | "بيع عملة";
-  bought_currency: string;
-  bought_amount: number;
-  sold_currency: string;
-  sold_amount: number;
-  exchange_rate: number | null;
-  description: string | null;
-  created_at: string;
-};
 type CurrencySupplier = { id: string; name: string };
 
-function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
-  const { rows: txns, loading } = useLive<CurrencySupplierTx>("currency_supplier_transactions" as any);
-  const { rows: suppliers } = useLive<CurrencySupplier>("currency_suppliers" as any);
+function CurrencySuppliersReport({ inRange, data }: SectionProps) {
+  const { currencySuppliers: suppliers, supplierTransactions: txns } = data;
   const nameOf = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
 
   const filtered = useMemo(() => txns.filter((t) => inRange(t.tx_date)), [txns, inRange]);
@@ -2080,7 +2039,7 @@ function CurrencySuppliersReport({ inRange }: { inRange: RangeFn }) {
             <thead><tr>{cols.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <EmptyOrLoading loading={loading} label="لا توجد حركات" colSpan={cols.length} />
+                <EmptyOrLoading label="لا توجد حركات" colSpan={cols.length} />
               ) : rows.map((r, i) => (
                 <tr key={i}>
                   <td data-label="التاريخ">{r.tx_date}</td>

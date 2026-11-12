@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import {
   canViewProfitPermission,
+  NET_PROFIT_PERMISSION_KEY,
   PROFIT_SUMMARY_PERMISSION_KEY,
   normalizePermissionsForLoad,
 } from "@/lib/permissionKeys";
@@ -23,7 +24,7 @@ import {
 import { readAllRows, type ReadAllRowsFilter } from "@/lib/readAllRows";
 import { expenseAccountingDay } from "@/lib/expenseArchive";
 
-async function canViewProfitSummary(sb: SupabaseClient<Database>, userId: string): Promise<boolean> {
+async function getProfitPermissions(sb: SupabaseClient<Database>, userId: string) {
   const [profileResult, roleResult] = await Promise.all([
     sb
       .from("profiles")
@@ -39,14 +40,14 @@ async function canViewProfitSummary(sb: SupabaseClient<Database>, userId: string
   const permissions = normalizePermissionsForLoad(
     (((profile as any)?.permissions ?? {}) as Record<string, unknown>),
   );
-  return canViewProfitPermission(
-    permissions,
-    {
-      roles: roleResult.data === true ? ["admin"] : [],
-      isSuperAdmin: Boolean((profile as any)?.is_super_admin),
-    },
-    PROFIT_SUMMARY_PERMISSION_KEY,
-  );
+  const user = {
+    roles: roleResult.data === true ? ["admin"] : [],
+    isSuperAdmin: Boolean(profile?.is_super_admin),
+  };
+  return {
+    canNetProfit: canViewProfitPermission(permissions, user, NET_PROFIT_PERMISSION_KEY),
+    canProfitSummary: canViewProfitPermission(permissions, user, PROFIT_SUMMARY_PERMISSION_KEY),
+  };
 }
 
 /**
@@ -60,8 +61,10 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
   .inputValidator((data: { period: SummaryPeriod }) => data)
   .handler(async ({ context, data }) => {
     const sb = context.supabase;
-    const allowed = await canViewProfitSummary(sb, context.userId);
-    if (!allowed) return { canProfitSummary: false, profitSummary: null };
+    const permissions = await getProfitPermissions(sb, context.userId);
+    if (!permissions.canNetProfit && !permissions.canProfitSummary) {
+      return { ...permissions, netProfit: null, profitSummary: null };
+    }
 
     const todayISO = cairoToday();
     const start = summaryPeriodStart(data.period, todayISO);
@@ -138,15 +141,17 @@ export const getDashboardPeriodProfitSummaryData = createServerFn({ method: "POS
       else pendingExpenses += 1;
     }
 
+    const netProfit = executionProfit - expenses;
     return {
-      canProfitSummary: true,
-      profitSummary: {
+      ...permissions,
+      netProfit: permissions.canNetProfit ? netProfit : null,
+      profitSummary: permissions.canProfitSummary ? {
         execSales,
         execCompanyCost,
         expenses,
-        netProfit: executionProfit - expenses,
+        netProfit,
         pendingExecutions,
         pendingExpenses,
-      },
+      } : null,
     };
   });

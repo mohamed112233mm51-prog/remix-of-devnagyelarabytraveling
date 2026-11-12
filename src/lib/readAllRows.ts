@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface DateFilterQuery {
+  eq(column: string, value: string): this;
+  is(column: string, value: null): this;
+  not(column: string, operator: string, value: null): this;
+  in(column: string, values: readonly string[]): this;
+  abortSignal(signal: AbortSignal): this;
   gte(column: string, value: string): this;
   lt(column: string, value: string): this;
   or(filters: string): this;

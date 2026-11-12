@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Briefcase,
@@ -9,7 +7,6 @@ import {
   ClipboardCheck,
   Landmark,
   Plane,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import { CurrencyLines } from "@/components/CurrencyLines";
@@ -19,7 +16,6 @@ import { useCurrencySuppliersPeriodTotals } from "@/hooks/useCurrencySuppliersPe
 import { useDashboardOperationalPeriod } from "@/hooks/useDashboardOperationalPeriod";
 import { fmtDL, fmtNum } from "@/lib/db";
 import { CurrencyMap } from "@/lib/financialSummary";
-import { getDashboardPeriodProfitSummaryData } from "@/lib/dashboardPeriodProfit.functions";
 import { type SummaryPeriod } from "@/lib/summaryPeriod";
 
 const PERIOD_BY_LABEL: Record<string, SummaryPeriod> = {
@@ -39,7 +35,6 @@ const PERIOD_LABELS: Record<SummaryPeriod, string> = {
 };
 
 type PortalSlots = {
-  profitHero: HTMLElement | null;
   submissionCount: HTMLElement | null;
   executionCount: HTMLElement | null;
   periodSummary: HTMLElement | null;
@@ -48,11 +43,9 @@ type PortalSlots = {
   serviceDistribution: HTMLElement | null;
   topDestinations: HTMLElement | null;
   supplierDetails: HTMLElement | null;
-  profitDetails: HTMLElement | null;
 };
 
 const EMPTY_SLOTS: PortalSlots = {
-  profitHero: null,
   submissionCount: null,
   executionCount: null,
   periodSummary: null,
@@ -61,11 +54,9 @@ const EMPTY_SLOTS: PortalSlots = {
   serviceDistribution: null,
   topDestinations: null,
   supplierDetails: null,
-  profitDetails: null,
 };
 
 const SLOT_IDS = [
-  "dashboard-profit-hero-period-slot",
   "dashboard-submission-count-period-slot",
   "dashboard-execution-count-period-slot",
   "dashboard-period-summary-slot",
@@ -74,7 +65,6 @@ const SLOT_IDS = [
   "dashboard-service-distribution-period-slot",
   "dashboard-top-destinations-period-slot",
   "dashboard-supplier-details-period-slot",
-  "dashboard-profit-details-period-slot",
 ];
 
 export function DashboardOperationalPeriodEnhancer() {
@@ -105,15 +95,6 @@ function DashboardOperationalPeriodPortals() {
     total.merge(merchantTotals.totalCollected);
     return total;
   }, [agentTotals.credit, merchantTotals.totalCollected]);
-
-  const profitSummaryFn = useServerFn(getDashboardPeriodProfitSummaryData);
-  const profitQuery = useQuery({
-    queryKey: ["dashboard-period-profit-summary", period],
-    enabled: Boolean(slots.profitHero || slots.profitDetails),
-    staleTime: 0,
-    refetchOnMount: "always",
-    queryFn: () => profitSummaryFn({ data: { period } }),
-  });
 
   useEffect(() => {
     const periodBar = document.querySelector<HTMLElement>(".erp-period-bar");
@@ -150,27 +131,10 @@ function DashboardOperationalPeriodPortals() {
       return null;
     };
 
-    const findPrimaryGrid = (): HTMLElement | null => {
-      const periodBar = document.querySelector<HTMLElement>(".erp-period-bar");
-      let sibling = periodBar?.nextElementSibling as HTMLElement | null;
-      while (sibling) {
-        if (sibling.matches(".erp-hero-grid")) return sibling;
-        if (sibling.classList.contains("erp-section-title")) return null;
-        sibling = sibling.nextElementSibling as HTMLElement | null;
-      }
-      return null;
-    };
-
     const findHero = (grid: HTMLElement | null, label: string): HTMLElement | null => {
       if (!grid) return null;
       return Array.from(grid.querySelectorAll<HTMLElement>(":scope > .erp-hero"))
         .find((card) => card.querySelector<HTMLElement>(".erp-hero-label")?.textContent?.trim() === label) || null;
-    };
-
-    const findHeroByPrefix = (grid: HTMLElement | null, prefix: string): HTMLElement | null => {
-      if (!grid) return null;
-      return Array.from(grid.querySelectorAll<HTMLElement>(":scope > .erp-hero"))
-        .find((card) => card.querySelector<HTMLElement>(".erp-hero-label")?.textContent?.trim().startsWith(prefix)) || null;
     };
 
     const findPanel = (title: string): HTMLElement | null =>
@@ -203,15 +167,10 @@ function DashboardOperationalPeriodPortals() {
     };
 
     const mountSlots = () => {
-      const primaryGrid = findPrimaryGrid();
       const mainGrid = findFollowingGrid("المؤشرات الرئيسية", ".erp-hero-grid");
       const detailsGrid = findFollowingGrid("تفاصيل الأقسام", ".dash-groups");
 
       const next: PortalSlots = {
-        profitHero: makeSlot(
-          findHeroByPrefix(primaryGrid, "صافي الأرباح —"),
-          "dashboard-profit-hero-period-slot",
-        ),
         submissionCount: makeSlot(
           findHero(mainGrid, "عدد التقديمات"),
           "dashboard-submission-count-period-slot",
@@ -244,10 +203,6 @@ function DashboardOperationalPeriodPortals() {
           findDetailsCard(detailsGrid, "موردو العملة"),
           "dashboard-supplier-details-period-slot",
         ),
-        profitDetails: makeSlot(
-          findDetailsCard(detailsGrid, "ملخص الأرباح"),
-          "dashboard-profit-details-period-slot",
-        ),
       };
 
       setSlots((previous) => (
@@ -273,23 +228,8 @@ function DashboardOperationalPeriodPortals() {
 
   const periodLabel = PERIOD_LABELS[period];
   const isLifetime = period === "all";
-  const profit = profitQuery.data?.canProfitSummary
-    ? profitQuery.data.profitSummary
-    : null;
-
   return (
     <>
-      {slots.profitHero && createPortal(
-        <DashboardHeroCard
-          label={`صافي الأرباح — ${periodLabel}`}
-          value={profitQuery.isLoading ? "جاري التحميل..." : fmtDL(profit?.netProfit ?? 0)}
-          icon={<TrendingUp size={18} />}
-          tone="primary"
-          sub="محسوب بأسعار الصرف التاريخية المقفلة"
-        />,
-        slots.profitHero,
-      )}
-
       {slots.submissionCount && createPortal(
         <DashboardHeroCard
           label={`عدد التقديمات — ${periodLabel}`}
@@ -431,23 +371,6 @@ function DashboardOperationalPeriodPortals() {
         slots.supplierDetails,
       )}
 
-      {slots.profitDetails && createPortal(
-        <DashboardSectionCard title="ملخص الأرباح" icon={<TrendingUp size={16} />}>
-          {profitQuery.isLoading ? (
-            <DashboardStat label="الحالة" value="جاري تحميل ملخص الفترة..." />
-          ) : profit ? (
-            <>
-              <DashboardStat label={`مبيعات الوكلاء — ${periodLabel}`} value={fmtDL(profit.execSales)} tone="green" />
-              <DashboardStat label={`تكلفة الشركات — ${periodLabel}`} value={fmtDL(profit.execCompanyCost)} tone="red" />
-              <DashboardStat label={`المصروفات — ${periodLabel}`} value={fmtDL(profit.expenses)} tone="red" />
-              <DashboardStat label={`صافي الأرباح — ${periodLabel}`} value={fmtDL(profit.netProfit)} highlight />
-            </>
-          ) : (
-            <DashboardStat label="الحالة" value="تعذر تحميل ملخص الأرباح" />
-          )}
-        </DashboardSectionCard>,
-        slots.profitDetails,
-      )}
     </>
   );
 }

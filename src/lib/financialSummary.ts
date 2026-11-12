@@ -12,8 +12,8 @@ import { directTransferPaymentLabelFromRow } from "@/lib/directTransferPaymentMe
  *  ملاحظات مهمة (Phase 1 — Refactoring داخلي فقط):
  *    - هذا الملف **يُغلِّف** المنطق الموجود في:
  *        • src/lib/financialEngine.ts  (payment_splits / cash_boxes)
- *        • src/lib/reportsData.ts      (بيانات التقارير Live)
- *        • src/lib/dashboard.functions.ts (أرباح Server-side)
+ *        • src/lib/reportsData.ts      (جلب بيانات التقارير حسب الفترة)
+ *        • src/lib/dashboardPeriodProfit.functions.ts (أرباح Server-side)
  *    - لم يُغيَّر أي منطق حسابي — فقط تم توحيد نقاط الاستدعاء وشكل النتائج.
  *    - جميع الدوال تُرجع النتائج **مُجمَّعة حسب العملة** بترتيب ثابت:
  *        EGP → USD → LYD ثم أي عملات أخرى بترتيب أبجدي.
